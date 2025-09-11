@@ -416,3 +416,9 @@ FodyWeavers.xsd
 *.msix
 *.msm
 *.msp
+
+out
+dist
+node_modules
+.vscode-test/
+*.vsix
