@@ -1,5 +1,11 @@
 import React, { useState } from 'react';
 import { Folder, History, Variable } from 'lucide-react';
+import {
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
+} from "../components/ui/tabs"
 
 const TABS = [
   { key: 'collections', label: 'Collections', icon: <Folder size={20} /> },
@@ -7,7 +13,7 @@ const TABS = [
   { key: 'environments', label: 'Environments', icon: <Variable size={20} /> },
 ];
 
-const ConfigPanel: React.FC = () => {
+const ConfigPanel2: React.FC = () => {
   const [activeTab, setActiveTab] = useState('collections');
 
   return (
@@ -38,5 +44,47 @@ const ConfigPanel: React.FC = () => {
     </div>
   );
 };
+
+
+const ConfigPanel: React.FC = () => {
+  return (
+    <Tabs
+      defaultValue="tab-1"
+      orientation="vertical"
+      className="w-full flex-row"
+    >
+      <TabsList className="flex-col gap-1 bg-transparent py-0">
+        {TABS.map(tab => (
+          <TabsTrigger
+            key={tab.key}
+            value={tab.key}
+            className="data-[state=active]:bg-muted w-full justify-start data-[state=active]:shadow-none"
+          >
+            {tab.icon}
+            {tab.label}
+          </TabsTrigger>
+        ))}
+      </TabsList>
+      <div className="grow rounded-md border text-start">
+        <TabsContent value="tab-1">
+          <p className="text-muted-foreground px-4 py-3 text-xs">
+            Content for Tab 1
+          </p>
+        </TabsContent>
+        <TabsContent value="tab-2">
+          <p className="text-muted-foreground px-4 py-3 text-xs">
+            Content for Tab 2
+          </p>
+        </TabsContent>
+        <TabsContent value="tab-3">
+          <p className="text-muted-foreground px-4 py-3 text-xs">
+            Content for Tab 3
+          </p>
+        </TabsContent>
+      </div>
+    </Tabs>
+  )
+}
+
 
 export default ConfigPanel;
