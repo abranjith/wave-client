@@ -14,12 +14,6 @@ export function activate(context: vscode.ExtensionContext) {
 	// The command has been defined in the package.json file
 	// Now provide the implementation of the command with registerCommand
 	// The commandId parameter must match the command field in package.json
-
-		const helloDisposable = vscode.commands.registerCommand('wave-client.helloWorld', () => {
-			vscode.window.showInformationMessage('Hello World from Wave Client!');
-		});
-		context.subscriptions.push(helloDisposable);
-
 		// Register waveclient.open command
 		const openDisposable = vscode.commands.registerCommand('waveclient.open', () => {
 			const panel = vscode.window.createWebviewPanel(
@@ -32,9 +26,12 @@ export function activate(context: vscode.ExtensionContext) {
 				}
 			);
 
-			// Get URI for the webview bundle
+			// Get URIs for the webview bundle and CSS
 			const webviewUri = panel.webview.asWebviewUri(
 				vscode.Uri.joinPath(context.extensionUri, 'dist', 'webview', 'webview.js')
+			);
+			const cssUri = panel.webview.asWebviewUri(
+				vscode.Uri.joinPath(context.extensionUri, 'dist', 'webview', 'index.css')
 			);
 
 			// HTML for the webview
@@ -45,7 +42,8 @@ export function activate(context: vscode.ExtensionContext) {
 					<meta charset="UTF-8">
 					<meta name="viewport" content="width=device-width, initial-scale=1.0">
 					<title>Wave Client</title>
-					<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-eval' 'unsafe-inline' ${panel.webview.cspSource}; font-src ${panel.webview.cspSource}; img-src ${panel.webview.cspSource} data:; connect-src ${panel.webview.cspSource} https: http:;">
+					<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline' ${panel.webview.cspSource}; script-src 'unsafe-eval' 'unsafe-inline' ${panel.webview.cspSource}; font-src ${panel.webview.cspSource}; img-src ${panel.webview.cspSource} data:; connect-src ${panel.webview.cspSource} https: http:;">
+					<link rel="stylesheet" href="${cssUri}">
 					<style>
 					  html, body, #root { height: 100%; margin: 0; padding: 0; }
 					</style>

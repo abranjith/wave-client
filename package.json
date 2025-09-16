@@ -14,12 +14,8 @@
   "contributes": {
     "commands": [
       {
-        "command": "wave-client.helloWorld",
-        "title": "Hello World"
-      },
-      {
         "command": "waveclient.open",
-        "title": "Wave Client: Open REST Client"
+        "title": "Wave Client: Open Wave Client"
       }
     ]
   },
@@ -48,6 +44,7 @@
     "autoprefixer": "^10.4.21",
     "css-loader": "^7.1.2",
     "eslint": "^9.34.0",
+    "mini-css-extract-plugin": "^2.9.4",
     "postcss": "^8.5.6",
     "postcss-loader": "^8.2.0",
     "style-loader": "^4.0.0",
