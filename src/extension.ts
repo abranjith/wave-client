@@ -45,10 +45,20 @@ export function activate(context: vscode.ExtensionContext) {
 					<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline' ${panel.webview.cspSource}; script-src 'unsafe-eval' 'unsafe-inline' ${panel.webview.cspSource}; font-src ${panel.webview.cspSource}; img-src ${panel.webview.cspSource} data:; connect-src ${panel.webview.cspSource} https: http:;">
 					<link rel="stylesheet" href="${cssUri}">
 					<style>
-					  html, body, #root { height: 100%; margin: 0; padding: 0; }
+					  html, body, #root { 
+						height: 100%; 
+						margin: 0; 
+						padding: 0; 
+						font-family: system-ui, -apple-system, sans-serif;
+					  }
+					  /* Override VS Code's theme variables */
+					  #root {
+						--vscode-foreground: initial;
+						--vscode-background: initial;
+					  }
 					</style>
 				</head>
-				<body>
+				<body class="light">
 					<div id="root"></div>
 					<script src="${webviewUri}" type="text/javascript"></script>
 				</body>

@@ -3,7 +3,6 @@ import ConfigPanel from './ConfigPanel';
 import RequestPanel from './RequestPanel';
 import ResponsePanel from './ResponsePanel';
 
-
 const App: React.FC = () => {
   return (
     <div

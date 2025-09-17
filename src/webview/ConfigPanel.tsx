@@ -48,12 +48,13 @@ const ConfigPanel2: React.FC = () => {
 
 const ConfigPanel: React.FC = () => {
   return (
+    <div className="flex h-full">
     <Tabs
-      defaultValue="tab-1"
+      defaultValue="collections"
       orientation="vertical"
-      className="w-full flex-row"
+      className="w-full flex-row h-full"
     >
-      <TabsList className="flex-col gap-1 bg-transparent py-0">
+      <TabsList className="flex-col gap-1 bg-transparent py-0 h-full">
         {TABS.map(tab => (
           <TabsTrigger
             key={tab.key}
@@ -65,24 +66,25 @@ const ConfigPanel: React.FC = () => {
           </TabsTrigger>
         ))}
       </TabsList>
-      <div className="grow rounded-md border text-start">
-        <TabsContent value="tab-1">
+      <div className="grow rounded-md border text-start h-full">
+        <TabsContent value="collections">
           <p className="text-muted-foreground px-4 py-3 text-xs">
-            Content for Tab 1
+            Content for Collections
           </p>
         </TabsContent>
-        <TabsContent value="tab-2">
+        <TabsContent value="history">
           <p className="text-muted-foreground px-4 py-3 text-xs">
-            Content for Tab 2
+            Content for History
           </p>
         </TabsContent>
-        <TabsContent value="tab-3">
+        <TabsContent value="environments">
           <p className="text-muted-foreground px-4 py-3 text-xs">
-            Content for Tab 3
+            Content for Environments
           </p>
         </TabsContent>
       </div>
     </Tabs>
+    </div>
   )
 }
 
