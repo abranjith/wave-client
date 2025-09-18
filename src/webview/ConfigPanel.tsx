@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Folder, History, Variable } from 'lucide-react';
+import { BoxIcon, FolderIcon, HistoryIcon } from 'lucide-react';
 import {
   Tabs,
   TabsContent,
@@ -8,9 +8,9 @@ import {
 } from "../components/ui/tabs"
 
 const TABS = [
-  { key: 'collections', label: 'Collections', icon: <Folder size={20} /> },
-  { key: 'history', label: 'History', icon: <History size={20} /> },
-  { key: 'environments', label: 'Environments', icon: <Variable size={20} /> },
+  { key: 'collections', label: 'Collections', icon: <FolderIcon size={20} /> },
+  { key: 'history', label: 'History', icon: <HistoryIcon size={20} /> },
+  { key: 'environments', label: 'Environments', icon: <BoxIcon size={20} /> },
 ];
 
 const ConfigPanel2: React.FC = () => {
@@ -59,10 +59,9 @@ const ConfigPanel: React.FC = () => {
           <TabsTrigger
             key={tab.key}
             value={tab.key}
-            className="data-[state=active]:bg-muted w-full justify-start data-[state=active]:shadow-none"
+            className="hover:bg-accent hover:text-foreground data-[state=active]:after:bg-primary data-[state=active]:hover:bg-accent relative w-full justify-start after:absolute after:inset-y-0 after:start-0 after:-ms-1 after:w-0.5 data-[state=active]:bg-transparent data-[state=active]:shadow-none"
           >
             {tab.icon}
-            {tab.label}
           </TabsTrigger>
         ))}
       </TabsList>

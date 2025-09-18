@@ -2,6 +2,8 @@
 @tailwind components;
 @tailwind utilities;
 
+@import './vscode-theme.css';
+
 :root {
   --radius: 0.625rem;
   --background: oklch(1 0 0);
@@ -36,6 +38,15 @@
   --sidebar-accent-foreground: oklch(0.21 0.006 285.885);
   --sidebar-border: oklch(0.92 0.004 286.32);
   --sidebar-ring: oklch(0.871 0.006 286.286);
+  
+  /* VS Code Theme Variables */
+  --vscode-sidebar-background: var(--sidebar);
+  --vscode-sidebar-foreground: var(--sidebar-foreground);
+  --vscode-sidebar-accent: var(--sidebar-accent);
+  --vscode-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --vscode-sidebar-border: var(--sidebar-border);
+  --vscode-editor-background: var(--background);
+  --vscode-editor-foreground: var(--foreground);
 }
 
 .dark {
@@ -71,4 +82,13 @@
   --sidebar-accent-foreground: oklch(0.985 0 0);
   --sidebar-border: oklch(0.274 0.006 286.033);
   --sidebar-ring: oklch(0.442 0.017 285.786);
+  
+  /* VS Code Theme Variables */
+  --vscode-sidebar-background: var(--sidebar);
+  --vscode-sidebar-foreground: var(--sidebar-foreground);
+  --vscode-sidebar-accent: var(--sidebar-accent);
+  --vscode-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --vscode-sidebar-border: var(--sidebar-border);
+  --vscode-editor-background: var(--background);
+  --vscode-editor-foreground: var(--foreground);
 }

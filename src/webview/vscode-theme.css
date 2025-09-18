@@ -1,0 +1,30 @@
+/* VS Code Theme Utility Classes */
+@layer utilities {
+  .bg-vscode-sidebar-background {
+    background-color: var(--vscode-sidebar-background);
+  }
+  
+  .text-vscode-sidebar-foreground {
+    color: var(--vscode-sidebar-foreground);
+  }
+  
+  .bg-vscode-sidebar-accent {
+    background-color: var(--vscode-sidebar-accent);
+  }
+  
+  .text-vscode-sidebar-accent-foreground {
+    color: var(--vscode-sidebar-accent-foreground);
+  }
+  
+  .border-vscode-sidebar-border {
+    border-color: var(--vscode-sidebar-border);
+  }
+  
+  .bg-vscode-editor-background {
+    background-color: var(--vscode-editor-background);
+  }
+  
+  .text-vscode-editor-foreground {
+    color: var(--vscode-editor-foreground);
+  }
+}
