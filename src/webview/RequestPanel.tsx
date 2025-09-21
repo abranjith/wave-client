@@ -1,7 +1,19 @@
-import React, { useState } from 'react';
+import React, { useState, useId } from 'react';
+import { Button } from "../components/ui/button"
+import { Input } from "../components/ui/input"
+import { Label } from "../components/ui/label"
+import { Square } from "../components/common/square"
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectLabel,
+  SelectTrigger,
+  SelectValue,
+} from "../components/ui/select"
 
-// VS Code API bridge
-const vscode = typeof acquireVsCodeApi !== 'undefined' ? acquireVsCodeApi() : null;
+// VS Code API will be passed as a prop
 
 const HTTP_METHODS = [
   'GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'HEAD', 'OPTIONS'
@@ -11,18 +23,25 @@ const PROTOCOLS = [
   'HTTP', 'HTTPS'
 ];
 
-const RequestPanel: React.FC = () => {
+interface RequestPanelProps {
+  onSendRequest: (request: { method: string; url: string }) => void;
+}
+
+const RequestPanel: React.FC<RequestPanelProps> = ({ onSendRequest }) => {
   const [protocol, setProtocol] = useState('HTTP');
   const [method, setMethod] = useState('GET');
   const [url, setUrl] = useState('');
 
   const [activeTab, setActiveTab] = useState<'params' | 'headers' | 'body'>('params');
+  const urlInputId = useId();
+  const httpMethodSelectId = useId();
+
 
   return (
     <div className="w-full bg-white border-b border-gray-200">
       {/* Top Bar */}
       <div className="px-6 py-4 flex items-center gap-3">
-        {/* Protocol Dropdown */}
+        {/* Protocol Dropdown 
         <select
           className="px-2 py-1 rounded border border-gray-300 bg-gray-50 text-gray-700 focus:outline-none"
           value={protocol}
@@ -32,6 +51,7 @@ const RequestPanel: React.FC = () => {
             <option key={p} value={p}>{p}</option>
           ))}
         </select>
+        */}
 
         {/* HTTP Method Dropdown */}
         <select
@@ -44,6 +64,30 @@ const RequestPanel: React.FC = () => {
           ))}
         </select>
 
+        {/* HTTP Method Dropdown
+        <div className="*:not-first:mt-2">
+          <Select defaultValue="1">
+            <SelectTrigger
+              id={httpMethodSelectId}
+              className="ps-2 [&>span]:flex [&>span]:items-center [&>span]:gap-2 [&>span_[data-square]]:shrink-0"
+            >
+              <SelectValue placeholder="Select Method" />
+            </SelectTrigger>
+            <SelectContent className="[&_*[role=option]]:ps-2 [&_*[role=option]]:pe-8 [&_*[role=option]>span]:start-auto [&_*[role=option]>span]:end-2 [&_*[role=option]>span]:flex [&_*[role=option]>span]:items-center [&_*[role=option]>span]:gap-2">
+              <SelectGroup>
+                <SelectLabel className="ps-2">Select Method</SelectLabel>
+                {HTTP_METHODS.map(m => (
+                  <SelectItem value={m}>
+                    <Square className="bg-indigo-400/20 text-indigo-500">F</Square>
+                    <span className="truncate">{m}</span>
+                  </SelectItem>
+                ))}
+              </SelectGroup>
+            </SelectContent>
+          </Select>
+        </div>
+        */}
+
         {/* URL Input */}
         <input
           type="text"
@@ -53,23 +97,30 @@ const RequestPanel: React.FC = () => {
           onChange={e => setUrl(e.target.value)}
         />
 
+        {/* URL Input
+        <div className="*:not-first:mt-2">
+          <div className="flex gap-2">
+            <Input id={urlInputId} className="flex-1" placeholder="URL" type="url" />
+            <Button variant="outline">Send</Button>
+          </div>
+        </div>
+         */}
+
         {/* Send Button */}
         <button
           className="px-5 py-2 rounded bg-blue-600 text-white font-semibold hover:bg-blue-700 transition"
           onClick={() => {
             const request = {
-              protocol,
               method,
               url,
               // Add params, headers, body when implemented
             };
-            if (vscode) {
-              vscode.postMessage({ type: 'sendRequest', request });
-            }
+            onSendRequest(request);
           }}
         >
           Send
         </button>
+        
       </div>
 
       {/* Horizontal Tabs */}

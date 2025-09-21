@@ -4,7 +4,7 @@ import React, { useState } from 'react';
 export interface ResponseData {
   status: number;
   statusText: string;
-  time: number;
+  elapsedTime: number;
   size: number;
   body: string;
   headers: Record<string, string>;
@@ -23,12 +23,25 @@ interface Props {
 
 const ResponsePanel: React.FC<Props> = ({ response }) => {
   const [activeTab, setActiveTab] = useState<'body' | 'headers'>('body');
-  const status = response?.status ?? 0;
-  const statusText = response?.statusText ?? '';
-  const time = response?.time ?? 0;
-  const size = response?.size ?? 0;
-  const body = response?.body ?? '';
-  const headers = response?.headers ?? {};
+
+  // Show a placeholder when no response is available
+  if (!response) {
+    return (
+      <div className="w-full h-full bg-white flex items-center justify-center">
+        <div className="text-gray-500 text-center">
+          <div className="text-lg font-medium mb-2">No response yet</div>
+          <div className="text-sm">Send a request to see the response here</div>
+        </div>
+      </div>
+    );
+  }
+
+  const status = response.status;
+  const statusText = response.statusText;
+  const time = response.elapsedTime;
+  const size = response.size;
+  const body = response.body;
+  const headers = response.headers;
 
   return (
     <div className="w-full h-full bg-white flex flex-col">
@@ -39,12 +52,12 @@ const ResponsePanel: React.FC<Props> = ({ response }) => {
           <span>{status} {statusText}</span>
         </div>
         <div className="flex items-center gap-1 text-blue-600">
-          <span className="font-bold">Time:</span>
+          <span className="font-bold">Elapsed Time:</span>
           <span>{time} ms</span>
         </div>
         <div className="flex items-center gap-1 text-gray-600">
           <span className="font-bold">Size:</span>
-          <span>{(size / 1024).toFixed(1)} KB</span>
+          <span>{size >= 1024 ? `${(size / 1024).toFixed(1)} KB` : `${size} B`}</span>
         </div>
       </div>
 

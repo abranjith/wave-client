@@ -67,7 +67,7 @@ export function activate(context: vscode.ExtensionContext) {
 
 			// Listen for messages from the webview
 			panel.webview.onDidReceiveMessage(async (message) => {
-				if (message.type === 'sendRequest') {
+				if (message.type === 'httpRequest') {
 					const req = message.request;
 					const start = Date.now();
 					try {
@@ -76,26 +76,26 @@ export function activate(context: vscode.ExtensionContext) {
 							url: req.url,
 							// Add params, headers, data when implemented
 						});
-						const time = Date.now() - start;
+						const elapsedTime = Date.now() - start;
 						panel.webview.postMessage({
-							type: 'response',
+							type: 'httpResponse',
 							response: {
 								status: response.status,
 								statusText: response.statusText,
-								time,
+								elapsedTime,
 								size: response.data ? JSON.stringify(response.data).length : 0,
 								headers: response.headers,
 								body: typeof response.data === 'string' ? response.data : JSON.stringify(response.data, null, 2),
 							}
 						});
 					} catch (error: any) {
-						const time = Date.now() - start;
+						const elapsedTime = Date.now() - start;
 						panel.webview.postMessage({
-							type: 'response',
+							type: 'httpResponse',
 							response: {
 								status: error?.response?.status || 0,
 								statusText: error?.response?.statusText || 'Error',
-								time,
+								elapsedTime,
 								size: error?.response?.data ? JSON.stringify(error.response.data).length : 0,
 								headers: error?.response?.headers || {},
 								body: error?.response?.data ? JSON.stringify(error.response.data, null, 2) : error.message,
