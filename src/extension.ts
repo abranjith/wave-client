@@ -74,7 +74,8 @@ export function activate(context: vscode.ExtensionContext) {
 						const response = await axios({
 							method: req.method,
 							url: req.url,
-							// Add params, headers, data when implemented
+							params: new URLSearchParams(req.params),
+							// Add headers, data when implemented
 						});
 						const elapsedTime = Date.now() - start;
 						panel.webview.postMessage({

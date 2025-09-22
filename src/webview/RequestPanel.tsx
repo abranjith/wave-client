@@ -3,6 +3,7 @@ import { Button } from "../components/ui/button"
 import { Input } from "../components/ui/input"
 import { Label } from "../components/ui/label"
 import { Square } from "../components/common/square"
+import RequestParams from "../components/common/RequestParams"
 import {
   Select,
   SelectContent,
@@ -24,13 +25,14 @@ const PROTOCOLS = [
 ];
 
 interface RequestPanelProps {
-  onSendRequest: (request: { method: string; url: string }) => void;
+  onSendRequest: (request: { method: string; url: string; params?: string }) => void;
 }
 
 const RequestPanel: React.FC<RequestPanelProps> = ({ onSendRequest }) => {
-  const [protocol, setProtocol] = useState('HTTP');
+  const [protocol, setProtocol] = useState('HTTPS');
   const [method, setMethod] = useState('GET');
   const [url, setUrl] = useState('');
+  const [requestParams, setRequestParams] = useState<URLSearchParams>(new URLSearchParams());
 
   const [activeTab, setActiveTab] = useState<'params' | 'headers' | 'body'>('params');
   const urlInputId = useId();
@@ -113,7 +115,8 @@ const RequestPanel: React.FC<RequestPanelProps> = ({ onSendRequest }) => {
             const request = {
               method,
               url,
-              // Add params, headers, body when implemented
+              params: requestParams.toString(),
+              // Add headers, body when implemented
             };
             onSendRequest(request);
           }}
@@ -143,7 +146,10 @@ const RequestPanel: React.FC<RequestPanelProps> = ({ onSendRequest }) => {
       {/* Tab Content */}
       <div className="p-6">
         {activeTab === 'params' && (
-          <div className="text-gray-700">Params editor placeholder</div>
+          <RequestParams 
+            onStateChange={setRequestParams}
+            initialParams={requestParams}
+          />
         )}
         {activeTab === 'headers' && (
           <div className="text-gray-700">Headers editor placeholder</div>
