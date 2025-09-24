@@ -75,7 +75,8 @@ export function activate(context: vscode.ExtensionContext) {
 							method: req.method,
 							url: req.url,
 							params: new URLSearchParams(req.params),
-							// Add headers, data when implemented
+							headers: req.headers,
+							// Add body when implemented
 						});
 						const elapsedTime = Date.now() - start;
 						panel.webview.postMessage({

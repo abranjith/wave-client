@@ -4,6 +4,7 @@ import { Input } from "../components/ui/input"
 import { Label } from "../components/ui/label"
 import { Square } from "../components/common/square"
 import RequestParams from "../components/common/RequestParams"
+import RequestHeaders from "../components/common/RequestHeaders"
 import {
   Select,
   SelectContent,
@@ -25,7 +26,7 @@ const PROTOCOLS = [
 ];
 
 interface RequestPanelProps {
-  onSendRequest: (request: { method: string; url: string; params?: string }) => void;
+  onSendRequest: (request: { method: string; url: string; params?: string; headers?: Record<string, string | string[]> }) => void;
 }
 
 const RequestPanel: React.FC<RequestPanelProps> = ({ onSendRequest }) => {
@@ -33,6 +34,7 @@ const RequestPanel: React.FC<RequestPanelProps> = ({ onSendRequest }) => {
   const [method, setMethod] = useState('GET');
   const [url, setUrl] = useState('');
   const [requestParams, setRequestParams] = useState<URLSearchParams>(new URLSearchParams());
+  const [requestHeaders, setRequestHeaders] = useState<Record<string, string | string[]>>({});
 
   const [activeTab, setActiveTab] = useState<'params' | 'headers' | 'body'>('params');
   const urlInputId = useId();
@@ -116,7 +118,8 @@ const RequestPanel: React.FC<RequestPanelProps> = ({ onSendRequest }) => {
               method,
               url,
               params: requestParams.toString(),
-              // Add headers, body when implemented
+              headers: requestHeaders,
+              // Add body when implemented
             };
             onSendRequest(request);
           }}
@@ -152,7 +155,10 @@ const RequestPanel: React.FC<RequestPanelProps> = ({ onSendRequest }) => {
           />
         )}
         {activeTab === 'headers' && (
-          <div className="text-gray-700">Headers editor placeholder</div>
+          <RequestHeaders 
+            onStateChange={setRequestHeaders}
+            initialHeaders={requestHeaders}
+          />
         )}
         {activeTab === 'body' && (
           <div className="text-gray-700">Body editor placeholder</div>
