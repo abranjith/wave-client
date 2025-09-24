@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
 import { BoxIcon, FolderIcon, HistoryIcon } from 'lucide-react';
+// Temporarily disabled while fixing imports
 import {
-  Tabs,
-  TabsContent,
-  TabsList,
-  TabsTrigger,
+   Tabs,
+   TabsContent,
+   TabsList,
+   TabsTrigger,
 } from "../components/ui/tabs"
 
 const TABS = [
@@ -46,6 +47,43 @@ const ConfigPanel2: React.FC = () => {
 };
 
 
+const ConfigPanel1: React.FC = () => {
+  return (
+    <div className="flex h-full">
+      {/* Temporarily using simple div instead of Tabs */}
+      <div className="w-full flex-row h-full flex">
+        <div className="flex-col gap-1 bg-transparent py-0 h-full">
+          {TABS.map(tab => (
+            <div
+              key={tab.key}
+              className="hover:bg-accent hover:text-foreground relative w-full justify-start cursor-pointer p-3 flex items-center"
+            >
+              {tab.icon}
+            </div>
+          ))}
+        </div>
+        <div className="grow rounded-md border text-start h-full">
+          <div>
+            <p className="text-muted-foreground px-4 py-3 text-xs">
+              Content for Collections
+            </p>
+          </div>
+          <div>
+            <p className="text-muted-foreground px-4 py-3 text-xs">
+              Content for History
+            </p>
+          </div>
+          <div>
+            <p className="text-muted-foreground px-4 py-3 text-xs">
+              Content for Environments
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 const ConfigPanel: React.FC = () => {
   return (
     <div className="flex h-full">
@@ -86,6 +124,5 @@ const ConfigPanel: React.FC = () => {
     </div>
   )
 }
-
 
 export default ConfigPanel;

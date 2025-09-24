@@ -1,7 +1,7 @@
 import * as React from "react"
 import { cva } from "class-variance-authority"
 import { ChevronDownIcon } from "lucide-react"
-import { NavigationMenu as NavigationMenuPrimitive } from "radix-ui"
+import * as NavigationMenuPrimitive from "@radix-ui/react-$(NavigationMenu.ToLower())"
 
 import { cn } from "../../utils/utils"
 
@@ -10,11 +10,11 @@ function NavigationMenu({
   children,
   viewport = true,
   ...props
-}: React.ComponentProps<typeof NavigationMenuPrimitive.Root> & {
+}: React.ComponentProps<typeof NavigationMenuPrimitive> & {
   viewport?: boolean
 }) {
   return (
-    <NavigationMenuPrimitive.Root
+    <NavigationMenuPrimitive
       data-slot="navigation-menu"
       data-viewport={viewport}
       className={cn(
@@ -25,7 +25,7 @@ function NavigationMenu({
     >
       {children}
       {viewport && <NavigationMenuViewport />}
-    </NavigationMenuPrimitive.Root>
+    </NavigationMenuPrimitive>
   )
 }
 
@@ -166,3 +166,4 @@ export {
   NavigationMenuViewport,
   navigationMenuTriggerStyle,
 }
+

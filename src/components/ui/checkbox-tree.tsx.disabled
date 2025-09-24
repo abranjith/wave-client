@@ -105,3 +105,4 @@ export function CheckboxTree({ tree, renderNode }: CheckboxTreeProps) {
 
   return renderTreeNode(tree)
 }
+

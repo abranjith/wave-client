@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from "react"
-import { Slider as SliderPrimitive } from "radix-ui"
+import * as SliderPrimitive from "@radix-ui/react-$(Slider.ToLower())"
 
 import { cn } from "../../utils/utils"
 import {
@@ -20,7 +20,7 @@ function Slider({
   showTooltip = false,
   tooltipContent,
   ...props
-}: React.ComponentProps<typeof SliderPrimitive.Root> & {
+}: React.ComponentProps<typeof SliderPrimitive> & {
   showTooltip?: boolean
   tooltipContent?: (value: number) => React.ReactNode
 }) {
@@ -94,7 +94,7 @@ function Slider({
   }
 
   return (
-    <SliderPrimitive.Root
+    <SliderPrimitive
       data-slot="slider"
       defaultValue={defaultValue}
       value={value}
@@ -125,8 +125,9 @@ function Slider({
           {renderThumb(internalValues[index])}
         </React.Fragment>
       ))}
-    </SliderPrimitive.Root>
+    </SliderPrimitive>
   )
 }
 
 export { Slider }
+

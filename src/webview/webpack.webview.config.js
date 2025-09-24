@@ -18,16 +18,18 @@ module.exports = {
         use: 'ts-loader',
         exclude: /node_modules/,
       },
-      {
-        test: /\.css$/,
-        use: [MiniCssExtractPlugin.loader, 'css-loader', 'postcss-loader'],
-      },
+      // CSS is now handled by Tailwind CLI, so we skip CSS processing in webpack
+      // {
+      //   test: /\.css$/,
+      //   use: [MiniCssExtractPlugin.loader, 'css-loader', 'postcss-loader'],
+      // },
     ],
   },
   devtool: 'source-map',
   plugins: [
-    new MiniCssExtractPlugin({
-      filename: 'index.css',
-    }),
+    // CSS plugin removed since we handle CSS separately
+    // new MiniCssExtractPlugin({
+    //   filename: 'index.css',
+    // }),
   ],
 };

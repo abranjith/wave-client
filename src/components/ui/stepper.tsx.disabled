@@ -3,7 +3,7 @@
 import * as React from "react"
 import { createContext, useContext } from "react"
 import { CheckIcon, LoaderCircleIcon } from "lucide-react"
-import { Slot } from "radix-ui"
+import { Slot } from "@radix-ui/react-slot"
 
 import { cn } from "../../utils/utils"
 
@@ -160,7 +160,7 @@ function StepperTrigger({
   const { step, isDisabled } = useStepItem()
 
   if (asChild) {
-    const Comp = asChild ? Slot.Root : "span"
+    const Comp = asChild ? Slot : "span"
     return (
       <Comp data-slot="stepper-trigger" className={className}>
         {children}
@@ -288,3 +288,4 @@ export {
   StepperTitle,
   StepperTrigger,
 }
+

@@ -1,16 +1,16 @@
 "use client"
 
 import * as React from "react"
-import { RadioGroup as RadioGroupPrimitive } from "radix-ui"
+import * as RadioGroupPrimitive from "@radix-ui/react-$(RadioGroup.ToLower())"
 
 import { cn } from "../../utils/utils"
 
 function RadioGroup({
   className,
   ...props
-}: React.ComponentProps<typeof RadioGroupPrimitive.Root>) {
+}: React.ComponentProps<typeof RadioGroupPrimitive>) {
   return (
-    <RadioGroupPrimitive.Root
+    <RadioGroupPrimitive
       data-slot="radio-group"
       className={cn("grid gap-3", className)}
       {...props}
@@ -47,3 +47,4 @@ function RadioGroupItem({
 }
 
 export { RadioGroup, RadioGroupItem }
+
