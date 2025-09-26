@@ -1,4 +1,4 @@
-import React, { useState, useId } from 'react';
+import React, { useState, useId, useEffect } from 'react';
 import { Button } from "../components/ui/button"
 import { Input } from "../components/ui/input"
 import { Label } from "../components/ui/label"
@@ -6,6 +6,7 @@ import { Square } from "../components/common/square"
 import RequestParams from "../components/common/RequestParams"
 import RequestHeaders from "../components/common/RequestHeaders"
 import RequestBody from "../components/common/RequestBody"
+import { ParsedRequest } from '../types/collection'
 import {
    Select,
    SelectContent,
@@ -28,9 +29,10 @@ const PROTOCOLS = [
 
 interface RequestPanelProps {
   onSendRequest: (request: { method: string; url: string; params?: string; headers?: Record<string, string | string[]>; body?: string }) => void;
+  selectedRequest?: ParsedRequest;
 }
 
-const RequestPanel: React.FC<RequestPanelProps> = ({ onSendRequest }) => {
+const RequestPanel: React.FC<RequestPanelProps> = ({ onSendRequest, selectedRequest }) => {
   const [protocol, setProtocol] = useState('HTTPS');
   const [method, setMethod] = useState('GET');
   const [url, setUrl] = useState('');
@@ -41,6 +43,17 @@ const RequestPanel: React.FC<RequestPanelProps> = ({ onSendRequest }) => {
   const [activeTab, setActiveTab] = useState<'params' | 'headers' | 'body'>('params');
   const urlInputId = useId();
   const httpMethodSelectId = useId();
+
+  // Effect to populate form when a request is selected
+  useEffect(() => {
+    if (selectedRequest) {
+      setMethod(selectedRequest.method);
+      setUrl(selectedRequest.url);
+      setRequestParams(new URLSearchParams(selectedRequest.params));
+      setRequestHeaders(selectedRequest.headers);
+      setRequestBody(selectedRequest.body);
+    }
+  }, [selectedRequest]);
 
 
   return (
@@ -73,12 +86,12 @@ const RequestPanel: React.FC<RequestPanelProps> = ({ onSendRequest }) => {
         {/* HTTP Method Dropdown */}
         <div className="*:not-first:mt-2">
           <Select defaultValue={method} onValueChange={setMethod}>
-            <SelectTrigger id={httpMethodSelectId} className="w-auto max-w-full min-w-48">
+            <SelectTrigger id={httpMethodSelectId} className="w-auto max-w-full min-w-48 bg-white border-slate-300 text-slate-900 hover:bg-slate-50 dark:bg-slate-800 dark:border-slate-600 dark:text-slate-100 dark:hover:bg-slate-700">
               <SelectValue placeholder="Select Method" />
             </SelectTrigger>
             <SelectContent>
                 {HTTP_METHODS.map(m => (
-                  <SelectItem key={m} value={m}>
+                  <SelectItem key={m} value={m} className="hover:bg-slate-100 dark:hover:bg-slate-700">
                     {m}
                   </SelectItem>
                 ))}
@@ -100,7 +113,7 @@ const RequestPanel: React.FC<RequestPanelProps> = ({ onSendRequest }) => {
           <div className="flex gap-2">
             <Input 
               id={urlInputId} 
-              className="flex-1" 
+              className="flex-1 bg-white border-slate-300 text-slate-900 placeholder:text-slate-500 focus:border-blue-500 focus:ring-blue-500 dark:bg-slate-800 dark:border-slate-600 dark:text-slate-100 dark:placeholder:text-slate-400 dark:focus:border-blue-400 dark:focus:ring-blue-400" 
               placeholder="Enter request URL..." 
               type="url" 
               value={url}
@@ -121,6 +134,7 @@ const RequestPanel: React.FC<RequestPanelProps> = ({ onSendRequest }) => {
             };
             onSendRequest(request);
           }}
+          className="bg-blue-600 hover:bg-blue-700 text-white font-medium px-6 py-2 transition-colors dark:bg-blue-500 dark:hover:bg-blue-600"
         >
           Send
         </Button>
@@ -128,14 +142,14 @@ const RequestPanel: React.FC<RequestPanelProps> = ({ onSendRequest }) => {
       </div>
 
       {/* Horizontal Tabs */}
-      <div className="border-b flex gap-0">
+      <div className="border-b border-slate-200 flex gap-0 bg-slate-50 dark:border-slate-700 dark:bg-slate-900">
         {['params', 'headers', 'body'].map(tab => (
           <button
             key={tab}
-            className={`px-6 py-2 text-sm font-medium focus:outline-none transition-all ${
+            className={`px-6 py-3 text-sm font-medium focus:outline-none transition-all relative ${
               activeTab === tab
-                ? 'border-b-2 border-primary text-primary bg-background'
-                : 'text-muted-foreground bg-muted hover:text-primary'
+                ? 'border-b-2 border-blue-500 text-blue-600 bg-white dark:bg-slate-800 dark:text-blue-400 dark:border-blue-400'
+                : 'text-slate-600 bg-transparent hover:text-blue-600 hover:bg-white/50 dark:text-slate-400 dark:hover:text-blue-400 dark:hover:bg-slate-800/50'
             }`}
             onClick={() => setActiveTab(tab as any)}
           >
@@ -145,7 +159,7 @@ const RequestPanel: React.FC<RequestPanelProps> = ({ onSendRequest }) => {
       </div>
 
       {/* Tab Content */}
-      <div className="p-6">
+      <div className="p-6 bg-white dark:bg-slate-900">
         {activeTab === 'params' && (
           <RequestParams 
             onStateChange={setRequestParams}

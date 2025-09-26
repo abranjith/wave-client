@@ -2,6 +2,9 @@
 // Import the module and reference it with the alias vscode in your code below
 import * as vscode from 'vscode';
 import axios from 'axios';
+import * as fs from 'fs';
+import * as path from 'path';
+import * as os from 'os';
 
 // This method is called when your extension is activated
 // Your extension is activated the very first time the command is executed
@@ -104,10 +107,61 @@ export function activate(context: vscode.ExtensionContext) {
 							}
 						});
 					}
+				} else if (message.type === 'loadCollections') {
+					try {
+						const collections = await loadCollections();
+						panel.webview.postMessage({
+							type: 'collectionsLoaded',
+							collections
+						});
+					} catch (error: any) {
+						panel.webview.postMessage({
+							type: 'collectionsError',
+							error: error.message
+						});
+					}
 				}
 			});
 		});
 		context.subscriptions.push(openDisposable);
+}
+
+/**
+ * Loads collections from the default directory (~/.waveclient/collections)
+ */
+async function loadCollections() {
+	const homeDir = os.homedir();
+	const collectionsDir = path.join(homeDir, '.waveclient', 'collections');
+	
+	// Ensure the collections directory exists
+	if (!fs.existsSync(collectionsDir)) {
+		fs.mkdirSync(collectionsDir, { recursive: true });
+		return [];
+	}
+	
+	const collections = [];
+	const files = fs.readdirSync(collectionsDir);
+	
+	for (const file of files) {
+		if (path.extname(file).toLowerCase() === '.json') {
+			try {
+				const filePath = path.join(collectionsDir, file);
+				const fileContent = fs.readFileSync(filePath, 'utf8');
+				const collectionData = JSON.parse(fileContent);
+				
+				// Add filename to the collection data
+				collections.push({
+					...collectionData,
+					filename: file
+				});
+			} catch (error: any) {
+				console.error(`Error loading collection ${file}:`, error.message);
+				// Continue loading other collections even if one fails
+			}
+		}
+	}
+	
+	return collections;
 }
 
 // This method is called when your extension is deactivated
