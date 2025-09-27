@@ -119,7 +119,7 @@ const RequestBody: React.FC<RequestBodyProps> = ({
           placeholder="Enter request body (JSON, XML, plain text, etc.)"
           value={body}
           onChange={e => handleBodyChange(e.target.value)}
-          className="min-h-[300px] font-mono text-sm resize-y"
+          className="min-h-[300px] font-mono text-sm resize-y text-gray-800 dark:text-gray-200"
           spellCheck={false}
         />
         

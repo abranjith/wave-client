@@ -88,7 +88,7 @@ const App: React.FC = () => {
       className="min-h-screen h-screen w-screen bg-gray-50 grid"
       style={{
         display: 'grid',
-        gridTemplateColumns: selectedEnvironment ? '250px 1fr' : '250px 1fr',
+        gridTemplateColumns: selectedEnvironment ? '400px 1fr' : '400px 1fr',
         gridTemplateRows: selectedEnvironment ? '1fr' : '1fr 1fr',
         gridTemplateAreas: selectedEnvironment 
           ? `"config environment"` 

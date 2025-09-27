@@ -1,4 +1,5 @@
 import React, { useState, useId, useEffect } from 'react';
+import { SendHorizonalIcon } from 'lucide-react';
 import { Button } from "../components/ui/button"
 import { Input } from "../components/ui/input"
 import { Label } from "../components/ui/label"
@@ -16,6 +17,12 @@ import {
    SelectTrigger,
    SelectValue,
  } from "../components/ui/select"
+ import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "../components/ui/tooltip"
 
 // VS Code API will be passed as a prop
 
@@ -123,21 +130,31 @@ const RequestPanel: React.FC<RequestPanelProps> = ({ onSendRequest, selectedRequ
         </div>
 
         {/* Send Button */}
-        <Button
-          onClick={() => {
-            const request = {
-              method,
-              url,
-              params: requestParams.toString(),
-              headers: requestHeaders,
-              body: requestBody,
-            };
-            onSendRequest(request);
-          }}
-          className="bg-blue-600 hover:bg-blue-700 text-white font-medium px-6 py-2 transition-colors dark:bg-blue-500 dark:hover:bg-blue-600"
-        >
-          Send
-        </Button>
+         <TooltipProvider delayDuration={0}>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                onClick={() => {
+                  const request = {
+                    method,
+                    url,
+                    params: requestParams.toString(),
+                    headers: requestHeaders,
+                    body: requestBody,
+                  };
+                  onSendRequest(request);
+                }}
+                className="bg-blue-600 hover:bg-blue-700 text-white font-medium px-6 py-2 transition-colors dark:bg-blue-500 dark:hover:bg-blue-600"
+              >
+                <SendHorizonalIcon/>
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent className="px-2 py-1 text-xs">
+              Send
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
+        
         
       </div>
 
