@@ -120,6 +120,19 @@ export function activate(context: vscode.ExtensionContext) {
 							error: error.message
 						});
 					}
+				} else if (message.type === 'loadEnvironments') {
+					try {
+						const environments = await loadEnvironments();
+						panel.webview.postMessage({
+							type: 'environmentsLoaded',
+							environments
+						});
+					} catch (error: any) {
+						panel.webview.postMessage({
+							type: 'environmentsError',
+							error: error.message
+						});
+					}
 				}
 			});
 		});
@@ -162,6 +175,50 @@ async function loadCollections() {
 	}
 	
 	return collections;
+}
+
+/**
+ * Loads environments from the default directory (~/.waveclient/environments)
+ */
+async function loadEnvironments() {
+	const homeDir = os.homedir();
+	const environmentsDir = path.join(homeDir, '.waveclient', 'environments');
+	
+	// Ensure the environments directory exists
+	if (!fs.existsSync(environmentsDir)) {
+		fs.mkdirSync(environmentsDir, { recursive: true });
+		return [];
+	}
+	
+	const environments = [];
+	const seenNames = new Set<string>(); // Track environment names to avoid duplicates
+	const files = fs.readdirSync(environmentsDir);
+	
+	for (const file of files) {
+		if (path.extname(file).toLowerCase() === '.json') {
+			try {
+				const filePath = path.join(environmentsDir, file);
+				const fileContent = fs.readFileSync(filePath, 'utf8');
+				const environmentData = JSON.parse(fileContent);
+				
+				// Skip if we've already seen an environment with this name
+				if (!seenNames.has(environmentData.name)) {
+					seenNames.add(environmentData.name);
+					environments.push({
+						...environmentData,
+						filename: file
+					});
+				} else {
+					console.warn(`Skipping duplicate environment name "${environmentData.name}" from file ${file}`);
+				}
+			} catch (error: any) {
+				console.error(`Error loading environment ${file}:`, error.message);
+				// Continue loading other environments even if one fails
+			}
+		}
+	}
+	
+	return environments;
 }
 
 // This method is called when your extension is deactivated

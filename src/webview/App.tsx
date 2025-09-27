@@ -3,7 +3,8 @@ import ConfigPanel from './ConfigPanel';
 import RequestPanel from './RequestPanel';
 import ResponsePanel, { ResponseData } from './ResponsePanel';
 import CollectionsPane from '../components/common/CollectionsPane';
-import { ParsedCollection, ParsedRequest, Collection } from '../types/collection';
+import EnvironmentsPane from '../components/common/EnvironmentsPane';
+import { ParsedCollection, ParsedRequest, Collection, Environment } from '../types/collection';
 import { parseCollection } from '../utils/collectionParser';
 
 const App: React.FC = () => {
@@ -11,7 +12,11 @@ const App: React.FC = () => {
   const [collections, setCollections] = useState<ParsedCollection[]>([]);
   const [collectionsLoading, setCollectionsLoading] = useState(true);
   const [collectionsError, setCollectionsError] = useState<string | undefined>();
+  const [environments, setEnvironments] = useState<Environment[]>([]);
+  const [environmentsLoading, setEnvironmentsLoading] = useState(true);
+  const [environmentsError, setEnvironmentsError] = useState<string | undefined>();
   const [selectedRequest, setSelectedRequest] = useState<ParsedRequest | undefined>();
+  const [activeTab, setActiveTab] = useState<'collections' | 'environments'>('collections');
   const vsCodeRef = useRef<any>(null);
 
   // Initialize VS Code API once
@@ -19,8 +24,9 @@ const App: React.FC = () => {
     if (typeof acquireVsCodeApi !== 'undefined' && !vsCodeRef.current) {
       vsCodeRef.current = acquireVsCodeApi();
       
-      // Load collections on startup
+      // Load collections and environments on startup
       vsCodeRef.current.postMessage({ type: 'loadCollections' });
+      vsCodeRef.current.postMessage({ type: 'loadEnvironments' });
     }
   }, []);
 
@@ -53,6 +59,12 @@ const App: React.FC = () => {
       } else if (message.type === 'collectionsError') {
         setCollectionsLoading(false);
         setCollectionsError(message.error);
+      } else if (message.type === 'environmentsLoaded') {
+        setEnvironmentsLoading(false);
+        setEnvironments(message.environments);
+      } else if (message.type === 'environmentsError') {
+        setEnvironmentsLoading(false);
+        setEnvironmentsError(message.error);
       }
     };
 
@@ -71,20 +83,56 @@ const App: React.FC = () => {
         gridTemplateColumns: '300px 1fr',
         gridTemplateRows: '1fr 1fr',
         gridTemplateAreas: `
-          "collections request"
-          "collections response"
+          "sidebar request"
+          "sidebar response"
         `,
         height: '100vh',
       }}
     >
-      {/* Left Collections Panel */}
-      <div style={{ gridArea: 'collections' }}>
-        <CollectionsPane 
-          collections={collections}
-          onRequestSelect={handleRequestSelect}
-          isLoading={collectionsLoading}
-          error={collectionsError}
-        />
+      {/* Left Sidebar with Tabs */}
+      <div style={{ gridArea: 'sidebar' }} className="flex flex-col bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-700">
+        {/* Tabs */}
+        <div className="flex border-b border-slate-200 dark:border-slate-700">
+          <button
+            className={`flex-1 px-4 py-3 text-sm font-medium transition-colors ${
+              activeTab === 'collections'
+                ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 border-b-2 border-blue-500'
+                : 'text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800'
+            }`}
+            onClick={() => setActiveTab('collections')}
+          >
+            Collections
+          </button>
+          <button
+            className={`flex-1 px-4 py-3 text-sm font-medium transition-colors ${
+              activeTab === 'environments'
+                ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 border-b-2 border-blue-500'
+                : 'text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800'
+            }`}
+            onClick={() => setActiveTab('environments')}
+          >
+            Environments
+          </button>
+        </div>
+        
+        {/* Tab Content */}
+        <div className="flex-1 overflow-hidden">
+          {activeTab === 'collections' && (
+            <CollectionsPane 
+              collections={collections}
+              onRequestSelect={handleRequestSelect}
+              isLoading={collectionsLoading}
+              error={collectionsError}
+            />
+          )}
+          {activeTab === 'environments' && (
+            <EnvironmentsPane 
+              environments={environments}
+              isLoading={environmentsLoading}
+              error={environmentsError}
+            />
+          )}
+        </div>
       </div>
 
       {/* Top-right RequestPanel */}

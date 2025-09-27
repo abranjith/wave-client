@@ -26,3 +26,4 @@
 4. Do not create/ update tests in the initial version, we can update this later.
 5. Do not create/ update documentation in the initial version, we can update this later.
 6. Follow existing code patterns, styling, conventions throughout the project.
+7. When any current file is being changed, be extra careful about not breaking existing functionality.

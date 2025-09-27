@@ -47,6 +47,20 @@ export interface Collection {
   item: CollectionItem[];
 }
 
+// Environment types
+export interface EnvironmentVariable {
+  key: string;
+  value: string;
+  type: 'default' | 'secret';
+  enabled: boolean;
+}
+
+export interface Environment {
+  id: string;
+  name: string;
+  values: EnvironmentVariable[];
+}
+
 // Parsed collection types for easier use in components
 export interface ParsedRequest {
   id: string;
