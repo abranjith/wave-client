@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ChevronRightIcon, ChevronDownIcon, FolderIcon, FileIcon, LayoutGridIcon } from 'lucide-react';
+import { ChevronRightIcon, ChevronDownIcon, FolderIcon, LayoutGridIcon } from 'lucide-react';
 import { ParsedCollection, ParsedRequest } from '../../types/collection';
 
 interface CollectionsPaneProps {
@@ -101,8 +101,8 @@ const CollectionsPane: React.FC<CollectionsPaneProps> = ({
   });
   
   return (
-    <div className="h-full overflow-auto bg-white dark:bg-slate-900">
-      <div className="p-4">
+    <div className="h-full overflow-hidden bg-white dark:bg-slate-900">
+      <div className="h-full overflow-auto p-4">
         <h2 className="text-lg font-semibold text-slate-800 dark:text-slate-200 mb-4">Collections</h2>
         
         <div className="space-y-2">
@@ -192,7 +192,6 @@ const CollectionsPane: React.FC<CollectionsPaneProps> = ({
                                                     onClick={() => onRequestSelect(request)}
                                                 >
                                                     <div className="flex items-center flex-1 min-w-0">
-                                                        <FileIcon className="h-3 w-3 text-slate-400 mr-2 flex-shrink-0" />
                                                         <span className={`text-xs font-medium mr-2 px-2 py-1 rounded-full text-white flex-shrink-0 ${getMethodColor(request.method)}`}>
                                                             {request.method}
                                                         </span>
@@ -218,4 +217,5 @@ const CollectionsPane: React.FC<CollectionsPaneProps> = ({
   );
 };
 
+export type { CollectionsPaneProps };
 export default CollectionsPane;

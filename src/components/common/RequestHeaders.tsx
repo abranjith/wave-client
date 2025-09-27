@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { Trash2Icon } from 'lucide-react';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 
@@ -136,7 +137,7 @@ const RequestHeaders: React.FC<RequestHeadersProps> = ({
                       onClick={() => removeHeader(header.id)}
                       className="text-red-600 hover:text-red-700 hover:border-red-300"
                     >
-                      X
+                      <Trash2Icon className="h-4 w-4" />
                     </Button>
                   )}
                 </td>

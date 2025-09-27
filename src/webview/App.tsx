@@ -2,8 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import ConfigPanel from './ConfigPanel';
 import RequestPanel from './RequestPanel';
 import ResponsePanel, { ResponseData } from './ResponsePanel';
-import CollectionsPane from '../components/common/CollectionsPane';
-import EnvironmentsPane from '../components/common/EnvironmentsPane';
+import EnvironmentGrid from '../components/common/EnvironmentGrid';
 import { ParsedCollection, ParsedRequest, Collection, Environment } from '../types/collection';
 import { parseCollection } from '../utils/collectionParser';
 
@@ -16,7 +15,7 @@ const App: React.FC = () => {
   const [environmentsLoading, setEnvironmentsLoading] = useState(true);
   const [environmentsError, setEnvironmentsError] = useState<string | undefined>();
   const [selectedRequest, setSelectedRequest] = useState<ParsedRequest | undefined>();
-  const [activeTab, setActiveTab] = useState<'collections' | 'environments'>('collections');
+  const [selectedEnvironment, setSelectedEnvironment] = useState<Environment | undefined>();
   const vsCodeRef = useRef<any>(null);
 
   // Initialize VS Code API once
@@ -38,6 +37,15 @@ const App: React.FC = () => {
 
   const handleRequestSelect = (request: ParsedRequest) => {
     setSelectedRequest(request);
+    setSelectedEnvironment(undefined); // Clear environment selection when selecting a request
+  };
+
+  const handleEnvironmentSelect = (environment: Environment) => {
+    setSelectedEnvironment(environment);
+  };
+
+  const handleBackFromEnvironment = () => {
+    setSelectedEnvironment(undefined);
   };
 
   useEffect(() => {
@@ -80,73 +88,59 @@ const App: React.FC = () => {
       className="min-h-screen h-screen w-screen bg-gray-50 grid"
       style={{
         display: 'grid',
-        gridTemplateColumns: '300px 1fr',
-        gridTemplateRows: '1fr 1fr',
-        gridTemplateAreas: `
-          "sidebar request"
-          "sidebar response"
-        `,
+        gridTemplateColumns: selectedEnvironment ? '250px 1fr' : '250px 1fr',
+        gridTemplateRows: selectedEnvironment ? '1fr' : '1fr 1fr',
+        gridTemplateAreas: selectedEnvironment 
+          ? `"config environment"` 
+          : `
+            "config request"
+            "config response"
+          `,
         height: '100vh',
       }}
     >
       {/* Left Sidebar with Tabs */}
-      <div style={{ gridArea: 'sidebar' }} className="flex flex-col bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-700">
-        {/* Tabs */}
-        <div className="flex border-b border-slate-200 dark:border-slate-700">
-          <button
-            className={`flex-1 px-4 py-3 text-sm font-medium transition-colors ${
-              activeTab === 'collections'
-                ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 border-b-2 border-blue-500'
-                : 'text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800'
-            }`}
-            onClick={() => setActiveTab('collections')}
-          >
-            Collections
-          </button>
-          <button
-            className={`flex-1 px-4 py-3 text-sm font-medium transition-colors ${
-              activeTab === 'environments'
-                ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 border-b-2 border-blue-500'
-                : 'text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800'
-            }`}
-            onClick={() => setActiveTab('environments')}
-          >
-            Environments
-          </button>
-        </div>
-        
-        {/* Tab Content */}
-        <div className="flex-1 overflow-hidden">
-          {activeTab === 'collections' && (
-            <CollectionsPane 
-              collections={collections}
-              onRequestSelect={handleRequestSelect}
-              isLoading={collectionsLoading}
-              error={collectionsError}
-            />
-          )}
-          {activeTab === 'environments' && (
-            <EnvironmentsPane 
-              environments={environments}
-              isLoading={environmentsLoading}
-              error={environmentsError}
-            />
-          )}
-        </div>
-      </div>
-
-      {/* Top-right RequestPanel */}
-      <div style={{ gridArea: 'request' }}>
-        <RequestPanel 
-          onSendRequest={handleSendRequest} 
-          selectedRequest={selectedRequest}
+      <div style={{ gridArea: 'config' }}>
+        <ConfigPanel 
+          collectionsProps={{
+            collections,
+            onRequestSelect: handleRequestSelect,
+            isLoading: collectionsLoading,
+            error: collectionsError
+          }}
+          environmentProps={{
+            environments,
+            onEnvironmentSelect: handleEnvironmentSelect,
+            isLoading: environmentsLoading,
+            error: environmentsError
+          }}
         />
       </div>
 
-      {/* Bottom-right ResponsePanel */}
-      <div style={{ gridArea: 'response' }}>
-        <ResponsePanel response={responseData} />
-      </div>
+      {selectedEnvironment ? (
+        /* Environment Grid - Full Height */
+        <div style={{ gridArea: 'environment' }}>
+          <EnvironmentGrid 
+            environment={selectedEnvironment}
+            onBack={handleBackFromEnvironment}
+          />
+        </div>
+      ) : (
+        <>
+          {/* Top-right RequestPanel */}
+          <div style={{ gridArea: 'request' }}>
+            <RequestPanel 
+              onSendRequest={handleSendRequest} 
+              selectedRequest={selectedRequest}
+            />
+          </div>
+
+          {/* Bottom-right ResponsePanel */}
+          <div style={{ gridArea: 'response' }}>
+            <ResponsePanel response={responseData} />
+          </div>
+        </>
+      )}
     </div>
   );
 };
