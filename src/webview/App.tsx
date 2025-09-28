@@ -114,6 +114,7 @@ const App: React.FC = () => {
             isLoading: environmentsLoading,
             error: environmentsError
           }}
+          onNewRequest={handleRequestSelect}
         />
       </div>
 

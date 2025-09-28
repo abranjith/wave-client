@@ -17,7 +17,7 @@ import {
    SelectTrigger,
    SelectValue,
  } from "../components/ui/select"
- import {
+import {
   Tooltip,
   TooltipContent,
   TooltipProvider,
@@ -106,15 +106,6 @@ const RequestPanel: React.FC<RequestPanelProps> = ({ onSendRequest, selectedRequ
           </Select>
         </div>
 
-        {/* URL Input
-        <input
-          type="text"
-          className="flex-1 px-3 py-1 rounded border border-gray-300 bg-gray-50 text-gray-800 focus:outline-none"
-          placeholder="Enter request URL..."
-          value={url}
-          onChange={e => setUrl(e.target.value)}
-        /> */}
-
         {/* URL Input */}
         <div className="flex-1">
           <div className="flex gap-2">
@@ -154,12 +145,10 @@ const RequestPanel: React.FC<RequestPanelProps> = ({ onSendRequest, selectedRequ
             </TooltipContent>
           </Tooltip>
         </TooltipProvider>
-        
-        
       </div>
 
       {/* Horizontal Tabs */}
-      <div className="border-b border-slate-200 flex gap-0 bg-slate-50 dark:border-slate-700 dark:bg-slate-900">
+      <div className="border-b border-slate-200 flex gap-0 bg-slate-50 px-6 dark:border-slate-700 dark:bg-slate-900">
         {['params', 'headers', 'body'].map(tab => (
           <button
             key={tab}
@@ -176,7 +165,7 @@ const RequestPanel: React.FC<RequestPanelProps> = ({ onSendRequest, selectedRequ
       </div>
 
       {/* Tab Content */}
-      <div className="p-6 bg-white dark:bg-slate-900">
+      <div className="px-6 py-6 bg-white dark:bg-slate-900">
         {activeTab === 'params' && (
           <RequestParams 
             onStateChange={setRequestParams}

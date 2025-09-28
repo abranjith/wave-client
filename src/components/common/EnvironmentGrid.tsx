@@ -69,9 +69,6 @@ const EnvironmentGrid: React.FC<EnvironmentGridProps> = ({ environment, onBack }
                   <th className="text-left py-3 px-4 text-sm font-medium text-gray-700 dark:text-slate-300 w-6/12">
                     Value
                   </th>
-                  <th className="text-left py-3 px-4 text-sm font-medium text-gray-700 dark:text-slate-300 w-2/12">
-                    Type
-                  </th>
                   <th className="text-left py-3 px-4 text-sm font-medium text-gray-700 dark:text-slate-300 w-1/12">
                     Actions
                   </th>
@@ -95,15 +92,6 @@ const EnvironmentGrid: React.FC<EnvironmentGridProps> = ({ environment, onBack }
                             {isSecret && !isVisible ? '••••••••••••••••' : variable.value}
                           </span>
                         </div>
-                      </td>
-                      <td className="py-3 px-4">
-                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                          isSecret 
-                            ? 'bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200' 
-                            : 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200'
-                        }`}>
-                          {variable.type || 'default'}
-                        </span>
                       </td>
                       <td className="py-3 px-4">
                         {isSecret && (

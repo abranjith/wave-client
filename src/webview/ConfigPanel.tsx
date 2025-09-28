@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { SunIcon , LibraryIcon , HistoryIcon } from 'lucide-react';
+import { SunIcon , LibraryIcon , HistoryIcon, PlusIcon } from 'lucide-react';
 import {
    Tabs,
    TabsContent,
@@ -8,10 +8,19 @@ import {
 } from "../components/ui/tabs"
 import CollectionsPane, { CollectionsPaneProps } from '../components/common/CollectionsPane';
 import EnvironmentsPane, {EnvironmentsPaneProps} from '../components/common/EnvironmentsPane';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "../components/ui/tooltip"
+import { Button } from "../components/ui/button"
+import { ParsedRequest } from '../types/collection';
 
 interface ConfigPanelProps {
   collectionsProps: CollectionsPaneProps,
-  environmentProps: EnvironmentsPaneProps
+  environmentProps: EnvironmentsPaneProps,
+  onNewRequest: ((request: ParsedRequest) => void)
 }
 
 
@@ -91,7 +100,7 @@ const ConfigPanel1: React.FC = () => {
   )
 }
 
-const ConfigPanel: React.FC<ConfigPanelProps> = ({ collectionsProps, environmentProps }) => {
+const ConfigPanel: React.FC<ConfigPanelProps> = ({ collectionsProps, environmentProps, onNewRequest }) => {
   return (
     <div className="flex h-full w-full">
       <Tabs
@@ -99,18 +108,56 @@ const ConfigPanel: React.FC<ConfigPanelProps> = ({ collectionsProps, environment
         orientation="vertical"
         className="w-full h-full flex flex-row"
       >
-        <TabsList className="flex flex-col gap-2 bg-transparent py-4 px-2 w-16 flex-shrink-0 border-r border-gray-200">
+        <div className="flex flex-col gap-2 bg-transparent py-4 px-2 w-16 flex-shrink-0 border-r border-gray-200">
+          <TooltipProvider delayDuration={0}>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  onClick={() => {
+                    const request: ParsedRequest = {
+                      id: '',
+                      method: 'GET',
+                      url: '',
+                      headers: {},
+                      body: '',
+                      name: '',
+                      params: new URLSearchParams(),
+                      folderPath: [],
+                    };
+                    onNewRequest(request);
+                  }}
+                  className="flex items-center justify-center w-full h-12 text-gray-600 hover:bg-gray-100 hover:text-gray-900 rounded-md transition-colors mb-2"
+                >
+                  <PlusIcon size={20}/>
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent className="px-2 py-1 text-xs">
+                New Request
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+          <TabsList className="flex flex-col gap-2 bg-transparent py-0 px-0 w-full flex-shrink-0">
           {TABS.map(tab => (
-            <TabsTrigger
-              key={tab.key}
-              value={tab.key}
-              className="flex items-center justify-center w-full h-12 text-gray-600 hover:bg-gray-100 hover:text-gray-900 data-[state=active]:bg-blue-50 data-[state=active]:text-blue-600 data-[state=active]:border-r-2 data-[state=active]:border-blue-500 rounded-l-md transition-colors"
-              title={tab.label}
-            >
-              {tab.icon}
-            </TabsTrigger>
+            <TooltipProvider delayDuration={0}>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <TabsTrigger
+                  key={tab.key}
+                  value={tab.key}
+                  className="flex items-center justify-center w-full h-12 text-gray-600 hover:bg-gray-100 hover:text-gray-900 data-[state=active]:bg-blue-50 data-[state=active]:text-blue-600 data-[state=active]:border-l-2 data-[state=active]:border-blue-500 rounded-md transition-colors"
+                >
+                  {tab.icon}
+                </TabsTrigger>
+              </TooltipTrigger>
+              <TooltipContent className="px-2 py-1 text-xs">
+                {tab.label}
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
           ))}
-        </TabsList>
+          </TabsList>
+        </div>
         <div className="flex-1 overflow-hidden">
           <TabsContent value="collections" className="h-full overflow-hidden">
             <CollectionsPane 

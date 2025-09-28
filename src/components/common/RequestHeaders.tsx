@@ -99,9 +99,9 @@ const RequestHeaders: React.FC<RequestHeadersProps> = ({
 
   return (
     <div className="space-y-4">
-      <div className="overflow-x-auto">
+      <div className="overflow-x-auto overflow-y-auto max-h-80 border border-gray-200 rounded-lg">
         <table className="w-full border-collapse">
-          <thead>
+          <thead className="sticky top-0 bg-white z-10">
             <tr className="border-b border-gray-200">
               <th className="text-left py-2 px-3 text-sm font-medium text-gray-700 w-5/12">Header Name</th>
               <th className="text-left py-2 px-3 text-sm font-medium text-gray-700 w-5/12">Header Value</th>
