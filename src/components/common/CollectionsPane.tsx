@@ -1,12 +1,10 @@
 import React, { useState } from 'react';
 import { ChevronRightIcon, ChevronDownIcon, FolderIcon, LayoutGridIcon } from 'lucide-react';
-import { ParsedCollection, ParsedRequest } from '../../types/collection';
+import { ParsedRequest } from '../../types/collection';
+import useAppStateStore from '../../hooks/store/useAppStateStore';
 
 interface CollectionsPaneProps {
-  collections: ParsedCollection[];
   onRequestSelect: (request: ParsedRequest) => void;
-  isLoading?: boolean;
-  error?: string;
 }
 
 const getMethodColor = (method: string): string => {
@@ -23,11 +21,12 @@ const getMethodColor = (method: string): string => {
 };
 
 const CollectionsPane: React.FC<CollectionsPaneProps> = ({ 
-  collections, 
-  onRequestSelect, 
-  isLoading = false,
-  error 
+  onRequestSelect
 }) => {
+  const collections = useAppStateStore((state) => state.collections);
+  const isLoading = useAppStateStore((state) => state.isCollectionsLoading);
+  const error = useAppStateStore((state) => state.collectionLoadError);
+
   const [expandedCollections, setExpandedCollections] = useState<Set<string>>(
     new Set(collections.map(c => c.filename)) // Auto-expand all collections
   );

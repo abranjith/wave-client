@@ -6,8 +6,8 @@ import {
    TabsList,
    TabsTrigger,
 } from "../components/ui/tabs"
-import CollectionsPane, { CollectionsPaneProps } from '../components/common/CollectionsPane';
-import EnvironmentsPane, {EnvironmentsPaneProps} from '../components/common/EnvironmentsPane';
+import CollectionsPane from '../components/common/CollectionsPane';
+import EnvironmentsPane from '../components/common/EnvironmentsPane';
 import {
   Tooltip,
   TooltipContent,
@@ -15,12 +15,11 @@ import {
   TooltipTrigger,
 } from "../components/ui/tooltip"
 import { Button } from "../components/ui/button"
-import { ParsedRequest } from '../types/collection';
+import { ParsedRequest, Environment } from '../types/collection';
 
 interface ConfigPanelProps {
-  collectionsProps: CollectionsPaneProps,
-  environmentProps: EnvironmentsPaneProps,
-  onNewRequest: ((request: ParsedRequest) => void)
+  onRequestSelect: ((request: ParsedRequest) => void)
+  onEnvSelect: ((environment: Environment) => void)
 }
 
 
@@ -100,7 +99,7 @@ const ConfigPanel1: React.FC = () => {
   )
 }
 
-const ConfigPanel: React.FC<ConfigPanelProps> = ({ collectionsProps, environmentProps, onNewRequest }) => {
+const ConfigPanel: React.FC<ConfigPanelProps> = ({ onRequestSelect, onEnvSelect }) => {
   return (
     <div className="flex h-full w-full">
       <Tabs
@@ -119,13 +118,13 @@ const ConfigPanel: React.FC<ConfigPanelProps> = ({ collectionsProps, environment
                       id: '',
                       method: 'GET',
                       url: '',
-                      headers: {},
+                      headers: [],
                       body: '',
                       name: '',
-                      params: new URLSearchParams(),
+                      params: [],
                       folderPath: [],
                     };
-                    onNewRequest(request);
+                    onRequestSelect(request);
                   }}
                   className="flex items-center justify-center w-full h-12 text-gray-600 hover:bg-gray-100 hover:text-gray-900 rounded-md transition-colors mb-2"
                 >
@@ -161,10 +160,7 @@ const ConfigPanel: React.FC<ConfigPanelProps> = ({ collectionsProps, environment
         <div className="flex-1 overflow-hidden">
           <TabsContent value="collections" className="h-full overflow-hidden">
             <CollectionsPane 
-                collections={collectionsProps.collections}
-                onRequestSelect={collectionsProps.onRequestSelect}
-                isLoading={collectionsProps.isLoading}
-                error={collectionsProps.error}
+                onRequestSelect={onRequestSelect}
               />
           </TabsContent>
           <TabsContent value="history" className="h-full overflow-hidden">
@@ -174,10 +170,7 @@ const ConfigPanel: React.FC<ConfigPanelProps> = ({ collectionsProps, environment
           </TabsContent>
           <TabsContent value="environments" className="h-full overflow-hidden">
             <EnvironmentsPane 
-                environments={environmentProps.environments}
-                onEnvironmentSelect={environmentProps.onEnvironmentSelect}
-                isLoading={environmentProps.isLoading}
-                error={environmentProps.error}
+                onEnvSelect={onEnvSelect}
               />
           </TabsContent>
         </div>

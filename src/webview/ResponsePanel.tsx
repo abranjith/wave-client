@@ -1,14 +1,7 @@
 import React, { useState } from 'react';
+import { ResponseData } from '../types/collection';
+import useAppStateStore from '../hooks/store/useAppStateStore';
 
-
-export interface ResponseData {
-  status: number;
-  statusText: string;
-  elapsedTime: number;
-  size: number;
-  body: string;
-  headers: Record<string, string>;
-}
 
 function getStatusColor(status: number) {
   if (status >= 200 && status < 300) return 'text-green-600';
@@ -17,12 +10,9 @@ function getStatusColor(status: number) {
   return 'text-gray-600';
 }
 
-interface Props {
-  response?: ResponseData;
-}
-
-const ResponsePanel: React.FC<Props> = ({ response }) => {
+const ResponsePanel: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'body' | 'headers'>('body');
+  const response = useAppStateStore((state) => state.responseData);
 
   // Show a placeholder when no response is available
   if (!response) {

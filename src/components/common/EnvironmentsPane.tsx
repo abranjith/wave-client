@@ -1,23 +1,20 @@
 import React from 'react';
 import { CloudIcon, SettingsIcon } from 'lucide-react';
 import { Environment } from '../../types/collection';
+import useAppStateStore from '../../hooks/store/useAppStateStore';
 
 interface EnvironmentsPaneProps {
-  environments: Environment[];
-  onEnvironmentSelect?: (environment: Environment) => void;
-  isLoading?: boolean;
-  error?: string;
+  onEnvSelect?: (environment: Environment) => void;
 }
 
-const EnvironmentsPane: React.FC<EnvironmentsPaneProps> = ({ 
-  environments, 
-  onEnvironmentSelect,
-  isLoading = false,
-  error 
-}) => {
+const EnvironmentsPane: React.FC<EnvironmentsPaneProps> = ({ onEnvSelect }) => {
+  const environments = useAppStateStore((state) => state.environments);
+  const isLoading = useAppStateStore((state) => state.isEnvironmentsLoading);
+  const error = useAppStateStore((state) => state.environmentLoadError);
+
   const handleEnvironmentClick = (environment: Environment) => {
-    if (onEnvironmentSelect) {
-      onEnvironmentSelect(environment);
+    if (onEnvSelect) {
+      onEnvSelect(environment);
     }
   };
 

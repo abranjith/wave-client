@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { EyeIcon, EyeOffIcon, ArrowLeftIcon } from 'lucide-react';
 import { Button } from '../ui/button';
-import { Environment, EnvironmentVariable } from '../../types/collection';
+import { Environment } from '../../types/collection';
 
 interface EnvironmentGridProps {
   environment: Environment;

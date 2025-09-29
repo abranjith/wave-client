@@ -54,6 +54,14 @@ module.exports = {
           "4": "hsl(var(--chart-4))",
           "5": "hsl(var(--chart-5))",
         },
+        'pastel-pink': '#FFD1DC',
+        'pastel-blue': '#A0D8E1',
+        'pastel-green': '#B2E0B2',
+        'pastel-yellow': '#FDFD96',
+        'pastel-orange': '#FFAB40',
+        'pastel-purple': '#EAB8FF',
+        'pastel-red': '#FFABAB',
+        'pastel-gray': '#D3D3D3'
       },
       keyframes: {
         "accordion-down": {

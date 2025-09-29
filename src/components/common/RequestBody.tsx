@@ -1,34 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import { Button } from '../ui/button';
 import { Textarea } from '../ui/textarea';
+import useAppStateStore from '../../hooks/store/useAppStateStore';
 
-interface RequestBodyProps {
-  onStateChange: (body: string) => void;
-  initialBody?: string;
-}
-
-const RequestBody: React.FC<RequestBodyProps> = ({ 
-  onStateChange, 
-  initialBody = '' 
-}) => {
-  const [body, setBody] = useState<string>(initialBody);
-  const [isValidJSON, setIsValidJSON] = useState<boolean>(false);
-
-  // Check if the body is valid JSON and notify parent
-  useEffect(() => {
-    // Check if the body is valid JSON
-    let isValid = false;
-    if (body.trim()) {
-      try {
-        JSON.parse(body);
-        isValid = true;
-      } catch (e) {
-        isValid = false;
-      }
-    }
-    setIsValidJSON(isValid);
-    onStateChange(body);
-  }, [body, onStateChange]);
+const RequestBody: React.FC = () => {
+  const [body, setBody, isValidJSON] = useAppStateStore((state) => [state?.body || '', state.updateBody, state.isBodyValidJson]);
 
   const handleBodyChange = (newValue: string) => {
     setBody(newValue);
@@ -72,17 +48,17 @@ const RequestBody: React.FC<RequestBodyProps> = ({
           <span className="text-sm text-muted-foreground">Request Body</span>
           {body.trim() && (
             <span className={`text-xs px-2 py-1 rounded ${
-              isValidJSON 
+              isValidJSON() 
                 ? 'bg-green-100 text-green-800 border border-green-200 dark:bg-green-900/20 dark:text-green-400 dark:border-green-800' 
                 : 'bg-blue-100 text-blue-800 border border-blue-200 dark:bg-blue-900/20 dark:text-blue-400 dark:border-blue-800'
             }`}>
-              {isValidJSON ? 'Valid JSON' : 'Text'}
+              {isValidJSON() ? 'Valid JSON' : 'Text'}
             </span>
           )}
         </div>
         
         <div className="flex items-center gap-2">
-          {isValidJSON && (
+          {isValidJSON() && (
             <>
               <Button
                 variant="outline"

@@ -67,9 +67,9 @@ export interface ParsedRequest {
   name: string;
   method: string;
   url: string;
-  headers: Record<string, string | string[]>;
-  params: URLSearchParams;
-  body: string;
+  headers: HeaderRow[];
+  params: ParamRow[];
+  body: string | null;
   folderPath: string[];
 }
 
@@ -84,4 +84,25 @@ export interface ParsedCollection {
   filename: string;
   folders: ParsedFolder[];
   requests: ParsedRequest[]; // Top-level requests not in folders
+}
+
+export interface HeaderRow {
+  id: string;
+  key: string;
+  value: string;
+}
+
+export interface ParamRow {
+  id: string;
+  key: string;
+  value: string;
+}
+
+export interface ResponseData {
+  status: number;
+  statusText: string;
+  elapsedTime: number;
+  size: number;
+  body: string;
+  headers: Record<string, string>;
 }

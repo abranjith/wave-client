@@ -7,13 +7,10 @@ import { Square } from "../components/common/square"
 import RequestParams from "../components/common/RequestParams"
 import RequestHeaders from "../components/common/RequestHeaders"
 import RequestBody from "../components/common/RequestBody"
-import { ParsedRequest } from '../types/collection'
 import {
    Select,
    SelectContent,
-   SelectGroup,
    SelectItem,
-   SelectLabel,
    SelectTrigger,
    SelectValue,
  } from "../components/ui/select"
@@ -23,6 +20,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "../components/ui/tooltip"
+import useAppStateStore from '../hooks/store/useAppStateStore';
 
 // VS Code API will be passed as a prop
 
@@ -34,34 +32,13 @@ const PROTOCOLS = [
   'HTTP', 'HTTPS'
 ];
 
-interface RequestPanelProps {
-  onSendRequest: (request: { method: string; url: string; params?: string; headers?: Record<string, string | string[]>; body?: string }) => void;
-  selectedRequest?: ParsedRequest;
-}
-
-const RequestPanel: React.FC<RequestPanelProps> = ({ onSendRequest, selectedRequest }) => {
+const RequestPanel: React.FC = () => {
   const [protocol, setProtocol] = useState('HTTPS');
-  const [method, setMethod] = useState('GET');
-  const [url, setUrl] = useState('');
-  const [requestParams, setRequestParams] = useState<URLSearchParams>(new URLSearchParams());
-  const [requestHeaders, setRequestHeaders] = useState<Record<string, string | string[]>>({});
-  const [requestBody, setRequestBody] = useState<string>('');
+  const [method, setMethod, url, setUrl, onSendRequest] = useAppStateStore((state) => [state.method || 'GET', state.updateMethod, state.url || '', state.updateUrl, state.handleSendRequest]);
 
   const [activeTab, setActiveTab] = useState<'params' | 'headers' | 'body'>('params');
   const urlInputId = useId();
   const httpMethodSelectId = useId();
-
-  // Effect to populate form when a request is selected
-  useEffect(() => {
-    if (selectedRequest) {
-      setMethod(selectedRequest.method);
-      setUrl(selectedRequest.url);
-      setRequestParams(new URLSearchParams(selectedRequest.params));
-      setRequestHeaders(selectedRequest.headers);
-      setRequestBody(selectedRequest.body);
-    }
-  }, [selectedRequest]);
-
 
   return (
     <div className="w-full bg-background border-b">
@@ -126,14 +103,7 @@ const RequestPanel: React.FC<RequestPanelProps> = ({ onSendRequest, selectedRequ
             <TooltipTrigger asChild>
               <Button
                 onClick={() => {
-                  const request = {
-                    method,
-                    url,
-                    params: requestParams.toString(),
-                    headers: requestHeaders,
-                    body: requestBody,
-                  };
-                  onSendRequest(request);
+                  onSendRequest();
                 }}
                 className="bg-blue-600 hover:bg-blue-700 text-white font-medium px-6 py-2 transition-colors dark:bg-blue-500 dark:hover:bg-blue-600"
               >
@@ -167,22 +137,13 @@ const RequestPanel: React.FC<RequestPanelProps> = ({ onSendRequest, selectedRequ
       {/* Tab Content */}
       <div className="px-6 py-6 bg-white dark:bg-slate-900">
         {activeTab === 'params' && (
-          <RequestParams 
-            onStateChange={setRequestParams}
-            initialParams={requestParams}
-          />
+          <RequestParams/>
         )}
         {activeTab === 'headers' && (
-          <RequestHeaders 
-            onStateChange={setRequestHeaders}
-            initialHeaders={requestHeaders}
-          />
+          <RequestHeaders/>
         )}
         {activeTab === 'body' && (
-          <RequestBody 
-            onStateChange={setRequestBody}
-            initialBody={requestBody}
-          />
+          <RequestBody/>
         )}
       </div>
     </div>
