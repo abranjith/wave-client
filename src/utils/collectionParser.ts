@@ -1,10 +1,11 @@
-import { Collection, CollectionItem, ParsedCollection, ParsedFolder, ParsedRequest, CollectionUrl, CollectionHeader } from '../types/collection';
+import { Collection, CollectionItem, ParsedCollection, ParsedFolder, ParsedRequest, CollectionUrl, ParamRow } from '../types/collection';
 
 /**
  * Generates a unique ID for a request based on its path and name
  */
-function generateRequestId(folderPath: string[], requestName: string): string {
-  return [...folderPath, requestName].join('/').toLowerCase().replace(/[^a-z0-9\/]/g, '-');
+function generateRequestId(folderPath: string[], requestName: string, prefix: string | null = null): string {
+  const baseId = [...folderPath, requestName].join('/').toLowerCase().replace(/[^a-z0-9\/]/g, '-');
+  return prefix ? `${prefix}-${baseId}` : baseId;
 }
 
 /**
@@ -27,47 +28,34 @@ function urlToString(url: CollectionUrl | string): string {
   return `${protocol}://${host}${path}`;
 }
 
-/**
- * Converts collection headers to record format
- */
-function headersToRecord(headers?: CollectionHeader[]): Record<string, string | string[]> {
-  if (!headers) {
-    return {};
-  }
-  
-  const result: Record<string, string | string[]> = {};
-  headers.forEach(header => {
-    if (header.key && header.value) {
-      result[header.key] = header.value;
-    }
-  });
-  
-  return result;
-}
 
 /**
  * Extracts URL parameters from both URL string and Postman query array
  */
-function extractUrlParams(url: CollectionUrl | string): URLSearchParams {
-  const params = new URLSearchParams();
+function extractUrlParams(url: CollectionUrl | string): ParamRow[] {
   
   if (typeof url === 'object' && url.query) {
     // Handle Postman query array format
-    url.query.forEach((queryItem: any) => {
-      if (queryItem.key && queryItem.value) {
-        params.append(queryItem.key, queryItem.value);
-      }
-    });
+    return url.query.map(q => ({
+      id: q.id || generateRequestId([], q.key, 'param'),
+      key: q.key,
+      value: q.value,
+      disabled: q.disabled || false
+    }));
   }
   
   // Also try to extract from raw URL
+  const params: ParamRow[] = [];
   const urlString = urlToString(url);
   try {
     const urlObj = new URL(urlString);
     urlObj.searchParams.forEach((value, key) => {
-      if (!params.has(key)) {
-        params.append(key, value);
-      }
+      params.push({
+        id: generateRequestId([], key, 'param'),
+        key,
+        value,
+        disabled: false
+      });
     });
   } catch {
     // Ignore parsing errors
@@ -122,7 +110,7 @@ function flattenFolders(
     } else if (item.request) {
       // This is a top-level request
       const url = urlToString(item.request.url);
-      const headers = headersToRecord(item.request.header);
+      const headers = item.request.header || [];
       const params = extractUrlParams(item.request.url);
       const body = item.request.body?.raw || '';
       
@@ -159,7 +147,7 @@ function getAllRequestsFromFolder(
     } else if (item.request) {
       // This is a request
       const url = urlToString(item.request.url);
-      const headers = headersToRecord(item.request.header);
+      const headers = item.request.header || [];
       const params = extractUrlParams(item.request.url);
       const body = item.request.body?.raw || '';
       

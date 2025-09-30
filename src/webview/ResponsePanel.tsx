@@ -1,7 +1,5 @@
 import React, { useState } from 'react';
-import { ResponseData } from '../types/collection';
 import useAppStateStore from '../hooks/store/useAppStateStore';
-
 
 function getStatusColor(status: number) {
   if (status >= 200 && status < 300) return 'text-green-600';
@@ -32,6 +30,8 @@ const ResponsePanel: React.FC = () => {
   const size = response.size;
   const body = response.body;
   const headers = response.headers;
+
+  console.log("ResponsePanel rendered");
 
   return (
     <div className="w-full h-full bg-white flex flex-col">

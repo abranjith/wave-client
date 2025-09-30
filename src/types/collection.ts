@@ -1,20 +1,11 @@
 // Collection types based on Postman collection structure
 
-export interface CollectionHeader {
-  key: string;
-  value: string;
-}
-
 export interface CollectionUrl {
   raw: string;
   protocol?: string;
   host?: string[];
   path?: string[];
-  query?: Array<{
-    key: string;
-    value: string;
-    disabled?: boolean;
-  }>;
+  query?: ParamRow[];
 }
 
 export interface CollectionBody {
@@ -24,7 +15,7 @@ export interface CollectionBody {
 
 export interface CollectionRequest {
   method: string;
-  header?: CollectionHeader[];
+  header?: HeaderRow[];
   url: CollectionUrl | string;
   body?: CollectionBody;
 }
@@ -90,12 +81,14 @@ export interface HeaderRow {
   id: string;
   key: string;
   value: string;
+  disabled: boolean;
 }
 
 export interface ParamRow {
   id: string;
   key: string;
   value: string;
+  disabled: boolean;
 }
 
 export interface ResponseData {

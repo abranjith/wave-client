@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import ConfigPanel from './ConfigPanel';
 import RequestPanel from './RequestPanel';
 import ResponsePanel from './ResponsePanel';
@@ -18,11 +18,16 @@ const App: React.FC = () => {
   const setEnvironmentLoadError = useAppStateStore((state) => state.setEnvironmentLoadError);
   const setCurrentRequest = useAppStateStore((state) => state.setCurrentRequest);
   const setResponseData = useAppStateStore((state) => state.setResponseData);
+  const onSendRequest = useAppStateStore((state) => state.handleSendRequest);
+  const vsCodeRef = useRef<any>(null);
 
   // Initialize Collections and Environments
   useEffect(() => {
-    refreshEnvironments();
-    refreshCollections();
+    if (typeof acquireVsCodeApi !== 'undefined' && !vsCodeRef.current) {
+      vsCodeRef.current = acquireVsCodeApi();
+      refreshEnvironments(vsCodeRef.current);
+      refreshCollections(vsCodeRef.current);
+    }
   }, []);
 
   const handleRequestSelect = (request: ParsedRequest) => {
@@ -36,6 +41,12 @@ const App: React.FC = () => {
 
   const handleBackFromEnvironment = () => {
     setSelectedEnvironment(null);
+  };
+
+  const handleSendRequest = () => {
+    if (vsCodeRef.current) {
+      onSendRequest(vsCodeRef.current);
+    }
   };
 
   useEffect(() => {
@@ -105,7 +116,9 @@ const App: React.FC = () => {
         <>
           {/* Top-right RequestPanel */}
           <div style={{ gridArea: 'request' }}>
-            <RequestPanel/>
+            <RequestPanel 
+              onSendRequest={handleSendRequest} 
+            />
           </div>
 
           {/* Bottom-right ResponsePanel */}

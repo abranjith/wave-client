@@ -1,14 +1,62 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Trash2Icon } from 'lucide-react';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import useAppStateStore from '../../hooks/store/useAppStateStore';
 
 const RequestParams: React.FC = () => {
-  const [params, addEmptyParam, upsertParam, removeParam] = useAppStateStore((state) => [state.params || [], state.addEmptyParam, state.upsertParam, state.removeParam]);
+  const params = useAppStateStore((state) => state.params || []);
+  const addEmptyParam = useAppStateStore((state) => state.addEmptyParam);
+  const upsertParam = useAppStateStore((state) => state.upsertParam);
+  const removeParam = useAppStateStore((state) => state.removeParam);
 
-  const updateParam = (id: string, field: 'key' | 'value', newValue: string) => {
-    upsertParam(id, field === 'key' ? newValue : undefined, field === 'value' ? newValue : undefined);
+  // Local state to track input values for all params
+  const [localParams, setLocalParams] = useState<{ [id: string]: { key: string; value: string } }>({});
+
+  // Sync local state when global params change (e.g., when adding/removing params)
+  useEffect(() => {
+    const newLocalParams: { [id: string]: { key: string; value: string } } = {};
+    params.forEach(param => {
+      if (!localParams[param.id]) {
+        newLocalParams[param.id] = { key: param.key, value: param.value };
+      } else {
+        newLocalParams[param.id] = localParams[param.id];
+      }
+    });
+    setLocalParams(newLocalParams);
+  }, [params.length]); // Only trigger when params are added/removed
+
+  const updateLocalParam = (id: string, field: 'key' | 'value', newValue: string) => {
+    setLocalParams(prev => ({
+      ...prev,
+      [id]: {
+        ...prev[id],
+        [field]: newValue
+      }
+    }));
+  };
+
+  const commitParam = (id: string) => {
+    const localParam = localParams[id];
+    if (localParam) {
+      upsertParam(id, localParam.key, localParam.value);
+      
+      // If both key and value are present, add an empty row for next entry
+      if (localParam.key.trim() && localParam.value.trim()) {
+        const isLastRow = params[params.length - 1].id === id;
+        const hasEmptyRow = params.some(p => !p.key.trim() && !p.value.trim());
+        
+        if (isLastRow && !hasEmptyRow) {
+          addEmptyParam();
+        }
+      }
+    }
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent, id: string) => {
+    if (e.key === 'Enter') {
+      commitParam(id);
+    }
   };
 
   return (
@@ -29,8 +77,10 @@ const RequestParams: React.FC = () => {
                   <Input
                     type="text"
                     placeholder="Parameter key"
-                    value={param.key}
-                    onChange={e => updateParam(param.id, 'key', e.target.value)}
+                    value={localParams[param.id]?.key ?? param.key}
+                    onChange={e => updateLocalParam(param.id, 'key', e.target.value)}
+                    onBlur={() => commitParam(param.id)}
+                    onKeyDown={e => handleKeyDown(e, param.id)}
                     className="w-full text-sm rounded bg-gray-50 text-gray-800 focus:outline-none"
                   />
                 </td>
@@ -38,8 +88,10 @@ const RequestParams: React.FC = () => {
                   <Input
                     type="text"
                     placeholder="Parameter value"
-                    value={param.value}
-                    onChange={e => updateParam(param.id, 'value', e.target.value)}
+                    value={localParams[param.id]?.value ?? param.value}
+                    onChange={e => updateLocalParam(param.id, 'value', e.target.value)}
+                    onBlur={() => commitParam(param.id)}
+                    onKeyDown={e => handleKeyDown(e, param.id)}
                     className="w-full text-sm rounded bg-gray-50 text-gray-800 focus:outline-none"
                   />
                 </td>

@@ -1,9 +1,7 @@
-import React, { useState, useId, useEffect } from 'react';
+import React, { useState, useId } from 'react';
 import { SendHorizonalIcon } from 'lucide-react';
 import { Button } from "../components/ui/button"
 import { Input } from "../components/ui/input"
-import { Label } from "../components/ui/label"
-import { Square } from "../components/common/square"
 import RequestParams from "../components/common/RequestParams"
 import RequestHeaders from "../components/common/RequestHeaders"
 import RequestBody from "../components/common/RequestBody"
@@ -22,7 +20,9 @@ import {
 } from "../components/ui/tooltip"
 import useAppStateStore from '../hooks/store/useAppStateStore';
 
-// VS Code API will be passed as a prop
+interface RequestPanelProps {
+  onSendRequest: () => void;
+}
 
 const HTTP_METHODS = [
   'GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'HEAD', 'OPTIONS'
@@ -32,13 +32,17 @@ const PROTOCOLS = [
   'HTTP', 'HTTPS'
 ];
 
-const RequestPanel: React.FC = () => {
+const RequestPanel: React.FC<RequestPanelProps> = ({ onSendRequest })  => {
   const [protocol, setProtocol] = useState('HTTPS');
-  const [method, setMethod, url, setUrl, onSendRequest] = useAppStateStore((state) => [state.method || 'GET', state.updateMethod, state.url || '', state.updateUrl, state.handleSendRequest]);
+  const method = useAppStateStore((state) => state.method || 'GET');
+  const setMethod = useAppStateStore((state) => state.updateMethod);
+  const url = useAppStateStore((state) => state.url || '');
+  const setUrl = useAppStateStore((state) => state.updateUrl);
 
   const [activeTab, setActiveTab] = useState<'params' | 'headers' | 'body'>('params');
   const urlInputId = useId();
   const httpMethodSelectId = useId();
+  console.log("RequestPanel rendered");
 
   return (
     <div className="w-full bg-background border-b">

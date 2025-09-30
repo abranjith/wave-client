@@ -4,7 +4,9 @@ import { Textarea } from '../ui/textarea';
 import useAppStateStore from '../../hooks/store/useAppStateStore';
 
 const RequestBody: React.FC = () => {
-  const [body, setBody, isValidJSON] = useAppStateStore((state) => [state?.body || '', state.updateBody, state.isBodyValidJson]);
+  const body = useAppStateStore((state) => state?.body || '');
+  const setBody = useAppStateStore((state) => state.updateBody);
+  const isValidJSON = useAppStateStore((state) => state.isBodyValidJson);
 
   const handleBodyChange = (newValue: string) => {
     setBody(newValue);

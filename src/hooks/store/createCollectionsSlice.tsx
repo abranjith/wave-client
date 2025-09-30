@@ -9,7 +9,7 @@ interface CollectionsSlice {
     addCollection: (collection: ParsedCollection) => void;
     removeCollection: (name: string) => void;
     updateCollection: (name: string, updates: Partial<ParsedCollection>) => void;
-    refreshCollections: () => void;
+    refreshCollections: (vsCodeApi: any) => void;
     setIsCollectionsLoading: (isLoading: boolean) => void;
     setCollectionLoadError: (error: string | null) => void;
 }
@@ -28,13 +28,12 @@ const createCollectionsSlice: StateCreator<CollectionsSlice> = (set) => ({
     updateCollection: (name, updates) => set((state) => ({
         collections: state.collections.map((c) => c.name === name ? { ...c, ...updates } : c)
     })),
-    refreshCollections: () => {
-        if (typeof acquireVsCodeApi === 'undefined') {
+    refreshCollections: (vsCodeApi) => {
+        if (vsCodeApi === 'undefined') {
             return;
         }
         set({ isCollectionsLoading: true, collectionLoadError: null });
-        const vscode = acquireVsCodeApi();
-        vscode.postMessage({ type: 'loadCollections' });
+        vsCodeApi.postMessage({ type: 'loadCollections' });
     },
     setIsCollectionsLoading: (isLoading) => set({ isCollectionsLoading: isLoading }),
     setCollectionLoadError: (error) => set({ collectionLoadError: error, isCollectionsLoading: false })

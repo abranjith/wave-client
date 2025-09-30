@@ -51,7 +51,7 @@ interface CurrentRequestSlice {
     setIsRequestProcessing: (isLoading: boolean) => void;
     setRequestError: (error: string | null) => void;
 
-    handleSendRequest: () => void;
+    handleSendRequest: (vsCodeApi: any) => void;
 }
 
 const getDictFromHeaderRows = (headerRows: HeaderRow[]): Record<string, string | string[]> => {
@@ -96,8 +96,8 @@ const createCurrentRequestSlice: StateCreator<CurrentRequestSlice> = (set, get) 
     name: null,
     method: 'GET',
     url: null,
-    params: [{ id: `param-${Date.now()}`, key: '', value: '' }],
-    headers: [{ id: `header-${Date.now()}`, key: '', value: '' }],
+    params: [{ id: `param-${Date.now()}`, key: '', value: '', disabled: false }],
+    headers: [{ id: `header-${Date.now()}`, key: '', value: '', disabled: false }],
     body: null,
     folderPath: null,
     responseData: null,
@@ -111,8 +111,8 @@ const createCurrentRequestSlice: StateCreator<CurrentRequestSlice> = (set, get) 
         name: request?.name,
         method: request?.method,
         url: request?.url,
-        params: request?.params || [{ id: `param-${Date.now()}`, key: '', value: '' }],
-        headers: request?.headers || [{ id: `header-${Date.now()}`, key: '', value: '' }],
+        params: (request?.params && request?.params.length > 0) ? request.params : [{ id: `param-${Date.now()}`, key: '', value: '', disabled: false }],
+        headers: (request?.headers && request?.headers.length > 0) ? request.headers : [{ id: `header-${Date.now()}`, key: '', value: '', disabled: false }],
         body: request?.body,
         folderPath: request?.folderPath,
         responseData: null,
@@ -124,8 +124,8 @@ const createCurrentRequestSlice: StateCreator<CurrentRequestSlice> = (set, get) 
         name: null,
         method: 'GET',
         url: null,
-        params: [{ id: `param-${Date.now()}`, key: '', value: '' }],
-        headers: [{ id: `header-${Date.now()}`, key: '', value: '' }],
+        params: [{ id: `param-${Date.now()}`, key: '', value: '', disabled: false }],
+        headers: [{ id: `header-${Date.now()}`, key: '', value: '', disabled: false }],
         body: null,
         folderPath: null,
         responseData: null,
@@ -166,7 +166,7 @@ const createCurrentRequestSlice: StateCreator<CurrentRequestSlice> = (set, get) 
 
     // Headers management
     addEmptyHeader: () => {
-        const newHeader = { id: `header-${Date.now()}`, key: '', value: '' };
+        const newHeader = { id: `header-${Date.now()}`, key: '', value: '', disabled: false };
         set(state => ({ headers: [...(state.headers || []), newHeader] }));
     },
     upsertHeader: (id: string, key: string | undefined, value: string | undefined) => {
@@ -179,20 +179,17 @@ const createCurrentRequestSlice: StateCreator<CurrentRequestSlice> = (set, get) 
         if (existingHeaderIndex !== -1) {
             // Update existing header
             const updatedHeaders = [...currentHeaders];
-            //allow partial updates (handle undefined key/value)
+            // Allow partial updates (handle undefined key/value)
             updatedHeaders[existingHeaderIndex] = { 
                 id, 
                 key: key ?? updatedHeaders[existingHeaderIndex].key, 
-                value: value ?? updatedHeaders[existingHeaderIndex].value 
+                value: value ?? updatedHeaders[existingHeaderIndex].value,
+                disabled: false
             };
-            //if both key and value are present, add an empty row so UI can show next row to update
-            if (updatedHeaders[existingHeaderIndex].key && updatedHeaders[existingHeaderIndex].value) {
-                updatedHeaders.push({ id: `header-${Date.now()}`, key: '', value: '' });
-            }
             set({ headers: updatedHeaders });
         } else {
             // Add new header
-            const newHeaders = [...currentHeaders, { id, key: key || '', value: value || '' }];
+            const newHeaders = [...currentHeaders, { id, key: key || '', value: value || '', disabled: false }];
             set({ headers: newHeaders });
         }
     },
@@ -201,14 +198,14 @@ const createCurrentRequestSlice: StateCreator<CurrentRequestSlice> = (set, get) 
         const currentHeaders = state.headers || [];
         const filteredHeaders = currentHeaders.filter(header => header.id !== id);
         if (filteredHeaders.length === 0) {
-            filteredHeaders.push({ id: `header-${Date.now()}`, key: '', value: '' });
+            filteredHeaders.push({ id: `header-${Date.now()}`, key: '', value: '', disabled: false });
         }
         set({ headers: filteredHeaders });
     },
     
     // URL Parameters management
     addEmptyParam: () => {
-        const newParam = { id: `param-${Date.now()}`, key: '', value: '' };
+        const newParam = { id: `param-${Date.now()}`, key: '', value: '', disabled: false };
         set(state => ({ params: [...(state.params || []), newParam] }));
     },
     upsertParam: (id: string, key: string | undefined, value: string | undefined) => {
@@ -225,16 +222,13 @@ const createCurrentRequestSlice: StateCreator<CurrentRequestSlice> = (set, get) 
             updatedParams[existingParamIndex] = { 
                 id, 
                 key: key ?? updatedParams[existingParamIndex].key, 
-                value: value ?? updatedParams[existingParamIndex].value 
+                value: value ?? updatedParams[existingParamIndex].value,
+                disabled: false
             };
-            //if both key and value are present, add an empty row so UI can show next row to update
-            if (updatedParams[existingParamIndex].key && updatedParams[existingParamIndex].value) {
-                updatedParams.push({ id: `param-${Date.now()}`, key: '', value: '' });
-            }
             set({ params: updatedParams });
         } else {
             // Add new param
-            const newParams = [...currentParams, { id, key: key || '', value: value || '' }];
+            const newParams = [...currentParams, { id, key: key || '', value: value || '', disabled: false }];
             set({ params: newParams });
         }
     },
@@ -243,7 +237,7 @@ const createCurrentRequestSlice: StateCreator<CurrentRequestSlice> = (set, get) 
         const currentParams = state.params || [];
         const filteredParams = currentParams.filter(param => param.id !== id);
         if (filteredParams.length === 0) {
-            filteredParams.push({ id: `param-${Date.now()}`, key: '', value: '' });
+            filteredParams.push({ id: `param-${Date.now()}`, key: '', value: '', disabled: false });
         }
         set({ params: filteredParams });
     },
@@ -265,7 +259,7 @@ const createCurrentRequestSlice: StateCreator<CurrentRequestSlice> = (set, get) 
     setRequestError: (error) => set({ requestError: error }),
 
     //Add method to start Processing request
-    handleSendRequest: () => {
+    handleSendRequest: (vsCodeApi) => {
         const state = get();
         
         if (!state.method || !state.url) {
@@ -273,7 +267,7 @@ const createCurrentRequestSlice: StateCreator<CurrentRequestSlice> = (set, get) 
             return;
         }
         
-        if (typeof acquireVsCodeApi === 'undefined') {
+        if (typeof vsCodeApi === 'undefined') {
             return;
         }
 
@@ -294,8 +288,7 @@ const createCurrentRequestSlice: StateCreator<CurrentRequestSlice> = (set, get) 
         };
         
         // Send request to VS Code
-        const vscode = acquireVsCodeApi();
-        vscode.postMessage({ type: 'httpRequest', request });
+        vsCodeApi.postMessage({ type: 'httpRequest', request });
     }
 });
 

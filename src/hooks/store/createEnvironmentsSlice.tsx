@@ -11,7 +11,7 @@ interface EnvironmentsSlice {
     removeEnvironment: (id: string) => void;
     updateEnvironment: (id: string, updates: Partial<Environment>) => void;
     setActiveEnvironment: (environment: Environment | null) => void;
-    refreshEnvironments: () => void;
+    refreshEnvironments: (vsCodeApi: any) => void;
     setIsEnvironmentsLoading: (isLoading: boolean) => void;
     setEnvironmentLoadError: (error: string | null) => void;
 }
@@ -22,7 +22,7 @@ const createEnvironmentsSlice: StateCreator<EnvironmentsSlice> = (set) => ({
     isEnvironmentsLoading: false,
     environmentLoadError: null,
 
-    setEnvironments: (environments) => set({ environments }),
+    setEnvironments: (environments) => set({ environments, environmentLoadError: null, isEnvironmentsLoading: false }),
     addEnvironment: (environment) => set((state) => ({
         environments: [...state.environments, environment]
     })),
@@ -35,16 +35,15 @@ const createEnvironmentsSlice: StateCreator<EnvironmentsSlice> = (set) => ({
         activeEnvironment: state.activeEnvironment?.id === id ? { ...state.activeEnvironment, ...updates } : state.activeEnvironment
     })),
     setActiveEnvironment: (environment) => set({ activeEnvironment: environment }),
-    refreshEnvironments: () => {
-        if (typeof acquireVsCodeApi === 'undefined') {
+    refreshEnvironments: (vsCodeApi) => {
+        if (typeof vsCodeApi === 'undefined') {
             return;
         }
         set({ isEnvironmentsLoading: true, environmentLoadError: null });
-        const vscode = acquireVsCodeApi();
-        vscode.postMessage({ type: 'loadEnvironments' });
+        vsCodeApi.postMessage({ type: 'loadEnvironments' });
     },
     setIsEnvironmentsLoading: (isLoading) => set({ isEnvironmentsLoading: isLoading }),
-    setEnvironmentLoadError: (error) => set({ environmentLoadError: error })
+    setEnvironmentLoadError: (error) => set({ environmentLoadError: error, isEnvironmentsLoading: false })
 });
 
 export default createEnvironmentsSlice;
