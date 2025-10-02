@@ -5,6 +5,7 @@ import axios from 'axios';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
+import { Environment } from './types/collection';
 
 // This method is called when your extension is activated
 // Your extension is activated the very first time the command is executed
@@ -219,6 +220,22 @@ async function loadEnvironments() {
 	}
 	
 	return environments;
+}
+
+//function to save environments to the default directory (~/.waveclient/environments)
+async function saveEnvironments(environments: Environment[]) {
+	const homeDir = os.homedir();
+	const environmentsDir = path.join(homeDir, '.waveclient', 'environments');
+
+	// Ensure the environments directory exists
+	if (!fs.existsSync(environmentsDir)) {
+		fs.mkdirSync(environmentsDir, { recursive: true });
+	}
+
+	for (const env of environments) {
+		const filePath = path.join(environmentsDir, `${env.name}.json`);
+		fs.writeFileSync(filePath, JSON.stringify(env, null, 2));
+	}
 }
 
 // This method is called when your extension is deactivated

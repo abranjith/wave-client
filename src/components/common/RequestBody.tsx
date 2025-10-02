@@ -1,156 +1,99 @@
-import React from 'react';
-import { Button } from '../ui/button';
-import { Textarea } from '../ui/textarea';
-import useAppStateStore from '../../hooks/store/useAppStateStore';
+import React, { useState, useId } from 'react';
+import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from '../ui/select';
+import TextBody from './TextBody';
+import { Label } from '../ui/label';
+import { SelectNative } from '../ui/select-native';
+
+type BodyType = 'none' | 'text' | 'binary' | 'form' | 'multipart';
 
 const RequestBody: React.FC = () => {
-  const body = useAppStateStore((state) => state?.body || '');
-  const setBody = useAppStateStore((state) => state.updateBody);
-  const isValidJSON = useAppStateStore((state) => state.isBodyValidJson);
+  const BODY_TYPES = [
+  'No Body', 'Text', 'Binary', 'Form', 'Multipart Form'
+];
+  const [selectedBodyType, setSelectedBodyType] = useState<BodyType>('none');
+  const bodyTypeSelectId = useId();
 
-  const handleBodyChange = (newValue: string) => {
-    setBody(newValue);
+  const handleBodyTypeChange = (str: string) => {
+    const typeMap: Record<string, BodyType> = {
+      'No Body': 'none',
+      'Text': 'text',
+      'Binary': 'binary',
+      'Form': 'form',
+      'Multipart Form': 'multipart'
+    };
+    setSelectedBodyType(typeMap[str] || 'none');
   };
 
-  const formatJSON = () => {
-    if (body.trim()) {
-      try {
-        const parsed = JSON.parse(body);
-        const formatted = JSON.stringify(parsed, null, 2);
-        setBody(formatted);
-      } catch (e) {
-        // If it's not valid JSON, don't format
-        console.warn('Invalid JSON, cannot format');
-      }
-    }
+  // Convert body type to display label
+  const getDisplayLabel = (type: BodyType): string => {
+    const labelMap: Record<BodyType, string> = {
+      'none': 'No Body',
+      'text': 'Text',
+      'binary': 'Binary',
+      'form': 'Form',
+      'multipart': 'Multipart Form'
+    };
+    return labelMap[type];
   };
 
-  const minifyJSON = () => {
-    if (body.trim()) {
-      try {
-        const parsed = JSON.parse(body);
-        const minified = JSON.stringify(parsed);
-        setBody(minified);
-      } catch (e) {
-        // If it's not valid JSON, don't minify
-        console.warn('Invalid JSON, cannot minify');
-      }
-    }
-  };
-
-  const clearBody = () => {
-    setBody('');
-  };
+  const renderDropdown = () => (
+    <Select value={getDisplayLabel(selectedBodyType)} onValueChange={handleBodyTypeChange}>
+      <SelectTrigger id={bodyTypeSelectId} className="w-auto max-w-full min-w-48 bg-white border-slate-300 text-slate-900 hover:bg-slate-50 dark:bg-slate-800 dark:border-slate-600 dark:text-slate-100 dark:hover:bg-slate-700">
+        <SelectValue placeholder="Select type" />
+      </SelectTrigger>
+      <SelectContent>
+        {BODY_TYPES.map(m => (
+          <SelectItem key={m} value={m} className="hover:bg-slate-100 dark:hover:bg-slate-700">
+            {m}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  );
 
   return (
-    <div className="space-y-4">
-      {/* Body Actions */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <span className="text-sm text-muted-foreground">Request Body</span>
-          {body.trim() && (
-            <span className={`text-xs px-2 py-1 rounded ${
-              isValidJSON() 
-                ? 'bg-green-100 text-green-800 border border-green-200 dark:bg-green-900/20 dark:text-green-400 dark:border-green-800' 
-                : 'bg-blue-100 text-blue-800 border border-blue-200 dark:bg-blue-900/20 dark:text-blue-400 dark:border-blue-800'
-            }`}>
-              {isValidJSON() ? 'Valid JSON' : 'Text'}
-            </span>
-          )}
-        </div>
+    <div className="flex flex-col h-full">
+      {/* Conditional Body Content - Takes remaining space */}
+      <div className="flex-1 overflow-auto min-h-0">
+        {selectedBodyType === 'text' && (
+          <TextBody dropdownElement={renderDropdown()} />
+        )}
         
-        <div className="flex items-center gap-2">
-          {isValidJSON() && (
-            <>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={formatJSON}
-              >
-                Format JSON
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={minifyJSON}
-              >
-                Minify JSON
-              </Button>
-            </>
-          )}
-          {body.trim() && (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={clearBody}
-              className="text-red-600 hover:text-red-700 hover:bg-red-50 dark:text-red-400 dark:hover:text-red-300 dark:hover:bg-red-900/20"
-            >
-              Clear
-            </Button>
-          )}
-        </div>
-      </div>
-
-      {/* Body Textarea */}
-      <div className="space-y-2">
-        <Textarea
-          placeholder="Enter request body (JSON, XML, plain text, etc.)"
-          value={body}
-          onChange={e => handleBodyChange(e.target.value)}
-          className="min-h-[300px] font-mono text-sm resize-y text-gray-800 dark:text-gray-200"
-          spellCheck={false}
-        />
+        {selectedBodyType === 'binary' && (
+          <>
+            <div className="flex-shrink-0 mb-4">{renderDropdown()}</div>
+            <div className="p-8 text-center border-2 border-dashed rounded-lg bg-slate-50 dark:bg-slate-900/50">
+              <p className="text-sm text-muted-foreground">Binary body support coming soon...</p>
+            </div>
+          </>
+        )}
         
-        {/* Character count */}
-        <div className="flex justify-end">
-          <span className="text-xs text-slate-600 bg-slate-100 px-2 py-1 rounded border dark:text-slate-400 dark:bg-slate-800 dark:border-slate-700">
-            {body.length} characters
-          </span>
-        </div>
-      </div>
+        {selectedBodyType === 'form' && (
+          <>
+            <div className="flex-shrink-0 mb-4">{renderDropdown()}</div>
+            <div className="p-8 text-center border-2 border-dashed rounded-lg bg-slate-50 dark:bg-slate-900/50">
+              <p className="text-sm text-muted-foreground">Form body support coming soon...</p>
+            </div>
+          </>
+        )}
+        
+        {selectedBodyType === 'multipart' && (
+          <>
+            <div className="flex-shrink-0 mb-4">{renderDropdown()}</div>
+            <div className="p-8 text-center border-2 border-dashed rounded-lg bg-slate-50 dark:bg-slate-900/50">
+              <p className="text-sm text-muted-foreground">Multipart form body support coming soon...</p>
+            </div>
+          </>
+        )}
 
-      {/* JSON Validation Message */}
-      {body.trim() && !isValidJSON && body.trim().startsWith('{') && (
-        <div className="text-sm bg-orange-50 border border-orange-200 rounded p-3 dark:bg-orange-900/10 dark:border-orange-800">
-          <span className="font-medium text-orange-800 dark:text-orange-400">Note:</span> 
-          <span className="text-orange-700 dark:text-orange-300"> Content appears to be JSON but contains syntax errors. 
-          Use the formatter once the JSON is valid.</span>
-        </div>
-      )}
-
-      {/* Common Body Examples */}
-      <div className="space-y-2">
-        <div className="text-sm text-muted-foreground font-medium">Quick Examples:</div>
-        <div className="flex flex-wrap gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setBody('{\n  "key": "value"\n}')}
-          >
-            JSON Object
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setBody('[\n  "item1",\n  "item2"\n]')}
-          >
-            JSON Array
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setBody('key1=value1&key2=value2')}
-          >
-            Form Data
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setBody('<root>\n  <item>value</item>\n</root>')}
-          >
-            XML
-          </Button>
-        </div>
+        {selectedBodyType === 'none' && (
+          <>
+            <div className="flex-shrink-0 mb-4">{renderDropdown()}</div>
+            <div className="p-8 text-center border-2 border-dashed rounded-lg bg-slate-50 dark:bg-slate-900/50">
+              <p className="text-sm text-muted-foreground">No body will be sent with this request</p>
+            </div>
+          </>
+        )}
       </div>
     </div>
   );
