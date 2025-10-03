@@ -42,7 +42,6 @@ const RequestPanel: React.FC<RequestPanelProps> = ({ onSendRequest })  => {
   const [activeTab, setActiveTab] = useState<'params' | 'headers' | 'body'>('params');
   const urlInputId = useId();
   const httpMethodSelectId = useId();
-  console.log("RequestPanel rendered");
 
   return (
     <div className="w-full bg-background border-b">

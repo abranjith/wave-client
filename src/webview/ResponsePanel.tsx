@@ -31,8 +31,6 @@ const ResponsePanel: React.FC = () => {
   const body = response.body;
   const headers = response.headers;
 
-  console.log("ResponsePanel rendered");
-
   return (
     <div className="w-full h-full bg-white flex flex-col">
       {/* Metadata Display */}

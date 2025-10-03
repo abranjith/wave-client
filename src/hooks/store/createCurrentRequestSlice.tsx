@@ -9,6 +9,11 @@ interface CurrentRequestSlice {
     params: ParamRow[] | null;
     headers: HeaderRow[] | null;
     body: string | null;
+    binaryBody?: {
+        data: ArrayBuffer;
+        fileName: string;
+        contentType: string;
+    };
     folderPath: string[] | null;
     responseData: ResponseData | null;
     isRequestProcessing: boolean;
@@ -24,6 +29,7 @@ interface CurrentRequestSlice {
     updateMethod: (method: string) => void;
     updateUrl: (url: string) => void;
     updateBody: (body: string) => void;
+    updateBinaryBody: (binaryBody: { data: ArrayBuffer; fileName: string; contentType: string } | undefined) => void;
     updateName: (name: string) => void;
     updateFolderPath: (folderPath: string[]) => void;
     isBodyValidJson: () => boolean;
@@ -99,6 +105,7 @@ const createCurrentRequestSlice: StateCreator<CurrentRequestSlice> = (set, get) 
     params: [{ id: `param-${Date.now()}`, key: '', value: '', disabled: false }],
     headers: [{ id: `header-${Date.now()}`, key: '', value: '', disabled: false }],
     body: null,
+    binaryBody: undefined,
     folderPath: null,
     responseData: null,
     isRequestProcessing: false,
@@ -114,6 +121,7 @@ const createCurrentRequestSlice: StateCreator<CurrentRequestSlice> = (set, get) 
         params: (request?.params && request?.params.length > 0) ? request.params : [{ id: `param-${Date.now()}`, key: '', value: '', disabled: false }],
         headers: (request?.headers && request?.headers.length > 0) ? request.headers : [{ id: `header-${Date.now()}`, key: '', value: '', disabled: false }],
         body: request?.body,
+        binaryBody: request?.binaryBody,
         folderPath: request?.folderPath,
         responseData: null,
         isRequestProcessing: false,
@@ -127,6 +135,7 @@ const createCurrentRequestSlice: StateCreator<CurrentRequestSlice> = (set, get) 
         params: [{ id: `param-${Date.now()}`, key: '', value: '', disabled: false }],
         headers: [{ id: `header-${Date.now()}`, key: '', value: '', disabled: false }],
         body: null,
+        binaryBody: undefined,
         folderPath: null,
         responseData: null,
         isRequestProcessing: false,
@@ -135,7 +144,7 @@ const createCurrentRequestSlice: StateCreator<CurrentRequestSlice> = (set, get) 
     }),
     getParsedRequest: () => {
         const state = get();
-        const { id, name, method, url, headers, body, params, folderPath } = state;
+        const { id, name, method, url, headers, body, binaryBody, params, folderPath } = state;
         return {
             id,
             name: name || '',
@@ -143,6 +152,7 @@ const createCurrentRequestSlice: StateCreator<CurrentRequestSlice> = (set, get) 
             url: url || '',
             headers: headers || [],
             body: body || '',
+            binaryBody: binaryBody,
             params: params || [],
             folderPath: folderPath || []
         };
@@ -152,6 +162,7 @@ const createCurrentRequestSlice: StateCreator<CurrentRequestSlice> = (set, get) 
     updateMethod: (method) => set({ method: method }),
     updateUrl: (url) => set({ url: url }),
     updateBody: (body) => set({ body: body }),
+    updateBinaryBody: (binaryBody) => set({ binaryBody: binaryBody }),
     updateName: (name) => set({ name: name }),
     updateFolderPath: (folderPath) => set({ folderPath: folderPath }),
     isBodyValidJson: () => {
@@ -284,7 +295,8 @@ const createCurrentRequestSlice: StateCreator<CurrentRequestSlice> = (set, get) 
             url: state.url, 
             params: paramsString || undefined, 
             headers, 
-            body: state.body || undefined
+            body: state.body || undefined,
+            binaryBody: state.binaryBody
         };
         
         // Send request to VS Code

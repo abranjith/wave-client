@@ -1,8 +1,10 @@
-import React, { useState, useId } from 'react';
+import React, { useState, useId, useEffect } from 'react';
 import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from '../ui/select';
 import TextBody from './TextBody';
+import BinaryBody from './BinaryBody';
 import { Label } from '../ui/label';
 import { SelectNative } from '../ui/select-native';
+import useAppStateStore from '../../hooks/store/useAppStateStore';
 
 type BodyType = 'none' | 'text' | 'binary' | 'form' | 'multipart';
 
@@ -12,6 +14,8 @@ const RequestBody: React.FC = () => {
 ];
   const [selectedBodyType, setSelectedBodyType] = useState<BodyType>('none');
   const bodyTypeSelectId = useId();
+  
+  const { updateBody, updateBinaryBody } = useAppStateStore();
 
   const handleBodyTypeChange = (str: string) => {
     const typeMap: Record<string, BodyType> = {
@@ -21,7 +25,16 @@ const RequestBody: React.FC = () => {
       'Form': 'form',
       'Multipart Form': 'multipart'
     };
-    setSelectedBodyType(typeMap[str] || 'none');
+    const newType = typeMap[str] || 'none';
+    setSelectedBodyType(newType);
+    
+    // Clear the appropriate body when switching types
+    if (newType !== 'text' && newType !== 'none') {
+      updateBody('');
+    }
+    if (newType !== 'binary') {
+      updateBinaryBody(undefined);
+    }
   };
 
   // Convert body type to display label
@@ -60,12 +73,7 @@ const RequestBody: React.FC = () => {
         )}
         
         {selectedBodyType === 'binary' && (
-          <>
-            <div className="flex-shrink-0 mb-4">{renderDropdown()}</div>
-            <div className="p-8 text-center border-2 border-dashed rounded-lg bg-slate-50 dark:bg-slate-900/50">
-              <p className="text-sm text-muted-foreground">Binary body support coming soon...</p>
-            </div>
-          </>
+          <BinaryBody dropdownElement={renderDropdown()} />
         )}
         
         {selectedBodyType === 'form' && (

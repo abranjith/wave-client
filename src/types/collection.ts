@@ -11,6 +11,11 @@ export interface CollectionUrl {
 export interface CollectionBody {
   mode: string;
   raw?: string;
+  binary?: {
+    data: ArrayBuffer;
+    fileName: string;
+    contentType: string;
+  };
 }
 
 export interface CollectionRequest {
@@ -61,6 +66,11 @@ export interface ParsedRequest {
   headers: HeaderRow[];
   params: ParamRow[];
   body: string | null;
+  binaryBody?: {
+    data: ArrayBuffer;
+    fileName: string;
+    contentType: string;
+  };
   folderPath: string[];
 }
 
