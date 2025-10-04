@@ -3,8 +3,7 @@ import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from '.
 import TextBody from './TextBody';
 import BinaryBody from './BinaryBody';
 import FormBody from './FormBody';
-import { Label } from '../ui/label';
-import { SelectNative } from '../ui/select-native';
+import MultiPartFormBody from './MultiPartFormBody';
 import useAppStateStore from '../../hooks/store/useAppStateStore';
 
 type BodyType = 'none' | 'text' | 'binary' | 'form' | 'multipart';
@@ -82,12 +81,7 @@ const RequestBody: React.FC = () => {
         )}
         
         {selectedBodyType === 'multipart' && (
-          <>
-            <div className="flex-shrink-0 mb-4">{renderDropdown()}</div>
-            <div className="p-8 text-center border-2 border-dashed rounded-lg bg-slate-50 dark:bg-slate-900/50">
-              <p className="text-sm text-muted-foreground">Multipart form body support coming soon...</p>
-            </div>
-          </>
+          <MultiPartFormBody dropdownElement={renderDropdown()} />
         )}
 
         {selectedBodyType === 'none' && (
