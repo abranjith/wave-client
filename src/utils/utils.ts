@@ -99,3 +99,58 @@ export function formatFileSize(bytes: number): string {
   
   return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
 }
+
+/**
+ * Checks if a URI is URL-encoded.
+ * @param uri - The URI string to check.
+ * @returns True if the URI is URL-encoded, false otherwise.
+ */
+export function isUrlEncoded(uri: string): boolean {
+  try {
+    // Attempt to decode the URI component.
+    // If it's already decoded or not encoded, decodeURIComponent will return the same string.
+    // If it's encoded, it will return a different, decoded string.
+    return uri !== decodeURIComponent(uri);
+  } catch (e) {
+    // Catch potential URIError if the string is not a valid URI component sequence
+    // (e.g., malformed encoding). In such cases, it's likely encoded but malformed. But since we can't be sure, we return false.
+    return false;
+  }
+}
+
+function safeDecodeURIComponent(value: string): string {
+  try {
+    return decodeURIComponent(value);
+  } catch (e) {
+    return value;
+  }
+}
+
+/**
+ * Parses the query parameters of a URL and returns them as an array of objects.
+ * Each object contains the following properties:
+ * - id: A unique identifier for the parameter (e.g., "param-1633036800000")
+ * - key: The decoded key of the query parameter
+ * - value: The decoded value of the query parameter
+ * - disabled: A boolean indicating whether the parameter is disabled (always false in this implementation)
+ * This function safely handles URL decoding and returns an empty array if the URL is invalid.
+ * @param url - The URL string to parse
+ * @returns 
+ */
+export function parseUrlQueryParams(url: string): { id: string; key: string; value: string; disabled: boolean }[] {
+  try {
+    const urlObj = new URL(url);
+    const params = Array.from(urlObj.searchParams.entries());
+    
+    //make id random to avoid collisions when called multiple times in the same millisecond. use crypto if available
+    return params.map(([key, value]) => ({
+      id: `param-${crypto.randomUUID()}`,
+      key: safeDecodeURIComponent(key),
+      value: safeDecodeURIComponent(value),
+      disabled: false
+    }));
+  } catch (e) {
+    // If URL is invalid, return empty array
+    return [];
+  }
+}

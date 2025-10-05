@@ -1,5 +1,6 @@
 import { StateCreator } from 'zustand'
 import { ParsedRequest, HeaderRow, ParamRow, ResponseData } from '../../types/collection';
+import { parseUrlQueryParams } from '../../utils/utils';
 
 interface CurrentRequestSlice {
     id: string;
@@ -87,7 +88,7 @@ const getURLSearchParamsFromParamRows = (paramRows: ParamRow[]): URLSearchParams
     const urlParams = new URLSearchParams();
     
     paramRows.forEach(param => {
-        if (param.key.trim()) {
+        if (param.key.trim() && !param.disabled) {
             const key = param.key.trim();
             const value = param.value;
             urlParams.append(key, value);
@@ -95,6 +96,37 @@ const getURLSearchParamsFromParamRows = (paramRows: ParamRow[]): URLSearchParams
     });
     
     return urlParams;
+};
+
+/**
+ * Updates the URL with query parameters from param rows
+ * Removes existing query params and appends new ones
+ */
+const updateUrlWithParams = (currentUrl: string | null, paramRows: ParamRow[]): string | null => {
+    if (!currentUrl) {
+        return currentUrl;
+    }
+    
+    try {
+        // Parse the URL to get base URL without query params
+        const urlObj = new URL(currentUrl);
+        
+        // Clear existing search params
+        urlObj.search = '';
+        
+        // Add params from param rows (URL-encoded automatically by URLSearchParams)
+        const searchParams = getURLSearchParamsFromParamRows(paramRows);
+        const searchString = searchParams.toString();
+        
+        if (searchString) {
+            urlObj.search = searchString;
+        }
+        
+        return urlObj.toString();
+    } catch (e) {
+        // If URL is invalid, return as-is
+        return currentUrl;
+    }
 };
 
 const createCurrentRequestSlice: StateCreator<CurrentRequestSlice> = (set, get) => ({
@@ -160,7 +192,21 @@ const createCurrentRequestSlice: StateCreator<CurrentRequestSlice> = (set, get) 
 
     // Individual field updaters
     updateMethod: (method) => set({ method: method }),
-    updateUrl: (url) => set({ url: url }),
+    updateUrl: (url) => {
+        // Parse query params from the URL
+        const parsedParams = parseUrlQueryParams(url);
+        
+        if(parsedParams.length > 0) {
+            set({ url: url, params: parsedParams });
+            return;
+        }
+        //in case url is being cleared(empty string), clear params as well
+        if(!Boolean(url)) {
+            set({ url: url, params: [{ id: `param-${Date.now()}`, key: '', value: '', disabled: false }]});
+            return;
+        }
+        set({ url: url});
+    },
     updateBody: (body) => set({ body: body }),
     updateBinaryBody: (binaryBody) => set({ binaryBody: binaryBody }),
     updateName: (name) => set({ name: name }),
@@ -216,8 +262,12 @@ const createCurrentRequestSlice: StateCreator<CurrentRequestSlice> = (set, get) 
     
     // URL Parameters management
     addEmptyParam: () => {
+        const state = get();
         const newParam = { id: `param-${Date.now()}`, key: '', value: '', disabled: false };
-        set(state => ({ params: [...(state.params || []), newParam] }));
+        const updatedParams = [...(state.params || []), newParam];
+        const updatedUrl = updateUrlWithParams(state.url, updatedParams);
+        
+        set({ params: updatedParams, url: updatedUrl });
     },
     upsertParam: (id: string, key: string | undefined, value: string | undefined) => {
         const state = get();
@@ -226,9 +276,10 @@ const createCurrentRequestSlice: StateCreator<CurrentRequestSlice> = (set, get) 
         // Find existing param by id
         const existingParamIndex = currentParams.findIndex(param => param.id === id);
 
+        let updatedParams: ParamRow[];
         if (existingParamIndex !== -1) {
             // Update existing param
-            const updatedParams = [...currentParams];
+            updatedParams = [...currentParams];
             // Allow partial updates (handle undefined key/value)
             updatedParams[existingParamIndex] = { 
                 id, 
@@ -236,21 +287,28 @@ const createCurrentRequestSlice: StateCreator<CurrentRequestSlice> = (set, get) 
                 value: value ?? updatedParams[existingParamIndex].value,
                 disabled: false
             };
-            set({ params: updatedParams });
         } else {
             // Add new param
-            const newParams = [...currentParams, { id, key: key || '', value: value || '', disabled: false }];
-            set({ params: newParams });
+            updatedParams = [...currentParams, { id, key: key || '', value: value || '', disabled: false }];
         }
+        
+        // Update URL with new params
+        const updatedUrl = updateUrlWithParams(state.url, updatedParams);
+        
+        set({ params: updatedParams, url: updatedUrl });
     },
     removeParam: (id: string) => {
         const state = get();
         const currentParams = state.params || [];
-        const filteredParams = currentParams.filter(param => param.id !== id);
+        let filteredParams = currentParams.filter(param => param.id !== id);
         if (filteredParams.length === 0) {
             filteredParams.push({ id: `param-${Date.now()}`, key: '', value: '', disabled: false });
         }
-        set({ params: filteredParams });
+        
+        // Update URL with remaining params
+        const updatedUrl = updateUrlWithParams(state.url, filteredParams);
+        
+        set({ params: filteredParams, url: updatedUrl });
     },
 
     // Response management
