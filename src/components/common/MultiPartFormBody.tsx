@@ -1,17 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { Trash2Icon, FileIcon, XIcon } from 'lucide-react';
+import { Trash2Icon } from 'lucide-react';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from '../ui/select';
+import {MultiPartFormField} from '../../types/collection';
 
 type FieldType = 'text' | 'file';
-
-interface MultiPartFormField {
-  id: string;
-  key: string;
-  value: string | File;
-  fieldType: FieldType;
-}
 
 interface MultiPartFormBodyProps {
   dropdownElement?: React.ReactNode;

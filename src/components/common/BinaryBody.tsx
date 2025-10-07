@@ -2,14 +2,15 @@ import React from 'react';
 import { FileInput } from '../ui/fileinput';
 import { FileWithPreview } from '../../hooks/useFileUpload';
 import useAppStateStore from '../../hooks/store/useAppStateStore';
-import { getContentTypeFromFileName } from '../../utils/utils';
 
 interface BinaryBodyProps {
   dropdownElement?: React.ReactNode;
 }
 
+//TODO - error handling to the user
 const BinaryBody: React.FC<BinaryBodyProps> = ({ dropdownElement }) => {
-  const { binaryBody, updateBinaryBody, updateBody } = useAppStateStore();
+  const updateBody = useAppStateStore((state) => state.updateBody);
+  const body = useAppStateStore((state) => state.body);
   
   //enhance function to accept array of files
   const handleFileSelect = async (addedFiles: FileWithPreview[]) => {
@@ -19,29 +20,20 @@ const BinaryBody: React.FC<BinaryBodyProps> = ({ dropdownElement }) => {
     // Check if file is a File object (not FileMetadata)
     const file = fileWithPreview.file;
     if (!(file instanceof File)) return;
-    
-    try {
-      const arrayBuffer = await file.arrayBuffer();
-      const contentType = getContentTypeFromFileName(file.name);
-      
-      updateBinaryBody({
-        data: arrayBuffer,
-        fileName: file.name,
-        contentType: contentType
-      });
-      
-      // Clear text body when binary body is set
-      updateBody('');
-    } catch (error) {
-      console.error('Error reading file:', error);
-      // You might want to show an error message to the user here
-    }
+
+    updateBody(fileWithPreview, 'binary', 'none'); // Clear existing body before setting new binary body
   };
 
   const handleRemoveFile = (removedFile: FileWithPreview) => {
-    updateBinaryBody(undefined);
+    updateBody(null, body.bodyType, 'none');
   };
 
+  const getInitialFiles = (): FileWithPreview[] => {
+    if (body && body.bodyType === 'binary' && body.data && typeof body.data !== 'string' && 'file' in body.data) {
+      return [body.data as FileWithPreview];
+    }
+    return [];
+  };
 
   return (
     <div className="flex flex-col h-full">
@@ -52,7 +44,7 @@ const BinaryBody: React.FC<BinaryBodyProps> = ({ dropdownElement }) => {
       
       {/* File upload area */}
       <div className="flex-1 flex flex-col gap-4">
-        <FileInput onFilesAdded={handleFileSelect} onFileRemoved={handleRemoveFile} />
+        <FileInput onFilesAdded={handleFileSelect} onFileRemoved={handleRemoveFile} initialFiles={getInitialFiles()} />
       </div>
     </div>
   );

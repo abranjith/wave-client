@@ -3,81 +3,113 @@ import { Button } from '../ui/button';
 import { Textarea } from '../ui/textarea';
 import { Tooltip, TooltipTrigger, TooltipContent } from '../ui/tooltip';
 import { CopyIcon, ClipboardPasteIcon, InfoIcon, FileTextIcon } from 'lucide-react';
-
-type BodyType = 'json' | 'xml' | 'html' | 'text' | 'unknown';
+import useAppStateStore from '../../hooks/store/useAppStateStore';
+import {RequestBodyTextType, RequestBodyType} from '../../types/collection';
+import { get } from 'axios';
 
 interface TextBodyProps {
   dropdownElement?: React.ReactNode;
 }
 
-const TextBody: React.FC<TextBodyProps> = ({ dropdownElement }) => {
-  const [body, setBody] = useState<string>('');
-  const [bodyType, setBodyType] = useState<BodyType>('unknown');
-  const [showExamples, setShowExamples] = useState(false);
+const isHTML = (content: string): boolean => {
+  const trimmed = content.trim().toLowerCase();
+  
+  // Strong HTML indicators
+  if (trimmed.includes('<!doctype html') || 
+      trimmed.includes('<html')) {
+    return true;
+  }
+  
+  // Check for HTML-specific tags that XML typically doesn't use
+  const htmlTags = ['<body', '<head', '<title', '<div', '<span', '<p>', '<a', '<img'];
+  const hasHtmlTags = htmlTags.some(tag => trimmed.includes(tag));
+  
+  // XML indicators (if it has XML declaration, it's likely XML)
+  const hasXmlDeclaration = trimmed.startsWith('<?xml');
+  
+  return hasHtmlTags && !hasXmlDeclaration;
+};
 
-  // Detect body type based on content
-  useEffect(() => {
-    if (!body.trim()) {
-      setBodyType('unknown');
-      return;
+const getBodyType = (content: string): RequestBodyTextType => {
+   //if body is not string, set to unknown
+    if (typeof content !== 'string') {
+      return 'unknown';
+    }
+    const strContent = content as string;
+    if (!strContent.trim()) {
+      return 'unknown';
     }
 
-    const trimmed = body.trim();
+    const trimmed = strContent.trim();
     
     // JSON detection
     if ((trimmed.startsWith('{') && trimmed.endsWith('}')) || 
         (trimmed.startsWith('[') && trimmed.endsWith(']'))) {
       try {
         JSON.parse(trimmed);
-        setBodyType('json');
-        return;
+        return 'json';
       } catch {
         // Not valid JSON, continue checking
       }
     }
 
+    // HTML detection
+    if (isHTML(trimmed)) {
+      return 'html';
+    }
+
     // XML detection
     if (trimmed.startsWith('<?xml') || 
         (trimmed.startsWith('<') && trimmed.endsWith('>') && trimmed.includes('</'))) {
-      setBodyType('xml');
-      return;
+      return 'xml';
     }
 
-    // HTML detection
-    if (trimmed.toLowerCase().includes('<!doctype html') ||
-        trimmed.toLowerCase().includes('<html') ||
-        /^<[a-z][\s\S]*<\/[a-z]>$/i.test(trimmed)) {
-      setBodyType('html');
-      return;
-    }
+    return 'text';
+}
 
-    setBodyType('text');
-  }, [body]);
+const TextBody: React.FC<TextBodyProps> = ({ dropdownElement }) => {
+  //const [body, setBody] = useState<string>('');
+  //const [bodyType, setBodyType] = useState<RequestBodyTextType>('unknown');
+  const updateBody = useAppStateStore((state) => state.updateBody);
+  const body = useAppStateStore((state) => state.body);
+  const [showExamples, setShowExamples] = useState(false);
 
   const handleBodyChange = (newValue: string) => {
-    setBody(newValue);
+    updateBody(newValue, 'text', getBodyType(newValue));
   };
 
   const formatContent = () => {
-    if (!body.trim()) return;
+    //if body is not string, set to unknown
+    if (typeof body.data !== 'string') {
+      return;
+    }
+    const strBody = body.data as string;
+    if (!strBody.trim()) {
+      return;
+    }
 
     try {
-      switch (bodyType) {
+      switch (body.bodyType as string) {
         case 'json':
-          const parsed = JSON.parse(body);
-          setBody(JSON.stringify(parsed, null, 2));
+          const parsed = JSON.parse(strBody);
+          updateBody(JSON.stringify(parsed, null, 2), 'text', 'json');
           break;
         
         case 'xml':
+          // Simple XML/HTML formatting
+          const formattedXml = formatXmlHtml(strBody);
+          updateBody(formattedXml, 'text', 'xml');
+          break;
+
         case 'html':
           // Simple XML/HTML formatting
-          const formatted = formatXmlHtml(body);
-          setBody(formatted);
+          const formattedHtml = formatXmlHtml(strBody);
+          updateBody(formattedHtml, 'text', 'html');
           break;
         
         default:
           // For plain text, just clean up extra whitespace
-          setBody(body.trim());
+          updateBody(strBody.trim(), 'text', 'text');
       }
     } catch (e) {
       console.warn('Failed to format content:', e);
@@ -123,7 +155,7 @@ const TextBody: React.FC<TextBodyProps> = ({ dropdownElement }) => {
 
   const copyToClipboard = async () => {
     try {
-      await navigator.clipboard.writeText(body);
+      await navigator.clipboard.writeText(body.data as string || '');
     } catch (err) {
       console.error('Failed to copy:', err);
     }
@@ -132,14 +164,14 @@ const TextBody: React.FC<TextBodyProps> = ({ dropdownElement }) => {
   const pasteFromClipboard = async () => {
     try {
       const text = await navigator.clipboard.readText();
-      setBody(text);
+      updateBody(text, 'text', getBodyType(text));
     } catch (err) {
       console.error('Failed to paste:', err);
     }
   };
 
   const getTypeInfo = (): { label: string; color: string; description: string } => {
-    switch (bodyType) {
+    switch (body.bodyType as string) {
       case 'json':
         return {
           label: 'JSON',
@@ -173,8 +205,8 @@ const TextBody: React.FC<TextBodyProps> = ({ dropdownElement }) => {
     }
   };
 
-  const loadExample = (type: BodyType) => {
-    const examples: Record<BodyType, string> = {
+  const loadExample = (type: RequestBodyType) => {
+    const examples: Record<string, string> = {
       json: '{\n  "name": "John Doe",\n  "email": "john@example.com",\n  "age": 30,\n  "active": true\n}',
       xml: '<?xml version="1.0" encoding="UTF-8"?>\n<root>\n  <item id="1">\n    <name>Example Item</name>\n    <value>100</value>\n  </item>\n</root>',
       html: '<!DOCTYPE html>\n<html>\n<head>\n  <title>Example</title>\n</head>\n<body>\n  <h1>Hello World</h1>\n  <p>This is an example.</p>\n</body>\n</html>',
@@ -182,7 +214,7 @@ const TextBody: React.FC<TextBodyProps> = ({ dropdownElement }) => {
       unknown: ''
     };
     
-    setBody(examples[type]);
+    updateBody(examples[type], 'text', getBodyType(examples[type]));
     setShowExamples(false);
   };
 
@@ -195,13 +227,13 @@ const TextBody: React.FC<TextBodyProps> = ({ dropdownElement }) => {
         {/* Left side - Dropdown and Type Badge */}
         <div className="flex items-center gap-2">
           {dropdownElement}
-          {body.trim() && (
+          {body.data.trim() && (
             <>
               <span className={`text-xs px-2 py-1 rounded border ${typeInfo.color}`}>
                 {typeInfo.label}
               </span>
               <span className="text-xs text-slate-400 dark:text-slate-500">
-                {body.length} characters
+                {body.data.length} characters
               </span>
             </>
           )}

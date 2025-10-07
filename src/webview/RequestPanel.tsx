@@ -32,6 +32,10 @@ const PROTOCOLS = [
   'HTTP', 'HTTPS'
 ];
 
+const TABS = [
+  'Params', 'Headers', 'Body'
+];
+
 const RequestPanel: React.FC<RequestPanelProps> = ({ onSendRequest })  => {
   const [protocol, setProtocol] = useState('HTTPS');
   const method = useAppStateStore((state) => state.method || 'GET');
@@ -39,7 +43,7 @@ const RequestPanel: React.FC<RequestPanelProps> = ({ onSendRequest })  => {
   const url = useAppStateStore((state) => state.url || '');
   const setUrl = useAppStateStore((state) => state.updateUrl);
 
-  const [activeTab, setActiveTab] = useState<'params' | 'headers' | 'body'>('params');
+  const [activeTab, setActiveTab] = useState<'Params' | 'Headers' | 'Body'>('Params');
   const urlInputId = useId();
   const httpMethodSelectId = useId();
 
@@ -122,7 +126,7 @@ const RequestPanel: React.FC<RequestPanelProps> = ({ onSendRequest })  => {
 
       {/* Horizontal Tabs */}
       <div className="border-b border-slate-200 flex gap-0 bg-slate-50 px-6 dark:border-slate-700 dark:bg-slate-900">
-        {['params', 'headers', 'body'].map(tab => (
+        {TABS.map(tab => (
           <button
             key={tab}
             className={`px-6 py-3 text-sm font-medium focus:outline-none transition-all relative ${
@@ -139,13 +143,13 @@ const RequestPanel: React.FC<RequestPanelProps> = ({ onSendRequest })  => {
 
       {/* Tab Content */}
       <div className="px-6 py-6 bg-white dark:bg-slate-900">
-        {activeTab === 'params' && (
+        {activeTab === 'Params' && (
           <RequestParams/>
         )}
-        {activeTab === 'headers' && (
+        {activeTab === 'Headers' && (
           <RequestHeaders/>
         )}
-        {activeTab === 'body' && (
+        {activeTab === 'Body' && (
           <RequestBody/>
         )}
       </div>

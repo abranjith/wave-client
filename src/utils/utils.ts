@@ -1,4 +1,6 @@
+import {RequestBodyTextType, RequestBodyType} from "../types/collection";
 import { clsx, type ClassValue } from "clsx";
+import { text } from "stream/consumers";
 import { twMerge } from "tailwind-merge";
 
 export function cn(...inputs: ClassValue[]) {
@@ -152,5 +154,54 @@ export function parseUrlQueryParams(url: string): { id: string; key: string; val
   } catch (e) {
     // If URL is invalid, return empty array
     return [];
+  }
+}
+
+/**
+ * Determines the Content-Type header value based on request body configuration
+ * @param bodyType - The type of request body ('none', 'raw', 'form-data', 'x-www-form-urlencoded', 'binary')
+ * @param fileName - Optional file name to determine MIME type from extension
+ * @param textType - Optional specific text type for raw body content
+ * @returns Content-Type header value or null if no body
+ */
+export function getContentTypeFromBody(
+  bodyType: RequestBodyType,
+  fileName?: string | null,
+  textType?: RequestBodyTextType | null
+): string | null {
+  // If body type is 'none', return null
+  if (bodyType === 'none') {
+    return null;
+  }
+
+  // If textType is specified, use that first
+  if (textType && textType !== 'none') {
+    const textTypeMap: Record<string, string> = {
+      'text': 'text/plain',
+      'json': 'application/json',
+      'xml': 'application/xml',
+      'html': 'text/html',
+      'csv': 'text/csv'
+    };
+    return textTypeMap[textType] || 'text/plain';
+  }
+
+  // If fileName is provided, determine from extension
+  if (fileName) {
+    return getContentTypeFromFileName(fileName);
+  }
+
+  // Use reasonable defaults based on body type
+  switch (bodyType) {
+    case 'text':
+      return 'text/plain';
+    case 'multipart':
+      return 'multipart/form-data';
+    case 'form':
+      return 'application/x-www-form-urlencoded';
+    case 'binary':
+      return 'application/octet-stream';
+    default:
+      return 'application/octet-stream';
   }
 }

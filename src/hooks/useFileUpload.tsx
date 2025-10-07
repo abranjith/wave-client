@@ -27,7 +27,7 @@ export type FileUploadOptions = {
   maxSize?: number // in bytes
   accept?: string
   multiple?: boolean // Defaults to false
-  initialFiles?: FileMetadata[]
+  initialFiles?: FileMetadata[] | FileWithPreview[] // Initial files to load
   onFilesChange?: (files: FileWithPreview[]) => void // Callback when files change
   onFilesAdded?: (addedFiles: FileWithPreview[]) => void // Callback when new files are added
   onFileRemoved?: (removedFile: FileWithPreview) => void // Callback when file is removed
@@ -72,11 +72,19 @@ export const useFileUpload = (
   } = options
 
   const [state, setState] = useState<FileUploadState>({
-    files: initialFiles.map((file) => ({
-      file,
-      id: file.id,
-      preview: file.url,
-    })),
+    files: initialFiles.map((file) => {
+      if ('file' in file) {
+        // file is already a FileWithPreview
+        return file
+      } else {
+        // file is FileMetadata, convert to FileWithPreview
+        return {
+          file,
+          id: file.id,
+          preview: file.url,
+        }
+      }
+    }),
     isDragging: false,
     errors: [],
   })

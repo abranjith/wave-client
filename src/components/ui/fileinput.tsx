@@ -5,10 +5,11 @@ import { Button } from './button';
 export interface FileInputProps {
   onFilesAdded?: (addedFiles: FileWithPreview[]) => void;
   onFileRemoved?: (removedFile: FileWithPreview) => void;
+  initialFiles?: FileWithPreview[];
 }
 
 //Accept props onFilesRemoved and onFilesAdded to notify parent component when files are added or removed.
-function FileInput({ onFilesAdded, onFileRemoved }: FileInputProps) {
+function FileInput({ onFilesAdded, onFileRemoved, initialFiles }: FileInputProps) {
   const [
     { files, isDragging, errors },
     {
@@ -20,7 +21,7 @@ function FileInput({ onFilesAdded, onFileRemoved }: FileInputProps) {
       removeFile,
       getInputProps,
     },
-  ] = useFileUpload({ onFilesAdded, onFileRemoved })
+  ] = useFileUpload({ onFilesAdded, onFileRemoved, initialFiles, multiple: false })
 
   const file = files[0]
 

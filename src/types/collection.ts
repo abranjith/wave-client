@@ -101,6 +101,19 @@ export interface ParamRow {
   disabled: boolean;
 }
 
+export interface FormField {
+  id: string;
+  key: string;
+  value: string;
+}
+
+export interface MultiPartFormField {
+  id: string;
+  key: string;
+  value: string | File;
+  fieldType: 'text' | 'file';
+}
+
 export interface ResponseData {
   status: number;
   statusText: string;
@@ -109,3 +122,7 @@ export interface ResponseData {
   body: string;
   headers: Record<string, string>;
 }
+
+export type RequestBodyTextType = 'none' | 'json' | 'xml' | 'html' | 'text' | 'csv' | 'unknown';
+
+export type RequestBodyType = 'none' | 'text' | 'binary' | 'form' | 'multipart';
