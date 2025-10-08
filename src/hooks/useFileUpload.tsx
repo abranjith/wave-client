@@ -16,6 +16,7 @@ export type FileMetadata = {
   id: string
 }
 
+//TODO - instead of making file be File | FileMetadata, make it just File for easier handling
 export type FileWithPreview = {
   file: File | FileMetadata
   id: string

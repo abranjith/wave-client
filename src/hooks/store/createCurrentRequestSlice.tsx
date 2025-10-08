@@ -5,11 +5,31 @@ import { FileWithPreview } from '../useFileUpload';
 
 type BodyDataType = string | FileWithPreview | MultiPartFormField[] | FormField[] | null;
 
-interface RequestBody {
-    data: BodyDataType;
+//'none' | 'text' | 'binary' | 'form' | 'multipart'
+interface RequestTextBody {
+    data: string | null;
+    textType: RequestBodyTextType | null;
+}
+
+interface RequestBinaryBody {
+    data: FileWithPreview | null;
     fileName: string | null;
-    contentType: string | null;
-    bodyType: RequestBodyType;
+}
+
+interface RequestFormBody {
+    data: FormField[] | null;
+}
+
+interface RequestMultiPartFormBody {
+    data: MultiPartFormField[] | null;
+}
+
+interface RequestBody {
+    textData: RequestTextBody | null;
+    binaryData: RequestBinaryBody | null;
+    formData: RequestFormBody | null;
+    multiPartFormData: RequestMultiPartFormBody | null;
+    currentBodyType: RequestBodyType;
 }
 
 interface CurrentRequestSlice {
@@ -34,15 +54,16 @@ interface CurrentRequestSlice {
     // Individual field updaters
     updateMethod: (method: string) => void;
     updateUrl: (url: string) => void;
-    updateBody: (
-        data: BodyDataType,
-        bodyType: RequestBodyType,
+    updateTextBody: (
+        data: string | null,
         bodyTextType: RequestBodyTextType
     ) => void;
+    updateBinaryBody: (data: FileWithPreview | null) => void;
+    updateFormBody: (data: FormField[] | null) => void;
+    updateMultiPartFormBody: (data: MultiPartFormField[] | null) => void;
+    updateCurrentBodyType: (bodyType: RequestBodyType) => void;
     updateName: (name: string) => void;
     updateFolderPath: (folderPath: string[]) => void;
-    isBodyValidJson: () => boolean;
-
     
     // Headers management
     addEmptyHeader: () => void;
@@ -137,23 +158,15 @@ const updateUrlWithParams = (currentUrl: string | null, paramRows: ParamRow[]): 
     }
 };
 
-const getFileFromBinaryBody = (data: BodyDataType, bodyType: RequestBodyType): File | null => {
-    if (bodyType === 'binary' && data && typeof data !== 'string' && 'file' in data && data.file instanceof File) {
-        return data.file;
-    }
-    return null;
-};
-
-
 /**
  * Converts the body data to the appropriate format for the HTTP request
  * based on the body type.
  */
 async function convertBodyToRequestBody(
-    data: BodyDataType,
+    body: RequestBody,
     bodyType: RequestBodyType
 ): Promise<string | FormData | Record<string, string> | ArrayBuffer | null> {
-    if (!data) {
+    if (!body) {
         return null;
     }
     
@@ -163,25 +176,27 @@ async function convertBodyToRequestBody(
             
         case 'text':
             // Text-based content types are sent as strings
-            return typeof data === 'string' ? data : JSON.stringify(data);
+            return body.textData?.data || null;
             
         case 'binary':
             // Binary data from file upload
-            if (typeof data !== 'string' && 'file' in data && data.file instanceof File) {
+            const binaryData = body.binaryData?.data;
+            if (binaryData && binaryData.file instanceof File) {
                 // Convert File to ArrayBuffer
-                return await data.file.arrayBuffer();
+                return await binaryData.file.arrayBuffer();
             }
             return null;
             
         case 'multipart':
             // FormData is sent as-is
-            if (data instanceof FormData) {
-                return data;
+            const multiPartData = body.multiPartFormData?.data;
+            if (multiPartData instanceof FormData) {
+                return multiPartData;
             }
             //construct FormData from MultiPartFormField[]
-            if (Array.isArray(data)) {
+            if (Array.isArray(multiPartData)) {
                 const formData = new FormData();
-                data.forEach(field => {
+                multiPartData.forEach(field => {
                     if (field.key.trim()) {
                         //if file field and value is File, append as file
                         if (field.value instanceof File) {
@@ -197,9 +212,9 @@ async function convertBodyToRequestBody(
             
         case 'form':
             // URL-encoded form data should be a Record
-            if (typeof data === 'object' && !(data instanceof FormData) && !(data instanceof File)) {
-                //construct Record<string, string> from FormField[]
-                const formFields = Array.isArray(data) ? data as FormField[] : [];
+            const urlEncodedFormData = body.formData?.data;
+            if (urlEncodedFormData) {
+                const formFields = Array.isArray(urlEncodedFormData) ? urlEncodedFormData as FormField[] : [];
                 const dataRecord: Record<string, string> = {};
                 formFields.forEach(field => {
                     if (field.key.trim() && field.value !== undefined) {
@@ -212,7 +227,7 @@ async function convertBodyToRequestBody(
             
         default:
             // Default to string for unknown types
-            return typeof data === 'string' ? data : null;
+            return body.textData?.data || null;
     }
 }
 
@@ -224,10 +239,11 @@ const createCurrentRequestSlice: StateCreator<CurrentRequestSlice> = (set, get) 
     params: [{ id: `param-${Date.now()}`, key: '', value: '', disabled: false }],
     headers: [{ id: `header-${Date.now()}`, key: '', value: '', disabled: false }],
     body: {
-        data: '',
-        fileName: null,
-        contentType: null,
-        bodyType: 'none'
+        textData: null,
+        binaryData: null,
+        formData: null,
+        multiPartFormData: null,
+        currentBodyType: 'none'
     },
     folderPath: null,
     responseData: null,
@@ -235,6 +251,7 @@ const createCurrentRequestSlice: StateCreator<CurrentRequestSlice> = (set, get) 
     requestError: null,
     isCancelled: false,
 
+    //TODO
     // Core request setters
     setCurrentRequest: (request) => set({
         id: request?.id ? request.id : Date.now().toString(),
@@ -244,15 +261,17 @@ const createCurrentRequestSlice: StateCreator<CurrentRequestSlice> = (set, get) 
         params: (request?.params && request?.params.length > 0) ? request.params : [{ id: `param-${Date.now()}`, key: '', value: '', disabled: false }],
         headers: (request?.headers && request?.headers.length > 0) ? request.headers : [{ id: `header-${Date.now()}`, key: '', value: '', disabled: false }],
         body: request?.body ? {
-            data: request.body,
-            fileName: null,
-            contentType: 'text/plain',
-            bodyType: 'text'
+            textData: { data: (request.body && typeof request.body === 'string') ? request.body : null, textType: 'text' },
+            binaryData: null,
+            formData: null,
+            multiPartFormData: null,
+            currentBodyType: 'text'
         } : {
-            data: '',
-            fileName: null,
-            contentType: null,
-            bodyType: 'none'
+            textData: null,
+            binaryData: null,
+            formData: null,
+            multiPartFormData: null,
+            currentBodyType: 'none'
         },
         folderPath: request?.folderPath,
         responseData: null,
@@ -267,10 +286,11 @@ const createCurrentRequestSlice: StateCreator<CurrentRequestSlice> = (set, get) 
         params: [{ id: `param-${Date.now()}`, key: '', value: '', disabled: false }],
         headers: [{ id: `header-${Date.now()}`, key: '', value: '', disabled: false }],
         body: {
-            data: '',
-            fileName: null,
-            contentType: null,
-            bodyType: 'none'
+            textData: null,
+            binaryData: null,
+            formData: null,
+            multiPartFormData: null,
+            currentBodyType: 'none'
         },
         folderPath: null,
         responseData: null,
@@ -278,6 +298,7 @@ const createCurrentRequestSlice: StateCreator<CurrentRequestSlice> = (set, get) 
         requestError: null,
         isCancelled: false
     }),
+    //TODO - needs to be updated
     getParsedRequest: () => {
         const state = get();
         const { id, name, method, url, headers, body, params, folderPath } = state;
@@ -287,7 +308,7 @@ const createCurrentRequestSlice: StateCreator<CurrentRequestSlice> = (set, get) 
             method: method || 'GET',
             url: url || '',
             headers: headers || [],
-            body: typeof body?.data === 'string' ? body.data : null,
+            body: body?.textData?.data ? body.textData.data : null,
             params: params || [],
             folderPath: folderPath || []
         };
@@ -310,38 +331,48 @@ const createCurrentRequestSlice: StateCreator<CurrentRequestSlice> = (set, get) 
         }
         set({ url: url});
     },
-    updateBody: (data, bodyType, bodyTextType) => {
-        let fileName: string | null = null;
-        const file = getFileFromBinaryBody(data, bodyType);
-        if(Boolean(file)) {
-            fileName = file?.name || null;
-        }
-        
-        const contentType = getContentTypeFromBody(bodyType, fileName, bodyTextType);
-        
-        set({ 
+
+    //implement update methods for different body types
+    updateTextBody: (data, bodyTextType) => {
+        set(state => ({
             body: {
-                data,
-                fileName,
-                contentType,
-                bodyType
+                ...state.body,
+                textData: { data: data, textType: bodyTextType },
             }
-        });
+        }));
     },
+    updateBinaryBody: (data) => {
+        set(state => ({
+            body: {
+                ...state.body,
+                binaryData: { data: data, fileName: data ? data.file.name : null },
+            }
+        }));
+    },
+    updateFormBody: (data) => {
+        set(state => ({
+            body: {
+                ...state.body,
+                formData: { data: data },
+            }
+        }));
+    },
+    updateMultiPartFormBody: (data) => {
+        set(state => ({
+            body: {
+                ...state.body,
+                multiPartFormData: { data: data },
+            }
+        }));
+    },
+    updateCurrentBodyType: (bodyType) => {
+        const state = get();
+        let updatedBody = { ...state.body, currentBodyType: bodyType };
+        set({ body: updatedBody });
+    },
+
     updateName: (name) => set({ name: name }),
     updateFolderPath: (folderPath) => set({ folderPath: folderPath }),
-    isBodyValidJson: () => {
-        const state = get();
-        try {
-            if (typeof state.body?.data === 'string') {
-                JSON.parse(state.body.data);
-                return true;
-            }
-            return false;
-        } catch {
-            return false;
-        }
-    },
 
     // Headers management
     addEmptyHeader: () => {
@@ -468,10 +499,13 @@ const createCurrentRequestSlice: StateCreator<CurrentRequestSlice> = (set, get) 
         // Convert headers and params to expected format
         const headers = state.headers ? getDictFromHeaderRows(state.headers) : {};
         //if headers does not have content-type and body is present, set content-type from body
-        if (state.body && state.body.bodyType !== 'none' && state.body.contentType) {
+        if (state.body && state.body.currentBodyType !== 'none') {
             const contentTypeKey = Object.keys(headers).find(key => key.toLowerCase() === 'content-type');
             if (!contentTypeKey) {
-                headers['Content-Type'] = state.body.contentType;
+                const contentType = getContentTypeFromBody(state.body.currentBodyType, state.body?.binaryData?.fileName, state.body?.textData?.textType);
+                if(contentType){
+                    headers['Content-Type'] = contentType;
+                }
             }
         }
         const paramsString = state.params ? getURLSearchParamsFromParamRows(state.params).toString() : '';
@@ -479,8 +513,8 @@ const createCurrentRequestSlice: StateCreator<CurrentRequestSlice> = (set, get) 
         // Prepare body based on body type
         let requestBody: string | ArrayBuffer | FormData | Record<string, string> | null = null;
         
-        if (state.body && state.body.bodyType !== 'none') {
-            requestBody = await convertBodyToRequestBody(state.body.data, state.body.bodyType);
+        if (state.body && state.body.currentBodyType !== 'none') {
+            requestBody = await convertBodyToRequestBody(state.body, state.body.currentBodyType);
         }
         
         // Convert request to the expected format
@@ -498,5 +532,3 @@ const createCurrentRequestSlice: StateCreator<CurrentRequestSlice> = (set, get) 
 });
 
 export default createCurrentRequestSlice;
-
-

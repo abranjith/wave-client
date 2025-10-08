@@ -9,7 +9,7 @@ interface BinaryBodyProps {
 
 //TODO - error handling to the user
 const BinaryBody: React.FC<BinaryBodyProps> = ({ dropdownElement }) => {
-  const updateBody = useAppStateStore((state) => state.updateBody);
+  const updateBody = useAppStateStore((state) => state.updateBinaryBody);
   const body = useAppStateStore((state) => state.body);
   
   //enhance function to accept array of files
@@ -21,16 +21,16 @@ const BinaryBody: React.FC<BinaryBodyProps> = ({ dropdownElement }) => {
     const file = fileWithPreview.file;
     if (!(file instanceof File)) return;
 
-    updateBody(fileWithPreview, 'binary', 'none'); // Clear existing body before setting new binary body
+    updateBody(fileWithPreview); // Clear existing body before setting new binary body
   };
 
   const handleRemoveFile = (removedFile: FileWithPreview) => {
-    updateBody(null, body.bodyType, 'none');
+    updateBody(null);
   };
 
   const getInitialFiles = (): FileWithPreview[] => {
-    if (body && body.bodyType === 'binary' && body.data && typeof body.data !== 'string' && 'file' in body.data) {
-      return [body.data as FileWithPreview];
+    if (body.binaryData?.data && 'file' in body.binaryData.data) {
+      return [body.binaryData.data as FileWithPreview];
     }
     return [];
   };

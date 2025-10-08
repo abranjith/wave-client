@@ -3,12 +3,8 @@ import { Trash2Icon, CopyIcon, ClipboardPasteIcon } from 'lucide-react';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Tooltip, TooltipTrigger, TooltipContent } from '../ui/tooltip';
-
-interface FormField {
-  id: string;
-  key: string;
-  value: string;
-}
+import { FormField } from '../../types/collection';
+import useAppStateStore from '../../hooks/store/useAppStateStore';
 
 interface FormBodyProps {
   dropdownElement?: React.ReactNode;
@@ -18,6 +14,8 @@ const FormBody: React.FC<FormBodyProps> = ({ dropdownElement }) => {
   const [formFields, setFormFields] = useState<FormField[]>([
     { id: crypto.randomUUID(), key: '', value: '' }
   ]);
+  const updateBody = useAppStateStore((state) => state.updateFormBody);
+  const body = useAppStateStore((state) => state.body);
   const [localFields, setLocalFields] = useState<{ [id: string]: { key: string; value: string } }>({});
 
   // Sync local state when form fields change
@@ -73,7 +71,9 @@ const FormBody: React.FC<FormBodyProps> = ({ dropdownElement }) => {
   };
 
   const addEmptyField = () => {
-    setFormFields(prev => [...prev, { id: crypto.randomUUID(), key: '', value: '' }]);
+    //setFormFields(prev => [...prev, { id: crypto.randomUUID(), key: '', value: '' }]);
+    let emptyRow = { id: crypto.randomUUID(), key: '', value: '' };
+    updateBody([...formFields, emptyRow]);
   };
 
   const removeField = (id: string) => {
