@@ -1,9 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { Trash2Icon, CopyIcon, ClipboardPasteIcon } from 'lucide-react';
+import { Trash2Icon, CopyIcon, ClipboardPasteIcon, PlusIcon } from 'lucide-react';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Tooltip, TooltipTrigger, TooltipContent } from '../ui/tooltip';
-import { FormField } from '../../types/collection';
 import useAppStateStore from '../../hooks/store/useAppStateStore';
 
 interface FormBodyProps {
@@ -11,16 +10,17 @@ interface FormBodyProps {
 }
 
 const FormBody: React.FC<FormBodyProps> = ({ dropdownElement }) => {
-  const [formFields, setFormFields] = useState<FormField[]>([
-    { id: crypto.randomUUID(), key: '', value: '' }
-  ]);
   const updateBody = useAppStateStore((state) => state.updateFormBody);
   const body = useAppStateStore((state) => state.body);
-  const [localFields, setLocalFields] = useState<{ [id: string]: { key: string; value: string } }>({});
+  
+  // Get form fields from store, with fallback to empty array with one field
+  const formFields = body.formData?.data || [{ id: crypto.randomUUID(), key: '', value: '' }];
+  
+  const [localFields, setLocalFields] = useState<{ [id: string]: { key: string; value: string | null } }>({});
 
   // Sync local state when form fields change
   useEffect(() => {
-    const newLocalFields: { [id: string]: { key: string; value: string } } = {};
+    const newLocalFields: { [id: string]: { key: string; value: string | null } } = {};
     formFields.forEach(field => {
       if (!localFields[field.id]) {
         newLocalFields[field.id] = { key: field.key, value: field.value };
@@ -31,7 +31,7 @@ const FormBody: React.FC<FormBodyProps> = ({ dropdownElement }) => {
     setLocalFields(newLocalFields);
   }, [formFields.length]);
 
-  const updateLocalField = (id: string, field: 'key' | 'value', newValue: string) => {
+  const updateLocalField = (id: string, field: 'key' | 'value', newValue: string | null) => {
     setLocalFields(prev => ({
       ...prev,
       [id]: {
@@ -44,18 +44,18 @@ const FormBody: React.FC<FormBodyProps> = ({ dropdownElement }) => {
   const commitField = (id: string) => {
     const localField = localFields[id];
     if (localField) {
-      setFormFields(prev =>
-        prev.map(field =>
-          field.id === id
-            ? { ...field, key: localField.key, value: localField.value }
-            : field
-        )
+      const updatedFields = formFields.map(field =>
+        field.id === id
+          ? { ...field, key: localField.key, value: localField.value }
+          : field
       );
+      
+      updateBody(updatedFields);
 
       // If both key and value are present, add an empty row for next entry
-      if (localField.key.trim() && localField.value.trim()) {
+      if (localField.key.trim() && localField.value?.trim()) {
         const isLastRow = formFields[formFields.length - 1].id === id;
-        const hasEmptyRow = formFields.some(f => !f.key.trim() && !f.value.trim());
+        const hasEmptyRow = formFields.some(f => !f.key.trim() && !f.value?.trim());
 
         if (isLastRow && !hasEmptyRow) {
           addEmptyField();
@@ -71,14 +71,14 @@ const FormBody: React.FC<FormBodyProps> = ({ dropdownElement }) => {
   };
 
   const addEmptyField = () => {
-    //setFormFields(prev => [...prev, { id: crypto.randomUUID(), key: '', value: '' }]);
     let emptyRow = { id: crypto.randomUUID(), key: '', value: '' };
     updateBody([...formFields, emptyRow]);
   };
 
   const removeField = (id: string) => {
     if (formFields.length > 1) {
-      setFormFields(prev => prev.filter(field => field.id !== id));
+      const filteredFields = formFields.filter(field => field.id !== id);
+      updateBody(filteredFields);
       setLocalFields(prev => {
         const newFields = { ...prev };
         delete newFields[id];
@@ -88,13 +88,13 @@ const FormBody: React.FC<FormBodyProps> = ({ dropdownElement }) => {
   };
 
   const clearAll = () => {
-    setFormFields([{ id: crypto.randomUUID(), key: '', value: '' }]);
+    updateBody([{ id: crypto.randomUUID(), key: '', value: '' }]);
     setLocalFields({});
   };
 
   const copyFormData = async () => {
     const data = formFields
-      .filter(field => field.key.trim() && field.value.trim())
+      .filter(field => field.key.trim() && field.value?.trim())
       .map(field => `${field.key}=${field.value}`)
       .join('&');
     
@@ -119,26 +119,15 @@ const FormBody: React.FC<FormBodyProps> = ({ dropdownElement }) => {
       }).filter(pair => pair.key);
 
       if (pairs.length > 0) {
-        setFormFields([...pairs, { id: crypto.randomUUID(), key: '', value: '' }]);
+        updateBody([...pairs, { id: crypto.randomUUID(), key: '', value: '' }]);
       }
     } catch (err) {
       console.error('Failed to paste:', err);
     }
   };
 
-  // Get FormData for submission (for future use)
-  const getFormData = (): FormData => {
-    const formData = new FormData();
-    formFields.forEach(field => {
-      if (field.key.trim() && field.value.trim()) {
-        formData.append(field.key, field.value);
-      }
-    });
-    return formData;
-  };
-
-  const hasData = formFields.some(field => field.key.trim() || field.value.trim());
-  const validFieldCount = formFields.filter(field => field.key.trim() && field.value.trim()).length;
+  const hasData = formFields.some(field => field.key.trim() || field.value?.trim());
+  const validFieldCount = formFields.filter(field => field.key.trim() && field.value?.trim()).length;
 
   return (
     <div className="flex flex-col h-full">
@@ -233,7 +222,7 @@ const FormBody: React.FC<FormBodyProps> = ({ dropdownElement }) => {
                   <Input
                     type="text"
                     placeholder="Field value (e.g., john_doe)"
-                    value={localFields[field.id]?.value ?? field.value}
+                    value={(localFields[field.id]?.value ?? field.value) || ''}
                     onChange={e => updateLocalField(field.id, 'value', e.target.value)}
                     onBlur={() => commitField(field.id)}
                     onKeyDown={e => handleKeyDown(e, field.id)}
@@ -266,7 +255,7 @@ const FormBody: React.FC<FormBodyProps> = ({ dropdownElement }) => {
           onClick={addEmptyField}
           className="text-blue-600 hover:text-blue-700 hover:border-blue-300"
         >
-          + Add Field
+          <PlusIcon className="h-2 w-2 mr-0.3" />Add Field
         </Button>
       </div>
     </div>

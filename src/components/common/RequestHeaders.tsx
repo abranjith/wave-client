@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Trash2Icon } from 'lucide-react';
+import { Trash2Icon, PlusIcon } from 'lucide-react';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import useAppStateStore from '../../hooks/store/useAppStateStore';
@@ -120,7 +120,7 @@ const RequestHeaders: React.FC = () => {
           onClick={addEmptyHeader}
           className="text-blue-600 hover:text-blue-700 hover:border-blue-300"
         >
-          + Add Header
+          <PlusIcon className="h-2 w-2 mr-0.3" />Add Header
         </Button>
       </div>
     </div>

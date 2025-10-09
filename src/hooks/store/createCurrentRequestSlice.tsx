@@ -3,8 +3,6 @@ import { ParsedRequest, HeaderRow, ParamRow, ResponseData, RequestBodyType, Requ
 import { parseUrlQueryParams, getContentTypeFromBody } from '../../utils/utils';
 import { FileWithPreview } from '../useFileUpload';
 
-type BodyDataType = string | FileWithPreview | MultiPartFormField[] | FormField[] | null;
-
 //'none' | 'text' | 'binary' | 'form' | 'multipart'
 interface RequestTextBody {
     data: string | null;
@@ -202,7 +200,7 @@ async function convertBodyToRequestBody(
                         if (field.value instanceof File) {
                             formData.append(field.key, field.value, field.value.name);
                         } else if (field.value !== undefined) {
-                            formData.append(field.key, field.value);
+                            formData.append(field.key, field.value || '');
                         }
                     }
                 });
@@ -218,7 +216,7 @@ async function convertBodyToRequestBody(
                 const dataRecord: Record<string, string> = {};
                 formFields.forEach(field => {
                     if (field.key.trim() && field.value !== undefined) {
-                        dataRecord[field.key] = field.value;
+                        dataRecord[field.key] = field.value || '';
                     }
                 });
                 return dataRecord;
@@ -231,6 +229,14 @@ async function convertBodyToRequestBody(
     }
 }
 
+function emptyFormField(): FormField {
+    return { id: crypto.randomUUID(), key: '', value: '' };
+}
+
+function emptyMultiPartFormField(): MultiPartFormField {
+    return { id: crypto.randomUUID(), key: '', value: '', fieldType: 'text' };
+}
+
 const createCurrentRequestSlice: StateCreator<CurrentRequestSlice> = (set, get) => ({
     id: Date.now().toString(),
     name: null,
@@ -241,8 +247,8 @@ const createCurrentRequestSlice: StateCreator<CurrentRequestSlice> = (set, get) 
     body: {
         textData: null,
         binaryData: null,
-        formData: null,
-        multiPartFormData: null,
+        formData: {data: [emptyFormField()]},
+        multiPartFormData: {data: [emptyMultiPartFormField()]},
         currentBodyType: 'none'
     },
     folderPath: null,
@@ -263,14 +269,14 @@ const createCurrentRequestSlice: StateCreator<CurrentRequestSlice> = (set, get) 
         body: request?.body ? {
             textData: { data: (request.body && typeof request.body === 'string') ? request.body : null, textType: 'text' },
             binaryData: null,
-            formData: null,
-            multiPartFormData: null,
+            formData: {data: [emptyFormField()]},
+            multiPartFormData: {data: [emptyMultiPartFormField()]},
             currentBodyType: 'text'
         } : {
             textData: null,
             binaryData: null,
-            formData: null,
-            multiPartFormData: null,
+            formData: {data: [emptyFormField()]},
+            multiPartFormData: {data: [emptyMultiPartFormField()]},
             currentBodyType: 'none'
         },
         folderPath: request?.folderPath,
@@ -288,8 +294,8 @@ const createCurrentRequestSlice: StateCreator<CurrentRequestSlice> = (set, get) 
         body: {
             textData: null,
             binaryData: null,
-            formData: null,
-            multiPartFormData: null,
+            formData: {data: [emptyFormField()]},
+            multiPartFormData: {data: [emptyMultiPartFormField()]},
             currentBodyType: 'none'
         },
         folderPath: null,
@@ -344,24 +350,30 @@ const createCurrentRequestSlice: StateCreator<CurrentRequestSlice> = (set, get) 
     updateBinaryBody: (data) => {
         set(state => ({
             body: {
-                ...state.body,
-                binaryData: { data: data, fileName: data ? data.file.name : null },
+            ...state.body,
+            binaryData: { data: data, fileName: data ? data.file.name : null },
             }
         }));
     },
     updateFormBody: (data) => {
+        // If data is null or empty array, add an empty row
+        const formData = data && data.length > 0 ? data : [{ id: crypto.randomUUID(), key: '', value: '' }];
+        
         set(state => ({
             body: {
-                ...state.body,
-                formData: { data: data },
+            ...state.body,
+            formData: { data: formData },
             }
         }));
     },
     updateMultiPartFormBody: (data) => {
+        // If data is null or empty array, add an empty row
+        const multiPartFormData = data && data.length > 0 ? data : [{ id: crypto.randomUUID(), key: '', value: '', fieldType: 'text' as const }];
+        
         set(state => ({
             body: {
-                ...state.body,
-                multiPartFormData: { data: data },
+            ...state.body,
+            multiPartFormData: { data: multiPartFormData },
             }
         }));
     },
@@ -518,12 +530,23 @@ const createCurrentRequestSlice: StateCreator<CurrentRequestSlice> = (set, get) 
         }
         
         // Convert request to the expected format
+        let serializableBody = requestBody;
+        
+        // Convert FormData to a serializable format
+        if (requestBody instanceof FormData) {
+            const formDataEntries: Array<{ key: string; value: string | File }> = [];
+            requestBody.forEach((value, key) => {
+                formDataEntries.push({ key, value });
+            });
+            serializableBody = { type: 'formdata', entries: formDataEntries } as any;
+        }
+        
         const request = { 
             method: state.method, 
             url: state.url, 
             params: paramsString || undefined, 
             headers, 
-            body: requestBody
+            body: serializableBody
         };
         
         // Send request to VS Code

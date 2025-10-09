@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { Trash2Icon } from 'lucide-react';
+import { Trash2Icon, PlusIcon } from 'lucide-react';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from '../ui/select';
 import {MultiPartFormField} from '../../types/collection';
+import useAppStateStore from '../../hooks/store/useAppStateStore';
 
 type FieldType = 'text' | 'file';
 
@@ -12,14 +13,17 @@ interface MultiPartFormBodyProps {
 }
 
 const MultiPartFormBody: React.FC<MultiPartFormBodyProps> = ({ dropdownElement }) => {
-  const [formFields, setFormFields] = useState<MultiPartFormField[]>([
-    { id: crypto.randomUUID(), key: '', value: '', fieldType: 'text' }
-  ]);
-  const [localFields, setLocalFields] = useState<{ [id: string]: { key: string; value: string | File } }>({});
+  const updateBody = useAppStateStore((state) => state.updateMultiPartFormBody);
+  const body = useAppStateStore((state) => state.body);
+
+  // Get form fields from store, with fallback to empty array with one field
+  const formFields = body.multiPartFormData?.data || [{ id: crypto.randomUUID(), key: '', value: '', fieldType: 'text' as const }];
+  
+  const [localFields, setLocalFields] = useState<{ [id: string]: { key: string; value: string | File | null } }>({});
 
   // Sync local state when form fields change
   useEffect(() => {
-    const newLocalFields: { [id: string]: { key: string; value: string | File } } = {};
+    const newLocalFields: { [id: string]: { key: string; value: string | File | null } } = {};
     formFields.forEach(field => {
       if (!localFields[field.id]) {
         newLocalFields[field.id] = { key: field.key, value: field.value };
@@ -30,7 +34,7 @@ const MultiPartFormBody: React.FC<MultiPartFormBodyProps> = ({ dropdownElement }
     setLocalFields(newLocalFields);
   }, [formFields.length]);
 
-  const updateLocalField = (id: string, field: 'key' | 'value', newValue: string | File) => {
+  const updateLocalField = (id: string, field: 'key' | 'value', newValue: string | File | null) => {
     setLocalFields(prev => ({
       ...prev,
       [id]: {
@@ -43,13 +47,13 @@ const MultiPartFormBody: React.FC<MultiPartFormBodyProps> = ({ dropdownElement }
   const commitField = (id: string) => {
     const localField = localFields[id];
     if (localField) {
-      setFormFields(prev =>
-        prev.map(field =>
-          field.id === id
-            ? { ...field, key: localField.key, value: localField.value }
-            : field
-        )
+      const updatedFields = formFields.map(field =>
+        field.id === id
+          ? { ...field, key: localField.key, value: localField.value }
+          : field
       );
+      
+      updateBody(updatedFields);
 
       // If both key and value are present, add an empty row for next entry
       const hasKey = localField.key.trim();
@@ -80,18 +84,19 @@ const MultiPartFormBody: React.FC<MultiPartFormBodyProps> = ({ dropdownElement }
   };
 
   const handleFieldTypeChange = (id: string, newType: FieldType) => {
-    setFormFields(prev =>
-      prev.map(field =>
-        field.id === id
-          ? { ...field, fieldType: newType, value: '' }
-          : field
-      )
+    const updatedFields = formFields.map(field =>
+      field.id === id
+        ? { ...field, fieldType: newType, value: null }
+        : field
     );
+    
+    updateBody(updatedFields);
+    
     setLocalFields(prev => ({
       ...prev,
       [id]: {
         ...prev[id],
-        value: ''
+        value: null
       }
     }));
   };
@@ -105,22 +110,23 @@ const MultiPartFormBody: React.FC<MultiPartFormBodyProps> = ({ dropdownElement }
 
   const clearFile = (id: string) => {
     updateLocalField(id, 'value', '');
-    setFormFields(prev =>
-      prev.map(field =>
-        field.id === id
-          ? { ...field, value: '' }
-          : field
-      )
+    const updatedFields = formFields.map(field =>
+      field.id === id
+        ? { ...field, value: '' }
+        : field
     );
+    
+    updateBody(updatedFields);
   };
 
   const addEmptyField = () => {
-    setFormFields(prev => [...prev, { id: crypto.randomUUID(), key: '', value: '', fieldType: 'text' }]);
+    updateBody([...formFields, { id: crypto.randomUUID(), key: '', value: '', fieldType: 'text' }]);
   };
 
   const removeField = (id: string) => {
     if (formFields.length > 1) {
-      setFormFields(prev => prev.filter(field => field.id !== id));
+      const filteredFields = formFields.filter(field => field.id !== id);
+      updateBody(filteredFields);
       setLocalFields(prev => {
         const newFields = { ...prev };
         delete newFields[id];
@@ -130,23 +136,8 @@ const MultiPartFormBody: React.FC<MultiPartFormBodyProps> = ({ dropdownElement }
   };
 
   const clearAll = () => {
-    setFormFields([{ id: crypto.randomUUID(), key: '', value: '', fieldType: 'text' }]);
+    updateBody([{ id: crypto.randomUUID(), key: '', value: '', fieldType: 'text' }]);
     setLocalFields({});
-  };
-
-  // Get FormData for submission (for future use)
-  const getFormData = (): FormData => {
-    const formData = new FormData();
-    formFields.forEach(field => {
-      if (field.key.trim() && field.value) {
-        if (typeof field.value === 'string' && field.value.trim()) {
-          formData.append(field.key, field.value);
-        } else if (field.value instanceof File) {
-          formData.append(field.key, field.value);
-        }
-      }
-    });
-    return formData;
   };
 
   const hasData = formFields.some(field => {
@@ -316,7 +307,7 @@ const MultiPartFormBody: React.FC<MultiPartFormBodyProps> = ({ dropdownElement }
           onClick={addEmptyField}
           className="text-blue-600 hover:text-blue-700 hover:border-blue-300"
         >
-          + Add Field
+          <PlusIcon className="h-2 w-2 mr-0.3" />Add Field
         </Button>
       </div>
     </div>

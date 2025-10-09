@@ -11,11 +11,12 @@ type BodyType = 'none' | 'text' | 'binary' | 'form' | 'multipart';
 const RequestBody: React.FC = () => {
   const BODY_TYPES = [
   'No Body', 'Text', 'Binary', 'Form', 'Multipart Form'
-];
-  const [selectedBodyType, setSelectedBodyType] = useState<BodyType>('none');
+  ];
+
+  const updateBodyType = useAppStateStore((state) => state.updateCurrentBodyType);
+  const currentBodyType = useAppStateStore((state) => state.body.currentBodyType);
   const bodyTypeSelectId = useId();
   
-  const { updateBody, updateBinaryBody } = useAppStateStore();
 
   const handleBodyTypeChange = (str: string) => {
     const typeMap: Record<string, BodyType> = {
@@ -26,15 +27,7 @@ const RequestBody: React.FC = () => {
       'Multipart Form': 'multipart'
     };
     const newType = typeMap[str] || 'none';
-    setSelectedBodyType(newType);
-    
-    // Clear the appropriate body when switching types
-    if (newType !== 'text' && newType !== 'none') {
-      updateBody('');
-    }
-    if (newType !== 'binary') {
-      updateBinaryBody(undefined);
-    }
+    updateBodyType(newType);
   };
 
   // Convert body type to display label
@@ -50,7 +43,7 @@ const RequestBody: React.FC = () => {
   };
 
   const renderDropdown = () => (
-    <Select value={getDisplayLabel(selectedBodyType)} onValueChange={handleBodyTypeChange}>
+    <Select value={getDisplayLabel(currentBodyType)} onValueChange={handleBodyTypeChange}>
       <SelectTrigger id={bodyTypeSelectId} className="w-auto max-w-full min-w-48 bg-white border-slate-300 text-slate-900 hover:bg-slate-50 dark:bg-slate-800 dark:border-slate-600 dark:text-slate-100 dark:hover:bg-slate-700">
         <SelectValue placeholder="Select type" />
       </SelectTrigger>
@@ -68,23 +61,23 @@ const RequestBody: React.FC = () => {
     <div className="flex flex-col h-full">
       {/* Conditional Body Content - Takes remaining space */}
       <div className="flex-1 overflow-auto min-h-0">
-        {selectedBodyType === 'text' && (
+        {currentBodyType === 'text' && (
           <TextBody dropdownElement={renderDropdown()} />
         )}
-        
-        {selectedBodyType === 'binary' && (
+
+        {currentBodyType === 'binary' && (
           <BinaryBody dropdownElement={renderDropdown()} />
         )}
-        
-        {selectedBodyType === 'form' && (
+
+        {currentBodyType === 'form' && (
           <FormBody dropdownElement={renderDropdown()} />
         )}
-        
-        {selectedBodyType === 'multipart' && (
+
+        {currentBodyType === 'multipart' && (
           <MultiPartFormBody dropdownElement={renderDropdown()} />
         )}
 
-        {selectedBodyType === 'none' && (
+        {currentBodyType === 'none' && (
           <>
             <div className="flex-shrink-0 mb-4">{renderDropdown()}</div>
             <div className="p-8 text-center border-2 border-dashed rounded-lg bg-slate-50 dark:bg-slate-900/50">

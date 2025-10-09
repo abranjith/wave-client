@@ -67,8 +67,6 @@ const getBodyType = (content: string): RequestBodyTextType => {
 }
 
 const TextBody: React.FC<TextBodyProps> = ({ dropdownElement }) => {
-  //const [body, setBody] = useState<string>('');
-  //const [bodyType, setBodyType] = useState<RequestBodyTextType>('unknown');
   const updateBody = useAppStateStore((state) => state.updateTextBody);
   const body = useAppStateStore((state) => state.body);
   const [showExamples, setShowExamples] = useState(false);
@@ -78,16 +76,13 @@ const TextBody: React.FC<TextBodyProps> = ({ dropdownElement }) => {
   };
 
   const formatContent = () => {
-    if (!body.textData || typeof body.textData.data !== 'string') {
-      return;
-    }
-    const strBody = body.textData.data;
+    const strBody = getBody();
     if (!strBody.trim()) {
       return;
     }
 
     try {
-      switch (body.currentBodyType as string) {
+      switch (body.textData?.textType as string) {
         case 'json':
           const parsed = JSON.parse(strBody);
           updateBody(JSON.stringify(parsed, null, 2), 'json');
@@ -169,7 +164,7 @@ const TextBody: React.FC<TextBodyProps> = ({ dropdownElement }) => {
   };
 
   const getTypeInfo = (): { label: string; color: string; description: string } => {
-    switch (body.currentBodyType as string) {
+    switch (body.textData?.textType as string) {
       case 'json':
         return {
           label: 'JSON',

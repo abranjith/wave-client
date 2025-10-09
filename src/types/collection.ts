@@ -104,13 +104,13 @@ export interface ParamRow {
 export interface FormField {
   id: string;
   key: string;
-  value: string;
+  value: string | null;
 }
 
 export interface MultiPartFormField {
   id: string;
   key: string;
-  value: string | File;
+  value: string | File | null;
   fieldType: 'text' | 'file';
 }
 
