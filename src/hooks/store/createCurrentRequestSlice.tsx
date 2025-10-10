@@ -3,7 +3,6 @@ import { ParsedRequest, HeaderRow, ParamRow, ResponseData, RequestBodyType, Requ
 import { parseUrlQueryParams, getContentTypeFromBody } from '../../utils/utils';
 import { FileWithPreview } from '../useFileUpload';
 
-//'none' | 'text' | 'binary' | 'form' | 'multipart'
 interface RequestTextBody {
     data: string | null;
     textType: RequestBodyTextType | null;

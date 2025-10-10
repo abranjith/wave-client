@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Trash2Icon, PlusIcon } from 'lucide-react';
+import { Trash2Icon, PlusIcon, FileIcon, XIcon } from 'lucide-react';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from '../ui/select';
@@ -20,21 +20,37 @@ const MultiPartFormBody: React.FC<MultiPartFormBodyProps> = ({ dropdownElement }
   const formFields = body.multiPartFormData?.data || [{ id: crypto.randomUUID(), key: '', value: '', fieldType: 'text' as const }];
   
   const [localFields, setLocalFields] = useState<{ [id: string]: { key: string; value: string | File | null } }>({});
+  const [pendingFileCommit, setPendingFileCommit] = useState<string | null>(null);
 
   // Sync local state when form fields change
   useEffect(() => {
+    console.log('Form Fields length changed:', formFields);
+    console.log('Form Fields length changed, before local fields:', localFields);
     const newLocalFields: { [id: string]: { key: string; value: string | File | null } } = {};
     formFields.forEach(field => {
       if (!localFields[field.id]) {
         newLocalFields[field.id] = { key: field.key, value: field.value };
       } else {
+        // Preserve existing local fields (which may contain File objects)
         newLocalFields[field.id] = localFields[field.id];
       }
     });
     setLocalFields(newLocalFields);
+    console.log('Form Fields length changed, after local fields:', newLocalFields);
   }, [formFields.length]);
 
+  // Handle pending file commit after state update
+  //TODO may not work when multiple files are added quickly
+  useEffect(() => {
+    if (pendingFileCommit) {
+      console.log(`Processing pending file commit for field ${pendingFileCommit}`);
+      commitField(pendingFileCommit);
+      setPendingFileCommit(null);
+    }
+  }, [localFields, pendingFileCommit]);
+
   const updateLocalField = (id: string, field: 'key' | 'value', newValue: string | File | null) => {
+    console.log(`Updating local field ${id}: ${field} = ${newValue}`, newValue instanceof File ? 'File' : typeof newValue);
     setLocalFields(prev => ({
       ...prev,
       [id]: {
@@ -46,6 +62,9 @@ const MultiPartFormBody: React.FC<MultiPartFormBodyProps> = ({ dropdownElement }
 
   const commitField = (id: string) => {
     const localField = localFields[id];
+    console.log(`Committing field ${id}:`, localField);
+    console.log(`Committing With field value type:`, localField?.value instanceof File ? 'File' : typeof localField?.value);
+    
     if (localField) {
       const updatedFields = formFields.map(field =>
         field.id === id
@@ -53,8 +72,6 @@ const MultiPartFormBody: React.FC<MultiPartFormBodyProps> = ({ dropdownElement }
           : field
       );
       
-      updateBody(updatedFields);
-
       // If both key and value are present, add an empty row for next entry
       const hasKey = localField.key.trim();
       const hasValue = typeof localField.value === 'string' 
@@ -62,18 +79,24 @@ const MultiPartFormBody: React.FC<MultiPartFormBodyProps> = ({ dropdownElement }
         : localField.value instanceof File;
 
       if (hasKey && hasValue) {
-        const isLastRow = formFields[formFields.length - 1].id === id;
-        const hasEmptyRow = formFields.some(f => {
+        const isLastRow = updatedFields[updatedFields.length - 1].id === id;
+        const hasEmptyRow = updatedFields.some(f => {
           const isEmpty = !f.key.trim() && (
-            typeof f.value === 'string' ? !f.value.trim() : false
+            typeof f.value === 'string' ? !f.value.trim() : !f.value
           );
           return isEmpty;
         });
 
         if (isLastRow && !hasEmptyRow) {
-          addEmptyField();
+          // Add empty field to the updated array before committing
+          const fieldsWithEmpty = [...updatedFields, { id: crypto.randomUUID(), key: '', value: '', fieldType: 'text' as const }];
+          updateBody(fieldsWithEmpty);
+          return;
         }
       }
+      
+      // Only update if we didn't add an empty field above
+      updateBody(updatedFields);
     }
   };
 
@@ -84,6 +107,7 @@ const MultiPartFormBody: React.FC<MultiPartFormBodyProps> = ({ dropdownElement }
   };
 
   const handleFieldTypeChange = (id: string, newType: FieldType) => {
+    console.log(`Field ${id} type changed to ${newType}`);
     const updatedFields = formFields.map(field =>
       field.id === id
         ? { ...field, fieldType: newType, value: null }
@@ -103,16 +127,18 @@ const MultiPartFormBody: React.FC<MultiPartFormBodyProps> = ({ dropdownElement }
 
   const handleFileChange = (id: string, file: File | null) => {
     if (file) {
+      console.log(`File selected for field ${id}:`, file, file instanceof File ? 'File' : typeof file);
       updateLocalField(id, 'value', file);
-      commitField(id);
+      // Queue the commit to run after state update
+      setPendingFileCommit(id);
     }
   };
 
   const clearFile = (id: string) => {
-    updateLocalField(id, 'value', '');
+    updateLocalField(id, 'value', null);
     const updatedFields = formFields.map(field =>
       field.id === id
-        ? { ...field, value: '' }
+        ? { ...field, value: null }
         : field
     );
     
@@ -160,6 +186,7 @@ const MultiPartFormBody: React.FC<MultiPartFormBodyProps> = ({ dropdownElement }
     return type === 'text' ? 'Text' : 'File';
   };
 
+  //TODO - need better file input component here
   const renderValueInput = (field: MultiPartFormField) => {
     if (field.fieldType === 'file') {
       const currentFile = localFields[field.id]?.value instanceof File 
@@ -173,14 +200,12 @@ const MultiPartFormBody: React.FC<MultiPartFormBodyProps> = ({ dropdownElement }
           <Input
             type="file"
             onChange={e => {
-              const file = e.target.files?.[0];
-              if (file) {
-                handleFileChange(field.id, file);
-              }
+              const file = e.target.files?.[0] || null;
+              handleFileChange(field.id, file);
             }}
             className="w-full text-sm rounded bg-gray-50 text-gray-800 focus:outline-none file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:text-xs file:bg-slate-100 file:text-slate-700 hover:file:bg-slate-200"
           />
-          {/*currentFile && (
+          {currentFile && (
             <div className="flex items-center gap-1 px-2 py-1 bg-blue-50 rounded text-xs text-blue-700 whitespace-nowrap">
               <FileIcon size={14} />
               <span className="max-w-[100px] truncate">{currentFile.name}</span>
@@ -191,7 +216,7 @@ const MultiPartFormBody: React.FC<MultiPartFormBodyProps> = ({ dropdownElement }
                 <XIcon size={14} />
               </button>
             </div>
-          )*/}
+          )}
         </div>
       );
     }
@@ -307,7 +332,7 @@ const MultiPartFormBody: React.FC<MultiPartFormBodyProps> = ({ dropdownElement }
           onClick={addEmptyField}
           className="text-blue-600 hover:text-blue-700 hover:border-blue-300"
         >
-          <PlusIcon className="h-2 w-2 mr-0.3" />Add Field
+          <PlusIcon className="h-2 w-2 mr-0.2" />Add Field
         </Button>
       </div>
     </div>

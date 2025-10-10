@@ -49,18 +49,22 @@ const FormBody: React.FC<FormBodyProps> = ({ dropdownElement }) => {
           ? { ...field, key: localField.key, value: localField.value }
           : field
       );
-      
-      updateBody(updatedFields);
 
       // If both key and value are present, add an empty row for next entry
       if (localField.key.trim() && localField.value?.trim()) {
-        const isLastRow = formFields[formFields.length - 1].id === id;
-        const hasEmptyRow = formFields.some(f => !f.key.trim() && !f.value?.trim());
+        const isLastRow = updatedFields[updatedFields.length - 1].id === id;
+        const hasEmptyRow = updatedFields.some(f => !f.key.trim() && !f.value?.trim());
 
         if (isLastRow && !hasEmptyRow) {
-          addEmptyField();
+          // Add empty field to the updated array before committing
+          const fieldsWithEmpty = [...updatedFields, { id: crypto.randomUUID(), key: '', value: '' }];
+          updateBody(fieldsWithEmpty);
+          return;
         }
       }
+      
+      // Only update if we didn't add an empty field above
+      updateBody(updatedFields);
     }
   };
 
@@ -255,7 +259,7 @@ const FormBody: React.FC<FormBodyProps> = ({ dropdownElement }) => {
           onClick={addEmptyField}
           className="text-blue-600 hover:text-blue-700 hover:border-blue-300"
         >
-          <PlusIcon className="h-2 w-2 mr-0.3" />Add Field
+          <PlusIcon className="h-2 w-2 mr-0.2" />Add Field
         </Button>
       </div>
     </div>

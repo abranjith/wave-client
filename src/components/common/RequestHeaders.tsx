@@ -120,7 +120,7 @@ const RequestHeaders: React.FC = () => {
           onClick={addEmptyHeader}
           className="text-blue-600 hover:text-blue-700 hover:border-blue-300"
         >
-          <PlusIcon className="h-2 w-2 mr-0.3" />Add Header
+          <PlusIcon className="h-2 w-2 mr-0.2" />Add Header
         </Button>
       </div>
     </div>

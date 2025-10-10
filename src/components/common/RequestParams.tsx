@@ -120,7 +120,7 @@ const RequestParams: React.FC = () => {
           onClick={addEmptyParam}
           className="text-blue-600 hover:text-blue-700 hover:border-blue-300"
         >
-          <PlusIcon className="h-2 w-2 mr-0.3" />Add Parameter
+          <PlusIcon className="h-2 w-2 mr-0.2" />Add Parameter
         </Button>
       </div>
     </div>
