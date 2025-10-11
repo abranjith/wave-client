@@ -30,13 +30,13 @@ const TABS = [
 
 const ConfigPanel: React.FC<ConfigPanelProps> = ({ onRequestSelect, onEnvSelect }) => {
   return (
-    <div className="flex h-full w-full">
+    <div className="flex h-full w-full overflow-hidden">
       <Tabs
         defaultValue="collections"
         orientation="vertical"
-        className="w-full h-full flex flex-row"
+        className="w-full h-full flex flex-row overflow-hidden"
       >
-        <div className="flex flex-col gap-2 bg-transparent py-4 px-2 w-16 flex-shrink-0 border-r border-gray-200">
+        <div className="flex flex-col gap-2 bg-transparent py-4 px-2 w-16 flex-shrink-0 border-r border-slate-200 dark:border-slate-700">
           <TooltipProvider delayDuration={0}>
             <Tooltip>
               <TooltipTrigger asChild>
@@ -55,7 +55,7 @@ const ConfigPanel: React.FC<ConfigPanelProps> = ({ onRequestSelect, onEnvSelect 
                     };
                     onRequestSelect(request);
                   }}
-                  className="flex items-center justify-center w-full h-12 text-gray-600 hover:bg-gray-100 hover:text-gray-900 rounded-md transition-colors mb-2"
+                  className="flex items-center justify-center w-full h-12 text-slate-600 hover:bg-slate-100 hover:text-slate-900 rounded-md transition-colors mb-2 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-100"
                 >
                   <PlusIcon size={20}/>
                 </Button>
@@ -73,7 +73,7 @@ const ConfigPanel: React.FC<ConfigPanelProps> = ({ onRequestSelect, onEnvSelect 
                 <div className="w-full">
                   <TabsTrigger
                     value={tab.key}
-                    className="flex items-center justify-center w-full h-12 text-gray-600 hover:bg-gray-100 hover:text-gray-900 data-[state=active]:bg-blue-50 data-[state=active]:text-blue-600 data-[state=active]:border-l-2 data-[state=active]:border-blue-500 rounded-md transition-colors"
+                    className="flex items-center justify-center w-full h-12 text-slate-600 hover:bg-slate-100 hover:text-slate-900 data-[state=active]:bg-blue-50 data-[state=active]:text-blue-600 data-[state=active]:border-l-2 data-[state=active]:border-blue-500 rounded-md transition-colors dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-100 dark:data-[state=active]:bg-blue-900/20 dark:data-[state=active]:text-blue-400"
                   >
                     {tab.icon}
                   </TabsTrigger>
@@ -94,7 +94,7 @@ const ConfigPanel: React.FC<ConfigPanelProps> = ({ onRequestSelect, onEnvSelect 
               />
           </TabsContent>
           <TabsContent value="history" className="h-full overflow-hidden">
-            <p className="text-muted-foreground px-4 py-3 text-xs">
+            <p className="text-slate-600 dark:text-slate-400 px-4 py-3 text-xs">
               Content for History
             </p>
           </TabsContent>

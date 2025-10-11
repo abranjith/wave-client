@@ -199,18 +199,18 @@ const FormBody: React.FC<FormBodyProps> = ({ dropdownElement }) => {
       </div>
 
       {/* Main Content Area - Table */}
-      <div className="flex-1 overflow-x-auto overflow-y-auto border border-gray-200 rounded-lg">
+      <div className="flex-1 overflow-x-auto overflow-y-auto border border-slate-200 dark:border-slate-700 rounded-lg">
         <table className="w-full border-collapse">
-          <thead className="sticky top-0 bg-white z-10">
-            <tr className="border-b border-gray-200">
-              <th className="text-left py-2 px-3 text-sm font-medium text-gray-700 w-5/12">Key</th>
-              <th className="text-left py-2 px-3 text-sm font-medium text-gray-700 w-5/12">Value</th>
-              <th className="text-left py-2 px-3 text-sm font-medium text-gray-700 w-2/12">Actions</th>
+          <thead className="sticky top-0 bg-white dark:bg-slate-800 z-10">
+            <tr className="border-b border-slate-200 dark:border-slate-700">
+              <th className="text-left py-2 px-3 text-sm font-medium text-slate-700 dark:text-slate-300 w-5/12">Key</th>
+              <th className="text-left py-2 px-3 text-sm font-medium text-slate-700 dark:text-slate-300 w-5/12">Value</th>
+              <th className="text-left py-2 px-3 text-sm font-medium text-slate-700 dark:text-slate-300 w-2/12">Actions</th>
             </tr>
           </thead>
           <tbody>
             {formFields.map((field, index) => (
-              <tr key={field.id} className="border-b border-gray-100 hover:bg-gray-50">
+              <tr key={field.id} className="border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/50">
                 <td className="py-2 px-3">
                   <Input
                     type="text"
@@ -219,7 +219,7 @@ const FormBody: React.FC<FormBodyProps> = ({ dropdownElement }) => {
                     onChange={e => updateLocalField(field.id, 'key', e.target.value)}
                     onBlur={() => commitField(field.id)}
                     onKeyDown={e => handleKeyDown(e, field.id)}
-                    className="w-full text-sm rounded bg-gray-50 text-gray-800 focus:outline-none"
+                    className="w-full text-sm rounded bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-200 focus:outline-none"
                   />
                 </td>
                 <td className="py-2 px-3">
@@ -230,7 +230,7 @@ const FormBody: React.FC<FormBodyProps> = ({ dropdownElement }) => {
                     onChange={e => updateLocalField(field.id, 'value', e.target.value)}
                     onBlur={() => commitField(field.id)}
                     onKeyDown={e => handleKeyDown(e, field.id)}
-                    className="w-full text-sm rounded bg-gray-50 text-gray-800 focus:outline-none"
+                    className="w-full text-sm rounded bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-200 focus:outline-none"
                   />
                 </td>
                 <td className="py-2 px-3">
@@ -239,7 +239,7 @@ const FormBody: React.FC<FormBodyProps> = ({ dropdownElement }) => {
                       variant="outline"
                       size="sm"
                       onClick={() => removeField(field.id)}
-                      className="text-red-600 hover:text-red-700 hover:border-red-300"
+                      className="text-red-600 hover:text-red-700 hover:border-red-300 dark:text-red-400 dark:hover:text-red-300"
                     >
                       <Trash2Icon className="h-4 w-4" />
                     </Button>
@@ -257,7 +257,7 @@ const FormBody: React.FC<FormBodyProps> = ({ dropdownElement }) => {
           variant="outline"
           size="sm"
           onClick={addEmptyField}
-          className="text-blue-600 hover:text-blue-700 hover:border-blue-300"
+          className="text-blue-600 hover:text-blue-700 hover:border-blue-300 dark:text-blue-400 dark:hover:text-blue-300"
         >
           <PlusIcon className="h-2 w-2 mr-0.2" />Add Field
         </Button>

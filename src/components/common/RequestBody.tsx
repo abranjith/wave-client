@@ -60,7 +60,7 @@ const RequestBody: React.FC = () => {
   return (
     <div className="flex flex-col h-full">
       {/* Conditional Body Content - Takes remaining space */}
-      <div className="flex-1 overflow-auto min-h-0">
+      <div className="flex-1 min-h-0">
         {currentBodyType === 'text' && (
           <TextBody dropdownElement={renderDropdown()} />
         )}

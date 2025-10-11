@@ -221,9 +221,9 @@ const TextBody: React.FC<TextBodyProps> = ({ dropdownElement }) => {
   const typeInfo = getTypeInfo();
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col h-full overflow-auto">
       {/* Header with Dropdown and Actions */}
-      <div className="flex-shrink-0 flex items-center justify-between mb-4">
+      <div className="flex-shrink-0 flex items-center justify-between mb-3">
         {/* Left side - Dropdown and Type Badge */}
         <div className="flex items-center gap-2">
           {dropdownElement}
@@ -333,15 +333,15 @@ const TextBody: React.FC<TextBodyProps> = ({ dropdownElement }) => {
           placeholder="Enter request body (JSON, XML, HTML, plain text, etc.)"
           value={getBody()}
           onChange={e => handleBodyChange(e.target.value)}
-          className="flex-1 font-mono text-sm resize-none text-gray-800 dark:text-gray-200 min-h-[400px]"
+          className="flex-1 font-mono text-sm resize-none text-slate-800 dark:text-slate-200 min-h-[300px] bg-white dark:bg-slate-900"
           spellCheck={false}
         />
       </div>
 
       {/* Quick Examples Panel */}
       {showExamples && (
-        <div className="flex-shrink-0 mt-4 space-y-2 p-4 bg-slate-50 border border-slate-200 rounded-lg dark:bg-slate-900/50 dark:border-slate-700">
-          <div className="text-sm text-muted-foreground font-medium">Quick Examples:</div>
+        <div className="flex-shrink-0 mt-3 space-y-2 p-3 bg-slate-50 border border-slate-200 rounded-lg dark:bg-slate-900/50 dark:border-slate-700">
+          <div className="text-sm text-slate-600 dark:text-slate-400 font-medium">Quick Examples:</div>
           <div className="flex flex-wrap gap-2">
             <Button
               variant="outline"

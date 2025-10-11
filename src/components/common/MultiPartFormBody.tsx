@@ -203,15 +203,15 @@ const MultiPartFormBody: React.FC<MultiPartFormBodyProps> = ({ dropdownElement }
               const file = e.target.files?.[0] || null;
               handleFileChange(field.id, file);
             }}
-            className="w-full text-sm rounded bg-gray-50 text-gray-800 focus:outline-none file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:text-xs file:bg-slate-100 file:text-slate-700 hover:file:bg-slate-200"
+            className="w-full text-sm rounded bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-200 focus:outline-none file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:text-xs file:bg-slate-100 dark:file:bg-slate-800 file:text-slate-700 dark:file:text-slate-300 hover:file:bg-slate-200 dark:hover:file:bg-slate-700"
           />
           {currentFile && (
-            <div className="flex items-center gap-1 px-2 py-1 bg-blue-50 rounded text-xs text-blue-700 whitespace-nowrap">
+            <div className="flex items-center gap-1 px-2 py-1 bg-blue-50 dark:bg-blue-900/20 rounded text-xs text-blue-700 dark:text-blue-400 whitespace-nowrap">
               <FileIcon size={14} />
               <span className="max-w-[100px] truncate">{currentFile.name}</span>
               <button
                 onClick={() => clearFile(field.id)}
-                className="ml-1 hover:text-blue-900"
+                className="ml-1 hover:text-blue-900 dark:hover:text-blue-300"
               >
                 <XIcon size={14} />
               </button>
@@ -229,7 +229,7 @@ const MultiPartFormBody: React.FC<MultiPartFormBodyProps> = ({ dropdownElement }
         onChange={e => updateLocalField(field.id, 'value', e.target.value)}
         onBlur={() => commitField(field.id)}
         onKeyDown={e => handleKeyDown(e, field.id)}
-        className="w-full text-sm rounded bg-gray-50 text-gray-800 focus:outline-none"
+        className="w-full text-sm rounded bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-200 focus:outline-none"
       />
     );
   };
@@ -265,19 +265,19 @@ const MultiPartFormBody: React.FC<MultiPartFormBodyProps> = ({ dropdownElement }
       </div>
 
       {/* Main Content Area - Table */}
-      <div className="flex-1 overflow-x-auto overflow-y-auto border border-gray-200 rounded-lg">
+      <div className="flex-1 overflow-x-auto overflow-y-auto border border-slate-200 dark:border-slate-700 rounded-lg">
         <table className="w-full border-collapse">
-          <thead className="sticky top-0 bg-white z-10">
-            <tr className="border-b border-gray-200">
-              <th className="text-left py-2 px-3 text-sm font-medium text-gray-700 w-3/12">Key</th>
-              <th className="text-left py-2 px-3 text-sm font-medium text-gray-700 w-2/12">Field Type</th>
-              <th className="text-left py-2 px-3 text-sm font-medium text-gray-700 w-5/12">Value</th>
-              <th className="text-left py-2 px-3 text-sm font-medium text-gray-700 w-2/12">Actions</th>
+          <thead className="sticky top-0 bg-white dark:bg-slate-800 z-10">
+            <tr className="border-b border-slate-200 dark:border-slate-700">
+              <th className="text-left py-2 px-3 text-sm font-medium text-slate-700 dark:text-slate-300 w-3/12">Key</th>
+              <th className="text-left py-2 px-3 text-sm font-medium text-slate-700 dark:text-slate-300 w-2/12">Field Type</th>
+              <th className="text-left py-2 px-3 text-sm font-medium text-slate-700 dark:text-slate-300 w-5/12">Value</th>
+              <th className="text-left py-2 px-3 text-sm font-medium text-slate-700 dark:text-slate-300 w-2/12">Actions</th>
             </tr>
           </thead>
           <tbody>
             {formFields.map((field, index) => (
-              <tr key={field.id} className="border-b border-gray-100 hover:bg-gray-50">
+              <tr key={field.id} className="border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/50">
                 <td className="py-2 px-3">
                   <Input
                     type="text"
@@ -286,7 +286,7 @@ const MultiPartFormBody: React.FC<MultiPartFormBodyProps> = ({ dropdownElement }
                     onChange={e => updateLocalField(field.id, 'key', e.target.value)}
                     onBlur={() => commitField(field.id)}
                     onKeyDown={e => handleKeyDown(e, field.id)}
-                    className="w-full text-sm rounded bg-gray-50 text-gray-800 focus:outline-none"
+                    className="w-full text-sm rounded bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-200 focus:outline-none"
                   />
                 </td>
                 <td className="py-2 px-3">
@@ -294,7 +294,7 @@ const MultiPartFormBody: React.FC<MultiPartFormBodyProps> = ({ dropdownElement }
                     value={getFieldTypeLabel(field.fieldType)} 
                     onValueChange={(value) => handleFieldTypeChange(field.id, value.toLowerCase() as FieldType)}
                   >
-                    <SelectTrigger className="w-full text-sm bg-gray-50 text-gray-800">
+                    <SelectTrigger className="w-full text-sm bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-200">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -312,7 +312,7 @@ const MultiPartFormBody: React.FC<MultiPartFormBodyProps> = ({ dropdownElement }
                       variant="outline"
                       size="sm"
                       onClick={() => removeField(field.id)}
-                      className="text-red-600 hover:text-red-700 hover:border-red-300"
+                      className="text-red-600 hover:text-red-700 hover:border-red-300 dark:text-red-400 dark:hover:text-red-300"
                     >
                       <Trash2Icon className="h-4 w-4" />
                     </Button>
@@ -330,7 +330,7 @@ const MultiPartFormBody: React.FC<MultiPartFormBodyProps> = ({ dropdownElement }
           variant="outline"
           size="sm"
           onClick={addEmptyField}
-          className="text-blue-600 hover:text-blue-700 hover:border-blue-300"
+          className="text-blue-600 hover:text-blue-700 hover:border-blue-300 dark:text-blue-400 dark:hover:text-blue-300"
         >
           <PlusIcon className="h-2 w-2 mr-0.2" />Add Field
         </Button>

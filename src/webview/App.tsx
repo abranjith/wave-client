@@ -94,7 +94,7 @@ const App: React.FC = () => {
 
   return (
     <div
-      className="min-h-screen h-screen w-screen bg-gray-50 grid"
+      className="min-h-screen h-screen w-screen bg-slate-50 dark:bg-slate-900 grid"
       style={{
         display: 'grid',
         gridTemplateColumns: selectedEnvironment ? '400px 1fr' : '400px 1fr',
@@ -109,7 +109,7 @@ const App: React.FC = () => {
       }}
     >
       {/* Left Sidebar with Tabs */}
-      <div style={{ gridArea: 'config' }}>
+      <div style={{ gridArea: 'config' }} className="overflow-hidden">
         <ConfigPanel 
           onRequestSelect={handleRequestSelect}
           onEnvSelect={handleEnvironmentSelect}
@@ -118,7 +118,7 @@ const App: React.FC = () => {
 
       {selectedEnvironment ? (
         /* Environment Grid - Full Height */
-        <div style={{ gridArea: 'environment' }}>
+        <div style={{ gridArea: 'environment' }} className="overflow-hidden">
           <EnvironmentGrid 
             environment={selectedEnvironment}
             onBack={handleBackFromEnvironment}
@@ -127,14 +127,14 @@ const App: React.FC = () => {
       ) : (
         <>
           {/* Top-right RequestPanel */}
-          <div style={{ gridArea: 'request' }}>
+          <div style={{ gridArea: 'request' }} className="overflow-hidden">
             <RequestPanel 
               onSendRequest={handleSendRequest} 
             />
           </div>
 
           {/* Bottom-right ResponsePanel */}
-          <div style={{ gridArea: 'response' }}>
+          <div style={{ gridArea: 'response' }} className="overflow-hidden">
             <ResponsePanel onDownloadResponse={handleDownloadResponse} />
           </div>
         </>

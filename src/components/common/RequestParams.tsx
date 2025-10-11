@@ -61,18 +61,18 @@ const RequestParams: React.FC = () => {
 
   return (
     <div className="space-y-4">
-      <div className="overflow-x-auto overflow-y-auto max-h-80 border border-gray-200 rounded-lg">
+      <div className="overflow-x-auto overflow-y-auto max-h-80 border border-slate-200 dark:border-slate-700 rounded-lg">
         <table className="w-full border-collapse">
-          <thead className="sticky top-0 bg-white z-10">
-            <tr className="border-b border-gray-200">
-              <th className="text-left py-2 px-3 text-sm font-medium text-gray-700 w-5/12">Key</th>
-              <th className="text-left py-2 px-3 text-sm font-medium text-gray-700 w-5/12">Value</th>
-              <th className="text-left py-2 px-3 text-sm font-medium text-gray-700 w-2/12">Actions</th>
+          <thead className="sticky top-0 bg-white dark:bg-slate-800 z-10">
+            <tr className="border-b border-slate-200 dark:border-slate-700">
+              <th className="text-left py-2 px-3 text-sm font-medium text-slate-700 dark:text-slate-300 w-5/12">Key</th>
+              <th className="text-left py-2 px-3 text-sm font-medium text-slate-700 dark:text-slate-300 w-5/12">Value</th>
+              <th className="text-left py-2 px-3 text-sm font-medium text-slate-700 dark:text-slate-300 w-2/12">Actions</th>
             </tr>
           </thead>
           <tbody>
             {params.map((param, index) => (
-              <tr key={param.id} className="border-b border-gray-100 hover:bg-gray-50">
+              <tr key={param.id} className="border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/50">
                 <td className="py-2 px-3">
                   <Input
                     type="text"
@@ -81,7 +81,7 @@ const RequestParams: React.FC = () => {
                     onChange={e => updateLocalParam(param.id, 'key', e.target.value)}
                     onBlur={() => commitParam(param.id)}
                     onKeyDown={e => handleKeyDown(e, param.id)}
-                    className="w-full text-sm rounded bg-gray-50 text-gray-800 focus:outline-none"
+                    className="w-full text-sm rounded bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-200 focus:outline-none"
                   />
                 </td>
                 <td className="py-2 px-3">
@@ -92,7 +92,7 @@ const RequestParams: React.FC = () => {
                     onChange={e => updateLocalParam(param.id, 'value', e.target.value)}
                     onBlur={() => commitParam(param.id)}
                     onKeyDown={e => handleKeyDown(e, param.id)}
-                    className="w-full text-sm rounded bg-gray-50 text-gray-800 focus:outline-none"
+                    className="w-full text-sm rounded bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-200 focus:outline-none"
                   />
                 </td>
                 <td className="py-2 px-3">

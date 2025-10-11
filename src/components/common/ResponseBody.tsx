@@ -155,11 +155,11 @@ const ResponseBody: React.FC<ResponseBodyProps> = ({ body, headers, statusCode, 
   if (!isTextBased) {
     // Binary content - show download link
     return (
-      <div className="flex flex-col items-center justify-center h-full p-8">
+      <div className="flex flex-col items-center justify-center h-full p-8 bg-white dark:bg-slate-900">
         <div className="text-center space-y-4">
-          <div className="text-gray-600">
+          <div className="text-slate-600 dark:text-slate-400">
             <FileIcon className="mx-auto mb-2 w-8 h-8" />
-            <p className="text-xs text-gray-500 mb-4">
+            <p className="text-xs text-slate-500 dark:text-slate-400 mb-4">
               This response contains data that cannot be displayed.
             </p>
           </div>
@@ -174,7 +174,7 @@ const ResponseBody: React.FC<ResponseBodyProps> = ({ body, headers, statusCode, 
             Download {fileName}
           </Button>
           
-          <p className="text-xs text-gray-400 mt-2">
+          <p className="text-xs text-slate-400 dark:text-slate-500 mt-2">
             Content-Type: {headers['content-type'] || 'application/octet-stream'}
           </p>
         </div>
@@ -184,14 +184,14 @@ const ResponseBody: React.FC<ResponseBodyProps> = ({ body, headers, statusCode, 
 
   // Text-based content - show formatted body with actions
   return (
-    <div className="flex flex-col h-full min-h-0">
+    <div className="flex flex-col h-full min-h-0 bg-white dark:bg-slate-900">
       {/* Action Bar */}
-      <div className="flex-shrink-0 flex items-center justify-between px-4 py-2 border-b border-gray-200 bg-gray-50">
+      <div className="flex-shrink-0 flex items-center justify-between px-4 py-2 border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800">
         <div className="flex items-center gap-2">
-          <span className="text-xs font-medium text-gray-600 uppercase">
+          <span className="text-xs font-medium text-slate-600 dark:text-slate-400 uppercase">
             {contentType}
           </span>
-          <span className="text-xs text-gray-400">
+          <span className="text-xs text-slate-400 dark:text-slate-500">
             {formattedBody.length.toLocaleString()} characters
           </span>
         </div>
@@ -236,8 +236,8 @@ const ResponseBody: React.FC<ResponseBodyProps> = ({ body, headers, statusCode, 
       </div>
 
       {/* Response Body Content */}
-      <div className="flex-1 min-h-0 overflow-auto max-h-80">
-        <pre className="p-4 text-xs text-gray-800 font-mono leading-relaxed whitespace-pre-wrap break-words">
+      <div className="flex-1 min-h-0 overflow-auto">
+        <pre className="p-4 text-xs text-slate-800 dark:text-slate-200 font-mono leading-relaxed whitespace-pre-wrap break-words">
           {formattedBody}
         </pre>
       </div>
