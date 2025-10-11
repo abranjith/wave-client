@@ -45,7 +45,7 @@ const RequestBody: React.FC = () => {
   const renderDropdown = () => (
     <Select value={getDisplayLabel(currentBodyType)} onValueChange={handleBodyTypeChange}>
       <SelectTrigger id={bodyTypeSelectId} className="w-auto max-w-full min-w-48 bg-white border-slate-300 text-slate-900 hover:bg-slate-50 dark:bg-slate-800 dark:border-slate-600 dark:text-slate-100 dark:hover:bg-slate-700">
-        <SelectValue placeholder="Select type" />
+        <SelectValue placeholder="Select Type" />
       </SelectTrigger>
       <SelectContent>
         {BODY_TYPES.map(m => (

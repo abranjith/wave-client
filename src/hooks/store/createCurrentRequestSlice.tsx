@@ -32,6 +32,7 @@ interface RequestBody {
 interface CurrentRequestSlice {
     id: string;
     name: string | null;
+    protocol: string | null;
     method: string | null;
     url: string | null;
     params: ParamRow[] | null;
@@ -50,6 +51,7 @@ interface CurrentRequestSlice {
 
     // Individual field updaters
     updateMethod: (method: string) => void;
+    updateProtocol: (protocol: string) => void;
     updateUrl: (url: string) => void;
     updateTextBody: (
         data: string | null,
@@ -240,6 +242,7 @@ const createCurrentRequestSlice: StateCreator<CurrentRequestSlice> = (set, get) 
     id: Date.now().toString(),
     name: null,
     method: 'GET',
+    protocol: 'https',
     url: null,
     params: [{ id: `param-${Date.now()}`, key: '', value: '', disabled: false }],
     headers: [{ id: `header-${Date.now()}`, key: '', value: '', disabled: false }],
@@ -321,10 +324,42 @@ const createCurrentRequestSlice: StateCreator<CurrentRequestSlice> = (set, get) 
 
     // Individual field updaters
     updateMethod: (method) => set({ method: method }),
+
+    // Update protocol (http/https)
+    updateProtocol: (protocol) => {
+        const state = get();
+        let currentUrl = state.url || '';
+        try {
+            set({ protocol: protocol.toLowerCase() });
+            // If URL is empty, just set protocol as 'http://' or 'https://'
+            if (!currentUrl) {
+                set({ url: protocol + '://' });
+                return;
+            }
+
+            // If URL is not empty, update the protocol
+            const urlParts = currentUrl.split('://');
+            if (urlParts.length > 1) {
+                set({ url: currentUrl.replace(urlParts[0], protocol) });
+            } else {
+                set({ url: protocol + '://' + currentUrl });
+            }
+        } catch (error) {
+            console.error('Error updating protocol:', error);
+        }
+    },
+
     updateUrl: (url) => {
         // Parse query params from the URL
         const parsedParams = parseUrlQueryParams(url);
-        
+        //if url has protocol, update protocol as well
+        if(url) {
+            const urlParts = url.split('://');
+            if(urlParts.length > 1) {
+                set({ protocol: urlParts[0].toLowerCase() });
+            }
+        }
+        // If there are parsed params, update both url and params
         if(parsedParams.length > 0) {
             set({ url: url, params: parsedParams });
             return;
@@ -539,10 +574,16 @@ const createCurrentRequestSlice: StateCreator<CurrentRequestSlice> = (set, get) 
             });
             serializableBody = { type: 'formdata', entries: formDataEntries } as any;
         }
-        
+
+        //if url is missing protocol, prepend protocol
+        let finalUrl = state.url;
+        if (!finalUrl.startsWith('http://') && !finalUrl.startsWith('https://')) {
+            finalUrl = `${state.protocol}://${finalUrl}`;
+        }
+
         const request = { 
             method: state.method, 
-            url: state.url, 
+            url: finalUrl, 
             params: paramsString || undefined, 
             headers, 
             body: serializableBody

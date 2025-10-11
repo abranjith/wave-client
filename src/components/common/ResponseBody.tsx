@@ -236,7 +236,7 @@ const ResponseBody: React.FC<ResponseBodyProps> = ({ body, headers, statusCode, 
       </div>
 
       {/* Response Body Content */}
-      <div className="flex-1 min-h-0">
+      <div className="flex-1 min-h-0 overflow-auto max-h-80">
         <pre className="p-4 text-xs text-gray-800 font-mono leading-relaxed whitespace-pre-wrap break-words">
           {formattedBody}
         </pre>

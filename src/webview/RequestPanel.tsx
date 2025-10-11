@@ -37,7 +37,8 @@ const TABS = [
 ];
 
 const RequestPanel: React.FC<RequestPanelProps> = ({ onSendRequest })  => {
-  const [protocol, setProtocol] = useState('HTTPS');
+  const protocol = useAppStateStore((state) => state.protocol || 'HTTPS');
+  const setProtocol = useAppStateStore((state) => state.updateProtocol);
   const method = useAppStateStore((state) => state.method || 'GET');
   const setMethod = useAppStateStore((state) => state.updateMethod);
   const url = useAppStateStore((state) => state.url || '');
@@ -46,6 +47,11 @@ const RequestPanel: React.FC<RequestPanelProps> = ({ onSendRequest })  => {
   const [activeTab, setActiveTab] = useState<'Params' | 'Headers' | 'Body'>('Params');
   const urlInputId = useId();
   const httpMethodSelectId = useId();
+  const protocolSelectId = useId();
+
+  const getUrlWithoutProtocol = (fullUrl: string) => {
+    return fullUrl.replace(/(^\w+:|^)\/\//, '');
+  }
 
   return (
     <div className="w-full bg-background border-b">
@@ -62,6 +68,20 @@ const RequestPanel: React.FC<RequestPanelProps> = ({ onSendRequest })  => {
           ))}
         </select>
         */}
+        <div className="*:not-first:mt-2">
+          <Select defaultValue='HTTPS' value={protocol.toUpperCase()} onValueChange={setProtocol}>
+            <SelectTrigger id={protocolSelectId} className="w-auto max-w-full min-w-24 bg-white border-slate-300 text-slate-900 hover:bg-slate-50 dark:bg-slate-800 dark:border-slate-600 dark:text-slate-100 dark:hover:bg-slate-700">
+              <SelectValue placeholder="Select Protocol" />
+            </SelectTrigger>
+            <SelectContent>
+            {PROTOCOLS.map(m => (
+              <SelectItem key={m} value={m} className="hover:bg-slate-100 dark:hover:bg-slate-700">
+                {m}
+              </SelectItem>
+            ))}
+            </SelectContent>
+          </Select>
+        </div>
 
         {/* HTTP Method Dropdown
         <select
@@ -77,7 +97,7 @@ const RequestPanel: React.FC<RequestPanelProps> = ({ onSendRequest })  => {
         {/* HTTP Method Dropdown */}
         <div className="*:not-first:mt-2">
           <Select defaultValue={method} onValueChange={setMethod}>
-            <SelectTrigger id={httpMethodSelectId} className="w-auto max-w-full min-w-48 bg-white border-slate-300 text-slate-900 hover:bg-slate-50 dark:bg-slate-800 dark:border-slate-600 dark:text-slate-100 dark:hover:bg-slate-700">
+            <SelectTrigger id={httpMethodSelectId} className="w-auto max-w-full min-w-24 bg-white border-slate-300 text-slate-900 hover:bg-slate-50 dark:bg-slate-800 dark:border-slate-600 dark:text-slate-100 dark:hover:bg-slate-700">
               <SelectValue placeholder="Select Method" />
             </SelectTrigger>
             <SelectContent>
@@ -98,7 +118,7 @@ const RequestPanel: React.FC<RequestPanelProps> = ({ onSendRequest })  => {
               className="flex-1 bg-white border-slate-300 text-slate-900 placeholder:text-slate-500 focus:border-blue-500 focus:ring-blue-500 dark:bg-slate-800 dark:border-slate-600 dark:text-slate-100 dark:placeholder:text-slate-400 dark:focus:border-blue-400 dark:focus:ring-blue-400" 
               placeholder="Enter request URL..." 
               type="url" 
-              value={url}
+              value={getUrlWithoutProtocol(url)}
               onChange={e => setUrl(e.target.value)}
             />
           </div>
