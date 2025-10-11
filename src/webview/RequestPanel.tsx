@@ -129,7 +129,7 @@ const RequestPanel: React.FC<RequestPanelProps> = ({ onSendRequest })  => {
         {TABS.map(tab => (
           <button
             key={tab}
-            className={`px-6 py-3 text-sm font-medium focus:outline-none transition-all relative ${
+            className={`px-6 py-4 text-sm font-medium focus:outline-none transition-all relative ${
               activeTab === tab
                 ? 'border-b-2 border-blue-500 text-blue-600 bg-white dark:bg-slate-800 dark:text-blue-400 dark:border-blue-400'
                 : 'text-slate-600 bg-transparent hover:text-blue-600 hover:bg-white/50 dark:text-slate-400 dark:hover:text-blue-400 dark:hover:bg-slate-800/50'

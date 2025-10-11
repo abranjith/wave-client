@@ -12,6 +12,7 @@
 2.  **Language:** Use **TypeScript** for both the extension's backend (the part that runs in VS Code's Node.js environment) and the frontend.
 3.  **Frontend Framework:** Set up a **React** application to render inside a VS Code webview panel.
 4.  **Styling:** Integrate **Tailwind CSS** into the React application for utility-first styling. Use the `@apply` directive for reusable component classes where necessary. Common components for the UI include buttons, input fields, and card layouts.
+For icons use lucide-react https://lucide.dev/
     Use react component libraries such as Origin UI https://originui.com/ or https://github.com/origin-space/originui
 5.  **State Management:** Use React's built-in state management hooks (`useState`, `useReducer`, `useContext`) for the initial version.
 
@@ -27,3 +28,5 @@
 5. Do not create/ update documentation in the initial version, we can update this later.
 6. Follow existing code patterns, styling, conventions throughout the project.
 7. When any current file is being changed, be extra careful about not breaking existing functionality.
+8.  **Performance:** Ensure the webview is performant, avoiding unnecessary re-renders and optimizing API call handling.
+9.  Since this project uses webviews, for any I/O operations, use the VS Code API to communicate between the webview and the extension backend.

@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from 'react';
+import { FileIcon, DownloadIcon, CopyIcon, CheckCheckIcon } from 'lucide-react';
 import { Button } from '../ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/tooltip';
 
@@ -6,6 +7,7 @@ interface ResponseBodyProps {
   body: string;
   headers: Record<string, string>;
   statusCode: number;
+  onDownloadResponse: (data: any) => void;
 }
 
 type ContentType = 'json' | 'xml' | 'html' | 'text' | 'csv' | 'binary';
@@ -18,12 +20,12 @@ function getContentType(headers: Record<string, string>): ContentType {
     .find(([key]) => key.toLowerCase() === 'content-type')?.[1]
     ?.toLowerCase() || '';
 
-  if (contentTypeHeader.includes('json')) return 'json';
-  if (contentTypeHeader.includes('xml')) return 'xml';
-  if (contentTypeHeader.includes('html')) return 'html';
-  if (contentTypeHeader.includes('csv')) return 'csv';
-  if (contentTypeHeader.includes('text')) return 'text';
-  
+  if (contentTypeHeader.includes('/json')) return 'json';
+  if (contentTypeHeader.includes('/xml')) return 'xml';
+  if (contentTypeHeader.includes('/html')) return 'html';
+  if (contentTypeHeader.includes('/csv')) return 'csv';
+  if (contentTypeHeader.includes('/text')) return 'text';
+
   // Check for binary content types
   if (
     contentTypeHeader.includes('image/') ||
@@ -108,8 +110,9 @@ function getFileName(headers: Record<string, string>, contentType: ContentType):
   return `response_${timestamp}.${extension}`;
 }
 
-const ResponseBody: React.FC<ResponseBodyProps> = ({ body, headers, statusCode }) => {
+const ResponseBody: React.FC<ResponseBodyProps> = ({ body, headers, statusCode, onDownloadResponse }) => {
   const [copySuccess, setCopySuccess] = useState(false);
+  const [downloadSuccess, setDownloadSuccess] = useState(false);
 
   const contentType = useMemo(() => getContentType(headers), [headers]);
   const isTextBased = contentType !== 'binary';
@@ -137,19 +140,15 @@ const ResponseBody: React.FC<ResponseBodyProps> = ({ body, headers, statusCode }
    */
   const handleDownload = () => {
     try {
-      const blob = new Blob([body], { 
-        type: headers['content-type'] || 'application/octet-stream' 
-      });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = fileName;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      URL.revokeObjectURL(url);
+        // Send download request to extension host
+        console.log('Sending download request to VS Code extension host');
+        onDownloadResponse({ body, fileName, contentType: headers['content-type'] || 'application/octet-stream' });
+        
+        // Show success feedback
+        setDownloadSuccess(true);
+        setTimeout(() => setDownloadSuccess(false), 2000);
     } catch (error) {
-      console.error('Failed to download file:', error);
+        console.error('Failed to download file:', error);
     }
   };
 
@@ -159,22 +158,9 @@ const ResponseBody: React.FC<ResponseBodyProps> = ({ body, headers, statusCode }
       <div className="flex flex-col items-center justify-center h-full p-8">
         <div className="text-center space-y-4">
           <div className="text-gray-600">
-            <svg
-              className="w-16 h-16 mx-auto mb-4 text-gray-400"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"
-              />
-            </svg>
-            <p className="text-sm font-medium mb-2">Binary Content</p>
+            <FileIcon className="mx-auto mb-2 w-8 h-8" />
             <p className="text-xs text-gray-500 mb-4">
-              This response contains binary data that cannot be displayed.
+              This response contains data that cannot be displayed.
             </p>
           </div>
           
@@ -184,19 +170,7 @@ const ResponseBody: React.FC<ResponseBodyProps> = ({ body, headers, statusCode }
             size="sm"
             className="gap-2"
           >
-            <svg
-              className="w-4 h-4"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"
-              />
-            </svg>
+            <DownloadIcon className="w-4 h-4" />
             Download {fileName}
           </Button>
           
@@ -210,9 +184,9 @@ const ResponseBody: React.FC<ResponseBodyProps> = ({ body, headers, statusCode }
 
   // Text-based content - show formatted body with actions
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col h-full min-h-0">
       {/* Action Bar */}
-      <div className="flex items-center justify-between px-4 py-2 border-b border-gray-200 bg-gray-50">
+      <div className="flex-shrink-0 flex items-center justify-between px-4 py-2 border-b border-gray-200 bg-gray-50">
         <div className="flex items-center gap-2">
           <span className="text-xs font-medium text-gray-600 uppercase">
             {contentType}
@@ -227,85 +201,42 @@ const ResponseBody: React.FC<ResponseBodyProps> = ({ body, headers, statusCode }
             <TooltipTrigger asChild>
               <Button
                 onClick={handleCopy}
-                variant="ghost"
+                variant="outline"
                 size="sm"
-                className="h-8 px-3"
+                className="h-9 w-9 p-0 flex items-center justify-center"
               >
                 {copySuccess ? (
-                  <>
-                    <svg
-                      className="w-4 h-4 text-green-600"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M5 13l4 4L19 7"
-                      />
-                    </svg>
-                    <span className="text-green-600 ml-1">Copied!</span>
-                  </>
+                    <CheckCheckIcon size={16} color='green'/>
                 ) : (
-                  <>
-                    <svg
-                      className="w-4 h-4"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"
-                      />
-                    </svg>
-                    <span className="ml-1">Copy</span>
-                  </>
+                    <CopyIcon size={16} />
                 )}
               </Button>
             </TooltipTrigger>
-            <TooltipContent>
-              <p>Copy to clipboard</p>
-            </TooltipContent>
+            <TooltipContent className="px-2 py-1 text-xs">Copy to clipboard</TooltipContent>
           </Tooltip>
 
           <Tooltip>
             <TooltipTrigger asChild>
               <Button
                 onClick={handleDownload}
-                variant="ghost"
+                variant="outline"
                 size="sm"
-                className="h-8 px-3"
+                className="h-9 w-9 p-0 flex items-center justify-center"
               >
-                <svg
-                  className="w-4 h-4"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"
-                  />
-                </svg>
-                <span className="ml-1">Download</span>
+                {downloadSuccess ? (
+                  <CheckCheckIcon size={16} color='green' />
+                ) : (
+                  <DownloadIcon size={16} />
+                )}
               </Button>
             </TooltipTrigger>
-            <TooltipContent>
-              <p>Download as file</p>
-            </TooltipContent>
+            <TooltipContent className="px-2 py-1 text-xs">Download as file</TooltipContent>
           </Tooltip>
         </div>
       </div>
 
       {/* Response Body Content */}
-      <div className="flex-1 overflow-auto">
+      <div className="flex-1 min-h-0">
         <pre className="p-4 text-xs text-gray-800 font-mono leading-relaxed whitespace-pre-wrap break-words">
           {formattedBody}
         </pre>

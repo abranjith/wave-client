@@ -9,7 +9,11 @@ function getStatusColor(status: number) {
   return 'text-gray-600';
 }
 
-const ResponsePanel: React.FC = () => {
+interface ResponsePanelProps {
+  onDownloadResponse: any;
+}
+
+const ResponsePanel: React.FC<ResponsePanelProps> = ({ onDownloadResponse }) => {
   const [activeTab, setActiveTab] = useState<'body' | 'headers'>('body');
   const response = useAppStateStore((state) => state.responseData);
 
@@ -68,22 +72,27 @@ const ResponsePanel: React.FC = () => {
       </div>
 
       {/* Tab Content */}
-      <div className="flex-1 overflow-auto">
+      <div className="flex-1 overflow-hidden min-h-0">
         {activeTab === 'body' && (
-          <ResponseBody 
-            body={body}
-            headers={headers}
-            statusCode={status}
-          />
+          <div className="h-full">
+            <ResponseBody 
+              body={body}
+              headers={headers}
+              statusCode={status}
+              onDownloadResponse={onDownloadResponse}
+            />
+          </div>
         )}
         {activeTab === 'headers' && (
-          <div className="p-6 text-xs text-gray-700">
-            {Object.entries(headers).map(([key, value]) => (
-              <div key={key} className="flex gap-2 py-1">
-                <span className="font-mono font-bold text-gray-500 w-40">{key}</span>
-                <span className="font-mono text-gray-800">{value}</span>
-              </div>
-            ))}
+          <div className="flex-1 overflow-auto min-h-0 max-h-80 p-6">
+            <div className="space-y-2">
+              {Object.entries(headers).map(([key, value]) => (
+                <div key={key} className="flex gap-2 py-1 border-b border-gray-100 last:border-0">
+                  <span className="font-mono font-bold text-gray-500 w-40 flex-shrink-0">{key}</span>
+                  <span className="font-mono text-gray-800 break-words">{value}</span>
+                </div>
+              ))}
+            </div>
           </div>
         )}
       </div>

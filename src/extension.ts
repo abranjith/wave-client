@@ -134,6 +134,30 @@ export function activate(context: vscode.ExtensionContext) {
 							error: error.message
 						});
 					}
+				} else if (message.type === 'downloadResponse') {
+					// Handle file download from webview
+					try {
+						const { body, fileName, contentType } = message.data;
+						
+						// Show save dialog to user
+						const uri = await vscode.window.showSaveDialog({
+							defaultUri: vscode.Uri.file(path.join(os.homedir(), 'Downloads', fileName)),
+							filters: {
+								'All Files': ['*']
+							}
+						});
+						
+						if (uri) {
+							// Write file to selected location
+							const buffer = Buffer.from(body, 'utf8');
+							await vscode.workspace.fs.writeFile(uri, buffer);
+							
+							// Show success message
+							vscode.window.showInformationMessage(`File saved: ${path.basename(uri.fsPath)}`);
+						}
+					} catch (error: any) {
+						vscode.window.showErrorMessage(`Failed to save file: ${error.message}`);
+					}
 				}
 			});
 		});

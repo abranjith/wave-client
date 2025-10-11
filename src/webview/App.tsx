@@ -47,6 +47,18 @@ const App: React.FC = () => {
     if (vsCodeRef.current) {
       onSendRequest(vsCodeRef.current);
     }
+    else{
+      console.error('VS Code API is not available.');
+    }
+  };
+
+  const handleDownloadResponse = (data: any) => {
+    if (vsCodeRef.current) {
+      vsCodeRef.current.postMessage({
+          type: 'downloadResponse',
+          data: data
+        });
+    }
   };
 
   useEffect(() => {
@@ -123,7 +135,7 @@ const App: React.FC = () => {
 
           {/* Bottom-right ResponsePanel */}
           <div style={{ gridArea: 'response' }}>
-            <ResponsePanel/>
+            <ResponsePanel onDownloadResponse={handleDownloadResponse} />
           </div>
         </>
       )}
