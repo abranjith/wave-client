@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import useAppStateStore from '../hooks/store/useAppStateStore';
+import ResponseBody from '../components/common/ResponseBody';
 
 function getStatusColor(status: number) {
   if (status >= 200 && status < 300) return 'text-green-600';
@@ -67,14 +68,16 @@ const ResponsePanel: React.FC = () => {
       </div>
 
       {/* Tab Content */}
-      <div className="p-6 flex-1 overflow-auto">
+      <div className="flex-1 overflow-auto">
         {activeTab === 'body' && (
-          <pre className="bg-gray-100 rounded p-4 text-xs text-gray-800 overflow-x-auto whitespace-pre-wrap">
-            {body}
-          </pre>
+          <ResponseBody 
+            body={body}
+            headers={headers}
+            statusCode={status}
+          />
         )}
         {activeTab === 'headers' && (
-          <div className="text-xs text-gray-700">
+          <div className="p-6 text-xs text-gray-700">
             {Object.entries(headers).map(([key, value]) => (
               <div key={key} className="flex gap-2 py-1">
                 <span className="font-mono font-bold text-gray-500 w-40">{key}</span>
