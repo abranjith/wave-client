@@ -328,21 +328,27 @@ const createCurrentRequestSlice: StateCreator<CurrentRequestSlice> = (set, get) 
     // Update protocol (http/https)
     updateProtocol: (protocol) => {
         const state = get();
+        const newProtocol = protocol.toLowerCase();
         let currentUrl = state.url || '';
+        
         try {
-            set({ protocol: protocol.toLowerCase() });
-            // If URL is empty, just set protocol as 'http://' or 'https://'
-            if (!currentUrl) {
-                set({ url: protocol + '://' });
+            // Update the protocol state
+            set({ protocol: newProtocol });
+            
+            // If URL is empty or just a protocol, set it to the new protocol
+            if (!currentUrl || currentUrl === `${state.protocol}://`) {
+                set({ url: `${newProtocol}://` });
                 return;
             }
 
-            // If URL is not empty, update the protocol
+            // If URL has a protocol, replace it
             const urlParts = currentUrl.split('://');
             if (urlParts.length > 1) {
-                set({ url: currentUrl.replace(urlParts[0], protocol) });
+                const urlWithoutProtocol = urlParts.slice(1).join('://');
+                set({ url: `${newProtocol}://${urlWithoutProtocol}` });
             } else {
-                set({ url: protocol + '://' + currentUrl });
+                // URL doesn't have protocol, add it
+                set({ url: `${newProtocol}://${currentUrl}` });
             }
         } catch (error) {
             console.error('Error updating protocol:', error);
@@ -350,26 +356,37 @@ const createCurrentRequestSlice: StateCreator<CurrentRequestSlice> = (set, get) 
     },
 
     updateUrl: (url) => {
-        // Parse query params from the URL
-        const parsedParams = parseUrlQueryParams(url);
-        //if url has protocol, update protocol as well
-        if(url) {
-            const urlParts = url.split('://');
-            if(urlParts.length > 1) {
-                set({ protocol: urlParts[0].toLowerCase() });
-            }
-        }
-        // If there are parsed params, update both url and params
-        if(parsedParams.length > 0) {
-            set({ url: url, params: parsedParams });
+        const state = get();
+        
+        // If URL is empty, clear params as well
+        if (!Boolean(url)) {
+            set({ url: '', params: [{ id: `param-${Date.now()}`, key: '', value: '', disabled: false }]});
             return;
         }
-        //in case url is being cleared(empty string), clear params as well
-        if(!Boolean(url)) {
-            set({ url: url, params: [{ id: `param-${Date.now()}`, key: '', value: '', disabled: false }]});
-            return;
+        
+        // Construct full URL with protocol for parsing
+        let fullUrl = url;
+        const urlParts = url.split('://');
+        
+        // Check if URL already has a protocol
+        if (urlParts.length > 1) {
+            // URL has protocol, update the protocol state
+            set({ protocol: urlParts[0].toLowerCase() });
+            fullUrl = url;
+        } else {
+            // URL doesn't have protocol, use current protocol from state
+            fullUrl = `${state.protocol}://${url}`;
         }
-        set({ url: url});
+        
+        // Parse query params from the full URL
+        const parsedParams = parseUrlQueryParams(fullUrl);
+        
+        // Store the full URL with protocol and update params if any were found
+        if (parsedParams.length > 0) {
+            set({ url: fullUrl, params: parsedParams });
+        } else {
+            set({ url: fullUrl });
+        }
     },
 
     //implement update methods for different body types

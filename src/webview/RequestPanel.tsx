@@ -50,7 +50,13 @@ const RequestPanel: React.FC<RequestPanelProps> = ({ onSendRequest })  => {
   const protocolSelectId = useId();
 
   const getUrlWithoutProtocol = (fullUrl: string) => {
-    return fullUrl.replace(/(^\w+:|^)\/\//, '');
+    if (!fullUrl) {
+      return '';
+    }
+    // Remove protocol (http:// or https://)
+    const withoutProtocol = fullUrl.replace(/^https?:\/\//, '');
+    // If the result is empty or just '/', return empty string
+    return withoutProtocol === '/' ? '' : withoutProtocol;
   }
 
   return (
