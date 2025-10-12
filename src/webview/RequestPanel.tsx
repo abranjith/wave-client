@@ -168,7 +168,7 @@ const RequestPanel: React.FC<RequestPanelProps> = ({ onSendRequest })  => {
       </div>
 
       {/* Tab Content */}
-      <div className="px-6 py-4 bg-white dark:bg-slate-900 overflow-auto max-h-80">
+      <div className="px-6 py-4 bg-white dark:bg-slate-900">
         {activeTab === 'Params' && (
           <RequestParams/>
         )}

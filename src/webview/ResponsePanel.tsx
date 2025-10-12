@@ -37,15 +37,15 @@ const ResponsePanel: React.FC<ResponsePanelProps> = ({ onDownloadResponse }) => 
   const headers = response.headers;
 
   return (
-    <div className="w-full h-full bg-white dark:bg-slate-900 flex flex-col">
+    <div className="w-full h-full bg-background flex flex-col border-b">
       {/* Metadata Display */}
-      <div className="flex gap-8 px-6 py-3 border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs font-mono">
+      <div className="flex gap-4 px-6 py-3 border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs font-mono">
         <div className={`flex items-center gap-1 ${getStatusColor(status)}`}>
           <span className="font-bold">Status:</span>
           <span>{status} {statusText}</span>
         </div>
         <div className="flex items-center gap-1 text-blue-600 dark:text-blue-400">
-          <span className="font-bold">Elapsed Time:</span>
+          <span className="font-bold">Time:</span>
           <span>{time} ms</span>
         </div>
         <div className="flex items-center gap-1 text-slate-600 dark:text-slate-400">
@@ -72,16 +72,14 @@ const ResponsePanel: React.FC<ResponsePanelProps> = ({ onDownloadResponse }) => 
       </div>
 
       {/* Tab Content */}
-      <div className="flex-1 overflow-auto min-h-0">
+      <div className="px-6 py-4 bg-white dark:bg-slate-900 overflow-auto min-h-0 flex-1">
         {activeTab === 'body' && (
-          <div className="h-full">
-            <ResponseBody 
-              body={body}
-              headers={headers}
-              statusCode={status}
-              onDownloadResponse={onDownloadResponse}
-            />
-          </div>
+          <ResponseBody 
+            body={body}
+            headers={headers}
+            statusCode={status}
+            onDownloadResponse={onDownloadResponse}
+          />
         )}
         {activeTab === 'headers' && (
           <div className="h-full overflow-auto p-6 bg-white dark:bg-slate-900">
