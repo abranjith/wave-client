@@ -20,6 +20,7 @@ import { ParsedRequest, Environment } from '../types/collection';
 interface ConfigPanelProps {
   onRequestSelect: ((request: ParsedRequest) => void)
   onEnvSelect: ((environment: Environment) => void)
+  vsCodeApi?: any;
 }
 
 const TABS = [
@@ -28,7 +29,7 @@ const TABS = [
   { key: 'environments', label: 'Environments', icon: <SunIcon size={20} /> },
 ];
 
-const ConfigPanel: React.FC<ConfigPanelProps> = ({ onRequestSelect, onEnvSelect }) => {
+const ConfigPanel: React.FC<ConfigPanelProps> = ({ onRequestSelect, onEnvSelect, vsCodeApi }) => {
   return (
     <div className="flex h-full w-full overflow-hidden">
       <Tabs
@@ -91,6 +92,7 @@ const ConfigPanel: React.FC<ConfigPanelProps> = ({ onRequestSelect, onEnvSelect 
           <TabsContent value="collections" className="h-full overflow-hidden">
             <CollectionsPane 
                 onRequestSelect={onRequestSelect}
+                vsCodeApi={vsCodeApi}
               />
           </TabsContent>
           <TabsContent value="history" className="h-full overflow-hidden">

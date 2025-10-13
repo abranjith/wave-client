@@ -158,6 +158,36 @@ export function activate(context: vscode.ExtensionContext) {
 					} catch (error: any) {
 						vscode.window.showErrorMessage(`Failed to save file: ${error.message}`);
 					}
+				} else if (message.type === 'importCollection') {
+					// Handle collection import
+					try {
+						const { fileName, fileContent, collectionType } = message.data;
+						
+						// Get the collections directory
+						const homeDir = os.homedir();
+						const collectionsDir = path.join(homeDir, '.waveclient', 'collections');
+						
+						// Ensure the collections directory exists
+						if (!fs.existsSync(collectionsDir)) {
+							fs.mkdirSync(collectionsDir, { recursive: true });
+						}
+						
+						// Save the file to the collections directory
+						const filePath = path.join(collectionsDir, fileName);
+						fs.writeFileSync(filePath, fileContent, 'utf8');
+						
+						// Show success message
+						vscode.window.showInformationMessage(`Collection imported: ${fileName}`);
+						
+						// Reload collections
+						const collections = await loadCollections();
+						panel.webview.postMessage({
+							type: 'collectionsLoaded',
+							collections
+						});
+					} catch (error: any) {
+						vscode.window.showErrorMessage(`Failed to import collection: ${error.message}`);
+					}
 				}
 			});
 		});

@@ -1,11 +1,58 @@
 import React, { useState } from 'react';
-import { ChevronRightIcon, ChevronDownIcon, FolderIcon, LayoutGridIcon } from 'lucide-react';
+import { ChevronRightIcon, ChevronDownIcon, FolderIcon, LayoutGridIcon, ImportIcon, DownloadIcon } from 'lucide-react';
 import { ParsedRequest } from '../../types/collection';
 import useAppStateStore from '../../hooks/store/useAppStateStore';
+import { Button } from '../ui/button';
+import { Tooltip, TooltipTrigger, TooltipContent } from '../ui/tooltip';
+import CollectionsImportWizard from './CollectionsImportWizard';
 
 interface CollectionsPaneProps {
   onRequestSelect: (request: ParsedRequest) => void;
+  vsCodeApi?: any;
 }
+
+interface CollectionsPaneHeaderProps {
+  label: string;
+  onImportClick: () => void;
+}
+
+const CollectionsPaneHeader: React.FC<CollectionsPaneHeaderProps> = ({ label, onImportClick }) => {
+  return (
+    <div className="flex items-center justify-between mb-4">
+      <h2 className="text-lg font-semibold text-slate-800 dark:text-slate-200">{label}</h2>
+      <div className="flex items-center gap-2">
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={onImportClick}
+              className="h-8 w-8 p-0"
+            >
+              <ImportIcon className="h-4 w-4" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>Import Collection</TooltipContent>
+        </Tooltip>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                // TODO: Add export functionality
+              }}
+              className="h-8 w-8 p-0"
+            >
+              <DownloadIcon className="h-4 w-4" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>Export Collection</TooltipContent>
+        </Tooltip>
+      </div>
+    </div>
+  );
+};
 
 const getMethodColor = (method: string): string => {
   switch (method.toLowerCase()) {
@@ -21,7 +68,8 @@ const getMethodColor = (method: string): string => {
 };
 
 const CollectionsPane: React.FC<CollectionsPaneProps> = ({ 
-  onRequestSelect
+  onRequestSelect,
+  vsCodeApi
 }) => {
   const collections = useAppStateStore((state) => state.collections);
   const isLoading = useAppStateStore((state) => state.isCollectionsLoading);
@@ -32,6 +80,7 @@ const CollectionsPane: React.FC<CollectionsPaneProps> = ({
   );
   
   const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set());
+  const [isImportWizardOpen, setIsImportWizardOpen] = useState(false);
 
   const toggleCollection = (filename: string) => {
     const newExpanded = new Set(expandedCollections);
@@ -55,37 +104,67 @@ const CollectionsPane: React.FC<CollectionsPaneProps> = ({
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center h-full">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mx-auto mb-4"></div>
-          <p className="text-sm text-slate-600 dark:text-slate-400">Loading collections...</p>
+      <div className="h-full overflow-hidden bg-white dark:bg-slate-900">
+        <div className="p-4">
+          <CollectionsPaneHeader label="Collections" onImportClick={() => setIsImportWizardOpen(true)} />
         </div>
+        <div className="flex items-center justify-center h-[calc(100%-5rem)]">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mx-auto mb-4"></div>
+            <p className="text-sm text-slate-600 dark:text-slate-400">Loading collections...</p>
+          </div>
+        </div>
+        <CollectionsImportWizard
+          isOpen={isImportWizardOpen}
+          onClose={() => setIsImportWizardOpen(false)}
+          vsCodeApi={vsCodeApi}
+        />
       </div>
     );
   }
   
   if (error) {
     return (
-      <div className="flex items-center justify-center h-full p-4">
-        <div className="text-center">
-          <div className="text-red-500 mb-2">⚠️</div>
-          <p className="text-sm text-red-600 dark:text-red-400 mb-2">Error loading collections</p>
-          <p className="text-xs text-slate-500 dark:text-slate-400">{error}</p>
+      <div className="h-full overflow-hidden bg-white dark:bg-slate-900">
+        <div className="p-4">
+          <CollectionsPaneHeader label="Collections" onImportClick={() => setIsImportWizardOpen(true)} />
         </div>
+        <div className="flex items-center justify-center h-[calc(100%-5rem)] p-4">
+          <div className="text-center">
+            <div className="text-red-500 mb-2">⚠️</div>
+            <p className="text-sm text-red-600 dark:text-red-400 mb-2">Error loading collections</p>
+            <p className="text-xs text-slate-500 dark:text-slate-400">{error}</p>
+          </div>
+        </div>
+        <CollectionsImportWizard
+          isOpen={isImportWizardOpen}
+          onClose={() => setIsImportWizardOpen(false)}
+          vsCodeApi={vsCodeApi}
+        />
       </div>
     );
   }
   
   if (collections.length === 0) {
     return (
-      <div className="flex items-center justify-center h-full p-4">
-        <div className="text-center">
-          <FolderIcon className="h-12 w-12 text-slate-300 mx-auto mb-4" />
-          <p className="text-sm text-slate-600 dark:text-slate-400 mb-2">No collections found</p>
-          <p className="text-xs text-slate-500 dark:text-slate-400">
-            Add collection files to ~/.waveclient/collections
-          </p>
+      <div className="h-full overflow-hidden bg-white dark:bg-slate-900">
+        <div className="p-4">
+          <CollectionsPaneHeader label="Collections" onImportClick={() => setIsImportWizardOpen(true)} />
         </div>
+        <div className="flex items-center justify-center h-[calc(100%-5rem)] p-4">
+          <div className="text-center">
+            <FolderIcon className="h-12 w-12 text-slate-300 mx-auto mb-4" />
+            <p className="text-sm text-slate-600 dark:text-slate-400 mb-2">No collections found</p>
+            <p className="text-xs text-slate-500 dark:text-slate-400">
+              Add collection files to ~/.waveclient/collections
+            </p>
+          </div>
+        </div>
+        <CollectionsImportWizard
+          isOpen={isImportWizardOpen}
+          onClose={() => setIsImportWizardOpen(false)}
+          vsCodeApi={vsCodeApi}
+        />
       </div>
     );
   }
@@ -102,7 +181,7 @@ const CollectionsPane: React.FC<CollectionsPaneProps> = ({
   return (
     <div className="h-full overflow-hidden bg-white dark:bg-slate-900">
       <div className="h-full overflow-auto p-4">
-        <h2 className="text-lg font-semibold text-slate-800 dark:text-slate-200 mb-4">Collections</h2>
+        <CollectionsPaneHeader label="Collections" onImportClick={() => setIsImportWizardOpen(true)} />
         
         <div className="space-y-2">
           {sortedCollections.map(collection => {
@@ -212,6 +291,11 @@ const CollectionsPane: React.FC<CollectionsPaneProps> = ({
           })}
         </div>
       </div>
+      <CollectionsImportWizard
+        isOpen={isImportWizardOpen}
+        onClose={() => setIsImportWizardOpen(false)}
+        vsCodeApi={vsCodeApi}
+      />
     </div>
   );
 };

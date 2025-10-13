@@ -113,6 +113,7 @@ const App: React.FC = () => {
         <ConfigPanel 
           onRequestSelect={handleRequestSelect}
           onEnvSelect={handleEnvironmentSelect}
+          vsCodeApi={vsCodeRef.current}
         />
       </div>
 
