@@ -8,7 +8,7 @@ import CollectionsImportWizard from './CollectionsImportWizard';
 
 interface CollectionsPaneProps {
   onRequestSelect: (request: ParsedRequest) => void;
-  vsCodeApi?: any;
+  onImportCollection: (fileName: string, fileContent: string, collectionType: string) => void;
 }
 
 interface CollectionsPaneHeaderProps {
@@ -69,7 +69,7 @@ const getMethodColor = (method: string): string => {
 
 const CollectionsPane: React.FC<CollectionsPaneProps> = ({ 
   onRequestSelect,
-  vsCodeApi
+  onImportCollection
 }) => {
   const collections = useAppStateStore((state) => state.collections);
   const isLoading = useAppStateStore((state) => state.isCollectionsLoading);
@@ -117,7 +117,7 @@ const CollectionsPane: React.FC<CollectionsPaneProps> = ({
         <CollectionsImportWizard
           isOpen={isImportWizardOpen}
           onClose={() => setIsImportWizardOpen(false)}
-          vsCodeApi={vsCodeApi}
+          onImportCollection={onImportCollection}
         />
       </div>
     );
@@ -139,7 +139,7 @@ const CollectionsPane: React.FC<CollectionsPaneProps> = ({
         <CollectionsImportWizard
           isOpen={isImportWizardOpen}
           onClose={() => setIsImportWizardOpen(false)}
-          vsCodeApi={vsCodeApi}
+          onImportCollection={onImportCollection}
         />
       </div>
     );
@@ -163,7 +163,7 @@ const CollectionsPane: React.FC<CollectionsPaneProps> = ({
         <CollectionsImportWizard
           isOpen={isImportWizardOpen}
           onClose={() => setIsImportWizardOpen(false)}
-          vsCodeApi={vsCodeApi}
+          onImportCollection={onImportCollection}
         />
       </div>
     );
@@ -294,7 +294,7 @@ const CollectionsPane: React.FC<CollectionsPaneProps> = ({
       <CollectionsImportWizard
         isOpen={isImportWizardOpen}
         onClose={() => setIsImportWizardOpen(false)}
-        vsCodeApi={vsCodeApi}
+        onImportCollection={onImportCollection}
       />
     </div>
   );

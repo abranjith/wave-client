@@ -61,6 +61,24 @@ const App: React.FC = () => {
     }
   };
 
+  const handleImportCollection = (fileName: string, fileContent: string, collectionType: string) => {
+    if (vsCodeRef.current) {
+      vsCodeRef.current.postMessage({
+        type: 'importCollection',
+        data: { fileName, fileContent, collectionType }
+      });
+    }
+  };
+
+  const handleImportEnvironments = (fileName: string, fileContent: string) => {
+    if (vsCodeRef.current) {
+      vsCodeRef.current.postMessage({
+        type: 'importEnvironments',
+        data: { fileName, fileContent }
+      });
+    }
+  };
+
   useEffect(() => {
     // Listen for messages from the VS Code extension
     const messageHandler = (event: MessageEvent) => {
@@ -113,7 +131,8 @@ const App: React.FC = () => {
         <ConfigPanel 
           onRequestSelect={handleRequestSelect}
           onEnvSelect={handleEnvironmentSelect}
-          vsCodeApi={vsCodeRef.current}
+          onImportCollection={handleImportCollection}
+          onImportEnvironments={handleImportEnvironments}
         />
       </div>
 

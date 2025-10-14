@@ -189,6 +189,22 @@ export function activate(context: vscode.ExtensionContext) {
 						vscode.window.showErrorMessage(`Failed to import collection: ${error.message}`);
 					}
 				}
+				else if (message.type === 'importEnvironments') {
+					try {
+						const { fileName, fileContent } = message.data;
+						await importEnvironments(fileContent);
+						vscode.window.showInformationMessage('Environments imported successfully.');
+						
+						// Reload environments
+						const environments = await loadEnvironments();
+						panel.webview.postMessage({
+							type: 'environmentsLoaded',
+							environments
+						});
+					} catch (error: any) {
+						vscode.window.showErrorMessage(`Failed to import environments: ${error.message}`);
+					}
+				}
 			});
 		});
 		context.subscriptions.push(openDisposable);
@@ -276,8 +292,8 @@ async function loadEnvironments() {
 	return environments;
 }
 
-//function to save environments to the default directory (~/.waveclient/environments)
-async function saveEnvironments(environments: Environment[]) {
+//update this function to accept json content and save to the default directory (~/.waveclient/environments)
+async function importEnvironments(fileContent: string) {
 	const homeDir = os.homedir();
 	const environmentsDir = path.join(homeDir, '.waveclient', 'environments');
 
@@ -285,6 +301,24 @@ async function saveEnvironments(environments: Environment[]) {
 	if (!fs.existsSync(environmentsDir)) {
 		fs.mkdirSync(environmentsDir, { recursive: true });
 	}
+
+	//allow just a single environment object or an array of environments
+	let environments: Environment[] = [];
+	if (fileContent.trim().startsWith('[')) {
+		environments = JSON.parse(fileContent) as Environment[];
+	} else {
+		const env = JSON.parse(fileContent) as Environment;
+		environments.push(env);
+	}
+
+	// Save each environment as a separate file named <environment_name>.json
+	// If an environment with the same name exists, it will be overwritten
+	// Environment names should be unique
+	// Invalid characters in filenames should be replaced with underscores
+	// e.g. "My Env/1" -> "My_Env_1.json"
+	const sanitizeFileName = (name: string) => {
+		return name.replace(/[^a-z0-9]/gi, '_').toLowerCase();
+	};
 
 	for (const env of environments) {
 		const filePath = path.join(environmentsDir, `${env.name}.json`);

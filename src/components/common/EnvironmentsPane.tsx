@@ -1,16 +1,21 @@
-import React from 'react';
-import { CloudIcon, SettingsIcon } from 'lucide-react';
+import React, { useState } from 'react';
+import { CloudIcon, SettingsIcon, ImportIcon, DownloadIcon } from 'lucide-react';
 import { Environment } from '../../types/collection';
 import useAppStateStore from '../../hooks/store/useAppStateStore';
+import { Button } from '../ui/button';
+import { Tooltip, TooltipTrigger, TooltipContent } from '../ui/tooltip';
+import EnvImportWizard from './EnvImportWizard';
 
 interface EnvironmentsPaneProps {
   onEnvSelect?: (environment: Environment) => void;
+  onImportEnvironments?: (fileName: string, fileContent: string) => void;
 }
 
-const EnvironmentsPane: React.FC<EnvironmentsPaneProps> = ({ onEnvSelect }) => {
+const EnvironmentsPane: React.FC<EnvironmentsPaneProps> = ({ onEnvSelect, onImportEnvironments }) => {
   const environments = useAppStateStore((state) => state.environments);
   const isLoading = useAppStateStore((state) => state.isEnvironmentsLoading);
   const error = useAppStateStore((state) => state.environmentLoadError);
+  const [isImportWizardOpen, setIsImportWizardOpen] = useState(false);
 
   const handleEnvironmentClick = (environment: Environment) => {
     if (onEnvSelect) {
@@ -18,39 +23,171 @@ const EnvironmentsPane: React.FC<EnvironmentsPaneProps> = ({ onEnvSelect }) => {
     }
   };
 
+  const handleImport = (fileName: string, fileContent: string) => {
+    if (onImportEnvironments) {
+      onImportEnvironments(fileName, fileContent);
+    }
+  };
+
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center h-full">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mx-auto mb-4"></div>
-          <p className="text-sm text-slate-600 dark:text-slate-400">Loading environments...</p>
+      <div className="h-full overflow-hidden bg-white dark:bg-slate-900">
+        <div className="p-4">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-lg font-semibold text-slate-800 dark:text-slate-200">Environments</h2>
+            <div className="flex items-center gap-2">
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setIsImportWizardOpen(true)}
+                    className="h-8 w-8 p-0"
+                  >
+                    <ImportIcon className="h-4 w-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>Import Environments</TooltipContent>
+              </Tooltip>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      // TODO: Add export functionality
+                    }}
+                    className="h-8 w-8 p-0"
+                  >
+                    <DownloadIcon className="h-4 w-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>Export Environments</TooltipContent>
+              </Tooltip>
+            </div>
+          </div>
         </div>
+        <div className="flex items-center justify-center h-[calc(100%-5rem)]">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mx-auto mb-4"></div>
+            <p className="text-sm text-slate-600 dark:text-slate-400">Loading environments...</p>
+          </div>
+        </div>
+        <EnvImportWizard
+          isOpen={isImportWizardOpen}
+          onClose={() => setIsImportWizardOpen(false)}
+          onImportEnvironments={handleImport}
+        />
       </div>
     );
   }
   
   if (error) {
     return (
-      <div className="flex items-center justify-center h-full p-4">
-        <div className="text-center">
-          <div className="text-red-500 mb-2">⚠️</div>
-          <p className="text-sm text-red-600 dark:text-red-400 mb-2">Error loading environments</p>
-          <p className="text-xs text-slate-500 dark:text-slate-400">{error}</p>
+      <div className="h-full overflow-hidden bg-white dark:bg-slate-900">
+        <div className="p-4">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-lg font-semibold text-slate-800 dark:text-slate-200">Environments</h2>
+            <div className="flex items-center gap-2">
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setIsImportWizardOpen(true)}
+                    className="h-8 w-8 p-0"
+                  >
+                    <ImportIcon className="h-4 w-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>Import Environments</TooltipContent>
+              </Tooltip>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      // TODO: Add export functionality
+                    }}
+                    className="h-8 w-8 p-0"
+                  >
+                    <DownloadIcon className="h-4 w-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>Export Environments</TooltipContent>
+              </Tooltip>
+            </div>
+          </div>
         </div>
+        <div className="flex items-center justify-center h-[calc(100%-5rem)] p-4">
+          <div className="text-center">
+            <div className="text-red-500 mb-2">⚠️</div>
+            <p className="text-sm text-red-600 dark:text-red-400 mb-2">Error loading environments</p>
+            <p className="text-xs text-slate-500 dark:text-slate-400">{error}</p>
+          </div>
+        </div>
+        <EnvImportWizard
+          isOpen={isImportWizardOpen}
+          onClose={() => setIsImportWizardOpen(false)}
+          onImportEnvironments={handleImport}
+        />
       </div>
     );
   }
   
   if (environments.length === 0) {
     return (
-      <div className="flex items-center justify-center h-full p-4">
-        <div className="text-center">
-          <CloudIcon className="h-12 w-12 text-slate-300 mx-auto mb-4" />
-          <p className="text-sm text-slate-600 dark:text-slate-400 mb-2">No environments found</p>
-          <p className="text-xs text-slate-500 dark:text-slate-400">
-            Add environment files to ~/.waveclient/environments
-          </p>
+      <div className="h-full overflow-hidden bg-white dark:bg-slate-900">
+        <div className="p-4">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-lg font-semibold text-slate-800 dark:text-slate-200">Environments</h2>
+            <div className="flex items-center gap-2">
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setIsImportWizardOpen(true)}
+                    className="h-8 w-8 p-0"
+                  >
+                    <ImportIcon className="h-4 w-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>Import Environments</TooltipContent>
+              </Tooltip>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      // TODO: Add export functionality
+                    }}
+                    className="h-8 w-8 p-0"
+                  >
+                    <DownloadIcon className="h-4 w-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>Export Environments</TooltipContent>
+              </Tooltip>
+            </div>
+          </div>
         </div>
+        <div className="flex items-center justify-center h-[calc(100%-5rem)] p-4">
+          <div className="text-center">
+            <CloudIcon className="h-12 w-12 text-slate-300 mx-auto mb-4" />
+            <p className="text-sm text-slate-600 dark:text-slate-400 mb-2">No environments found</p>
+            <p className="text-xs text-slate-500 dark:text-slate-400">
+              Add environment files to ~/.waveclient/environments
+            </p>
+          </div>
+        </div>
+        <EnvImportWizard
+          isOpen={isImportWizardOpen}
+          onClose={() => setIsImportWizardOpen(false)}
+          onImportEnvironments={handleImport}
+        />
       </div>
     );
   }
@@ -58,7 +195,39 @@ const EnvironmentsPane: React.FC<EnvironmentsPaneProps> = ({ onEnvSelect }) => {
   return (
     <div className="h-full overflow-hidden bg-white dark:bg-slate-900">
       <div className="h-full overflow-auto p-4">
-        <h2 className="text-lg font-semibold text-slate-800 dark:text-slate-200 mb-4">Environments</h2>
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-lg font-semibold text-slate-800 dark:text-slate-200">Environments</h2>
+          <div className="flex items-center gap-2">
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setIsImportWizardOpen(true)}
+                  className="h-8 w-8 p-0"
+                >
+                  <ImportIcon className="h-4 w-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Import Environments</TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    // TODO: Add export functionality
+                  }}
+                  className="h-8 w-8 p-0"
+                >
+                  <DownloadIcon className="h-4 w-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Export Environments</TooltipContent>
+            </Tooltip>
+          </div>
+        </div>
         
         <div className="space-y-2">
           {environments.map(environment => {
@@ -87,6 +256,11 @@ const EnvironmentsPane: React.FC<EnvironmentsPaneProps> = ({ onEnvSelect }) => {
           })}
         </div>
       </div>
+      <EnvImportWizard
+        isOpen={isImportWizardOpen}
+        onClose={() => setIsImportWizardOpen(false)}
+        onImportEnvironments={handleImport}
+      />
     </div>
   );
 };

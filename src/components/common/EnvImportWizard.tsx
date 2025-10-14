@@ -1,8 +1,6 @@
 import React, { useState } from 'react';
 import { FileIcon, UploadIcon, XIcon } from 'lucide-react';
 import { Button } from '../ui/button';
-import { Label } from '../ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import {
   Dialog,
   DialogContent,
@@ -12,36 +10,28 @@ import {
   DialogTitle,
 } from '../ui/dialog';
 
-interface CollectionsImportWizardProps {
+interface EnvImportWizardProps {
   isOpen: boolean;
   onClose: () => void;
-  onImportCollection: (fileName: string, fileContent: string, collectionType: string) => void;
+  onImportEnvironments: (fileName: string, fileContent: string) => void;
 }
 
-type CollectionType = 'json' | 'http';
-
-const CollectionsImportWizard: React.FC<CollectionsImportWizardProps> = ({
+const EnvImportWizard: React.FC<EnvImportWizardProps> = ({
   isOpen,
   onClose,
-  onImportCollection,
+  onImportEnvironments,
 }) => {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [collectionType, setCollectionType] = useState<CollectionType>('json');
   const [isDragging, setIsDragging] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isImporting, setIsImporting] = useState(false);
 
   /**
-   * Determines collection type from file extension
+   * Validates if file is a JSON file
    */
-  const getCollectionTypeFromFile = (file: File): CollectionType => {
+  const isJsonFile = (file: File): boolean => {
     const extension = file.name.split('.').pop()?.toLowerCase();
-    if (extension === 'json') {
-      return 'json';
-    } else if (extension === 'http') {
-      return 'http';
-    }
-    return 'json'; // Default to json
+    return extension === 'json';
   };
 
   /**
@@ -51,8 +41,11 @@ const CollectionsImportWizard: React.FC<CollectionsImportWizardProps> = ({
     const files = event.target.files;
     if (files && files.length > 0) {
       const file = files[0];
+      if (!isJsonFile(file)) {
+        setError('Please select a JSON file');
+        return;
+      }
       setSelectedFile(file);
-      setCollectionType(getCollectionTypeFromFile(file));
       setError(null);
     }
   };
@@ -85,8 +78,11 @@ const CollectionsImportWizard: React.FC<CollectionsImportWizardProps> = ({
     const files = e.dataTransfer.files;
     if (files && files.length > 0) {
       const file = files[0];
+      if (!isJsonFile(file)) {
+        setError('Please select a JSON file');
+        return;
+      }
       setSelectedFile(file);
-      setCollectionType(getCollectionTypeFromFile(file));
       setError(null);
     }
   };
@@ -107,13 +103,20 @@ const CollectionsImportWizard: React.FC<CollectionsImportWizardProps> = ({
       // Read file content
       const fileContent = await selectedFile.text();
 
+      // Validate JSON format
+      try {
+        JSON.parse(fileContent);
+      } catch (e) {
+        throw new Error('Invalid JSON file');
+      }
+
       // Send import request to extension host
-      onImportCollection(selectedFile.name, fileContent, collectionType);
+      onImportEnvironments(selectedFile.name, fileContent);
 
       // Close the dialog
       handleClose();
     } catch (err: any) {
-      setError(`Failed to import collection: ${err.message}`);
+      setError(`Failed to import environments: ${err.message}`);
     } finally {
       setIsImporting(false);
     }
@@ -124,7 +127,6 @@ const CollectionsImportWizard: React.FC<CollectionsImportWizardProps> = ({
    */
   const handleClose = () => {
     setSelectedFile(null);
-    setCollectionType('json');
     setError(null);
     setIsImporting(false);
     onClose();
@@ -143,10 +145,10 @@ const CollectionsImportWizard: React.FC<CollectionsImportWizardProps> = ({
       <DialogContent className="sm:max-w-[500px]">
         <DialogHeader>
           <DialogTitle className="text-lg font-semibold text-slate-800 dark:text-slate-200">
-            Import Collection
+            Import Environments
           </DialogTitle>
           <DialogDescription className="text-sm text-slate-600 dark:text-slate-400">
-            Upload a collection file to add it to your collections directory
+            Upload a JSON file containing environments to add to your environments directory
           </DialogDescription>
         </DialogHeader>
 
@@ -166,23 +168,26 @@ const CollectionsImportWizard: React.FC<CollectionsImportWizardProps> = ({
             >
               <UploadIcon className="mx-auto h-12 w-12 text-slate-400 dark:text-slate-500 mb-4" />
               <p className="text-sm text-slate-600 dark:text-slate-400 mb-2">
-                Drag and drop a collection file here, or click to browse
+                Drag and drop a JSON file here, or click to browse
               </p>
               <input
                 type="file"
-                id="collection-file-input"
-                accept=".json,.http"
+                id="environment-file-input"
+                accept=".json"
                 onChange={handleFileChange}
                 className="hidden"
               />
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => document.getElementById('collection-file-input')?.click()}
+                onClick={() => document.getElementById('environment-file-input')?.click()}
                 className="mt-2"
               >
                 Browse Files
               </Button>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-4">
+                Only JSON files are supported
+              </p>
             </div>
           ) : (
             <div className="border border-slate-200 dark:border-slate-700 rounded-lg p-4 bg-slate-50 dark:bg-slate-800">
@@ -207,27 +212,6 @@ const CollectionsImportWizard: React.FC<CollectionsImportWizardProps> = ({
                   <XIcon className="h-4 w-4" />
                 </Button>
               </div>
-            </div>
-          )}
-
-          {/* Collection Type Selection */}
-          {selectedFile && (
-            <div className="space-y-2">
-              <Label htmlFor="collection-type" className="text-sm font-medium text-slate-700 dark:text-slate-300">
-                Collection Type
-              </Label>
-              <Select value={collectionType} onValueChange={(value) => setCollectionType(value as CollectionType)}>
-                <SelectTrigger id="collection-type" className="w-full">
-                  <SelectValue placeholder="Select collection type" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="json">JSON</SelectItem>
-                  <SelectItem value="http">HTTP</SelectItem>
-                </SelectContent>
-              </Select>
-              <p className="text-xs text-slate-500 dark:text-slate-400">
-                Type is automatically detected based on file extension
-              </p>
             </div>
           )}
 
@@ -259,4 +243,4 @@ const CollectionsImportWizard: React.FC<CollectionsImportWizardProps> = ({
   );
 };
 
-export default CollectionsImportWizard;
+export default EnvImportWizard;

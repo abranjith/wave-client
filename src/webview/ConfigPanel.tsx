@@ -20,7 +20,8 @@ import { ParsedRequest, Environment } from '../types/collection';
 interface ConfigPanelProps {
   onRequestSelect: ((request: ParsedRequest) => void)
   onEnvSelect: ((environment: Environment) => void)
-  vsCodeApi?: any;
+  onImportCollection: (fileName: string, fileContent: string, collectionType: string) => void;
+  onImportEnvironments: (fileName: string, fileContent: string) => void;
 }
 
 const TABS = [
@@ -29,7 +30,7 @@ const TABS = [
   { key: 'environments', label: 'Environments', icon: <SunIcon size={20} /> },
 ];
 
-const ConfigPanel: React.FC<ConfigPanelProps> = ({ onRequestSelect, onEnvSelect, vsCodeApi }) => {
+const ConfigPanel: React.FC<ConfigPanelProps> = ({ onRequestSelect, onEnvSelect, onImportCollection, onImportEnvironments }) => {
   return (
     <div className="flex h-full w-full overflow-hidden">
       <Tabs
@@ -92,7 +93,7 @@ const ConfigPanel: React.FC<ConfigPanelProps> = ({ onRequestSelect, onEnvSelect,
           <TabsContent value="collections" className="h-full overflow-hidden">
             <CollectionsPane 
                 onRequestSelect={onRequestSelect}
-                vsCodeApi={vsCodeApi}
+                onImportCollection={onImportCollection}
               />
           </TabsContent>
           <TabsContent value="history" className="h-full overflow-hidden">
@@ -103,6 +104,7 @@ const ConfigPanel: React.FC<ConfigPanelProps> = ({ onRequestSelect, onEnvSelect,
           <TabsContent value="environments" className="h-full overflow-hidden">
             <EnvironmentsPane 
                 onEnvSelect={onEnvSelect}
+                onImportEnvironments={onImportEnvironments}
               />
           </TabsContent>
         </div>
