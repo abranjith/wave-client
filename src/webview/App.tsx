@@ -52,7 +52,7 @@ const App: React.FC = () => {
     }
   };
 
-  const handleDownloadResponse = (data: any) => {
+  const handleDownloadResponse = (data: string) => {
     if (vsCodeRef.current) {
       vsCodeRef.current.postMessage({
           type: 'downloadResponse',

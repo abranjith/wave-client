@@ -1,7 +1,7 @@
 import * as React from "react"
 import { ChevronDownIcon } from "lucide-react"
 
-import { cn } from "../../utils/utils"
+import { cn } from "../../utils/common"
 
 const SelectNative = ({
   className,

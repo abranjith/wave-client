@@ -115,6 +115,7 @@ export interface MultiPartFormField {
 }
 
 export interface ResponseData {
+  id: string;
   status: number;
   statusText: string;
   elapsedTime: number;

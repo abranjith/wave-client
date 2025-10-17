@@ -2,6 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { FileIcon, DownloadIcon, CopyIcon, CheckCheckIcon } from 'lucide-react';
 import { Button } from '../ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/tooltip';
+import { base64ToText, base64ToJson } from '../../utils/encoding';
 
 interface ResponseBodyProps {
   body: string;
@@ -48,30 +49,32 @@ function getContentType(headers: Record<string, string>): ContentType {
  * Formats the response body based on content type
  */
 function formatBody(body: string, contentType: ContentType): string {
+  console.log('Formatting body as:', contentType, typeof body);
   if (contentType === 'json') {
     try {
-      const parsed = JSON.parse(body);
+      const parsed = base64ToJson(body);
       return JSON.stringify(parsed, null, 2);
     } catch {
-      return body;
+      return base64ToText(body);
     }
   }
 
   if (contentType === 'xml' || contentType === 'html') {
     try {
       // Basic XML/HTML formatting
-      return body
+      const xmlString = base64ToText(body);
+      return xmlString
         .replace(/></g, '>\n<')
         .replace(/(<\/?[^>]+>)/g, (match) => {
           const indent = (match.match(/\//g) || []).length > 0 ? '' : '  ';
           return indent + match;
         });
     } catch {
-      return body;
+      return base64ToText(body);
     }
   }
 
-  return body;
+  return base64ToText(body);
 }
 
 /**
@@ -127,7 +130,7 @@ const ResponseBody: React.FC<ResponseBodyProps> = ({ body, headers, statusCode, 
    */
   const handleCopy = async () => {
     try {
-      await navigator.clipboard.writeText(formattedBody);
+      await navigator.clipboard.writeText(formattedBody as string || '');
       setCopySuccess(true);
       setTimeout(() => setCopySuccess(false), 2000);
     } catch (error) {
@@ -141,7 +144,6 @@ const ResponseBody: React.FC<ResponseBodyProps> = ({ body, headers, statusCode, 
   const handleDownload = () => {
     try {
         // Send download request to extension host
-        console.log('Sending download request to VS Code extension host');
         onDownloadResponse({ body, fileName, contentType: headers['content-type'] || 'application/octet-stream' });
         
         // Show success feedback
@@ -183,6 +185,7 @@ const ResponseBody: React.FC<ResponseBodyProps> = ({ body, headers, statusCode, 
   }
 
   // Text-based content - show formatted body with actions
+  const formattedBodyString = formattedBody as string || '';
   return (
     <div className="flex flex-col h-full min-h-0 bg-white dark:bg-slate-900">
       {/* Action Bar */}
@@ -192,7 +195,7 @@ const ResponseBody: React.FC<ResponseBodyProps> = ({ body, headers, statusCode, 
             {contentType}
           </span>
           <span className="text-xs text-slate-400 dark:text-slate-500">
-            {formattedBody.length.toLocaleString()} characters
+            {formattedBodyString.length.toLocaleString()} characters
           </span>
         </div>
         
@@ -238,7 +241,7 @@ const ResponseBody: React.FC<ResponseBodyProps> = ({ body, headers, statusCode, 
       {/* Response Body Content */}
       <div className="flex-1 min-h-0 overflow-auto">
         <pre className="p-4 text-xs text-slate-800 dark:text-slate-200 font-mono leading-relaxed whitespace-pre-wrap break-words">
-          {formattedBody}
+          {formattedBodyString}
         </pre>
       </div>
     </div>

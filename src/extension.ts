@@ -81,30 +81,43 @@ export function activate(context: vscode.ExtensionContext) {
 							params: new URLSearchParams(req.params),
 							headers: req.headers,
 							data: req.body,
+							responseType: 'arraybuffer'
 						});
 						const elapsedTime = Date.now() - start;
+						// Convert ArrayBuffer to base64 for efficient transfer
+                        const bodyBase64 = Buffer.from(response.data).toString('base64');
 						panel.webview.postMessage({
 							type: 'httpResponse',
 							response: {
+								id: req.id,
 								status: response.status,
 								statusText: response.statusText,
 								elapsedTime,
-								size: response.data ? JSON.stringify(response.data).length : 0,
+								size: response.data ? response.data.byteLength : 0,
 								headers: response.headers,
-								body: typeof response.data === 'string' ? response.data : JSON.stringify(response.data, null, 2),
+								body: bodyBase64,
 							}
 						});
 					} catch (error: any) {
 						const elapsedTime = Date.now() - start;
+						// Convert error response to base64
+                        let errorBodyBase64 = '';
+                        if (error?.response?.data) {
+                            errorBodyBase64 = error.response.data instanceof ArrayBuffer 
+                                ? Buffer.from(error.response.data).toString('base64')
+                                : Buffer.from(JSON.stringify(error.response.data, null, 2)).toString('base64');
+                        } else {
+                            errorBodyBase64 = Buffer.from(error.message).toString('base64');
+                        }
 						panel.webview.postMessage({
 							type: 'httpResponse',
 							response: {
 								status: error?.response?.status || 0,
 								statusText: error?.response?.statusText || 'Error',
 								elapsedTime,
-								size: error?.response?.data ? JSON.stringify(error.response.data).length : 0,
+								size: error?.response?.data ? error.response.data.byteLength || JSON.stringify(error.response.data).length : error.message.length,
 								headers: error?.response?.headers || {},
-								body: error?.response?.data ? JSON.stringify(error.response.data, null, 2) : error.message,
+								body: errorBodyBase64,
 							}
 						});
 					}
@@ -138,6 +151,7 @@ export function activate(context: vscode.ExtensionContext) {
 					// Handle file download from webview
 					try {
 						const { body, fileName, contentType } = message.data;
+						const bodyBuffer = base64ToUint8Array(body);
 						
 						// Show save dialog to user
 						const uri = await vscode.window.showSaveDialog({
@@ -149,8 +163,7 @@ export function activate(context: vscode.ExtensionContext) {
 						
 						if (uri) {
 							// Write file to selected location
-							const buffer = Buffer.from(body, 'utf8');
-							await vscode.workspace.fs.writeFile(uri, buffer);
+							await vscode.workspace.fs.writeFile(uri, bodyBuffer);
 							
 							// Show success message
 							vscode.window.showInformationMessage(`File saved: ${path.basename(uri.fsPath)}`);
@@ -324,6 +337,15 @@ async function importEnvironments(fileContent: string) {
 		const filePath = path.join(environmentsDir, `${env.name}.json`);
 		fs.writeFileSync(filePath, JSON.stringify(env, null, 2));
 	}
+}
+
+function base64ToUint8Array(base64: string): Uint8Array {
+  const binaryString = atob(base64);
+  const bytes = new Uint8Array(binaryString.length);
+  for (let i = 0; i < binaryString.length; i++) {
+    bytes[i] = binaryString.charCodeAt(i);
+  }
+  return bytes;
 }
 
 // This method is called when your extension is deactivated

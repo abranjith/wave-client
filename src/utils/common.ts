@@ -144,7 +144,7 @@ export function parseUrlQueryParams(url: string): { id: string; key: string; val
     const urlObj = new URL(url);
     const params = Array.from(urlObj.searchParams.entries());
     
-    //make id random to avoid collisions when called multiple times in the same millisecond. use crypto if available
+    //make id random to avoid collisions when called multiple times in the same millisecond
     return params.map(([key, value]) => ({
       id: `param-${crypto.randomUUID()}`,
       key: safeDecodeURIComponent(key),

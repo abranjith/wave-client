@@ -1,6 +1,6 @@
 import { StateCreator } from 'zustand'
 import { ParsedRequest, HeaderRow, ParamRow, ResponseData, RequestBodyType, RequestBodyTextType, FormField, MultiPartFormField } from '../../types/collection';
-import { parseUrlQueryParams, getContentTypeFromBody } from '../../utils/utils';
+import { parseUrlQueryParams, getContentTypeFromBody } from '../../utils/common';
 import { FileWithPreview } from '../useFileUpload';
 
 interface RequestTextBody {
@@ -239,13 +239,13 @@ function emptyMultiPartFormField(): MultiPartFormField {
 }
 
 const createCurrentRequestSlice: StateCreator<CurrentRequestSlice> = (set, get) => ({
-    id: Date.now().toString(),
+    id: crypto.randomUUID(),
     name: null,
     method: 'GET',
     protocol: 'https',
     url: null,
-    params: [{ id: `param-${Date.now()}`, key: '', value: '', disabled: false }],
-    headers: [{ id: `header-${Date.now()}`, key: '', value: '', disabled: false }],
+    params: [{ id: `param-${crypto.randomUUID()}`, key: '', value: '', disabled: false }],
+    headers: [{ id: `header-${crypto.randomUUID()}`, key: '', value: '', disabled: false }],
     body: {
         textData: null,
         binaryData: null,
@@ -262,12 +262,12 @@ const createCurrentRequestSlice: StateCreator<CurrentRequestSlice> = (set, get) 
     //TODO
     // Core request setters
     setCurrentRequest: (request) => set({
-        id: request?.id ? request.id : Date.now().toString(),
+        id: request?.id ? request.id : crypto.randomUUID(),
         name: request?.name,
         method: request?.method,
         url: request?.url,
-        params: (request?.params && request?.params.length > 0) ? request.params : [{ id: `param-${Date.now()}`, key: '', value: '', disabled: false }],
-        headers: (request?.headers && request?.headers.length > 0) ? request.headers : [{ id: `header-${Date.now()}`, key: '', value: '', disabled: false }],
+        params: (request?.params && request?.params.length > 0) ? request.params : [{ id: `param-${crypto.randomUUID()}`, key: '', value: '', disabled: false }],
+        headers: (request?.headers && request?.headers.length > 0) ? request.headers : [{ id: `header-${crypto.randomUUID()}`, key: '', value: '', disabled: false }],
         body: request?.body ? {
             textData: { data: (request.body && typeof request.body === 'string') ? request.body : null, textType: 'text' },
             binaryData: null,
@@ -291,8 +291,8 @@ const createCurrentRequestSlice: StateCreator<CurrentRequestSlice> = (set, get) 
         name: null,
         method: 'GET',
         url: null,
-        params: [{ id: `param-${Date.now()}`, key: '', value: '', disabled: false }],
-        headers: [{ id: `header-${Date.now()}`, key: '', value: '', disabled: false }],
+        params: [{ id: `param-${crypto.randomUUID()}`, key: '', value: '', disabled: false }],
+        headers: [{ id: `header-${crypto.randomUUID()}`, key: '', value: '', disabled: false }],
         body: {
             textData: null,
             binaryData: null,
@@ -360,7 +360,7 @@ const createCurrentRequestSlice: StateCreator<CurrentRequestSlice> = (set, get) 
         
         // If URL is empty, clear params as well
         if (!Boolean(url)) {
-            set({ url: '', params: [{ id: `param-${Date.now()}`, key: '', value: '', disabled: false }]});
+            set({ url: '', params: [{ id: `param-${crypto.randomUUID()}`, key: '', value: '', disabled: false }]});
             return;
         }
         
@@ -439,7 +439,7 @@ const createCurrentRequestSlice: StateCreator<CurrentRequestSlice> = (set, get) 
 
     // Headers management
     addEmptyHeader: () => {
-        const newHeader = { id: `header-${Date.now()}`, key: '', value: '', disabled: false };
+        const newHeader = { id: `header-${crypto.randomUUID()}`, key: '', value: '', disabled: false };
         set(state => ({ headers: [...(state.headers || []), newHeader] }));
     },
     upsertHeader: (id: string, key: string | undefined, value: string | undefined) => {
@@ -471,7 +471,7 @@ const createCurrentRequestSlice: StateCreator<CurrentRequestSlice> = (set, get) 
         const currentHeaders = state.headers || [];
         const filteredHeaders = currentHeaders.filter(header => header.id !== id);
         if (filteredHeaders.length === 0) {
-            filteredHeaders.push({ id: `header-${Date.now()}`, key: '', value: '', disabled: false });
+            filteredHeaders.push({ id: `header-${crypto.randomUUID()}`, key: '', value: '', disabled: false });
         }
         set({ headers: filteredHeaders });
     },
@@ -479,7 +479,7 @@ const createCurrentRequestSlice: StateCreator<CurrentRequestSlice> = (set, get) 
     // URL Parameters management
     addEmptyParam: () => {
         const state = get();
-        const newParam = { id: `param-${Date.now()}`, key: '', value: '', disabled: false };
+        const newParam = { id: `param-${crypto.randomUUID()}`, key: '', value: '', disabled: false };
         const updatedParams = [...(state.params || []), newParam];
         const updatedUrl = updateUrlWithParams(state.url, updatedParams);
         
@@ -518,7 +518,7 @@ const createCurrentRequestSlice: StateCreator<CurrentRequestSlice> = (set, get) 
         const currentParams = state.params || [];
         let filteredParams = currentParams.filter(param => param.id !== id);
         if (filteredParams.length === 0) {
-            filteredParams.push({ id: `param-${Date.now()}`, key: '', value: '', disabled: false });
+            filteredParams.push({ id: `param-${crypto.randomUUID()}`, key: '', value: '', disabled: false });
         }
         
         // Update URL with remaining params
@@ -607,7 +607,7 @@ const createCurrentRequestSlice: StateCreator<CurrentRequestSlice> = (set, get) 
         };
         
         // Send request to VS Code
-        vsCodeApi.postMessage({ type: 'httpRequest', request });
+        vsCodeApi.postMessage({ type: 'httpRequest', request, id: state.id });
     }
 });
 
