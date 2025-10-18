@@ -3,6 +3,7 @@ import { FileIcon, DownloadIcon, CopyIcon, CheckCheckIcon } from 'lucide-react';
 import { Button } from '../ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/tooltip';
 import { base64ToText, base64ToJson } from '../../utils/encoding';
+import {getExtensionFromContentType} from '../../utils/common';
 
 interface ResponseBodyProps {
   body: string;
@@ -80,16 +81,11 @@ function formatBody(body: string, contentType: ContentType): string {
 /**
  * Gets appropriate file extension for content type
  */
-function getFileExtension(contentType: ContentType): string {
-  const extensions: Record<ContentType, string> = {
-    json: 'json',
-    xml: 'xml',
-    html: 'html',
-    csv: 'csv',
-    text: 'txt',
-    binary: 'bin',
-  };
-  return extensions[contentType];
+function getFileExtension(headers: Record<string, string>): string {
+  const contentTypeHeader = Object.entries(headers)
+    .find(([key]) => key.toLowerCase() === 'content-type')?.[1]
+    ?.toLowerCase() || '';
+  return getExtensionFromContentType(contentTypeHeader);
 }
 
 /**
@@ -109,7 +105,7 @@ function getFileName(headers: Record<string, string>, contentType: ContentType):
 
   // Generate a filename based on timestamp and content type
   const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
-  const extension = getFileExtension(contentType);
+  const extension = getFileExtension(headers);
   return `response_${timestamp}.${extension}`;
 }
 

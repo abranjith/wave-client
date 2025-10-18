@@ -86,6 +86,186 @@ export function getContentTypeFromFileName(fileName: string): string {
 }
 
 /**
+ * Determines file extension based on HTTP Content-Type header
+ * @param contentType - The Content-Type header value (e.g., 'application/json', 'image/png; charset=utf-8')
+ * @returns The appropriate file extension including the dot (e.g., '.json', '.png') or '.bin' as default
+ */
+export function getExtensionFromContentType(contentType: string): string {
+  // Extract the main MIME type, ignoring parameters like charset
+  const mimeType = contentType.split(';')[0].trim().toLowerCase();
+  
+  const extensionMap: Record<string, string> = {
+    // Images
+    'image/jpeg': '.jpg',
+    'image/png': '.png',
+    'image/gif': '.gif',
+    'image/webp': '.webp',
+    'image/svg+xml': '.svg',
+    'image/x-icon': '.ico',
+    'image/vnd.microsoft.icon': '.ico',
+    'image/bmp': '.bmp',
+    'image/tiff': '.tiff',
+    'image/avif': '.avif',
+    'image/heic': '.heic',
+    'image/heif': '.heif',
+    
+    // Documents
+    'application/pdf': '.pdf',
+    'application/msword': '.doc',
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document': '.docx',
+    'application/vnd.ms-excel': '.xls',
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': '.xlsx',
+    'application/vnd.ms-powerpoint': '.ppt',
+    'application/vnd.openxmlformats-officedocument.presentationml.presentation': '.pptx',
+    'application/vnd.oasis.opendocument.text': '.odt',
+    'application/vnd.oasis.opendocument.spreadsheet': '.ods',
+    'application/vnd.oasis.opendocument.presentation': '.odp',
+    'application/rtf': '.rtf',
+    'text/plain': '.txt',
+    'text/markdown': '.md',
+    'text/csv': '.csv',
+    
+    // Audio
+    'audio/mpeg': '.mp3',
+    'audio/mp3': '.mp3',
+    'audio/wav': '.wav',
+    'audio/wave': '.wav',
+    'audio/x-wav': '.wav',
+    'audio/ogg': '.ogg',
+    'audio/flac': '.flac',
+    'audio/aac': '.aac',
+    'audio/mp4': '.m4a',
+    'audio/x-m4a': '.m4a',
+    'audio/webm': '.weba',
+    'audio/opus': '.opus',
+    'audio/midi': '.midi',
+    'audio/x-midi': '.midi',
+    
+    // Video
+    'video/mp4': '.mp4',
+    'video/mpeg': '.mpeg',
+    'video/x-msvideo': '.avi',
+    'video/quicktime': '.mov',
+    'video/x-ms-wmv': '.wmv',
+    'video/x-flv': '.flv',
+    'video/webm': '.webm',
+    'video/x-matroska': '.mkv',
+    'video/3gpp': '.3gp',
+    'video/3gpp2': '.3g2',
+    'video/ogg': '.ogv',
+    
+    // Archives
+    'application/zip': '.zip',
+    'application/x-zip-compressed': '.zip',
+    'application/vnd.rar': '.rar',
+    'application/x-rar-compressed': '.rar',
+    'application/x-7z-compressed': '.7z',
+    'application/x-tar': '.tar',
+    'application/gzip': '.gz',
+    'application/x-gzip': '.gz',
+    'application/x-bzip': '.bz',
+    'application/x-bzip2': '.bz2',
+    'application/x-compress': '.z',
+    'application/x-compressed': '.z',
+    
+    // Code/Text/Data
+    'application/json': '.json',
+    'application/ld+json': '.jsonld',
+    'application/xml': '.xml',
+    'text/xml': '.xml',
+    'text/html': '.html',
+    'application/xhtml+xml': '.xhtml',
+    'text/css': '.css',
+    'text/javascript': '.js',
+    'application/javascript': '.js',
+    'application/x-javascript': '.js',
+    'application/typescript': '.ts',
+    'text/typescript': '.ts',
+    'application/yaml': '.yaml',
+    'text/yaml': '.yaml',
+    'application/x-yaml': '.yml',
+    'text/x-yaml': '.yml',
+    'application/toml': '.toml',
+    'text/toml': '.toml',
+    'application/x-sh': '.sh',
+    'application/x-python': '.py',
+    'text/x-python': '.py',
+    'application/x-ruby': '.rb',
+    'text/x-ruby': '.rb',
+    'application/x-php': '.php',
+    'text/x-php': '.php',
+    'application/sql': '.sql',
+    'text/x-sql': '.sql',
+    
+    // Fonts
+    'font/woff': '.woff',
+    'font/woff2': '.woff2',
+    'font/ttf': '.ttf',
+    'font/otf': '.otf',
+    'application/font-woff': '.woff',
+    'application/font-woff2': '.woff2',
+    'application/x-font-ttf': '.ttf',
+    'application/x-font-otf': '.otf',
+    'application/vnd.ms-fontobject': '.eot',
+    
+    // Other common types
+    'application/octet-stream': '.bin',
+    'application/x-binary': '.bin',
+    'application/x-msdownload': '.exe',
+    'application/vnd.android.package-archive': '.apk',
+    'application/vnd.apple.installer+xml': '.mpkg',
+    'application/x-apple-diskimage': '.dmg',
+    'application/x-iso9660-image': '.iso',
+    'application/x-debian-package': '.deb',
+    'application/x-redhat-package-manager': '.rpm',
+    
+    // E-books
+    'application/epub+zip': '.epub',
+    'application/x-mobipocket-ebook': '.mobi',
+    'application/vnd.amazon.ebook': '.azw',
+    
+    // CAD
+    'application/acad': '.dwg',
+    'application/x-autocad': '.dwg',
+    'image/vnd.dwg': '.dwg',
+    'application/dxf': '.dxf',
+    'image/vnd.dxf': '.dxf',
+    
+    // 3D Models
+    'model/gltf+json': '.gltf',
+    'model/gltf-binary': '.glb',
+    'model/obj': '.obj',
+    'model/stl': '.stl',
+    'model/3mf': '.3mf',
+    
+    // Other data formats
+    'application/vnd.google-earth.kml+xml': '.kml',
+    'application/vnd.google-earth.kmz': '.kmz',
+    'application/geo+json': '.geojson',
+    'application/protobuf': '.pb',
+    'application/x-protobuf': '.pb',
+    'application/msgpack': '.msgpack',
+    'application/x-msgpack': '.msgpack',
+    
+    // Certificates & Keys
+    'application/x-x509-ca-cert': '.crt',
+    'application/x-pem-file': '.pem',
+    'application/pkcs8': '.p8',
+    'application/pkcs10': '.p10',
+    'application/pkcs12': '.p12',
+    'application/x-pkcs12': '.pfx',
+    
+    // Web formats
+    'application/wasm': '.wasm',
+    'application/manifest+json': '.webmanifest',
+    'image/x-xbitmap': '.xbm',
+    'image/x-xpixmap': '.xpm',
+  };
+  
+  return extensionMap[mimeType] || '.bin';
+}
+
+/**
  * Formats file size in human readable format
  * @param bytes - Size in bytes
  * @returns Formatted size string

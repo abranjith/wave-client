@@ -7,6 +7,43 @@ import * as path from 'path';
 import * as os from 'os';
 import { Environment } from './types/collection';
 
+/**
+ * Converts various data types to base64 string for safe transfer to webview
+ */
+function convertToBase64(data: any): string {
+    // Handle binary data types
+    if (data instanceof ArrayBuffer) {
+        return Buffer.from(data).toString('base64');
+    }
+    
+    if (Buffer.isBuffer(data)) {
+        // Node.js Buffer (which is a Uint8Array subclass)
+        return data.toString('base64');
+    }
+    
+    if (data instanceof Uint8Array) {
+        return Buffer.from(data).toString('base64');
+    }
+    
+    // Handle string data
+    if (typeof data === 'string') {
+        return Buffer.from(data, 'utf8').toString('base64');
+    }
+    
+    // Handle objects (JSON, etc.)
+    if (data && typeof data === 'object') {
+        try {
+            return Buffer.from(JSON.stringify(data, null, 2), 'utf8').toString('base64');
+        } catch (error) {
+            // Fallback for objects that can't be stringified
+            return Buffer.from('[Object: Unable to serialize]', 'utf8').toString('base64');
+        }
+    }
+    
+    // Fallback for any other type
+    return Buffer.from(String(data), 'utf8').toString('base64');
+}
+
 // This method is called when your extension is activated
 // Your extension is activated the very first time the command is executed
 export function activate(context: vscode.ExtensionContext) {
@@ -85,7 +122,7 @@ export function activate(context: vscode.ExtensionContext) {
 						});
 						const elapsedTime = Date.now() - start;
 						// Convert ArrayBuffer to base64 for efficient transfer
-                        const bodyBase64 = Buffer.from(response.data).toString('base64');
+						const bodyBase64 = convertToBase64(response.data);
 						panel.webview.postMessage({
 							type: 'httpResponse',
 							response: {
@@ -101,21 +138,20 @@ export function activate(context: vscode.ExtensionContext) {
 					} catch (error: any) {
 						const elapsedTime = Date.now() - start;
 						// Convert error response to base64
-                        let errorBodyBase64 = '';
-                        if (error?.response?.data) {
-                            errorBodyBase64 = error.response.data instanceof ArrayBuffer 
-                                ? Buffer.from(error.response.data).toString('base64')
-                                : Buffer.from(JSON.stringify(error.response.data, null, 2)).toString('base64');
-                        } else {
-                            errorBodyBase64 = Buffer.from(error.message).toString('base64');
-                        }
+                        const errorBodyBase64 = error?.response?.data 
+                            ? convertToBase64(error.response.data)
+                            : Buffer.from(error.message, 'utf8').toString('base64');
+                        
+                        const errorSize = error?.response?.data 
+                            ? (error.response.data.byteLength || Buffer.byteLength(error.response.data) || 0)
+                            : Buffer.byteLength(error.message);
 						panel.webview.postMessage({
 							type: 'httpResponse',
 							response: {
 								status: error?.response?.status || 0,
 								statusText: error?.response?.statusText || 'Error',
 								elapsedTime,
-								size: error?.response?.data ? error.response.data.byteLength || JSON.stringify(error.response.data).length : error.message.length,
+								size: errorSize,
 								headers: error?.response?.headers || {},
 								body: errorBodyBase64,
 							}
