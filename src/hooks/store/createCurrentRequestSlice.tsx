@@ -126,6 +126,18 @@ const getURLSearchParamsFromParamRows = (paramRows: ParamRow[]): URLSearchParams
     return urlParams;
 };
 
+const getParamRowsAsString = (paramRows: ParamRow[]): string => {
+    const params: string[] = [];
+    paramRows.forEach(param => {
+        if (param.key.trim() && !param.disabled) {
+            const key = param.key.trim();
+            const value = param.value;
+            params.push(`${key}=${value}`);
+        }
+    });
+    return params.join('&');
+};
+
 /**
  * Updates the URL with query parameters from param rows
  * Removes existing query params and appends new ones
@@ -136,21 +148,19 @@ const updateUrlWithParams = (currentUrl: string | null, paramRows: ParamRow[]): 
     }
     
     try {
-        // Parse the URL to get base URL without query params
-        const urlObj = new URL(currentUrl);
+        // Split URL into base and query string without using URL constructor to avoid encoding
+        const questionMarkIndex = currentUrl.indexOf('?');
+        const baseUrl = questionMarkIndex !== -1 ? currentUrl.substring(0, questionMarkIndex) : currentUrl;
         
-        // Clear existing search params
-        urlObj.search = '';
+        // Get params string from param rows
+        const searchString = getParamRowsAsString(paramRows);
         
-        // Add params from param rows (URL-encoded automatically by URLSearchParams)
-        const searchParams = getURLSearchParamsFromParamRows(paramRows);
-        const searchString = searchParams.toString();
-        
+        // Reconstruct URL with new params
         if (searchString) {
-            urlObj.search = searchString;
+            return `${baseUrl}?${searchString}`;
         }
         
-        return urlObj.toString();
+        return baseUrl;
     } catch (e) {
         // If URL is invalid, return as-is
         return currentUrl;
@@ -597,6 +607,10 @@ const createCurrentRequestSlice: StateCreator<CurrentRequestSlice> = (set, get) 
         if (!finalUrl.startsWith('http://') && !finalUrl.startsWith('https://')) {
             finalUrl = `${state.protocol}://${finalUrl}`;
         }
+        //remove params from url if present as it is being sent separately as paramsString
+        const urlObj = new URL(finalUrl);
+        urlObj.search = '';
+        finalUrl = urlObj.toString();
 
         const request = { 
             method: state.method, 

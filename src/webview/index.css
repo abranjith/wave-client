@@ -2,6 +2,21 @@
 @tailwind components;
 @tailwind utilities;
 
+@layer components {
+  /* Parameterized text styling for {{variable}} syntax */
+  .parameterized-text {
+    @apply font-medium;
+  }
+  
+  .param-exists {
+    @apply text-emerald-500;
+  }
+  
+  .param-missing {
+    @apply text-red-500;
+  }
+}
+
 @layer base {
   :root {
     --radius: 0.625rem;

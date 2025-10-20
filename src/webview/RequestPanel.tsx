@@ -1,7 +1,7 @@
 import React, { useState, useId } from 'react';
 import { SendHorizonalIcon } from 'lucide-react';
 import { Button } from "../components/ui/button"
-import { Input } from "../components/ui/input"
+import { StyledInput } from "../components/ui/styledinput"
 import RequestParams from "../components/common/RequestParams"
 import RequestHeaders from "../components/common/RequestHeaders"
 import RequestBody from "../components/common/RequestBody"
@@ -19,6 +19,7 @@ import {
   TooltipTrigger,
 } from "../components/ui/tooltip"
 import useAppStateStore from '../hooks/store/useAppStateStore';
+import { renderParameterizedText } from '../utils/styling';
 
 interface RequestPanelProps {
   onSendRequest: () => void;
@@ -58,6 +59,10 @@ const RequestPanel: React.FC<RequestPanelProps> = ({ onSendRequest })  => {
     // If the result is empty or just '/', return empty string
     return withoutProtocol === '/' ? '' : withoutProtocol;
   }
+
+  const handleParameterizedTextStyling = (text: string) => {
+    return renderParameterizedText(text, new Set());
+  };
 
   return (
     <div className="w-full bg-background border-b">
@@ -117,18 +122,15 @@ const RequestPanel: React.FC<RequestPanelProps> = ({ onSendRequest })  => {
         </div>
 
         {/* URL Input */}
-        <div className="flex-1">
-          <div className="flex gap-2">
-            <Input 
-              id={urlInputId} 
-              className="flex-1 bg-white border-slate-300 text-slate-900 placeholder:text-slate-500 focus:border-blue-500 focus:ring-blue-500 dark:bg-slate-800 dark:border-slate-600 dark:text-slate-100 dark:placeholder:text-slate-400 dark:focus:border-blue-400 dark:focus:ring-blue-400" 
-              placeholder="Enter request URL..." 
-              type="url" 
-              value={getUrlWithoutProtocol(url)}
-              onChange={e => setUrl(e.target.value)}
-            />
-          </div>
-        </div>
+        <StyledInput
+          id={urlInputId}
+          type="text"
+          className="bg-white border-slate-300 focus:border-blue-500 dark:bg-slate-800 dark:border-slate-600 dark:focus:border-blue-400" 
+          value={getUrlWithoutProtocol(url)}
+          onChange={setUrl}
+          handleTextStyling={handleParameterizedTextStyling}
+          placeholder="Enter request URL..."
+        />
 
         {/* Send Button */}
          <TooltipProvider delayDuration={0}>
