@@ -316,7 +316,7 @@ const createCurrentRequestSlice: StateCreator<CurrentRequestSlice> = (set, get) 
         requestError: null,
         isCancelled: false
     }),
-    //TODO - needs to be updated
+    //TODO - needs to be updated to hande non text body
     getParsedRequest: () => {
         const state = get();
         const { id, name, method, url, headers, body, params, folderPath } = state;
@@ -607,7 +607,7 @@ const createCurrentRequestSlice: StateCreator<CurrentRequestSlice> = (set, get) 
         if (!finalUrl.startsWith('http://') && !finalUrl.startsWith('https://')) {
             finalUrl = `${state.protocol}://${finalUrl}`;
         }
-        //remove params from url if present as it is being sent separately as paramsString
+        //remove params from url if present as it is being sent separately as paramsString (also url encode)
         const urlObj = new URL(finalUrl);
         urlObj.search = '';
         finalUrl = urlObj.toString();

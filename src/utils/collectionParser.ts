@@ -82,23 +82,14 @@ function flattenFolders(
       const currentFolderName = item.name.replace(/\//g, ' ');
       const fullFolderPath = [...folderPath, currentFolderName];
       
-      // Create display name: prefix with collection name if not default
       let displayName = currentFolderName;
-      if (!isDefault && folderPath.length === 0) {
-        // Only prefix top-level folders from non-default collections
-        const cleanCollectionName = collectionName.replace(/\//g, ' ');
-        displayName = `${cleanCollectionName}/${currentFolderName}`;
-      } else if (folderPath.length > 0) {
+      if (folderPath.length > 0) {
         // For nested folders, create a flat path
         displayName = fullFolderPath.join('/');
-        if (!isDefault) {
-          const cleanCollectionName = collectionName.replace(/\//g, ' ');
-          displayName = `${cleanCollectionName}/${displayName}`;
-        }
       }
       
       // Recursively get all requests from this folder and its subfolders
-      const allRequests = getAllRequestsFromFolder(item.item, fullFolderPath);
+      const allRequests = getAllRequestsFromFolder(item.item, fullFolderPath, collectionName);
       
       if (allRequests.length > 0) {
         folders.push({
@@ -122,7 +113,7 @@ function flattenFolders(
         headers,
         params,
         body,
-        folderPath
+        folderPath: [collectionName, ...folderPath]
       });
     }
   });
@@ -135,14 +126,15 @@ function flattenFolders(
  */
 function getAllRequestsFromFolder(
   items: CollectionItem[], 
-  folderPath: string[]
+  folderPath: string[],
+  parentCollectionName: string = ''
 ): ParsedRequest[] {
   const requests: ParsedRequest[] = [];
   
   items.forEach(item => {
     if (item.item) {
       // This is a subfolder - recurse into it
-      const subRequests = getAllRequestsFromFolder(item.item, [...folderPath, item.name]);
+      const subRequests = getAllRequestsFromFolder(item.item, [...folderPath, item.name], parentCollectionName);
       requests.push(...subRequests);
     } else if (item.request) {
       // This is a request
@@ -159,7 +151,7 @@ function getAllRequestsFromFolder(
         headers,
         params,
         body,
-        folderPath
+        folderPath: Boolean(parentCollectionName) ? [parentCollectionName, ...folderPath] : folderPath
       });
     }
   });

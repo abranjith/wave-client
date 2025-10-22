@@ -169,6 +169,7 @@ const CollectionsPane: React.FC<CollectionsPaneProps> = ({
     );
   }
   
+  //TODO this default logic is flaky and needs a better approach
   // Sort collections to show default collection first
   const sortedCollections = [...collections].sort((a, b) => {
     const aIsDefault = a.filename.toLowerCase().includes('default');

@@ -1,5 +1,5 @@
 import { StateCreator } from 'zustand'
-import { ParsedCollection } from '../../types/collection';
+import { ParsedCollection, ParsedRequest } from '../../types/collection';
 
 interface CollectionsSlice {
     collections: ParsedCollection[];
@@ -12,6 +12,7 @@ interface CollectionsSlice {
     refreshCollections: (vsCodeApi: any) => void;
     setIsCollectionsLoading: (isLoading: boolean) => void;
     setCollectionLoadError: (error: string | null) => void;
+    saveRequestToCollection: (request: ParsedRequest, collectionName: string, folderName: string | null) => void;
 }
 
 const createCollectionsSlice: StateCreator<CollectionsSlice> = (set) => ({
@@ -36,7 +37,38 @@ const createCollectionsSlice: StateCreator<CollectionsSlice> = (set) => ({
         vsCodeApi.postMessage({ type: 'loadCollections' });
     },
     setIsCollectionsLoading: (isLoading) => set({ isCollectionsLoading: isLoading }),
-    setCollectionLoadError: (error) => set({ collectionLoadError: error, isCollectionsLoading: false })
+    setCollectionLoadError: (error) => set({ collectionLoadError: error, isCollectionsLoading: false }),
+    
+    saveRequestToCollection: (request, collectionName, folderName) => set((state) => {
+        const collections = state.collections.map((collection) => {
+            if (collection.name !== collectionName) {
+                return collection;
+            }
+            // If folderName is provided, find the folder and add the request there
+            if (folderName) {
+                const updatedFolders = collection.folders.map((folder) => {
+                    if (folder.name !== folderName) {
+                        return folder;
+                    }
+                    return {
+                        ...folder,
+                        requests: [...folder.requests, request]
+                    };
+                });
+                return {
+                    ...collection,
+                    folders: updatedFolders
+                };
+            } else {
+                // Otherwise, add the request to the top-level requests
+                return {
+                    ...collection,
+                    requests: [...collection.requests, request]
+                };
+            }
+        });
+        return { collections };
+    })
 });
 
 export default createCollectionsSlice;

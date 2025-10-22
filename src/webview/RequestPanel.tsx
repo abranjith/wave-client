@@ -1,5 +1,5 @@
 import React, { useState, useId } from 'react';
-import { SendHorizonalIcon } from 'lucide-react';
+import { SendHorizonalIcon, SaveIcon } from 'lucide-react';
 import { Button } from "../components/ui/button"
 import { StyledInput } from "../components/ui/styledinput"
 import RequestParams from "../components/common/RequestParams"
@@ -18,6 +18,14 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "../components/ui/tooltip"
+import {
+  Breadcrumb,
+  BreadcrumbItem,
+  BreadcrumbLink,
+  BreadcrumbList,
+  BreadcrumbPage,
+  BreadcrumbSeparator,
+} from "../components/ui/breadcrumb"
 import useAppStateStore from '../hooks/store/useAppStateStore';
 import { renderParameterizedText } from '../utils/styling';
 
@@ -44,11 +52,19 @@ const RequestPanel: React.FC<RequestPanelProps> = ({ onSendRequest })  => {
   const setMethod = useAppStateStore((state) => state.updateMethod);
   const url = useAppStateStore((state) => state.url || '');
   const setUrl = useAppStateStore((state) => state.updateUrl);
+  const folderPath = useAppStateStore((state) => state.folderPath);
+  const environments = useAppStateStore((state) => state.environments);
+  const activeEnvironment = useAppStateStore((state) => state.activeEnvironment);
+  const setActiveEnvironment = useAppStateStore((state) => state.setActiveEnvironment);
+  const saveRequestToCollection = useAppStateStore((state) => state.saveRequestToCollection);
+  const getParsedRequest = useAppStateStore((state) => state.getParsedRequest);
+  const requestName = useAppStateStore((state) => state.name || 'Untitled Request');
 
   const [activeTab, setActiveTab] = useState<'Params' | 'Headers' | 'Body'>('Params');
   const urlInputId = useId();
   const httpMethodSelectId = useId();
   const protocolSelectId = useId();
+  const environmentSelectId = useId();
 
   const getUrlWithoutProtocol = (fullUrl: string) => {
     if (!fullUrl) {
@@ -64,8 +80,110 @@ const RequestPanel: React.FC<RequestPanelProps> = ({ onSendRequest })  => {
     return renderParameterizedText(text, new Set());
   };
 
+  const handleSaveRequest = () => {
+    // Get collection and folder names from folderPath
+    // folderPath format: [collectionName, folderName1, folderName2, ...]
+    if (!folderPath || folderPath.length === 0) {
+      // TODO: Show error or prompt to select a collection
+      console.error('No collection selected');
+      return;
+    }
+
+    const collectionName = folderPath[0];
+    const folderName = folderPath.length > 1 ? folderPath[folderPath.length - 1] : null;
+    const currentRequest = getParsedRequest();
+
+    saveRequestToCollection(currentRequest, collectionName, folderName);
+  };
+
+  const handleEnvironmentChange = (value: string) => {
+    if (value === 'none') {
+      setActiveEnvironment(null);
+    } else {
+      const selectedEnv = environments?.find((env) => env.id === value);
+      if (selectedEnv) {
+        setActiveEnvironment(selectedEnv);
+      }
+    }
+  };
+
   return (
     <div className="w-full bg-background border-b">
+      {/* Breadcrumb and Environment Bar */}
+      <div className="px-6 py-2 flex items-center justify-between border-b border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-900">
+        {/* Breadcrumb on the left */}
+        <Breadcrumb>
+          <BreadcrumbList>
+            {folderPath && folderPath.length > 0 ? (
+              <>
+                {folderPath.map((item, index) => (
+                      <>
+                        <BreadcrumbItem>
+                          <BreadcrumbLink>{item}</BreadcrumbLink>
+                        </BreadcrumbItem>
+                        <BreadcrumbSeparator />
+                      </>
+                ))}
+                <BreadcrumbItem>
+                  <BreadcrumbPage>{requestName}</BreadcrumbPage>
+                </BreadcrumbItem>
+              </>
+            ) : (
+              <BreadcrumbItem>
+                <BreadcrumbPage>{requestName}</BreadcrumbPage>
+              </BreadcrumbItem>
+            )}
+          </BreadcrumbList>
+        </Breadcrumb>
+
+        {/* Environment Selector and Save Button on the right */}
+        <div className="flex items-center gap-3">
+          {/* Environment Dropdown */}
+          <Select 
+            value={activeEnvironment?.id || 'none'} 
+            onValueChange={handleEnvironmentChange}
+          >
+            <SelectTrigger 
+              id={environmentSelectId} 
+              className="w-auto max-w-full min-w-40 bg-white border-slate-300 text-slate-900 hover:bg-slate-50 dark:bg-slate-800 dark:border-slate-600 dark:text-slate-100 dark:hover:bg-slate-700"
+            >
+              <SelectValue placeholder="Select Environment" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="none" className="hover:bg-slate-100 dark:hover:bg-slate-700">
+                None
+              </SelectItem>
+              {environments && environments.map((env) => (
+                <SelectItem 
+                  key={env.id} 
+                  value={env.id} 
+                  className="hover:bg-slate-100 dark:hover:bg-slate-700"
+                >
+                  {env.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
+          {/* Save Button */}
+          <TooltipProvider delayDuration={0}>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  onClick={handleSaveRequest}
+                  className="bg-green-600 hover:bg-green-700 text-white font-medium px-6 py-2 transition-colors dark:bg-green-500 dark:hover:bg-green-600"
+                >
+                  <SaveIcon size={16} />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent className="px-2 py-1 text-xs">
+                Save to Collection
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+        </div>
+      </div>
+
       {/* Top Bar */}
       <div className="px-6 py-4 flex items-center gap-3">
         {/* Protocol Dropdown 
