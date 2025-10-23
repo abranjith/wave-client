@@ -76,8 +76,16 @@ const RequestPanel: React.FC<RequestPanelProps> = ({ onSendRequest })  => {
     return withoutProtocol === '/' ? '' : withoutProtocol;
   }
 
-  const handleParameterizedTextStyling = (text: string) => {
-    return renderParameterizedText(text, new Set());
+  const getStyledText = (text: string) => {
+    const activeEnvVariables = new Set<string>();
+    if (activeEnvironment) {
+      for (const [key, value] of Object.entries(activeEnvironment.values)) {
+        if (value.enabled) {
+          activeEnvVariables.add(key);
+        }
+      }
+    }
+    return renderParameterizedText(text, activeEnvVariables);
   };
 
   const handleSaveRequest = () => {
@@ -246,7 +254,7 @@ const RequestPanel: React.FC<RequestPanelProps> = ({ onSendRequest })  => {
           className="bg-white border-slate-300 focus:border-blue-500 dark:bg-slate-800 dark:border-slate-600 dark:focus:border-blue-400" 
           value={getUrlWithoutProtocol(url)}
           onChange={setUrl}
-          handleTextStyling={handleParameterizedTextStyling}
+          styledValue={getStyledText(getUrlWithoutProtocol(url))}
           placeholder="Enter request URL..."
         />
 

@@ -1,16 +1,17 @@
 import * as React from "react";
 import { Input } from "./input";
 import { cn } from "../../utils/common";
+import { JSX } from "react";
 
 interface StyledInputProps extends Omit<React.ComponentProps<"input">, 'onChange'> {
-  /**
-   * Function that takes the input text and returns styled JSX elements
-   */
-  handleTextStyling: (text: string) => React.ReactNode;
   /**
    * Controlled value for the input
    */
   value: string;
+    /**
+   * Styled value for the input
+   */
+  styledValue: JSX.Element;
   /**
    * Change handler for the input
    */
@@ -22,7 +23,7 @@ interface StyledInputProps extends Omit<React.ComponentProps<"input">, 'onChange
 }
 
 const StyledInput = React.forwardRef<HTMLInputElement, StyledInputProps>(
-  ({ handleTextStyling, value, onChange, className, containerClassName, placeholder, ...props }, ref) => {
+  ({ styledValue, value, onChange, className, containerClassName, placeholder, ...props }, ref) => {
     const inputRef = React.useRef<HTMLInputElement>(null);
     const overlayRef = React.useRef<HTMLDivElement>(null);
 
@@ -90,8 +91,8 @@ const StyledInput = React.forwardRef<HTMLInputElement, StyledInputProps>(
             "flex items-center"
           )}
         >
-          {value ? (
-            handleTextStyling(value)
+          {styledValue ? (
+            styledValue
           ) : (
             <span className="text-muted-foreground/70">
               {placeholder}

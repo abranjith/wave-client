@@ -44,15 +44,26 @@ const createCollectionsSlice: StateCreator<CollectionsSlice> = (set) => ({
             if (collection.name !== collectionName) {
                 return collection;
             }
-            // If folderName is provided, find the folder and add the request there
+            // If folderName is provided, find the folder and add/update the request there
             if (folderName) {
                 const updatedFolders = collection.folders.map((folder) => {
                     if (folder.name !== folderName) {
                         return folder;
                     }
+                    // Check if a request with the same name already exists
+                    const existingIndex = folder.requests.findIndex((r) => r.name === request.name);
+                    let updatedRequests;
+                    if (existingIndex !== -1) {
+                        // Replace existing request
+                        updatedRequests = [...folder.requests];
+                        updatedRequests[existingIndex] = request;
+                    } else {
+                        // Add new request
+                        updatedRequests = [...folder.requests, request];
+                    }
                     return {
                         ...folder,
-                        requests: [...folder.requests, request]
+                        requests: updatedRequests
                     };
                 });
                 return {
@@ -60,10 +71,20 @@ const createCollectionsSlice: StateCreator<CollectionsSlice> = (set) => ({
                     folders: updatedFolders
                 };
             } else {
-                // Otherwise, add the request to the top-level requests
+                // Check if a request with the same name already exists at top-level
+                const existingIndex = collection.requests.findIndex((r) => r.name === request.name);
+                let updatedRequests;
+                if (existingIndex !== -1) {
+                    // Replace existing request
+                    updatedRequests = [...collection.requests];
+                    updatedRequests[existingIndex] = request;
+                } else {
+                    // Add new request
+                    updatedRequests = [...collection.requests, request];
+                }
                 return {
                     ...collection,
-                    requests: [...collection.requests, request]
+                    requests: updatedRequests
                 };
             }
         });
