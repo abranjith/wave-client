@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { ChevronRightIcon, ChevronDownIcon, FolderIcon, LayoutGridIcon, ImportIcon, DownloadIcon } from 'lucide-react';
-import { ParsedRequest } from '../../types/collection';
+import { ParsedCollection, ParsedRequest } from '../../types/collection';
 import useAppStateStore from '../../hooks/store/useAppStateStore';
 import { Button } from '../ui/button';
 import { Tooltip, TooltipTrigger, TooltipContent } from '../ui/tooltip';
@@ -78,6 +78,7 @@ const CollectionsPane: React.FC<CollectionsPaneProps> = ({
   const [expandedCollections, setExpandedCollections] = useState<Set<string>>(
     new Set(collections.map(c => c.filename)) // Auto-expand all collections
   );
+  const [sortedCollections, setSortedCollections] = useState<ParsedCollection[]>([]);
   
   const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set());
   const [isImportWizardOpen, setIsImportWizardOpen] = useState(false);
@@ -101,6 +102,19 @@ const CollectionsPane: React.FC<CollectionsPaneProps> = ({
     }
     setExpandedFolders(newExpanded);
   };
+
+  //TODO this default logic is flaky and needs a better approach
+  // Sort collections to show default collection first
+  useEffect(() => {
+    const sorted = [...collections].sort((a, b) => {
+      const aIsDefault = a.filename.toLowerCase().includes('default');
+      const bIsDefault = b.filename.toLowerCase().includes('default');
+      if (aIsDefault && !bIsDefault) return -1;
+      if (!aIsDefault && bIsDefault) return 1;
+      return a.name.localeCompare(b.name);
+    });
+    setSortedCollections(sorted);
+  }, [collections]);
 
   if (isLoading) {
     return (
@@ -168,16 +182,6 @@ const CollectionsPane: React.FC<CollectionsPaneProps> = ({
       </div>
     );
   }
-  
-  //TODO this default logic is flaky and needs a better approach
-  // Sort collections to show default collection first
-  const sortedCollections = [...collections].sort((a, b) => {
-    const aIsDefault = a.filename.toLowerCase().includes('default');
-    const bIsDefault = b.filename.toLowerCase().includes('default');
-    if (aIsDefault && !bIsDefault) return -1;
-    if (!aIsDefault && bIsDefault) return 1;
-    return a.name.localeCompare(b.name);
-  });
   
   return (
     <div className="h-full overflow-hidden bg-white dark:bg-slate-900">

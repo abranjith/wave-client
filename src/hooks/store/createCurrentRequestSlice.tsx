@@ -1,5 +1,5 @@
 import { StateCreator } from 'zustand'
-import { ParsedRequest, HeaderRow, ParamRow, ResponseData, RequestBodyType, RequestBodyTextType, FormField, MultiPartFormField } from '../../types/collection';
+import { ParsedRequest, HeaderRow, ParamRow, ResponseData, RequestBodyType, RequestBodyTextType, FormField, MultiPartFormField, CollectionReference } from '../../types/collection';
 import { parseUrlQueryParams, getContentTypeFromBody } from '../../utils/common';
 import { FileWithPreview } from '../useFileUpload';
 
@@ -43,6 +43,7 @@ interface CurrentRequestSlice {
     isRequestProcessing: boolean;
     requestError: string | null;
     isCancelled: boolean;
+    collectionRef: CollectionReference | null;
 
     // Core request methods
     setCurrentRequest: (request: ParsedRequest | null) => void;
@@ -268,6 +269,7 @@ const createCurrentRequestSlice: StateCreator<CurrentRequestSlice> = (set, get) 
     isRequestProcessing: false,
     requestError: null,
     isCancelled: false,
+    collectionRef: null,
 
     //TODO
     // Core request setters
@@ -291,11 +293,12 @@ const createCurrentRequestSlice: StateCreator<CurrentRequestSlice> = (set, get) 
             multiPartFormData: {data: [emptyMultiPartFormField()]},
             currentBodyType: 'none'
         },
-        folderPath: request?.folderPath,
+        folderPath: request?.sourceRef ? [request.sourceRef.collectionName, ...request.sourceRef.itemPath, request.name] : (request ? [request.name] : []),
         responseData: null,
         isRequestProcessing: false,
         requestError: null,
-        isCancelled: false
+        isCancelled: false,
+        collectionRef: request?.sourceRef ? request.sourceRef : null
     }),
     clearCurrentRequest: () => set({
         name: null,
@@ -328,7 +331,7 @@ const createCurrentRequestSlice: StateCreator<CurrentRequestSlice> = (set, get) 
             headers: headers || [],
             body: body?.textData?.data ? body.textData.data : null,
             params: params || [],
-            folderPath: folderPath || []
+            sourceRef: state.collectionRef || { collectionFilename: '', collectionName: '', itemPath: folderPath ? folderPath.slice(0, -1) : [] }
         };
     },
 

@@ -5,7 +5,7 @@ import axios from 'axios';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
-import { Environment } from './types/collection';
+import { Environment, Collection, CollectionRequest } from './types/collection';
 
 /**
  * Converts various data types to base64 string for safe transfer to webview
@@ -170,6 +170,30 @@ export function activate(context: vscode.ExtensionContext) {
 							error: error.message
 						});
 					}
+				} else if (message.type === 'saveRequestToCollection') {
+					try {
+						const { requestContent, requestName, collectionFileName, folderPath } = message.data;
+						const collectionName = await saveRequestToCollection(requestContent, requestName, collectionFileName, folderPath);
+						panel.webview.postMessage({
+							type: 'collectionRequestSaved',
+							collectionName
+						});
+						const collection = await loadCollection(collectionFileName);
+						if (collection) {
+							panel.webview.postMessage({
+								type: 'collectionUpdated',
+								collection: {
+									...collection,
+									filename: collectionFileName
+								}
+							});
+						}
+					} catch (error: any) {
+						panel.webview.postMessage({
+							type: 'collectionRequestSaveError',
+							error: error.message
+						});
+					}
 				} else if (message.type === 'loadEnvironments') {
 					try {
 						const environments = await loadEnvironments();
@@ -277,24 +301,117 @@ async function loadCollections() {
 	
 	for (const file of files) {
 		if (path.extname(file).toLowerCase() === '.json') {
-			try {
-				const filePath = path.join(collectionsDir, file);
-				const fileContent = fs.readFileSync(filePath, 'utf8');
-				const collectionData = JSON.parse(fileContent);
-				
-				// Add filename to the collection data
+			const collection = await loadCollection(file);
+			if (collection) {
 				collections.push({
-					...collectionData,
+					...collection,
 					filename: file
 				});
-			} catch (error: any) {
-				console.error(`Error loading collection ${file}:`, error.message);
-				// Continue loading other collections even if one fails
 			}
 		}
 	}
 	
 	return collections;
+}
+
+/**
+ * Loads a single collection file
+ */
+async function loadCollection(fileName: string): Promise<Collection | null> {
+	const homeDir = os.homedir();
+	const collectionsDir = path.join(homeDir, '.waveclient', 'collections');
+	const filePath = path.join(collectionsDir, fileName);
+
+	console.log('Loading single collection from file:', filePath);
+
+	if (!fs.existsSync(filePath)) {
+		return null;
+	}
+
+	try {
+		const fileContent = fs.readFileSync(filePath, 'utf8');
+		return JSON.parse(fileContent);
+	} catch (error: any) {
+		console.error(`Error loading collection ${fileName}:`, error.message);
+		return null;
+	}
+}
+
+/**
+ * Saves a collection to the default directory (~/.waveclient/collections)
+ * @param fileContent 
+ * @param fileName 
+ */
+async function saveCollection(fileContent: string, fileName: string): Promise<string | undefined> {
+	const homeDir = os.homedir();
+	const collectionsDir = path.join(homeDir, '.waveclient', 'collections');
+
+	// Ensure the collections directory exists
+	if (!fs.existsSync(collectionsDir)) {
+		fs.mkdirSync(collectionsDir, { recursive: true });
+	}
+
+	try {
+		// Parse the collection JSON
+		const collection = JSON.parse(fileContent) as Collection;
+		
+		// Save the collection to a file (overwrites if exists, creates if not)
+		const filePath = path.join(collectionsDir, fileName);
+		fs.writeFileSync(filePath, JSON.stringify(collection, null, 2));
+		return collection.info.name;
+	} catch (error: any) {
+		console.error(`Error saving collection ${fileName}:`, error.message);
+		throw new Error(`Failed to save collection: ${error.message}`);
+	}
+}
+
+/**
+ * Saves or updates a request in a collection file under the specified folder path
+ * @param requestContent The JSON content of the request to save
+ * @param requestName The name of the request
+ * @param collectionFileName The collection file to save to
+ * @param folderPath The folder path within the collection to save the request under
+ */
+async function saveRequestToCollection(requestContent: string, requestName: string, collectionFileName: string, folderPath: string[]) {
+	const collection = await loadCollection(collectionFileName);
+	console.log('Loaded collection for saving request:', collectionFileName, requestName, folderPath, requestContent);
+	if (!collection) {
+		throw new Error(`Collection ${collectionFileName} not found`);
+	}
+
+	// Parse the collection JSON
+	const request = JSON.parse(requestContent) as CollectionRequest;
+
+	// Navigate to the correct folder, creating it if necessary
+	let items = collection.item;
+	for (const folderName of folderPath) {
+		let folder = items.find(i => i.name === folderName && i.item);
+		if (!folder) {
+			// Create the folder if it doesn't exist
+			folder = {
+				name: folderName,
+				item: []
+			};
+			items.push(folder);
+		}
+		items = folder.item!;
+	}
+
+	// Check if a request with the same name exists in the target folder
+	const existingRequestIndex = items.findIndex(i => i.name === requestName && i.request);
+	if (existingRequestIndex !== -1) {
+		// Overwrite existing request
+		items[existingRequestIndex].request = request;
+	} else {
+		// Add new request
+		items.push({
+			name: requestName,
+			request: request
+		});
+	}
+
+	// Save the updated collection
+	await saveCollection(JSON.stringify(collection), collectionFileName);
 }
 
 /**

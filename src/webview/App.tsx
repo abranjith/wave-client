@@ -4,7 +4,7 @@ import RequestPanel from './RequestPanel';
 import ResponsePanel from './ResponsePanel';
 import EnvironmentGrid from '../components/common/EnvironmentGrid';
 import { ParsedRequest, Collection, Environment } from '../types/collection';
-import { parseCollection } from '../utils/collectionParser';
+import { parseCollection, transformToCollectionRequest } from '../utils/collectionParser';
 import useAppStateStore from '../hooks/store/useAppStateStore';
 
 const App: React.FC = () => {
@@ -12,6 +12,7 @@ const App: React.FC = () => {
 
   const refreshCollections = useAppStateStore((state) => state.refreshCollections);
   const setCollections = useAppStateStore((state) => state.setCollections);
+  const updateCollection = useAppStateStore((state) => state.updateCollection);
   const setCollectionLoadError = useAppStateStore((state) => state.setCollectionLoadError);
   const refreshEnvironments = useAppStateStore((state) => state.refreshEnvironments);
   const setEnvironments = useAppStateStore((state) => state.setEnvironments);
@@ -51,6 +52,22 @@ const App: React.FC = () => {
       console.error('VS Code API is not available.');
     }
   };
+
+  const handleSaveRequest = (request: ParsedRequest) => {
+    const collectionRequest = transformToCollectionRequest(request);
+    console.log('Saving request to collection:', request.name, collectionRequest);
+    if (vsCodeRef.current) {
+      vsCodeRef.current.postMessage({
+        type: 'saveRequestToCollection',
+        data: {
+          requestContent: JSON.stringify(collectionRequest, null, 2),
+          requestName: request.name,
+          collectionFileName: request.sourceRef.collectionFilename,
+          folderPath: request.sourceRef.itemPath
+        }
+      });
+    }
+  }
 
   const handleDownloadResponse = (data: string) => {
     if (vsCodeRef.current) {
@@ -93,6 +110,14 @@ const App: React.FC = () => {
           setCollections(parsedCollections);
         } catch (error: any) {
           setCollectionLoadError(`Error parsing collections: ${error.message}`);
+        }
+      } else if (message.type === 'collectionUpdated') {
+        try {
+          console.log('Received updated collection message:', message);
+          const collection = parseCollection(message.collection, message.collection.filename);
+          updateCollection(collection.name, collection);
+        } catch (error: any) {
+          console.error('Error updating collection:', error);
         }
       } else if (message.type === 'collectionsError') {
         setCollectionLoadError(message.error);
@@ -149,7 +174,8 @@ const App: React.FC = () => {
           {/* Top-right RequestPanel */}
           <div style={{ gridArea: 'request' }} className="overflow-hidden">
             <RequestPanel 
-              onSendRequest={handleSendRequest} 
+              onSendRequest={handleSendRequest}
+              onSaveRequest={handleSaveRequest}
             />
           </div>
 

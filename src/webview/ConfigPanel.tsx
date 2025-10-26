@@ -53,7 +53,11 @@ const ConfigPanel: React.FC<ConfigPanelProps> = ({ onRequestSelect, onEnvSelect,
                       body: '',
                       name: '',
                       params: [],
-                      folderPath: [],
+                      sourceRef: {
+                        collectionFilename: '',
+                        collectionName: '',
+                        itemPath: []
+                      }
                     };
                     onRequestSelect(request);
                   }}

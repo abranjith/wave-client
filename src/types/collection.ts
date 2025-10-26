@@ -57,6 +57,12 @@ export interface Environment {
   values: EnvironmentVariable[];
 }
 
+export interface CollectionReference {
+  collectionFilename: string;
+  collectionName: string;
+  itemPath: string[]; // Path through folders to reach the item, e.g., ['Folder1', 'Subfolder']
+}
+
 // Parsed collection types for easier use in components
 export interface ParsedRequest {
   id: string;
@@ -71,7 +77,7 @@ export interface ParsedRequest {
     fileName: string;
     contentType: string;
   };
-  folderPath: string[];
+  sourceRef: CollectionReference; // Reference back to original collection structure
 }
 
 export interface ParsedFolder {

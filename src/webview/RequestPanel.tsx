@@ -28,9 +28,11 @@ import {
 } from "../components/ui/breadcrumb"
 import useAppStateStore from '../hooks/store/useAppStateStore';
 import { renderParameterizedText } from '../utils/styling';
+import { ParsedRequest } from '../types/collection';
 
 interface RequestPanelProps {
   onSendRequest: () => void;
+  onSaveRequest: (request: ParsedRequest) => void;
 }
 
 const HTTP_METHODS = [
@@ -45,7 +47,7 @@ const TABS = [
   'Params', 'Headers', 'Body'
 ];
 
-const RequestPanel: React.FC<RequestPanelProps> = ({ onSendRequest })  => {
+const RequestPanel: React.FC<RequestPanelProps> = ({ onSendRequest, onSaveRequest })  => {
   const protocol = useAppStateStore((state) => state.protocol || 'HTTPS');
   const setProtocol = useAppStateStore((state) => state.updateProtocol);
   const method = useAppStateStore((state) => state.method || 'GET');
@@ -56,7 +58,6 @@ const RequestPanel: React.FC<RequestPanelProps> = ({ onSendRequest })  => {
   const environments = useAppStateStore((state) => state.environments);
   const activeEnvironment = useAppStateStore((state) => state.activeEnvironment);
   const setActiveEnvironment = useAppStateStore((state) => state.setActiveEnvironment);
-  const saveRequestToCollection = useAppStateStore((state) => state.saveRequestToCollection);
   const getParsedRequest = useAppStateStore((state) => state.getParsedRequest);
   const requestName = useAppStateStore((state) => state.name || 'Untitled Request');
 
@@ -97,11 +98,8 @@ const RequestPanel: React.FC<RequestPanelProps> = ({ onSendRequest })  => {
       return;
     }
 
-    const collectionName = folderPath[0];
-    const folderName = folderPath.length > 1 ? folderPath[folderPath.length - 1] : null;
     const currentRequest = getParsedRequest();
-
-    saveRequestToCollection(currentRequest, collectionName, folderName);
+    onSaveRequest(currentRequest);
   };
 
   const handleEnvironmentChange = (value: string) => {
