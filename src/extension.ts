@@ -172,13 +172,13 @@ export function activate(context: vscode.ExtensionContext) {
 					}
 				} else if (message.type === 'saveRequestToCollection') {
 					try {
-						const { requestContent, requestName, collectionFileName, folderPath } = message.data;
-						const collectionName = await saveRequestToCollection(requestContent, requestName, collectionFileName, folderPath);
-						panel.webview.postMessage({
-							type: 'collectionRequestSaved',
-							collectionName
-						});
-						const collection = await loadCollection(collectionFileName);
+						const { requestContent, requestName, collectionFileName, folderPath, newCollectionName } = message.data;
+						const savedCollectionFileName = await saveRequestToCollection(requestContent, requestName, collectionFileName, folderPath, newCollectionName);
+
+						// Show success message
+						vscode.window.showInformationMessage(`Request saved to collection: ${savedCollectionFileName}`);
+
+						const collection = await loadCollection(savedCollectionFileName);
 						if (collection) {
 							panel.webview.postMessage({
 								type: 'collectionUpdated',
@@ -189,6 +189,7 @@ export function activate(context: vscode.ExtensionContext) {
 							});
 						}
 					} catch (error: any) {
+						console.error('Error saving request to collection:', error);
 						panel.webview.postMessage({
 							type: 'collectionRequestSaveError',
 							error: error.message
@@ -322,8 +323,6 @@ async function loadCollection(fileName: string): Promise<Collection | null> {
 	const collectionsDir = path.join(homeDir, '.waveclient', 'collections');
 	const filePath = path.join(collectionsDir, fileName);
 
-	console.log('Loading single collection from file:', filePath);
-
 	if (!fs.existsSync(filePath)) {
 		return null;
 	}
@@ -342,7 +341,7 @@ async function loadCollection(fileName: string): Promise<Collection | null> {
  * @param fileContent 
  * @param fileName 
  */
-async function saveCollection(fileContent: string, fileName: string): Promise<string | undefined> {
+async function saveCollection(fileContent: string, fileName: string): Promise<Collection | undefined> {
 	const homeDir = os.homedir();
 	const collectionsDir = path.join(homeDir, '.waveclient', 'collections');
 
@@ -358,7 +357,7 @@ async function saveCollection(fileContent: string, fileName: string): Promise<st
 		// Save the collection to a file (overwrites if exists, creates if not)
 		const filePath = path.join(collectionsDir, fileName);
 		fs.writeFileSync(filePath, JSON.stringify(collection, null, 2));
-		return collection.info.name;
+		return collection;
 	} catch (error: any) {
 		console.error(`Error saving collection ${fileName}:`, error.message);
 		throw new Error(`Failed to save collection: ${error.message}`);
@@ -371,12 +370,30 @@ async function saveCollection(fileContent: string, fileName: string): Promise<st
  * @param requestName The name of the request
  * @param collectionFileName The collection file to save to
  * @param folderPath The folder path within the collection to save the request under
+ * @param newCollectionName Optional name for a new collection if the specified one doesn't exist
  */
-async function saveRequestToCollection(requestContent: string, requestName: string, collectionFileName: string, folderPath: string[]) {
-	const collection = await loadCollection(collectionFileName);
-	console.log('Loaded collection for saving request:', collectionFileName, requestName, folderPath, requestContent);
-	if (!collection) {
-		throw new Error(`Collection ${collectionFileName} not found`);
+async function saveRequestToCollection(requestContent: string, requestName: string, collectionFileName: string, folderPath: string[], newCollectionName: string | undefined) : Promise<string> {
+	//let collection = await loadCollection(collectionFileName);
+	let collection: Collection | null = null;
+	let finalCollectionFileName = collectionFileName;
+
+	if (newCollectionName) {
+		//create a new collection if it doesn't exist. Use {newCollectionName}.json as the filename and if if exists, append sequence number
+		finalCollectionFileName = generateFileNameForCollection(newCollectionName);
+		collection = {
+			info: {
+				name: newCollectionName ? newCollectionName : 'New Collection',
+				schema: 'https://schema.getpostman.com/json/collection/v2.1.0/collection.json'
+			},
+			item: []
+		};
+	} else if (collectionFileName) {
+        // Load existing collection
+        collection = await loadCollection(collectionFileName);
+    }
+
+	if(!collection) {
+		throw new Error(`Collection file ${collectionFileName} does not exist and no new collection name provided.`);
 	}
 
 	// Parse the collection JSON
@@ -411,7 +428,27 @@ async function saveRequestToCollection(requestContent: string, requestName: stri
 	}
 
 	// Save the updated collection
-	await saveCollection(JSON.stringify(collection), collectionFileName);
+	await saveCollection(JSON.stringify(collection), finalCollectionFileName);
+
+	return finalCollectionFileName;
+}
+
+function generateFileNameForCollection(newCollectionName: string) {
+	const homeDir = os.homedir();
+	const collectionsDir = path.join(homeDir, '.waveclient', 'collections');
+	let baseFileName = newCollectionName ? newCollectionName : 'New Collection';
+	baseFileName = baseFileName.replace(/[^a-z0-9]/gi, '_').toLowerCase();
+	let fileName = `${baseFileName}.json`;
+	let counter = 1;
+	while (fs.existsSync(path.join(collectionsDir, fileName))) {
+		fileName = `${baseFileName}_${counter}.json`;
+		counter++;
+		//limit to 100
+		if (counter > 100) {
+			throw new Error('Unable to generate unique collection filename, please provide a unique name.');
+		}
+	}
+	return fileName;
 }
 
 /**

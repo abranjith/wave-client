@@ -1,5 +1,5 @@
 import { StateCreator } from 'zustand'
-import { ParsedCollection, ParsedRequest } from '../../types/collection';
+import { ParsedCollection } from '../../types/collection';
 
 interface CollectionsSlice {
     collections: ParsedCollection[];

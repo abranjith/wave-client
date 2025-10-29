@@ -53,9 +53,8 @@ const App: React.FC = () => {
     }
   };
 
-  const handleSaveRequest = (request: ParsedRequest) => {
+  const handleSaveRequest = (request: ParsedRequest, newCollectionName: string | undefined) => {
     const collectionRequest = transformToCollectionRequest(request);
-    console.log('Saving request to collection:', request.name, collectionRequest);
     if (vsCodeRef.current) {
       vsCodeRef.current.postMessage({
         type: 'saveRequestToCollection',
@@ -63,7 +62,8 @@ const App: React.FC = () => {
           requestContent: JSON.stringify(collectionRequest, null, 2),
           requestName: request.name,
           collectionFileName: request.sourceRef.collectionFilename,
-          folderPath: request.sourceRef.itemPath
+          folderPath: request.sourceRef.itemPath,
+          newCollectionName: newCollectionName
         }
       });
     }
@@ -113,7 +113,6 @@ const App: React.FC = () => {
         }
       } else if (message.type === 'collectionUpdated') {
         try {
-          console.log('Received updated collection message:', message);
           const collection = parseCollection(message.collection, message.collection.filename);
           updateCollection(collection.name, collection);
         } catch (error: any) {

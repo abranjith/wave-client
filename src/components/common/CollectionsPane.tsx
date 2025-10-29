@@ -75,9 +75,7 @@ const CollectionsPane: React.FC<CollectionsPaneProps> = ({
   const isLoading = useAppStateStore((state) => state.isCollectionsLoading);
   const error = useAppStateStore((state) => state.collectionLoadError);
 
-  const [expandedCollections, setExpandedCollections] = useState<Set<string>>(
-    new Set(collections.map(c => c.filename)) // Auto-expand all collections
-  );
+  const [expandedCollections, setExpandedCollections] = useState<Set<string>>(new Set());
   const [sortedCollections, setSortedCollections] = useState<ParsedCollection[]>([]);
   
   const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set());

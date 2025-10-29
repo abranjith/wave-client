@@ -1,4 +1,4 @@
-import React, { useState, useId } from 'react';
+import React, { useState, useId, useEffect } from 'react';
 import { SendHorizonalIcon, SaveIcon } from 'lucide-react';
 import { Button } from "../components/ui/button"
 import { StyledInput } from "../components/ui/styledinput"
@@ -29,10 +29,11 @@ import {
 import useAppStateStore from '../hooks/store/useAppStateStore';
 import { renderParameterizedText } from '../utils/styling';
 import { ParsedRequest } from '../types/collection';
+import RequestSaveWizard from '../components/common/RequestSaveWizard';
 
 interface RequestPanelProps {
   onSendRequest: () => void;
-  onSaveRequest: (request: ParsedRequest) => void;
+  onSaveRequest: (request: ParsedRequest, newCollectionName: string | undefined) => void;
 }
 
 const HTTP_METHODS = [
@@ -60,6 +61,10 @@ const RequestPanel: React.FC<RequestPanelProps> = ({ onSendRequest, onSaveReques
   const setActiveEnvironment = useAppStateStore((state) => state.setActiveEnvironment);
   const getParsedRequest = useAppStateStore((state) => state.getParsedRequest);
   const requestName = useAppStateStore((state) => state.name || 'Untitled Request');
+  const collections = useAppStateStore((state) => state.collections);
+
+  const [isRequestSaveWizardOpen, setIsRequestSaveWizardOpen] = useState(false);
+  const [saveToCollectionName, setSaveToCollectionName] = useState<string | undefined>(undefined);
 
   const [activeTab, setActiveTab] = useState<'Params' | 'Headers' | 'Body'>('Params');
   const urlInputId = useId();
@@ -92,14 +97,16 @@ const RequestPanel: React.FC<RequestPanelProps> = ({ onSendRequest, onSaveReques
   const handleSaveRequest = () => {
     // Get collection and folder names from folderPath
     // folderPath format: [collectionName, folderName1, folderName2, ...]
-    if (!folderPath || folderPath.length === 0) {
-      // TODO: Show error or prompt to select a collection
-      console.error('No collection selected');
-      return;
+    if (!folderPath || folderPath.length <= 1) {
+      //invoke Request Save Wizard to select collection
+      console.log('Opening Request Save Wizard');
+      setIsRequestSaveWizardOpen(true);
     }
-
-    const currentRequest = getParsedRequest();
-    onSaveRequest(currentRequest);
+    else {
+      console.log('Saving request to existing collection/folder');
+      const currentRequest = getParsedRequest();
+      onSaveRequest(currentRequest, undefined);
+    }
   };
 
   const handleEnvironmentChange = (value: string) => {
@@ -113,6 +120,14 @@ const RequestPanel: React.FC<RequestPanelProps> = ({ onSendRequest, onSaveReques
     }
   };
 
+  useEffect(() => {
+    if (saveToCollectionName) {
+      const currentRequest = getParsedRequest();
+      onSaveRequest(currentRequest, saveToCollectionName);
+      setSaveToCollectionName(undefined); // Reset after saving
+    }
+  }, [saveToCollectionName]);
+
   return (
     <div className="w-full bg-background border-b">
       {/* Breadcrumb and Environment Bar */}
@@ -122,7 +137,7 @@ const RequestPanel: React.FC<RequestPanelProps> = ({ onSendRequest, onSaveReques
           <BreadcrumbList>
             {folderPath && folderPath.length > 0 ? (
               <>
-                {folderPath.map((item, index) => (
+                {folderPath.slice(1).map((item, index) => (
                       <>
                         <BreadcrumbItem>
                           <BreadcrumbLink>{item}</BreadcrumbLink>
@@ -305,6 +320,18 @@ const RequestPanel: React.FC<RequestPanelProps> = ({ onSendRequest, onSaveReques
           <RequestBody/>
         )}
       </div>
+
+      {isRequestSaveWizardOpen && (
+        <RequestSaveWizard
+          isOpen={isRequestSaveWizardOpen}
+          collections={collections.map(c => c.name)}
+          onClose={() => setIsRequestSaveWizardOpen(false)}
+          onSave={(newCollectionName) => {
+            setSaveToCollectionName(newCollectionName);
+            setIsRequestSaveWizardOpen(false);
+          }}
+        />
+      )}
     </div>
   );
 };

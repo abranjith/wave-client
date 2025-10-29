@@ -293,7 +293,7 @@ const createCurrentRequestSlice: StateCreator<CurrentRequestSlice> = (set, get) 
             multiPartFormData: {data: [emptyMultiPartFormField()]},
             currentBodyType: 'none'
         },
-        folderPath: request?.sourceRef ? [request.sourceRef.collectionName, ...request.sourceRef.itemPath, request.name] : (request ? [request.name] : []),
+        folderPath: getRequestFolderPath(request),
         responseData: null,
         isRequestProcessing: false,
         requestError: null,
@@ -629,3 +629,19 @@ const createCurrentRequestSlice: StateCreator<CurrentRequestSlice> = (set, get) 
 });
 
 export default createCurrentRequestSlice;
+
+function getRequestFolderPath(request: ParsedRequest | null): string[] | null | undefined {
+    let fullFolderPath: string[] = [];
+    if (request?.sourceRef) {
+        if(request.sourceRef.collectionName){
+            fullFolderPath.push(request.sourceRef.collectionName);
+        }
+        if(request.sourceRef.itemPath){
+            fullFolderPath.push(...request.sourceRef.itemPath);
+        }
+        fullFolderPath.push(request.name);
+    } else if (request) {
+        fullFolderPath.push(request.name);
+    }
+    return fullFolderPath;
+}
