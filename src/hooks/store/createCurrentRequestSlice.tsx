@@ -271,8 +271,6 @@ const createCurrentRequestSlice: StateCreator<CurrentRequestSlice> = (set, get) 
     isCancelled: false,
     collectionRef: null,
 
-    //TODO
-    // Core request setters
     setCurrentRequest: (request) => set({
         id: request?.id ? request.id : crypto.randomUUID(),
         name: request?.name,
@@ -331,7 +329,7 @@ const createCurrentRequestSlice: StateCreator<CurrentRequestSlice> = (set, get) 
             headers: headers || [],
             body: body?.textData?.data ? body.textData.data : null,
             params: params || [],
-            sourceRef: state.collectionRef || { collectionFilename: '', collectionName: '', itemPath: folderPath ? folderPath.slice(0, -1) : [] }
+            sourceRef: state.collectionRef || { collectionFilename: '', collectionName: '', itemPath: folderPath ? folderPath : [] }
         };
     },
 
@@ -639,9 +637,6 @@ function getRequestFolderPath(request: ParsedRequest | null): string[] | null | 
         if(request.sourceRef.itemPath){
             fullFolderPath.push(...request.sourceRef.itemPath);
         }
-        fullFolderPath.push(request.name);
-    } else if (request) {
-        fullFolderPath.push(request.name);
     }
     return fullFolderPath;
 }

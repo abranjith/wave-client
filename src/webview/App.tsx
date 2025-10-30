@@ -20,6 +20,7 @@ const App: React.FC = () => {
   const setCurrentRequest = useAppStateStore((state) => state.setCurrentRequest);
   const setResponseData = useAppStateStore((state) => state.setResponseData);
   const onSendRequest = useAppStateStore((state) => state.handleSendRequest);
+  const collections = useAppStateStore((state) => state.collections);
   const vsCodeRef = useRef<any>(null);
 
   // Initialize Collections and Environments
@@ -55,15 +56,17 @@ const App: React.FC = () => {
 
   const handleSaveRequest = (request: ParsedRequest, newCollectionName: string | undefined) => {
     const collectionRequest = transformToCollectionRequest(request);
+    //if newCollectionName exists in collections, we are updating an existing collection s use filename & collection name from there
+    const existingCollection =  newCollectionName && collections.find((collection) => collection.name === newCollectionName);
     if (vsCodeRef.current) {
       vsCodeRef.current.postMessage({
         type: 'saveRequestToCollection',
         data: {
           requestContent: JSON.stringify(collectionRequest, null, 2),
           requestName: request.name,
-          collectionFileName: request.sourceRef.collectionFilename,
+          collectionFileName: existingCollection ? existingCollection.filename : request.sourceRef.collectionFilename,
           folderPath: request.sourceRef.itemPath,
-          newCollectionName: newCollectionName
+          newCollectionName: existingCollection ? undefined : newCollectionName
         }
       });
     }

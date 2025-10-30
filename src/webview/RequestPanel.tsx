@@ -36,6 +36,11 @@ interface RequestPanelProps {
   onSaveRequest: (request: ParsedRequest, newCollectionName: string | undefined) => void;
 }
 
+interface CollectionToSaveInfo {
+  collectionName: string;
+  requestName: string;
+}
+
 const HTTP_METHODS = [
   'GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'HEAD', 'OPTIONS'
 ];
@@ -64,7 +69,7 @@ const RequestPanel: React.FC<RequestPanelProps> = ({ onSendRequest, onSaveReques
   const collections = useAppStateStore((state) => state.collections);
 
   const [isRequestSaveWizardOpen, setIsRequestSaveWizardOpen] = useState(false);
-  const [saveToCollectionName, setSaveToCollectionName] = useState<string | undefined>(undefined);
+  const [collectionInfoToSave, setCollectionInfoToSave] = useState<CollectionToSaveInfo | undefined>(undefined);
 
   const [activeTab, setActiveTab] = useState<'Params' | 'Headers' | 'Body'>('Params');
   const urlInputId = useId();
@@ -97,13 +102,11 @@ const RequestPanel: React.FC<RequestPanelProps> = ({ onSendRequest, onSaveReques
   const handleSaveRequest = () => {
     // Get collection and folder names from folderPath
     // folderPath format: [collectionName, folderName1, folderName2, ...]
-    if (!folderPath || folderPath.length <= 1) {
+    if (!folderPath || folderPath.length === 0) {
       //invoke Request Save Wizard to select collection
-      console.log('Opening Request Save Wizard');
       setIsRequestSaveWizardOpen(true);
     }
     else {
-      console.log('Saving request to existing collection/folder');
       const currentRequest = getParsedRequest();
       onSaveRequest(currentRequest, undefined);
     }
@@ -121,12 +124,13 @@ const RequestPanel: React.FC<RequestPanelProps> = ({ onSendRequest, onSaveReques
   };
 
   useEffect(() => {
-    if (saveToCollectionName) {
+    if (collectionInfoToSave) {
       const currentRequest = getParsedRequest();
-      onSaveRequest(currentRequest, saveToCollectionName);
-      setSaveToCollectionName(undefined); // Reset after saving
+      currentRequest.name = collectionInfoToSave.requestName || currentRequest.name;
+      onSaveRequest(currentRequest, collectionInfoToSave.collectionName);
+      setCollectionInfoToSave(undefined);
     }
-  }, [saveToCollectionName]);
+  }, [collectionInfoToSave]);
 
   return (
     <div className="w-full bg-background border-b">
@@ -135,7 +139,7 @@ const RequestPanel: React.FC<RequestPanelProps> = ({ onSendRequest, onSaveReques
         {/* Breadcrumb on the left */}
         <Breadcrumb>
           <BreadcrumbList>
-            {folderPath && folderPath.length > 0 ? (
+            {folderPath && folderPath.length > 1 ? (
               <>
                 {folderPath.slice(1).map((item, index) => (
                       <>
@@ -326,8 +330,8 @@ const RequestPanel: React.FC<RequestPanelProps> = ({ onSendRequest, onSaveReques
           isOpen={isRequestSaveWizardOpen}
           collections={collections.map(c => c.name)}
           onClose={() => setIsRequestSaveWizardOpen(false)}
-          onSave={(newCollectionName) => {
-            setSaveToCollectionName(newCollectionName);
+          onSave={(newCollectionName, requestName) => {
+            setCollectionInfoToSave({ collectionName: newCollectionName, requestName });
             setIsRequestSaveWizardOpen(false);
           }}
         />

@@ -16,7 +16,7 @@ interface RequestSaveWizardProps {
   isOpen: boolean;
   onClose: () => void;
   collections: string[];
-  onSave: (collectionName: string) => void;
+  onSave: (collectionName: string, requestName: string) => void;
 }
 
 const RequestSaveWizard: React.FC<RequestSaveWizardProps> = ({
@@ -26,6 +26,7 @@ const RequestSaveWizard: React.FC<RequestSaveWizardProps> = ({
   onSave,
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
+  const [requestName, setRequestName] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
 
@@ -56,6 +57,12 @@ const RequestSaveWizard: React.FC<RequestSaveWizardProps> = ({
    */
   const handleSave = async () => {
     const collectionName = searchQuery.trim();
+    const reqName = requestName.trim();
+
+    if (!reqName) {
+      setError('Please enter a request name');
+      return;
+    }
 
     if (!collectionName) {
       setError('Please enter a collection name');
@@ -66,8 +73,8 @@ const RequestSaveWizard: React.FC<RequestSaveWizardProps> = ({
     setError(null);
 
     try {
-      // Call the onSave callback with the collection name
-      onSave(collectionName);
+      // Call the onSave callback with the collection name and request name
+      onSave(collectionName, reqName);
 
       // Close the dialog
       handleClose();
@@ -83,6 +90,7 @@ const RequestSaveWizard: React.FC<RequestSaveWizardProps> = ({
    */
   const handleClose = () => {
     setSearchQuery('');
+    setRequestName('');
     setError(null);
     setIsSaving(false);
     onClose();
@@ -114,15 +122,31 @@ const RequestSaveWizard: React.FC<RequestSaveWizardProps> = ({
             Save Request to Collection
           </DialogTitle>
           <DialogDescription className="text-sm text-slate-600 dark:text-slate-400">
-            Select an existing collection or create a new one
+            Enter a request name and select an existing collection or create a new one
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4 py-4">
-          {/* Search/Input Field */}
+          {/* Request Name Field */}
+          <div className="space-y-2">
+            <Label htmlFor="request-name" className="text-sm font-medium text-slate-700 dark:text-slate-300">
+              Request Name <span className="text-red-500">*</span>
+            </Label>
+            <Input
+              id="request-name"
+              type="text"
+              placeholder="Enter request name..."
+              value={requestName}
+              onChange={(e) => setRequestName(e.target.value)}
+              onKeyDown={handleKeyDown}
+              autoFocus
+            />
+          </div>
+
+          {/* Collection Search/Input Field */}
           <div className="space-y-2">
             <Label htmlFor="collection-search" className="text-sm font-medium text-slate-700 dark:text-slate-300">
-              Collection Name
+              Collection Name <span className="text-red-500">*</span>
             </Label>
             <div className="relative">
               <SearchIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-slate-400 dark:text-slate-500" />
@@ -134,7 +158,6 @@ const RequestSaveWizard: React.FC<RequestSaveWizardProps> = ({
                 onChange={(e) => setSearchQuery(e.target.value)}
                 onKeyDown={handleKeyDown}
                 className="pl-10"
-                autoFocus
               />
             </div>
             {searchQuery.trim() && !isExistingCollection && (
@@ -199,7 +222,7 @@ const RequestSaveWizard: React.FC<RequestSaveWizardProps> = ({
           </Button>
           <Button
             onClick={handleSave}
-            disabled={!searchQuery.trim() || isSaving}
+            disabled={!searchQuery.trim() || !requestName.trim() || isSaving}
           >
             {isSaving ? 'Saving...' : 'Save'}
           </Button>
