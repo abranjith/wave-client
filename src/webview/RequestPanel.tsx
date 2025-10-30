@@ -133,9 +133,9 @@ const RequestPanel: React.FC<RequestPanelProps> = ({ onSendRequest, onSaveReques
   }, [collectionInfoToSave]);
 
   return (
-    <div className="w-full bg-background border-b">
+    <div className="w-full h-full bg-background border-b flex flex-col">
       {/* Breadcrumb and Environment Bar */}
-      <div className="px-6 py-2 flex items-center justify-between border-b border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-900">
+      <div className="px-6 py-2 flex items-center justify-between border-b border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-900 flex-shrink-0">
         {/* Breadcrumb on the left */}
         <Breadcrumb>
           <BreadcrumbList>
@@ -210,7 +210,7 @@ const RequestPanel: React.FC<RequestPanelProps> = ({ onSendRequest, onSaveReques
       </div>
 
       {/* Top Bar */}
-      <div className="px-6 py-4 flex items-center gap-3">
+      <div className="px-6 py-4 flex items-center gap-3 flex-shrink-0">
         {/* Protocol Dropdown 
         <select
           className="px-2 py-1 rounded border border-gray-300 bg-gray-50 text-gray-700 focus:outline-none"
@@ -296,7 +296,7 @@ const RequestPanel: React.FC<RequestPanelProps> = ({ onSendRequest, onSaveReques
       </div>
 
       {/* Horizontal Tabs */}
-      <div className="border-b border-slate-200 flex gap-0 bg-slate-50 px-6 dark:border-slate-700 dark:bg-slate-900">
+      <div className="border-b border-slate-200 flex gap-0 bg-slate-50 px-6 dark:border-slate-700 dark:bg-slate-900 flex-shrink-0">
         {TABS.map(tab => (
           <button
             key={tab}
@@ -313,7 +313,7 @@ const RequestPanel: React.FC<RequestPanelProps> = ({ onSendRequest, onSaveReques
       </div>
 
       {/* Tab Content */}
-      <div className="px-6 py-4 bg-white dark:bg-slate-900">
+      <div className="px-6 py-4 bg-white dark:bg-slate-900 overflow-y-auto flex-1 min-h-0">
         {activeTab === 'Params' && (
           <RequestParams/>
         )}

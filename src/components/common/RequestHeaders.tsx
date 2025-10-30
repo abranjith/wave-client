@@ -60,8 +60,8 @@ const RequestHeaders: React.FC = () => {
   };
 
   return (
-    <div className="space-y-4">
-      <div className="overflow-x-auto overflow-y-auto max-h-80 border border-slate-200 dark:border-slate-700 rounded-lg">
+    <div className="space-y-0">
+      <div className="overflow-x-auto border border-slate-200 dark:border-slate-700 rounded-t-lg">
         <table className="w-full border-collapse">
           <thead className="sticky top-0 bg-white dark:bg-slate-800 z-10">
             <tr className="border-b border-slate-200 dark:border-slate-700">
@@ -113,7 +113,7 @@ const RequestHeaders: React.FC = () => {
         </table>
       </div>
       
-      <div className="flex justify-start">
+      <div className="flex justify-start border border-t-0 border-slate-200 dark:border-slate-700 rounded-b-lg p-3 bg-slate-50 dark:bg-slate-800">
         <Button
           variant="outline"
           size="sm"
