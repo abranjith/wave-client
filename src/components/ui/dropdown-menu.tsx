@@ -1,10 +1,7 @@
-"use client"
-
 import * as React from "react"
 import { CheckIcon, ChevronRightIcon, CircleIcon } from "lucide-react"
-import * as DropdownMenuPrimitive from "@radix-ui/react-$(DropdownMenu.ToLower())"
-
-import { cn } from "../../utils/utils"
+import * as DropdownMenuPrimitive from "@radix-ui/react-dropdown-menu"
+import { cn } from "../../utils/common"
 
 type PointerDownEvent = Parameters<
   NonNullable<DropdownMenuPrimitive.DropdownMenuContentProps["onPointerDown"]>
@@ -17,8 +14,8 @@ type PointerDownOutsideEvent = Parameters<
 
 function DropdownMenu({
   ...props
-}: React.ComponentProps<typeof DropdownMenuPrimitive>) {
-  return <DropdownMenuPrimitive data-slot="dropdown-menu" {...props} />
+}: React.ComponentProps<typeof DropdownMenuPrimitive.Root>) {
+  return <DropdownMenuPrimitive.Root data-slot="dropdown-menu" {...props} />
 }
 
 function DropdownMenuPortal({
@@ -307,4 +304,3 @@ export {
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 }
-

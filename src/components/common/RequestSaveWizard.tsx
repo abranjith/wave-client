@@ -11,17 +11,16 @@ import {
   DialogHeader,
   DialogTitle,
 } from '../ui/dialog';
+import useAppStateStore from '../../hooks/store/useAppStateStore';
 
 interface RequestSaveWizardProps {
   isOpen: boolean;
   onClose: () => void;
-  collections: string[];
   onSave: (collectionName: string, requestName: string) => void;
 }
 
 const RequestSaveWizard: React.FC<RequestSaveWizardProps> = ({
   isOpen,
-  collections,
   onClose,
   onSave,
 }) => {
@@ -29,28 +28,30 @@ const RequestSaveWizard: React.FC<RequestSaveWizardProps> = ({
   const [requestName, setRequestName] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const collections = useAppStateStore((state) => state.collections);
+  const collectionNames = collections.map((col) => col.name);
 
   /**
    * Filter collections based on search query
    */
-  const filteredCollections = useMemo(() => {
+  const filteredCollectionNames = useMemo(() => {
     if (!searchQuery.trim()) {
-      return collections;
+      return collectionNames;
     }
     const query = searchQuery.toLowerCase();
-    return collections.filter((collection) =>
+    return collectionNames.filter((collection) =>
       collection.toLowerCase().includes(query)
     );
-  }, [collections, searchQuery]);
+  }, [collectionNames, searchQuery]);
 
   /**
    * Check if the search query matches an existing collection exactly
    */
   const isExistingCollection = useMemo(() => {
-    return collections.some(
+    return collectionNames.some(
       (collection) => collection.toLowerCase() === searchQuery.trim().toLowerCase()
     );
-  }, [collections, searchQuery]);
+  }, [collectionNames, searchQuery]);
 
   /**
    * Handles save action
@@ -169,13 +170,13 @@ const RequestSaveWizard: React.FC<RequestSaveWizardProps> = ({
           </div>
 
           {/* Collection List */}
-          {filteredCollections.length > 0 && (
+          {filteredCollectionNames.length > 0 && (
             <div className="space-y-2">
               <Label className="text-xs font-medium text-slate-600 dark:text-slate-400 uppercase tracking-wide">
                 {searchQuery.trim() ? 'Matching Collections' : 'Available Collections'}
               </Label>
               <div className="border border-slate-200 dark:border-slate-700 rounded-lg max-h-[240px] overflow-y-auto">
-                {filteredCollections.map((collection, index) => (
+                {filteredCollectionNames.map((collection, index) => (
                   <button
                     key={index}
                     onClick={() => handleCollectionSelect(collection)}
@@ -193,7 +194,7 @@ const RequestSaveWizard: React.FC<RequestSaveWizardProps> = ({
           )}
 
           {/* No Results Message */}
-          {searchQuery.trim() && filteredCollections.length === 0 && (
+          {searchQuery.trim() && filteredCollectionNames.length === 0 && (
             <div className="border border-slate-200 dark:border-slate-700 rounded-lg p-4 text-center">
               <p className="text-sm text-slate-600 dark:text-slate-400">
                 No matching collections found

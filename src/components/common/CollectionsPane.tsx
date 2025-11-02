@@ -5,18 +5,21 @@ import useAppStateStore from '../../hooks/store/useAppStateStore';
 import { Button } from '../ui/button';
 import { Tooltip, TooltipTrigger, TooltipContent } from '../ui/tooltip';
 import CollectionsImportWizard from './CollectionsImportWizard';
+import CollectionExportWizard from './CollectionExportWizard';
 
 interface CollectionsPaneProps {
   onRequestSelect: (request: ParsedRequest) => void;
   onImportCollection: (fileName: string, fileContent: string, collectionType: string) => void;
+  onExportCollection: (collectionName: string) => void;
 }
 
 interface CollectionsPaneHeaderProps {
   label: string;
   onImportClick: () => void;
+  onExportClick: () => void;
 }
 
-const CollectionsPaneHeader: React.FC<CollectionsPaneHeaderProps> = ({ label, onImportClick }) => {
+const CollectionsPaneHeader: React.FC<CollectionsPaneHeaderProps> = ({ label, onImportClick, onExportClick }) => {
   return (
     <div className="flex items-center justify-between mb-4">
       <h2 className="text-lg font-semibold text-slate-800 dark:text-slate-200">{label}</h2>
@@ -39,9 +42,7 @@ const CollectionsPaneHeader: React.FC<CollectionsPaneHeaderProps> = ({ label, on
             <Button
               variant="ghost"
               size="sm"
-              onClick={() => {
-                // TODO: Add export functionality
-              }}
+              onClick={onExportClick}
               className="h-8 w-8 p-0"
             >
               <DownloadIcon className="h-4 w-4" />
@@ -69,7 +70,8 @@ const getMethodColor = (method: string): string => {
 
 const CollectionsPane: React.FC<CollectionsPaneProps> = ({ 
   onRequestSelect,
-  onImportCollection
+  onImportCollection,
+  onExportCollection
 }) => {
   const collections = useAppStateStore((state) => state.collections);
   const isLoading = useAppStateStore((state) => state.isCollectionsLoading);
@@ -80,6 +82,7 @@ const CollectionsPane: React.FC<CollectionsPaneProps> = ({
   
   const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set());
   const [isImportWizardOpen, setIsImportWizardOpen] = useState(false);
+  const [isExportWizardOpen, setIsExportWizardOpen] = useState(false);
 
   const toggleCollection = (filename: string) => {
     const newExpanded = new Set(expandedCollections);
@@ -118,7 +121,11 @@ const CollectionsPane: React.FC<CollectionsPaneProps> = ({
     return (
       <div className="h-full overflow-hidden bg-white dark:bg-slate-900">
         <div className="p-4">
-          <CollectionsPaneHeader label="Collections" onImportClick={() => setIsImportWizardOpen(true)} />
+          <CollectionsPaneHeader 
+            label="Collections" 
+            onImportClick={() => setIsImportWizardOpen(true)} 
+            onExportClick={() => setIsExportWizardOpen(true)}
+          />
         </div>
         <div className="flex items-center justify-center h-[calc(100%-5rem)]">
           <div className="text-center">
@@ -131,6 +138,11 @@ const CollectionsPane: React.FC<CollectionsPaneProps> = ({
           onClose={() => setIsImportWizardOpen(false)}
           onImportCollection={onImportCollection}
         />
+        <CollectionExportWizard
+          isOpen={isExportWizardOpen}
+          onClose={() => setIsExportWizardOpen(false)}
+          onExportCollection={onExportCollection}
+        />
       </div>
     );
   }
@@ -139,7 +151,11 @@ const CollectionsPane: React.FC<CollectionsPaneProps> = ({
     return (
       <div className="h-full overflow-hidden bg-white dark:bg-slate-900">
         <div className="p-4">
-          <CollectionsPaneHeader label="Collections" onImportClick={() => setIsImportWizardOpen(true)} />
+          <CollectionsPaneHeader 
+            label="Collections" 
+            onImportClick={() => setIsImportWizardOpen(true)} 
+            onExportClick={() => setIsExportWizardOpen(true)}
+          />
         </div>
         <div className="flex items-center justify-center h-[calc(100%-5rem)] p-4">
           <div className="text-center">
@@ -153,6 +169,11 @@ const CollectionsPane: React.FC<CollectionsPaneProps> = ({
           onClose={() => setIsImportWizardOpen(false)}
           onImportCollection={onImportCollection}
         />
+        <CollectionExportWizard
+          isOpen={isExportWizardOpen}
+          onClose={() => setIsExportWizardOpen(false)}
+          onExportCollection={onExportCollection}
+        />
       </div>
     );
   }
@@ -161,7 +182,11 @@ const CollectionsPane: React.FC<CollectionsPaneProps> = ({
     return (
       <div className="h-full overflow-hidden bg-white dark:bg-slate-900">
         <div className="p-4">
-          <CollectionsPaneHeader label="Collections" onImportClick={() => setIsImportWizardOpen(true)} />
+          <CollectionsPaneHeader 
+            label="Collections" 
+            onImportClick={() => setIsImportWizardOpen(true)} 
+            onExportClick={() => setIsExportWizardOpen(true)}
+          />
         </div>
         <div className="flex items-center justify-center h-[calc(100%-5rem)] p-4">
           <div className="text-center">
@@ -177,6 +202,11 @@ const CollectionsPane: React.FC<CollectionsPaneProps> = ({
           onClose={() => setIsImportWizardOpen(false)}
           onImportCollection={onImportCollection}
         />
+        <CollectionExportWizard
+          isOpen={isExportWizardOpen}
+          onClose={() => setIsExportWizardOpen(false)}
+          onExportCollection={onExportCollection}
+        />
       </div>
     );
   }
@@ -184,7 +214,11 @@ const CollectionsPane: React.FC<CollectionsPaneProps> = ({
   return (
     <div className="h-full overflow-hidden bg-white dark:bg-slate-900">
       <div className="h-full overflow-auto p-4">
-        <CollectionsPaneHeader label="Collections" onImportClick={() => setIsImportWizardOpen(true)} />
+        <CollectionsPaneHeader 
+          label="Collections" 
+          onImportClick={() => setIsImportWizardOpen(true)} 
+          onExportClick={() => setIsExportWizardOpen(true)}
+        />
         
         <div className="space-y-2">
           {sortedCollections.map(collection => {
@@ -298,6 +332,11 @@ const CollectionsPane: React.FC<CollectionsPaneProps> = ({
         isOpen={isImportWizardOpen}
         onClose={() => setIsImportWizardOpen(false)}
         onImportCollection={onImportCollection}
+      />
+      <CollectionExportWizard
+        isOpen={isExportWizardOpen}
+        onClose={() => setIsExportWizardOpen(false)}
+        onExportCollection={onExportCollection}
       />
     </div>
   );

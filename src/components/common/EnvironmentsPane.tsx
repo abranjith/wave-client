@@ -7,11 +7,12 @@ import { Tooltip, TooltipTrigger, TooltipContent } from '../ui/tooltip';
 import EnvImportWizard from './EnvImportWizard';
 
 interface EnvironmentsPaneProps {
-  onEnvSelect?: (environment: Environment) => void;
-  onImportEnvironments?: (fileName: string, fileContent: string) => void;
+  onEnvSelect: (environment: Environment) => void;
+  onImportEnvironments: (fileName: string, fileContent: string) => void;
+  onExportEnvironments: () => void;
 }
 
-const EnvironmentsPane: React.FC<EnvironmentsPaneProps> = ({ onEnvSelect, onImportEnvironments }) => {
+const EnvironmentsPane: React.FC<EnvironmentsPaneProps> = ({ onEnvSelect, onImportEnvironments, onExportEnvironments }) => {
   const environments = useAppStateStore((state) => state.environments);
   const isLoading = useAppStateStore((state) => state.isEnvironmentsLoading);
   const error = useAppStateStore((state) => state.environmentLoadError);
@@ -54,9 +55,7 @@ const EnvironmentsPane: React.FC<EnvironmentsPaneProps> = ({ onEnvSelect, onImpo
                   <Button
                     variant="ghost"
                     size="sm"
-                    onClick={() => {
-                      // TODO: Add export functionality
-                    }}
+                    onClick={() => onExportEnvironments()}
                     className="h-8 w-8 p-0"
                   >
                     <DownloadIcon className="h-4 w-4" />
@@ -107,9 +106,7 @@ const EnvironmentsPane: React.FC<EnvironmentsPaneProps> = ({ onEnvSelect, onImpo
                   <Button
                     variant="ghost"
                     size="sm"
-                    onClick={() => {
-                      // TODO: Add export functionality
-                    }}
+                    onClick={() => onExportEnvironments()}
                     className="h-8 w-8 p-0"
                   >
                     <DownloadIcon className="h-4 w-4" />
@@ -161,9 +158,7 @@ const EnvironmentsPane: React.FC<EnvironmentsPaneProps> = ({ onEnvSelect, onImpo
                   <Button
                     variant="ghost"
                     size="sm"
-                    onClick={() => {
-                      // TODO: Add export functionality
-                    }}
+                    onClick={() => onExportEnvironments()}
                     className="h-8 w-8 p-0"
                   >
                     <DownloadIcon className="h-4 w-4" />
@@ -216,9 +211,7 @@ const EnvironmentsPane: React.FC<EnvironmentsPaneProps> = ({ onEnvSelect, onImpo
                 <Button
                   variant="ghost"
                   size="sm"
-                  onClick={() => {
-                    // TODO: Add export functionality
-                  }}
+                  onClick={() => onExportEnvironments()}
                   className="h-8 w-8 p-0"
                 >
                   <DownloadIcon className="h-4 w-4" />

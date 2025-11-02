@@ -228,7 +228,6 @@ export function activate(context: vscode.ExtensionContext) {
 						});
 					}
 				} else if (message.type === 'downloadResponse') {
-					// Handle file download from webview
 					try {
 						const { body, fileName, contentType } = message.data;
 						const bodyBuffer = base64ToUint8Array(body);
@@ -246,10 +245,10 @@ export function activate(context: vscode.ExtensionContext) {
 							await vscode.workspace.fs.writeFile(uri, bodyBuffer);
 							
 							// Show success message
-							vscode.window.showInformationMessage(`File saved: ${path.basename(uri.fsPath)}`);
+							vscode.window.showInformationMessage(`Response file saved: ${path.basename(uri.fsPath)}`);
 						}
 					} catch (error: any) {
-						vscode.window.showErrorMessage(`Failed to save file: ${error.message}`);
+						vscode.window.showErrorMessage(`Failed to save response file: ${error.message}`);
 					}
 				} else if (message.type === 'importCollection') {
 					// Handle collection import
@@ -281,8 +280,28 @@ export function activate(context: vscode.ExtensionContext) {
 					} catch (error: any) {
 						vscode.window.showErrorMessage(`Failed to import collection: ${error.message}`);
 					}
-				}
-				else if (message.type === 'importEnvironments') {
+				} else if (message.type === 'exportCollection') {
+					try {
+						const { fileName } = message.data;
+						const uri = await vscode.window.showSaveDialog({
+							defaultUri: vscode.Uri.file(path.join(os.homedir(), 'Downloads', fileName)),
+							filters: {
+								'All Files': ['*']
+							}
+						});
+						const collection = await loadCollection(fileName);
+						
+						if (uri) {
+							const jsonString = JSON.stringify(collection, null, 2);
+							const uint8Array = new TextEncoder().encode(jsonString);
+							await vscode.workspace.fs.writeFile(uri, uint8Array);
+							
+							vscode.window.showInformationMessage(`Collection file saved: ${path.basename(uri.fsPath)}`);
+						}
+					} catch (error: any) {
+						vscode.window.showErrorMessage(`Failed to save collection file: ${error.message}`);
+					}
+				} else if (message.type === 'importEnvironments') {
 					try {
 						const { fileName, fileContent } = message.data;
 						await importEnvironments(fileContent);
@@ -296,6 +315,28 @@ export function activate(context: vscode.ExtensionContext) {
 						});
 					} catch (error: any) {
 						vscode.window.showErrorMessage(`Failed to import environments: ${error.message}`);
+					}
+				} else if (message.type === 'exportEnvironments') {
+					try {
+						// Show save dialog to user
+						const uri = await vscode.window.showSaveDialog({
+							defaultUri: vscode.Uri.file(path.join(os.homedir(), 'Downloads', 'environments.json')),
+							filters: {
+								'All Files': ['*']
+							}
+						});
+						const environments = await loadEnvironments();
+						
+						if (uri) {
+							const jsonString = JSON.stringify(environments, null, 2);
+							const uint8Array = new TextEncoder().encode(jsonString);
+							await vscode.workspace.fs.writeFile(uri, uint8Array);
+							
+							// Show success message
+							vscode.window.showInformationMessage(`Environments file saved: ${path.basename(uri.fsPath)}`);
+						}
+					} catch (error: any) {
+						vscode.window.showErrorMessage(`Failed to save Environments file: ${error.message}`);
 					}
 				}
 			});
@@ -552,12 +593,7 @@ async function saveEnvironment(env: Environment) {
 	if (!fs.existsSync(environmentsDir)) {
 		fs.mkdirSync(environmentsDir, { recursive: true });
 	}
-
-	console.log('Saving environment - raw object:', typeof env, env);
-    console.log('Environment name:', env.name);
-
 	const fileName = sanitizeFileName(env.name);
-	console.log('Sanitized file name:', fileName);
 	const filePath = path.join(environmentsDir, `${fileName}.json`);
 	fs.writeFileSync(filePath, JSON.stringify(env, null, 2));
 }

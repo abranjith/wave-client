@@ -328,7 +328,6 @@ const RequestPanel: React.FC<RequestPanelProps> = ({ onSendRequest, onSaveReques
       {isRequestSaveWizardOpen && (
         <RequestSaveWizard
           isOpen={isRequestSaveWizardOpen}
-          collections={collections.map(c => c.name)}
           onClose={() => setIsRequestSaveWizardOpen(false)}
           onSave={(newCollectionName, requestName) => {
             setCollectionInfoToSave({ collectionName: newCollectionName, requestName });

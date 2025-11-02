@@ -102,11 +102,29 @@ const App: React.FC = () => {
     }
   };
 
+  const handleExportCollection = (collectionName: string) => {
+    const collection =  collectionName && collections.find((collection) => collection.name === collectionName);
+    if (vsCodeRef.current && collection) {
+      vsCodeRef.current.postMessage({
+        type: 'exportCollection',
+        data: { fileName : collection.filename }
+      });
+    }
+  };
+
   const handleImportEnvironments = (fileName: string, fileContent: string) => {
     if (vsCodeRef.current) {
       vsCodeRef.current.postMessage({
         type: 'importEnvironments',
         data: { fileName, fileContent }
+      });
+    }
+  };
+
+  const handleExportEnvironments = () => {
+    if (vsCodeRef.current) {
+      vsCodeRef.current.postMessage({
+        type: 'exportEnvironments'
       });
     }
   };
@@ -178,7 +196,9 @@ const App: React.FC = () => {
           onRequestSelect={handleRequestSelect}
           onEnvSelect={handleEnvironmentSelect}
           onImportCollection={handleImportCollection}
+          onExportCollection={handleExportCollection}
           onImportEnvironments={handleImportEnvironments}
+          onExportEnvironments={handleExportEnvironments}
         />
       </div>
 

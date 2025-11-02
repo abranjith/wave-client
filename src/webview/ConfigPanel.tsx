@@ -21,7 +21,9 @@ interface ConfigPanelProps {
   onRequestSelect: ((request: ParsedRequest) => void)
   onEnvSelect: ((environment: Environment) => void)
   onImportCollection: (fileName: string, fileContent: string, collectionType: string) => void;
+  onExportCollection: (collectionName: string) => void;
   onImportEnvironments: (fileName: string, fileContent: string) => void;
+  onExportEnvironments: () => void;
 }
 
 const TABS = [
@@ -30,7 +32,7 @@ const TABS = [
   { key: 'environments', label: 'Environments', icon: <SunIcon size={20} /> },
 ];
 
-const ConfigPanel: React.FC<ConfigPanelProps> = ({ onRequestSelect, onEnvSelect, onImportCollection, onImportEnvironments }) => {
+const ConfigPanel: React.FC<ConfigPanelProps> = ({ onRequestSelect, onEnvSelect, onImportCollection, onExportCollection, onImportEnvironments, onExportEnvironments }) => {
   return (
     <div className="flex h-full w-full overflow-hidden">
       <Tabs
@@ -98,6 +100,7 @@ const ConfigPanel: React.FC<ConfigPanelProps> = ({ onRequestSelect, onEnvSelect,
             <CollectionsPane 
                 onRequestSelect={onRequestSelect}
                 onImportCollection={onImportCollection}
+                onExportCollection={onExportCollection}
               />
           </TabsContent>
           <TabsContent value="history" className="h-full overflow-hidden">
@@ -109,6 +112,7 @@ const ConfigPanel: React.FC<ConfigPanelProps> = ({ onRequestSelect, onEnvSelect,
             <EnvironmentsPane 
                 onEnvSelect={onEnvSelect}
                 onImportEnvironments={onImportEnvironments}
+                onExportEnvironments={onExportEnvironments}
               />
           </TabsContent>
         </div>

@@ -16,7 +16,6 @@ const RequestBody: React.FC = () => {
   const updateBodyType = useAppStateStore((state) => state.updateCurrentBodyType);
   const currentBodyType = useAppStateStore((state) => state.body.currentBodyType);
   const bodyTypeSelectId = useId();
-  
 
   const handleBodyTypeChange = (str: string) => {
     const typeMap: Record<string, BodyType> = {
