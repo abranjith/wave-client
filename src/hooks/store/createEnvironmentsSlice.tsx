@@ -1,5 +1,5 @@
 import { StateCreator } from 'zustand'
-import { Environment } from '../../types/collection';
+import { Environment, EnvironmentVariable } from '../../types/collection';
 
 interface EnvironmentsSlice {
     environments: Environment[];
@@ -43,7 +43,7 @@ const createEnvironmentsSlice: StateCreator<EnvironmentsSlice> = (set) => ({
         vsCodeApi.postMessage({ type: 'loadEnvironments' });
     },
     setIsEnvironmentsLoading: (isLoading) => set({ isEnvironmentsLoading: isLoading }),
-    setEnvironmentLoadError: (error) => set({ environmentLoadError: error, isEnvironmentsLoading: false })
+    setEnvironmentLoadError: (error) => set({ environmentLoadError: error, isEnvironmentsLoading: false }),
 });
 
 export default createEnvironmentsSlice;

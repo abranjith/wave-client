@@ -48,6 +48,7 @@ export interface EnvironmentVariable {
   key: string;
   value: string;
   type: 'default' | 'secret';
+  notes?: string;
   enabled: boolean;
 }
 

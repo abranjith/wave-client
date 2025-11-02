@@ -20,6 +20,7 @@ const App: React.FC = () => {
   const setCurrentRequest = useAppStateStore((state) => state.setCurrentRequest);
   const setResponseData = useAppStateStore((state) => state.setResponseData);
   const onSendRequest = useAppStateStore((state) => state.handleSendRequest);
+  const updateEnvironment = useAppStateStore((state) => state.updateEnvironment);
   const collections = useAppStateStore((state) => state.collections);
   const vsCodeRef = useRef<any>(null);
 
@@ -71,6 +72,17 @@ const App: React.FC = () => {
       });
     }
   }
+
+  const handleSaveEnvironment = (environment: Environment) => {
+    if (vsCodeRef.current) {
+      vsCodeRef.current.postMessage({
+        type: 'saveEnvironment',
+        data: {
+          environment: JSON.stringify(environment, null, 2)
+        }
+      });
+    }
+  };
 
   const handleDownloadResponse = (data: string) => {
     if (vsCodeRef.current) {
@@ -128,6 +140,13 @@ const App: React.FC = () => {
       } else if (message.type === 'environmentsError') {
         setEnvironmentLoadError(message.error);
       }
+      else if (message.type === 'environmentUpdated') {
+        try {
+          updateEnvironment(message.environment.id, message.environment);
+        } catch (error: any) {
+          console.error('Error updating environment:', error);
+        }
+      }
     };
 
     window.addEventListener('message', messageHandler);
@@ -169,6 +188,7 @@ const App: React.FC = () => {
           <EnvironmentGrid 
             environment={selectedEnvironment}
             onBack={handleBackFromEnvironment}
+            onSaveEnvironment={handleSaveEnvironment}
           />
         </div>
       ) : (

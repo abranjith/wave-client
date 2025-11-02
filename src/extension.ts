@@ -208,6 +208,25 @@ export function activate(context: vscode.ExtensionContext) {
 							error: error.message
 						});
 					}
+				} else if (message.type === 'saveEnvironment') {
+					try {
+						const envToUpdate = JSON.parse(message.data.environment);
+						await saveEnvironment(envToUpdate);
+
+						// Show success message
+						vscode.window.showInformationMessage(`Environment saved: ${envToUpdate.name}`);
+
+						panel.webview.postMessage({
+							type: 'environmentUpdated',
+							environment: envToUpdate
+						});
+					} catch (error: any) {
+						console.error('Error saving environment:', error);
+						panel.webview.postMessage({
+							type: 'environmentsError',
+							error: error.message
+						});
+					}
 				} else if (message.type === 'downloadResponse') {
 					// Handle file download from webview
 					try {
@@ -495,7 +514,6 @@ async function loadEnvironments() {
 	return environments;
 }
 
-//update this function to accept json content and save to the default directory (~/.waveclient/environments)
 async function importEnvironments(fileContent: string) {
 	const homeDir = os.homedir();
 	const environmentsDir = path.join(homeDir, '.waveclient', 'environments');
@@ -519,15 +537,40 @@ async function importEnvironments(fileContent: string) {
 	// Environment names should be unique
 	// Invalid characters in filenames should be replaced with underscores
 	// e.g. "My Env/1" -> "My_Env_1.json"
-	const sanitizeFileName = (name: string) => {
-		return name.replace(/[^a-z0-9]/gi, '_').toLowerCase();
-	};
-
 	for (const env of environments) {
-		const filePath = path.join(environmentsDir, `${env.name}.json`);
+		const fileName = sanitizeFileName(env.name);
+		const filePath = path.join(environmentsDir, `${fileName}.json`);
 		fs.writeFileSync(filePath, JSON.stringify(env, null, 2));
 	}
 }
+
+async function saveEnvironment(env: Environment) {
+	const homeDir = os.homedir();
+	const environmentsDir = path.join(homeDir, '.waveclient', 'environments');
+
+	// Ensure the environments directory exists
+	if (!fs.existsSync(environmentsDir)) {
+		fs.mkdirSync(environmentsDir, { recursive: true });
+	}
+
+	console.log('Saving environment - raw object:', typeof env, env);
+    console.log('Environment name:', env.name);
+
+	const fileName = sanitizeFileName(env.name);
+	console.log('Sanitized file name:', fileName);
+	const filePath = path.join(environmentsDir, `${fileName}.json`);
+	fs.writeFileSync(filePath, JSON.stringify(env, null, 2));
+}
+
+function sanitizeFileName(name: string): string {
+	// Replace characters that are invalid in Windows, Linux, and macOS filesystems
+	// Invalid characters: < > : " / \ | ? * and control characters (0-31)
+	// Also replace leading/trailing spaces and dots as they can cause issues
+	return name
+		.replace(/[<>:"/\\|?*\x00-\x1F]/g, '_')
+		.replace(/^[\s.]+|[\s.]+$/g, '_')
+		.trim();
+};
 
 function base64ToUint8Array(base64: string): Uint8Array {
   const binaryString = atob(base64);
