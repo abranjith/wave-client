@@ -1,5 +1,4 @@
 import React, { useState, useMemo } from 'react';
-import { SaveIcon, SearchIcon } from 'lucide-react';
 import { Button } from '../ui/button';
 import { Label } from '../ui/label';
 import { Input } from '../ui/input';
@@ -12,6 +11,7 @@ import {
   DialogTitle,
 } from '../ui/dialog';
 import useAppStateStore from '../../hooks/store/useAppStateStore';
+import SearchableSelect from '../ui/searchable-select';
 
 interface RequestSaveWizardProps {
   isOpen: boolean;
@@ -30,6 +30,7 @@ const RequestSaveWizard: React.FC<RequestSaveWizardProps> = ({
   const [isSaving, setIsSaving] = useState(false);
   const collections = useAppStateStore((state) => state.collections);
   const collectionNames = collections.map((col) => col.name);
+  const [isCollectionInput, setIsCollectionInput] = useState(false);
 
   /**
    * Filter collections based on search query
@@ -140,6 +141,7 @@ const RequestSaveWizard: React.FC<RequestSaveWizardProps> = ({
               value={requestName}
               onChange={(e) => setRequestName(e.target.value)}
               onKeyDown={handleKeyDown}
+              className="w-full text-sm rounded bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-200 focus:outline-none"
               autoFocus
             />
           </div>
@@ -149,62 +151,35 @@ const RequestSaveWizard: React.FC<RequestSaveWizardProps> = ({
             <Label htmlFor="collection-search" className="text-sm font-medium text-slate-700 dark:text-slate-300">
               Collection Name <span className="text-red-500">*</span>
             </Label>
-            <div className="relative">
-              <SearchIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-slate-400 dark:text-slate-500" />
+            <SearchableSelect
+              id="collection-search"
+              name="Collection"
+              options={collectionNames.map((name) => ({
+                label: name,
+                value: name,
+              }))}
+              setSelectedValue={setSearchQuery}
+              selectedValue={searchQuery}
+              includeOptionToCreateNew
+              onCreateNewOption={(isSelected) => {
+                setSearchQuery('');
+                setError(null);
+                setIsCollectionInput(isSelected);
+              }}
+            />
+            {isCollectionInput && (
               <Input
-                id="collection-search"
+                id="collection-name"
                 type="text"
-                placeholder="Search or enter new collection name..."
+                placeholder="Enter new collection name..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 onKeyDown={handleKeyDown}
-                className="pl-10"
+                className="w-full text-sm rounded bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-200 focus:outline-none"
               />
-            </div>
-            {searchQuery.trim() && !isExistingCollection && (
-              <p className="text-xs text-blue-600 dark:text-blue-400 flex items-center gap-1">
-                <SaveIcon className="h-3 w-3" />
-                Press Enter or click Save to create new collection "{searchQuery.trim()}"
-              </p>
             )}
           </div>
-
-          {/* Collection List */}
-          {filteredCollectionNames.length > 0 && (
-            <div className="space-y-2">
-              <Label className="text-xs font-medium text-slate-600 dark:text-slate-400 uppercase tracking-wide">
-                {searchQuery.trim() ? 'Matching Collections' : 'Available Collections'}
-              </Label>
-              <div className="border border-slate-200 dark:border-slate-700 rounded-lg max-h-[240px] overflow-y-auto">
-                {filteredCollectionNames.map((collection, index) => (
-                  <button
-                    key={index}
-                    onClick={() => handleCollectionSelect(collection)}
-                    className={`w-full text-left px-4 py-2.5 text-sm transition-colors border-b border-slate-100 dark:border-slate-700 last:border-b-0 ${
-                      searchQuery.toLowerCase() === collection.toLowerCase()
-                        ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 font-medium'
-                        : 'text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800'
-                    }`}
-                  >
-                    {collection}
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* No Results Message */}
-          {searchQuery.trim() && filteredCollectionNames.length === 0 && (
-            <div className="border border-slate-200 dark:border-slate-700 rounded-lg p-4 text-center">
-              <p className="text-sm text-slate-600 dark:text-slate-400">
-                No matching collections found
-              </p>
-              <p className="text-xs text-slate-500 dark:text-slate-500 mt-1">
-                A new collection will be created
-              </p>
-            </div>
-          )}
-
+         
           {/* Error Message */}
           {error && (
             <div className="rounded-md bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 p-3">

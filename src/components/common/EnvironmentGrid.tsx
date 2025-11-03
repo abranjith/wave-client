@@ -35,6 +35,16 @@ const EnvironmentGrid: React.FC<EnvironmentGridProps> = ({ environment, onBack, 
   const isInitialMount = useRef(true);
   // Use a ref to track the last saved environment to avoid unnecessary saves
   const lastSavedEnvironment = useRef<Environment | null>(null);
+  // Track the current environment ID to detect when it changes
+  const currentEnvironmentId = useRef<string>(environment.id);
+  
+  // Reset isInitialMount when the environment changes (user selects a different environment)
+  useEffect(() => {
+    if (currentEnvironmentId.current !== environment.id) {
+      isInitialMount.current = true;
+      currentEnvironmentId.current = environment.id;
+    }
+  }, [environment.id]);
   
   // Call onSaveEnvironment whenever currentEnvironment changes (except on initial mount)
   useEffect(() => {

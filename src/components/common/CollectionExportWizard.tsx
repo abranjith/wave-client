@@ -12,7 +12,6 @@ import {
 } from '../ui/dialog';
 import SearchableSelect from '../ui/searchable-select';
 import useAppStateStore from '../../hooks/store/useAppStateStore';
-import DescriptiveSelect from '../ui/select-description';
 
 interface CollectionExportWizardProps {
   isOpen: boolean;
@@ -84,6 +83,8 @@ const CollectionExportWizard: React.FC<CollectionExportWizardProps> = ({
               Select Collection <span className="text-red-500">*</span>
             </Label>
             <SearchableSelect
+              id="collection-select"
+              name="Collection"
               options={collections.map((collection) => ({
                 label: collection.name,
                 value: collection.name,

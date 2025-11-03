@@ -1,8 +1,5 @@
 import { useEffect, useId, useState } from "react"
-import { CheckIcon, ChevronDownIcon } from "lucide-react"
-
-import * as React from "react"
-import * as PopoverPrimitive from "@radix-ui/react-popover"
+import { CheckIcon, ChevronDownIcon, PlusIcon } from "lucide-react"
 
 import { cn } from "../../utils/common"
 import { Button } from "./button"
@@ -13,6 +10,7 @@ import {
   CommandInput,
   CommandItem,
   CommandList,
+  CommandSeparator
 } from "./command"
 import { Label } from "./label"
 import {
@@ -22,14 +20,17 @@ import {
 } from "./popover"
 
 interface SearchableSelectProps {
-  id?: string
+  id?: string,
+  name?: string
   label?: string
   options: { label: string; value: string }[]
   setSelectedValue: (value: string) => void
-  selectedValue?: string
+  selectedValue?: string,
+  includeOptionToCreateNew?: boolean,
+  onCreateNewOption?: (isSelected: boolean) => void
 }
 
-export default function SearchableSelect({id, label, options, selectedValue, setSelectedValue}: SearchableSelectProps) {
+export default function SearchableSelect({id, name, label, options, selectedValue, setSelectedValue, includeOptionToCreateNew, onCreateNewOption}: SearchableSelectProps) {
   const idValue = id || useId()
   const [open, setOpen] = useState<boolean>(false)
   const [value, setValue] = useState<string>(selectedValue || "")
@@ -55,7 +56,7 @@ export default function SearchableSelect({id, label, options, selectedValue, set
             <span className={cn("truncate", !value && "text-muted-foreground")}>
               {value
                 ? options.find((option) => option.value === value)?.label
-                : "Select value..."}
+                : `Select ${name || 'value'}...`}
             </span>
             <ChevronDownIcon
               size={16}
@@ -69,9 +70,9 @@ export default function SearchableSelect({id, label, options, selectedValue, set
           align="start"
         >
           <Command>
-            <CommandInput placeholder="Search value..." />
+            <CommandInput placeholder={`Select ${name || 'value'}...`} />
             <CommandList>
-              <CommandEmpty>No value found.</CommandEmpty>
+              <CommandEmpty>{`No ${name || 'value'} found.`}</CommandEmpty>
               <CommandGroup>
                 {options.map((option) => (
                   <CommandItem
@@ -80,6 +81,7 @@ export default function SearchableSelect({id, label, options, selectedValue, set
                     onSelect={(currentValue) => {
                       setValue(currentValue === value ? "" : currentValue)
                       setOpen(false)
+                      onCreateNewOption && onCreateNewOption(false)
                     }}
                   >
                     {option.label}
@@ -89,6 +91,25 @@ export default function SearchableSelect({id, label, options, selectedValue, set
                   </CommandItem>
                 ))}
               </CommandGroup>
+              {includeOptionToCreateNew && onCreateNewOption && (
+              <>
+              <CommandSeparator />
+              <CommandGroup>
+                <Button
+                  variant="ghost"
+                  className="w-full justify-start font-normal"
+                  onClick={() => { setOpen(false); onCreateNewOption(true); }}
+                >
+                  <PlusIcon
+                    size={16}
+                    className="-ms-2 opacity-60"
+                    aria-hidden="true"
+                  />
+                  {name ? `Create New ${name}` : "Create New"}
+                </Button>
+              </CommandGroup>
+              </>
+            )}
             </CommandList>
           </Command>
         </PopoverContent>

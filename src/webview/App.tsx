@@ -13,6 +13,7 @@ const App: React.FC = () => {
   const refreshCollections = useAppStateStore((state) => state.refreshCollections);
   const setCollections = useAppStateStore((state) => state.setCollections);
   const updateCollection = useAppStateStore((state) => state.updateCollection);
+  const addCollection = useAppStateStore((state) => state.addCollection);
   const setCollectionLoadError = useAppStateStore((state) => state.setCollectionLoadError);
   const refreshEnvironments = useAppStateStore((state) => state.refreshEnvironments);
   const setEnvironments = useAppStateStore((state) => state.setEnvironments);
@@ -147,6 +148,12 @@ const App: React.FC = () => {
       } else if (message.type === 'collectionUpdated') {
         try {
           const collection = parseCollection(message.collection, message.collection.filename);
+          //if collection does not exist, add it
+          const existingCollection = collections.find((c) => c.name === collection.name);
+          if (!existingCollection) {
+            addCollection(collection);
+            return;
+          }
           updateCollection(collection.name, collection);
         } catch (error: any) {
           console.error('Error updating collection:', error);

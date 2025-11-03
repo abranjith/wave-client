@@ -268,7 +268,7 @@ const RequestPanel: React.FC<RequestPanelProps> = ({ onSendRequest, onSaveReques
         <StyledInput
           id={urlInputId}
           type="text"
-          className="bg-white border-slate-300 focus:border-blue-500 dark:bg-slate-800 dark:border-slate-600 dark:focus:border-blue-400" 
+          className="bg-white border-slate-300 focus:border-blue-500 dark:bg-slate-800 dark:border-slate-600 dark:focus:border-blue-400"
           value={getUrlWithoutProtocol(url)}
           onChange={setUrl}
           styledValue={getStyledText(getUrlWithoutProtocol(url))}
