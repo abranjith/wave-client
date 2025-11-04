@@ -1,4 +1,4 @@
-import React, { useState, useId, useEffect } from 'react';
+import React, { useState, useId, useEffect, useMemo } from 'react';
 import { SendHorizonalIcon, SaveIcon } from 'lucide-react';
 import { Button } from "../components/ui/button"
 import { StyledInput } from "../components/ui/styledinput"
@@ -87,17 +87,20 @@ const RequestPanel: React.FC<RequestPanelProps> = ({ onSendRequest, onSaveReques
     return withoutProtocol === '/' ? '' : withoutProtocol;
   }
 
-  const getStyledText = (text: string) => {
+  // Memoize the styled text so it updates when activeEnvironment or url changes
+  const styledUrlText = useMemo(() => {
     const activeEnvVariables = new Set<string>();
-    if (activeEnvironment) {
-      for (const [key, value] of Object.entries(activeEnvironment.values)) {
-        if (value.enabled) {
-          activeEnvVariables.add(key);
+    if (activeEnvironment && activeEnvironment.values) {
+      activeEnvironment.values.forEach((envVar) => {
+        if (envVar.enabled && envVar.value) {
+          activeEnvVariables.add(envVar.key);
         }
-      }
+      });
     }
-    return renderParameterizedText(text, activeEnvVariables);
-  };
+    const urlWithoutProtocol = getUrlWithoutProtocol(url);
+    console.log('Rendering styled URL text with active environment variables:', Array.from(activeEnvVariables), urlWithoutProtocol);
+    return renderParameterizedText(urlWithoutProtocol, activeEnvVariables);
+  }, [activeEnvironment, url]);
 
   const handleSaveRequest = () => {
     // Get collection and folder names from folderPath
@@ -118,6 +121,7 @@ const RequestPanel: React.FC<RequestPanelProps> = ({ onSendRequest, onSaveReques
     } else {
       const selectedEnv = environments?.find((env) => env.id === value);
       if (selectedEnv) {
+        console.log('Setting active environment to:', selectedEnv);
         setActiveEnvironment(selectedEnv);
       }
     }
@@ -271,7 +275,7 @@ const RequestPanel: React.FC<RequestPanelProps> = ({ onSendRequest, onSaveReques
           className="bg-white border-slate-300 focus:border-blue-500 dark:bg-slate-800 dark:border-slate-600 dark:focus:border-blue-400"
           value={getUrlWithoutProtocol(url)}
           onChange={setUrl}
-          styledValue={getStyledText(getUrlWithoutProtocol(url))}
+          styledValue={styledUrlText}
           placeholder="Enter request URL..."
         />
 

@@ -11,7 +11,7 @@ export function renderParameterizedText(text: string, existingParams: Set<string
       if (!match) return <span key={index}>{segment}</span>;
 
       const name = match[1];
-      const exists = existingParams?.has(name);
+      const exists = existingParams && Array.from(existingParams).some(param => param.toLowerCase() === name.toLowerCase());
 
       return (
         <span
