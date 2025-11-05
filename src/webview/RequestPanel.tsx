@@ -1,7 +1,7 @@
 import React, { useState, useId, useEffect, useMemo } from 'react';
 import { SendHorizonalIcon, SaveIcon } from 'lucide-react';
 import { Button } from "../components/ui/button"
-import { StyledInput } from "../components/ui/styledinput"
+import StyledInput from "../components/ui/styled-input"
 import RequestParams from "../components/common/RequestParams"
 import RequestHeaders from "../components/common/RequestHeaders"
 import RequestBody from "../components/common/RequestBody"
@@ -66,7 +66,6 @@ const RequestPanel: React.FC<RequestPanelProps> = ({ onSendRequest, onSaveReques
   const setActiveEnvironment = useAppStateStore((state) => state.setActiveEnvironment);
   const getParsedRequest = useAppStateStore((state) => state.getParsedRequest);
   const requestName = useAppStateStore((state) => state.name || 'Untitled Request');
-  const collections = useAppStateStore((state) => state.collections);
 
   const [isRequestSaveWizardOpen, setIsRequestSaveWizardOpen] = useState(false);
   const [collectionInfoToSave, setCollectionInfoToSave] = useState<CollectionToSaveInfo | undefined>(undefined);
@@ -98,7 +97,6 @@ const RequestPanel: React.FC<RequestPanelProps> = ({ onSendRequest, onSaveReques
       });
     }
     const urlWithoutProtocol = getUrlWithoutProtocol(url);
-    console.log('Rendering styled URL text with active environment variables:', Array.from(activeEnvVariables), urlWithoutProtocol);
     return renderParameterizedText(urlWithoutProtocol, activeEnvVariables);
   }, [activeEnvironment, url]);
 
@@ -121,7 +119,6 @@ const RequestPanel: React.FC<RequestPanelProps> = ({ onSendRequest, onSaveReques
     } else {
       const selectedEnv = environments?.find((env) => env.id === value);
       if (selectedEnv) {
-        console.log('Setting active environment to:', selectedEnv);
         setActiveEnvironment(selectedEnv);
       }
     }
@@ -274,7 +271,7 @@ const RequestPanel: React.FC<RequestPanelProps> = ({ onSendRequest, onSaveReques
           type="text"
           className="bg-white border-slate-300 focus:border-blue-500 dark:bg-slate-800 dark:border-slate-600 dark:focus:border-blue-400"
           value={getUrlWithoutProtocol(url)}
-          onChange={setUrl}
+          onChange={e => setUrl(e.target.value)}
           styledValue={styledUrlText}
           placeholder="Enter request URL..."
         />

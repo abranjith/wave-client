@@ -3,7 +3,7 @@ import { Input } from "./input";
 import { cn } from "../../utils/common";
 import { JSX } from "react";
 
-interface StyledInputProps extends Omit<React.ComponentProps<"input">, 'onChange'> {
+interface StyledInputProps extends React.ComponentProps<"input"> {
   /**
    * Controlled value for the input
    */
@@ -13,17 +13,13 @@ interface StyledInputProps extends Omit<React.ComponentProps<"input">, 'onChange
    */
   styledValue: JSX.Element;
   /**
-   * Change handler for the input
-   */
-  onChange: (value: string) => void;
-  /**
    * Additional className for the container
    */
   containerClassName?: string;
 }
 
 const StyledInput = React.forwardRef<HTMLInputElement, StyledInputProps>(
-  ({ styledValue, value, onChange, className, containerClassName, placeholder, ...props }, ref) => {
+  ({ styledValue, value, className, containerClassName, placeholder, ...props }, ref) => {
     const inputRef = React.useRef<HTMLInputElement>(null);
     const overlayRef = React.useRef<HTMLDivElement>(null);
 
@@ -36,10 +32,6 @@ const StyledInput = React.forwardRef<HTMLInputElement, StyledInputProps>(
         overlayRef.current.scrollLeft = inputRef.current.scrollLeft;
       }
     }, []);
-
-    const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-      onChange(e.target.value);
-    };
 
     return (
       <div className={cn("relative flex-1", containerClassName)}>
@@ -61,7 +53,6 @@ const StyledInput = React.forwardRef<HTMLInputElement, StyledInputProps>(
             className
           )}
           value={value}
-          onChange={handleChange}
           onScroll={handleScroll}
           placeholder={placeholder}
           {...props}
@@ -81,8 +72,8 @@ const StyledInput = React.forwardRef<HTMLInputElement, StyledInputProps>(
             "text-sm",
             // Use font-medium to match the parameterized-text class styling
             "font-medium tracking-normal",
-            // Handle overflow and text wrapping
-            "overflow-x-auto overflow-y-hidden whitespace-nowrap",
+            // Handle overflow and text wrapping - PRESERVE whitespace!
+            "overflow-x-auto overflow-y-hidden whitespace-pre",
             // Hide scrollbar
             "[scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden",
             // Text color
@@ -106,4 +97,4 @@ const StyledInput = React.forwardRef<HTMLInputElement, StyledInputProps>(
 
 StyledInput.displayName = "StyledInput";
 
-export { StyledInput };
+export default StyledInput;

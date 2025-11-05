@@ -1,30 +1,56 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, JSX } from 'react';
 import { Trash2Icon, PlusIcon } from 'lucide-react';
 import { Button } from '../ui/button';
-import { Input } from '../ui/input';
+import StyledInput from "../ui/styled-input"
 import useAppStateStore from '../../hooks/store/useAppStateStore';
+import { renderParameterizedText } from '../../utils/styling';
 
 const RequestParams: React.FC = () => {
   const params = useAppStateStore((state) => state.params || []);
   const addEmptyParam = useAppStateStore((state) => state.addEmptyParam);
   const upsertParam = useAppStateStore((state) => state.upsertParam);
   const removeParam = useAppStateStore((state) => state.removeParam);
+  const activeEnvironment = useAppStateStore((state) => state.activeEnvironment);
+  const activeEnvVariables = new Set<string>();
+    if (activeEnvironment && activeEnvironment.values) {
+      activeEnvironment.values.forEach((envVar) => {
+        if (envVar.enabled && envVar.value) {
+          activeEnvVariables.add(envVar.key);
+        }
+      });
+    }
 
   // Local state to track input values for all params
   const [localParams, setLocalParams] = useState<{ [id: string]: { key: string; value: string } }>({});
+  const [styledLocalParams, setStyledLocalParams] = useState<{ [id: string]: { key: JSX.Element; value: JSX.Element } }>({});
 
   // Sync local state when global params change (e.g., when adding/removing params)
   useEffect(() => {
     const newLocalParams: { [id: string]: { key: string; value: string } } = {};
+    const newStyledLocalParams: { [id: string]: { key: JSX.Element; value: JSX.Element } } = {};
     params.forEach(param => {
       if (!localParams[param.id]) {
         newLocalParams[param.id] = { key: param.key, value: param.value };
+        newStyledLocalParams[param.id] = { key: renderParameterizedText(param.key, activeEnvVariables), value: renderParameterizedText(param.value, activeEnvVariables) };
       } else {
         newLocalParams[param.id] = localParams[param.id];
+        newStyledLocalParams[param.id] = { key: renderParameterizedText(localParams[param.id].key, activeEnvVariables), value: renderParameterizedText(localParams[param.id].value, activeEnvVariables) };
       }
     });
     setLocalParams(newLocalParams);
+    setStyledLocalParams(newStyledLocalParams);
   }, [params.length]); // Only trigger when params are added/removed
+
+  useEffect(() => {
+    const newStyledLocalParams: { [id: string]: { key: JSX.Element; value: JSX.Element } } = {};
+    Object.keys(localParams).forEach(id => {
+      newStyledLocalParams[id] = {
+        key: renderParameterizedText(localParams[id].key, activeEnvVariables),
+        value: renderParameterizedText(localParams[id].value, activeEnvVariables)
+      };
+    });
+    setStyledLocalParams(newStyledLocalParams);
+  }, [activeEnvVariables]);
 
   const updateLocalParam = (id: string, field: 'key' | 'value', newValue: string) => {
     setLocalParams(prev => ({
@@ -32,6 +58,13 @@ const RequestParams: React.FC = () => {
       [id]: {
         ...prev[id],
         [field]: newValue
+      }
+    }));
+    setStyledLocalParams(prev => ({
+      ...prev,
+      [id]: {
+        ...prev[id],
+        [field]: renderParameterizedText(newValue, activeEnvVariables)
       }
     }));
   };
@@ -74,25 +107,27 @@ const RequestParams: React.FC = () => {
             {params.map((param, index) => (
               <tr key={param.id} className="border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/50">
                 <td className="py-2 px-3">
-                  <Input
+                  <StyledInput
                     type="text"
                     placeholder="Parameter key"
                     value={localParams[param.id]?.key ?? param.key}
+                    styledValue={styledLocalParams[param.id]?.key ?? renderParameterizedText(param.key, activeEnvVariables)}
                     onChange={e => updateLocalParam(param.id, 'key', e.target.value)}
                     onBlur={() => commitParam(param.id)}
                     onKeyDown={e => handleKeyDown(e, param.id)}
-                    className="w-full text-sm rounded bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-200 focus:outline-none"
+                    className="bg-white border-slate-300 focus:border-blue-500 dark:bg-slate-800 dark:border-slate-600 dark:focus:border-blue-400"
                   />
                 </td>
                 <td className="py-2 px-3">
-                  <Input
+                  <StyledInput
                     type="text"
                     placeholder="Parameter value"
                     value={localParams[param.id]?.value ?? param.value}
+                    styledValue={styledLocalParams[param.id]?.value ?? renderParameterizedText(param.value, activeEnvVariables)}
                     onChange={e => updateLocalParam(param.id, 'value', e.target.value)}
                     onBlur={() => commitParam(param.id)}
                     onKeyDown={e => handleKeyDown(e, param.id)}
-                    className="w-full text-sm rounded bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-200 focus:outline-none"
+                    className="bg-white border-slate-300 focus:border-blue-500 dark:bg-slate-800 dark:border-slate-600 dark:focus:border-blue-400"
                   />
                 </td>
                 <td className="py-2 px-3">

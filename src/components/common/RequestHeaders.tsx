@@ -1,30 +1,56 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, JSX } from 'react';
 import { Trash2Icon, PlusIcon } from 'lucide-react';
 import { Button } from '../ui/button';
-import { Input } from '../ui/input';
+import StyledInput from "../ui/styled-input";
 import useAppStateStore from '../../hooks/store/useAppStateStore';
+import { renderParameterizedText } from '../../utils/styling';
 
 const RequestHeaders: React.FC = () => {
   const headers = useAppStateStore((state) => state.headers || []);
   const addEmptyHeader = useAppStateStore((state) => state.addEmptyHeader);
   const upsertHeader = useAppStateStore((state) => state.upsertHeader);
   const removeHeader = useAppStateStore((state) => state.removeHeader);
+  const activeEnvironment = useAppStateStore((state) => state.activeEnvironment);
+  const activeEnvVariables = new Set<string>();
+    if (activeEnvironment && activeEnvironment.values) {
+      activeEnvironment.values.forEach((envVar) => {
+        if (envVar.enabled && envVar.value) {
+          activeEnvVariables.add(envVar.key);
+        }
+      });
+    }
 
   // Local state to track input values for all headers
   const [localHeaders, setLocalHeaders] = useState<{ [id: string]: { key: string; value: string } }>({});
+  const [styledLocalHeaders, setStyledLocalHeaders] = useState<{ [id: string]: { key: JSX.Element; value: JSX.Element } }>({});
 
   // Sync local state when global headers change (e.g., when adding/removing headers)
   useEffect(() => {
     const newLocalHeaders: { [id: string]: { key: string; value: string } } = {};
+    const newStyledLocalHeaders: { [id: string]: { key: JSX.Element; value: JSX.Element } } = {};
     headers.forEach(header => {
       if (!localHeaders[header.id]) {
         newLocalHeaders[header.id] = { key: header.key, value: header.value };
+        newStyledLocalHeaders[header.id] = { key: renderParameterizedText(header.key, activeEnvVariables), value: renderParameterizedText(header.value, activeEnvVariables) };
       } else {
         newLocalHeaders[header.id] = localHeaders[header.id];
+        newStyledLocalHeaders[header.id] = { key: renderParameterizedText(localHeaders[header.id].key, activeEnvVariables), value: renderParameterizedText(localHeaders[header.id].value, activeEnvVariables) };
       }
     });
     setLocalHeaders(newLocalHeaders);
+    setStyledLocalHeaders(newStyledLocalHeaders);
   }, [headers.length]); // Only trigger when headers are added/removed
+
+  useEffect(() => {
+    const newStyledLocalHeaders: { [id: string]: { key: JSX.Element; value: JSX.Element } } = {};
+    Object.keys(localHeaders).forEach(id => {
+      newStyledLocalHeaders[id] = {
+        key: renderParameterizedText(localHeaders[id].key, activeEnvVariables),
+        value: renderParameterizedText(localHeaders[id].value, activeEnvVariables)
+      };
+    });
+    setStyledLocalHeaders(newStyledLocalHeaders);
+  }, [activeEnvVariables]);
 
   const updateLocalHeader = (id: string, field: 'key' | 'value', newValue: string) => {
     setLocalHeaders(prev => ({
@@ -32,6 +58,13 @@ const RequestHeaders: React.FC = () => {
       [id]: {
         ...prev[id],
         [field]: newValue
+      }
+    }));
+    setStyledLocalHeaders(prev => ({
+      ...prev,
+      [id]: {
+        ...prev[id],
+        [field]: renderParameterizedText(newValue, activeEnvVariables)
       }
     }));
   };
@@ -74,25 +107,27 @@ const RequestHeaders: React.FC = () => {
             {headers.map((header, index) => (
               <tr key={header.id} className="border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/50">
                 <td className="py-2 px-3">
-                  <Input
+                  <StyledInput
                     type="text"
                     placeholder="Header name (e.g., Content-Type)"
                     value={localHeaders[header.id]?.key ?? header.key}
+                    styledValue={styledLocalHeaders[header.id]?.key ?? renderParameterizedText(header.key, activeEnvVariables)}
                     onChange={e => updateLocalHeader(header.id, 'key', e.target.value)}
                     onBlur={() => commitHeader(header.id)}
                     onKeyDown={e => handleKeyDown(e, header.id)}
-                    className="w-full text-sm rounded bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-200 focus:outline-none"
+                    className="bg-white border-slate-300 focus:border-blue-500 dark:bg-slate-800 dark:border-slate-600 dark:focus:border-blue-400"
                   />
                 </td>
                 <td className="py-2 px-3">
-                  <Input
+                  <StyledInput
                     type="text"
                     placeholder="Header value (e.g., application/json)"
                     value={localHeaders[header.id]?.value ?? header.value}
+                    styledValue={styledLocalHeaders[header.id]?.value ?? renderParameterizedText(header.value, activeEnvVariables)}
                     onChange={e => updateLocalHeader(header.id, 'value', e.target.value)}
                     onBlur={() => commitHeader(header.id)}
                     onKeyDown={e => handleKeyDown(e, header.id)}
-                    className="w-full text-sm rounded bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-200 focus:outline-none"
+                    className="bg-white border-slate-300 focus:border-blue-500 dark:bg-slate-800 dark:border-slate-600 dark:focus:border-blue-400"
                   />
                 </td>
                 <td className="py-2 px-3">

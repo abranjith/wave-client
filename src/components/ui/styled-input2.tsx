@@ -1,9 +1,9 @@
 // StyledInput.tsx
-import React, { useRef, useEffect } from 'react';
+import React, { useRef, useEffect, JSX } from 'react';
 import { cn } from "../../utils/common";
 
 interface StyledInputProps extends Omit<React.HTMLAttributes<HTMLDivElement>, 'onChange'> {
-  value: string;
+  value: JSX.Element;
   onChange: (plainText: string) => void;
 }
 
@@ -14,7 +14,7 @@ interface StyledInputProps extends Omit<React.HTMLAttributes<HTMLDivElement>, 'o
  * @param value - The HTML string to render inside the editor.
  * @param onChange - Callback with the plain text.
  */
-function StyledInput({ value, onChange, className, ...props }: StyledInputProps) {
+function StyledInput2({ value, onChange, className, ...props }: StyledInputProps) {
   const editorRef = useRef<HTMLDivElement>(null);
 
   // 1. Handle user input
@@ -32,17 +32,34 @@ function StyledInput({ value, onChange, className, ...props }: StyledInputProps)
   // 2. Synchronize the 'value' prop (HTML) with the editor
   // This runs when the `value` prop from the parent component changes.
   useEffect(() => {
-    // We check if the parent's HTML value is different from the
-    // editor's current HTML.
-    // This check is the key to preventing cursor jumps.
-    if (editorRef.current && value !== editorRef.current.innerHTML) {
-      editorRef.current.innerHTML = value;
+    // Since value is a JSX.Element, we need to render it into the contentEditable div
+    // We'll use a temporary container to convert JSX to HTML string
+    if (editorRef.current) {
+      const tempDiv = document.createElement('div');
+      const root = (window as any).createRoot ? (window as any).createRoot(tempDiv) : null;
+      
+      if (root) {
+        root.render(value);
+        setTimeout(() => {
+          if (editorRef.current && tempDiv.innerHTML !== editorRef.current.innerHTML) {
+            editorRef.current.innerHTML = tempDiv.innerHTML;
+          }
+          root.unmount();
+        }, 0);
+      } else {
+        // Fallback: just set innerHTML directly from JSX string representation
+        // This won't work perfectly but prevents the error
+        const htmlString = String(value);
+        if (editorRef.current.innerHTML !== htmlString) {
+          editorRef.current.innerHTML = htmlString;
+        }
+      }
     }
   }, [value]); // Only re-run this effect if the `value` prop changes
 
   return (
     <div
-      {...props} // Pass down props like `className`, `style`, etc.
+      {...props}
       contentEditable={true}
       ref={editorRef}
       onInput={handleInput}
@@ -56,4 +73,4 @@ function StyledInput({ value, onChange, className, ...props }: StyledInputProps)
   );
 }
 
-export default StyledInput;
+export default StyledInput2;
