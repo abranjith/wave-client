@@ -385,3 +385,35 @@ export function getContentTypeFromBody(
       return 'application/octet-stream';
   }
 }
+
+/**
+ * Resolves parameterized placeholders in a string using environment variables
+ * Supports {{variable}} syntax
+ * @param value - The string value that may contain placeholders
+ * @param environmentVariables - Map of environment variables (key -> value)
+ * @returns Object with resolved string and array of unresolved placeholders
+ */
+export function resolveParameterizedValue(
+  value: string,
+  environmentVariables: Map<string, string>
+): { resolved: string; unresolved: string[] } {
+  const unresolved: string[] = [];
+  const placeholderRegex = /\{\{([^}]+)\}\}/g;
+  
+  const resolved = value.replace(placeholderRegex, (match, variableName) => {
+    const trimmedName = variableName.trim();
+    
+    const matchingKey = Array.from(environmentVariables.keys()).find(
+      key => key.toLowerCase() === trimmedName.toLowerCase()
+    );
+    
+    if (matchingKey) {
+      return environmentVariables.get(matchingKey)!;
+    } else {
+      unresolved.push(trimmedName);
+      return match; // Keep original placeholder if unresolved
+    }
+  });
+  
+  return { resolved, unresolved };
+}

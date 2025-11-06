@@ -22,6 +22,7 @@ const App: React.FC = () => {
   const setResponseData = useAppStateStore((state) => state.setResponseData);
   const onSendRequest = useAppStateStore((state) => state.handleSendRequest);
   const updateEnvironment = useAppStateStore((state) => state.updateEnvironment);
+  const activeEnvironment = useAppStateStore((state) => state.activeEnvironment);
   const collections = useAppStateStore((state) => state.collections);
   const vsCodeRef = useRef<any>(null);
 
@@ -49,7 +50,7 @@ const App: React.FC = () => {
 
   const handleSendRequest = () => {
     if (vsCodeRef.current) {
-      onSendRequest(vsCodeRef.current);
+      onSendRequest(vsCodeRef.current, activeEnvironment?.values);
     }
     else{
       console.error('VS Code API is not available.');

@@ -17,7 +17,6 @@ const ResponsePanel: React.FC<ResponsePanelProps> = ({ onDownloadResponse }) => 
   const [activeTab, setActiveTab] = useState<'body' | 'headers'>('body');
   const response = useAppStateStore((state) => state.responseData);
 
-  // Show a placeholder when no response is available
   if (!response) {
     return (
       <div className="w-full h-full bg-white dark:bg-slate-900 flex items-center justify-center">

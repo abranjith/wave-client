@@ -1,6 +1,6 @@
 import { StateCreator } from 'zustand'
-import { ParsedRequest, HeaderRow, ParamRow, ResponseData, RequestBodyType, RequestBodyTextType, FormField, MultiPartFormField, CollectionReference } from '../../types/collection';
-import { parseUrlQueryParams, getContentTypeFromBody } from '../../utils/common';
+import { ParsedRequest, HeaderRow, ParamRow, ResponseData, RequestBodyType, RequestBodyTextType, FormField, MultiPartFormField, CollectionReference, EnvironmentVariable } from '../../types/collection';
+import { parseUrlQueryParams, getContentTypeFromBody, resolveParameterizedValue } from '../../utils/common';
 import { FileWithPreview } from '../useFileUpload';
 
 interface RequestTextBody {
@@ -44,6 +44,7 @@ interface CurrentRequestSlice {
     requestError: string | null;
     isCancelled: boolean;
     collectionRef: CollectionReference | null;
+    errorMessage: string;
 
     // Core request methods
     setCurrentRequest: (request: ParsedRequest | null) => void;
@@ -86,51 +87,70 @@ interface CurrentRequestSlice {
     // State management
     setIsRequestProcessing: (isLoading: boolean) => void;
     setRequestError: (error: string | null) => void;
+    setErrorMessage: (error: string) => void;
 
-    handleSendRequest: (vsCodeApi: any) => void;
+    handleSendRequest: (vsCodeApi: any, activeEnvironmentVariables?: EnvironmentVariable[] | null) => void;
 }
 
-const getDictFromHeaderRows = (headerRows: HeaderRow[]): Record<string, string | string[]> => {
+const getDictFromHeaderRows = (headerRows: HeaderRow[], envVarsMap: Map<string, string>, unresolved: Set<string>): Record<string, string | string[]> => {
     const headers: Record<string, string | string[]> = {};
     
-    headerRows.forEach(header => {
-      if (header.key.trim()) {
-        const key = header.key.trim();
-        const value = header.value;
+    for (const header of headerRows) {
+        if (header.key && header.key.trim() && !header.disabled) {
+            // Resolve header key
+            const keyResult = resolveParameterizedValue(header.key, envVarsMap);
+            keyResult.unresolved.forEach(u => unresolved.add(u));
+            const resolvedKey = keyResult.resolved.trim();
 
-        if (headers[key]) {
-          // Key already exists, convert to array or add to existing array
-          if (Array.isArray(headers[key])) {
-            (headers[key] as string[]).push(value);
-          } else {
-            headers[key] = [headers[key] as string, value];
-          }
-        } else {
-          headers[key] = value;
+            // Resolve header value
+            const valueResult = resolveParameterizedValue(header.value, envVarsMap);
+            valueResult.unresolved.forEach(u => unresolved.add(u));
+            const resolvedValue = valueResult.resolved;
+
+            if (headers[resolvedKey]) {
+                // Key already exists, convert to array or add to existing array
+                if (Array.isArray(headers[resolvedKey])) {
+                    (headers[resolvedKey] as string[]).push(resolvedValue);
+                } else {
+                    headers[resolvedKey] = [headers[resolvedKey] as string, resolvedValue];
+                }
+            } else {
+                headers[resolvedKey] = resolvedValue;
+            }
         }
-      }
-    });
+    }
+
     return headers;
 }
 
-const getURLSearchParamsFromParamRows = (paramRows: ParamRow[]): URLSearchParams => {
-    const urlParams = new URLSearchParams();
-    
-    paramRows.forEach(param => {
-        if (param.key.trim() && !param.disabled) {
-            const key = param.key.trim();
-            const value = param.value;
-            urlParams.append(key, value);
+const getURLSearchParamsFromParamRows = (paramRows: ParamRow[], envVarsMap: Map<string, string>, unresolved: Set<string>): URLSearchParams => {
+    const resolvedParams: Array<{key: string, value: string}> = [];
+    for (const param of paramRows) {
+        if (param.key && param.key.trim() && !param.disabled) {
+            // Resolve param key
+            const keyResult = resolveParameterizedValue(param.key, envVarsMap);
+            keyResult.unresolved.forEach(u => unresolved.add(u));
+            const resolvedKey = keyResult.resolved.trim();
+
+            // Resolve param value
+            const valueResult = resolveParameterizedValue(param.value, envVarsMap);
+            valueResult.unresolved.forEach(u => unresolved.add(u));
+            const resolvedValue = valueResult.resolved;
+
+            resolvedParams.push({ key: resolvedKey, value: resolvedValue });
         }
+    }
+    const urlParams = new URLSearchParams();
+    resolvedParams.forEach(param => {
+        urlParams.append(param.key, param.value);
     });
-    
     return urlParams;
 };
 
 const getParamRowsAsString = (paramRows: ParamRow[]): string => {
     const params: string[] = [];
     paramRows.forEach(param => {
-        if (param.key.trim() && !param.disabled) {
+        if (param.key && param.key.trim() && !param.disabled) {
             const key = param.key.trim();
             const value = param.value;
             params.push(`${key}=${value}`);
@@ -174,7 +194,9 @@ const updateUrlWithParams = (currentUrl: string | null, paramRows: ParamRow[]): 
  */
 async function convertBodyToRequestBody(
     body: RequestBody,
-    bodyType: RequestBodyType
+    bodyType: RequestBodyType,
+    envVarsMap: Map<string, string>,
+    unresolved: Set<string>
 ): Promise<string | FormData | Record<string, string> | ArrayBuffer | null> {
     if (!body) {
         return null;
@@ -186,7 +208,13 @@ async function convertBodyToRequestBody(
             
         case 'text':
             // Text-based content types are sent as strings
-            return body.textData?.data || null;
+            let txtBody = body.textData?.data || null;
+            if (txtBody) {
+                const bodyResult = resolveParameterizedValue(txtBody, envVarsMap);
+                bodyResult.unresolved.forEach(u => unresolved.add(u));
+                txtBody = bodyResult.resolved;
+            }
+            return txtBody;
             
         case 'binary':
             // Binary data from file upload
@@ -200,22 +228,29 @@ async function convertBodyToRequestBody(
         case 'multipart':
             // FormData is sent as-is
             const multiPartData = body.multiPartFormData?.data;
+            
             if (multiPartData instanceof FormData) {
                 return multiPartData;
             }
             //construct FormData from MultiPartFormField[]
             if (Array.isArray(multiPartData)) {
                 const formData = new FormData();
-                multiPartData.forEach(field => {
-                    if (field.key.trim()) {
-                        //if file field and value is File, append as file
+                for (const field of multiPartData) {
+                    if (field.key && field.key.trim()) {
+                        // Resolve key
+                        const keyResult = resolveParameterizedValue(field.key, envVarsMap);
+                        keyResult.unresolved.forEach(u => unresolved.add(u));
+                        const resolvedKey = keyResult.resolved;
+
                         if (field.value instanceof File) {
-                            formData.append(field.key, field.value, field.value.name);
+                            formData.append(resolvedKey, field.value, field.value.name);
                         } else if (field.value !== undefined) {
-                            formData.append(field.key, field.value || '');
+                            const valueResult = resolveParameterizedValue(field.value || '', envVarsMap);
+                            valueResult.unresolved.forEach(u => unresolved.add(u));
+                            formData.append(resolvedKey, valueResult.resolved);
                         }
                     }
-                });
+                }
                 return formData;
             }
             return null;
@@ -226,18 +261,31 @@ async function convertBodyToRequestBody(
             if (urlEncodedFormData) {
                 const formFields = Array.isArray(urlEncodedFormData) ? urlEncodedFormData as FormField[] : [];
                 const dataRecord: Record<string, string> = {};
-                formFields.forEach(field => {
-                    if (field.key.trim() && field.value !== undefined) {
-                        dataRecord[field.key] = field.value || '';
+                for (const field of formFields) {
+                    if (field.key && field.key.trim() && field.value !== undefined) {
+                        const keyResult = resolveParameterizedValue(field.key, envVarsMap);
+                        keyResult.unresolved.forEach(u => unresolved.add(u));
+                        const resolvedKey = keyResult.resolved;
+
+                        const valueResult = resolveParameterizedValue(field.value || '', envVarsMap);
+                        valueResult.unresolved.forEach(u => unresolved.add(u));
+
+                        dataRecord[resolvedKey] = valueResult.resolved;
                     }
-                });
+                }
                 return dataRecord;
             }
             return null;
             
         default:
             // Default to string for unknown types
-            return body.textData?.data || null;
+            let defaultTxtBody = body.textData?.data || null;
+            if (defaultTxtBody) {
+                const bodyResult = resolveParameterizedValue(defaultTxtBody, envVarsMap);
+                bodyResult.unresolved.forEach(u => unresolved.add(u));
+                defaultTxtBody = bodyResult.resolved;
+            }
+            return defaultTxtBody;
     }
 }
 
@@ -270,6 +318,7 @@ const createCurrentRequestSlice: StateCreator<CurrentRequestSlice> = (set, get) 
     requestError: null,
     isCancelled: false,
     collectionRef: null,
+    errorMessage: '',
 
     setCurrentRequest: (request) => set({
         id: request?.id ? request.id : crypto.randomUUID(),
@@ -553,9 +602,10 @@ const createCurrentRequestSlice: StateCreator<CurrentRequestSlice> = (set, get) 
     // State management
     setIsRequestProcessing: (isProcessing) => set({ isRequestProcessing: isProcessing }),
     setRequestError: (error) => set({ requestError: error }),
+    setErrorMessage: (error) => set({ errorMessage: error }),
 
     //Add method to start Processing request
-    handleSendRequest: async (vsCodeApi) => {
+    handleSendRequest: async (vsCodeApi, activeEnvironmentVariables) => {
         const state = get();
         
         if (!state.method || !state.url) {
@@ -567,12 +617,31 @@ const createCurrentRequestSlice: StateCreator<CurrentRequestSlice> = (set, get) 
             return;
         }
 
-        // Set processing state
-        set({ isRequestProcessing: true, isCancelled: false, requestError: null });
+        // Create environment variables map from active environment
+        const envVarsMap = new Map<string, string>();
+        if (activeEnvironmentVariables) {
+            activeEnvironmentVariables.forEach(variable => {
+                if (variable.enabled) {
+                    envVarsMap.set(variable.key, variable.value);
+                }
+            });
+        }
+
+        // Track all unresolved placeholders
+        const allUnresolved: Set<string> = new Set();
+
+        // Set processing state and reset error message
+        set({ isRequestProcessing: true, isCancelled: false, requestError: null, errorMessage: '' });
         
-        // Convert headers and params to expected format
-        const headers = state.headers ? getDictFromHeaderRows(state.headers) : {};
-        //if headers does not have content-type and body is present, set content-type from body
+        // Resolve URL
+        const urlResult = resolveParameterizedValue(state.url, envVarsMap);
+        urlResult.unresolved.forEach(u => allUnresolved.add(u));
+        let finalUrl = urlResult.resolved;
+
+        // Resolve and convert headers
+        const headers = getDictFromHeaderRows(state.headers || [], envVarsMap, allUnresolved);
+
+        // If headers does not have content-type and body is present, set content-type from body
         if (state.body && state.body.currentBodyType !== 'none') {
             const contentTypeKey = Object.keys(headers).find(key => key.toLowerCase() === 'content-type');
             if (!contentTypeKey) {
@@ -582,18 +651,29 @@ const createCurrentRequestSlice: StateCreator<CurrentRequestSlice> = (set, get) 
                 }
             }
         }
-        const paramsString = state.params ? getURLSearchParamsFromParamRows(state.params).toString() : '';
+
+        // Resolve and convert params to URLSearchParams
+        const urlParams = state.params ? getURLSearchParamsFromParamRows(state.params, envVarsMap, allUnresolved).toString() : '';
         
-        // Prepare body based on body type
+        // Prepare body based on body type and resolve placeholders
         let requestBody: string | ArrayBuffer | FormData | Record<string, string> | null = null;
-        
         if (state.body && state.body.currentBodyType !== 'none') {
-            requestBody = await convertBodyToRequestBody(state.body, state.body.currentBodyType);
+            requestBody = await convertBodyToRequestBody(state.body, state.body.currentBodyType, envVarsMap, allUnresolved);
+        }
+
+        // Check if there are any unresolved placeholders
+        if (allUnresolved.size > 0) {
+            const unresolvedList = Array.from(allUnresolved).slice(0, 3).join(', ') + (allUnresolved.size > 3 ? '...' : '');
+            const errorMsg = `Request has unresolved placeholders: ${unresolvedList}. Please resolve them and try again.`;
+            set({ 
+                errorMessage: errorMsg,
+                isRequestProcessing: false
+            });
+            return;
         }
         
         // Convert request to the expected format
         let serializableBody = requestBody;
-        
         // Convert FormData to a serializable format
         if (requestBody instanceof FormData) {
             const formDataEntries: Array<{ key: string; value: string | File }> = [];
@@ -604,7 +684,6 @@ const createCurrentRequestSlice: StateCreator<CurrentRequestSlice> = (set, get) 
         }
 
         //if url is missing protocol, prepend protocol
-        let finalUrl = state.url;
         if (!finalUrl.startsWith('http://') && !finalUrl.startsWith('https://')) {
             finalUrl = `${state.protocol}://${finalUrl}`;
         }
@@ -616,7 +695,7 @@ const createCurrentRequestSlice: StateCreator<CurrentRequestSlice> = (set, get) 
         const request = { 
             method: state.method, 
             url: finalUrl, 
-            params: paramsString || undefined, 
+            params: urlParams || undefined, 
             headers, 
             body: serializableBody
         };

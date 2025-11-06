@@ -1,8 +1,11 @@
+import { JSX } from "react";
+
 /**
  * Renders parameterized text with {{variable}} syntax
  * Variables are colored green if they exist in the params set, red otherwise
  */
-export function renderParameterizedText(text: string, existingParams: Set<string>){
+export function renderParameterizedText(text: string, existingParams: Set<string>) : JSX.Element {
+  if (!text) return <></>;
   const parts = text
     .split(/(\{\{[^}]+\}\})/g)
     .filter(Boolean)

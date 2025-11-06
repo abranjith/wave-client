@@ -5,6 +5,7 @@ import StyledInput from "../components/ui/styled-input"
 import RequestParams from "../components/common/RequestParams"
 import RequestHeaders from "../components/common/RequestHeaders"
 import RequestBody from "../components/common/RequestBody"
+import Banner from "../components/ui/banner"
 import {
    Select,
    SelectContent,
@@ -66,6 +67,8 @@ const RequestPanel: React.FC<RequestPanelProps> = ({ onSendRequest, onSaveReques
   const setActiveEnvironment = useAppStateStore((state) => state.setActiveEnvironment);
   const getParsedRequest = useAppStateStore((state) => state.getParsedRequest);
   const requestName = useAppStateStore((state) => state.name || 'Untitled Request');
+  const errorMessage = useAppStateStore((state) => state.errorMessage);
+  const setErrorMessage = useAppStateStore((state) => state.setErrorMessage);
 
   const [isRequestSaveWizardOpen, setIsRequestSaveWizardOpen] = useState(false);
   const [collectionInfoToSave, setCollectionInfoToSave] = useState<CollectionToSaveInfo | undefined>(undefined);
@@ -209,6 +212,17 @@ const RequestPanel: React.FC<RequestPanelProps> = ({ onSendRequest, onSaveReques
           </TooltipProvider>
         </div>
       </div>
+      
+      {/* Error Message Banner */}
+      {errorMessage && (
+        <div className="px-6 pb-2 flex-shrink-0">
+          <Banner
+            message={errorMessage}
+            messageType="error"
+            onClose={() => setErrorMessage('')}
+          />
+        </div>
+      )}
 
       {/* Top Bar */}
       <div className="px-6 py-4 flex items-center gap-3 flex-shrink-0">
