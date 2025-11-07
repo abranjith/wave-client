@@ -22,8 +22,8 @@ const App: React.FC = () => {
   const setResponseData = useAppStateStore((state) => state.setResponseData);
   const onSendRequest = useAppStateStore((state) => state.handleSendRequest);
   const updateEnvironment = useAppStateStore((state) => state.updateEnvironment);
+  const setErrorMessage = useAppStateStore((state) => state.setErrorMessage);
   const activeEnvironment = useAppStateStore((state) => state.activeEnvironment);
-  const collections = useAppStateStore((state) => state.collections);
   const vsCodeRef = useRef<any>(null);
 
   // Initialize Collections and Environments
@@ -57,10 +57,19 @@ const App: React.FC = () => {
     }
   };
 
-  const handleSaveRequest = (request: ParsedRequest, newCollectionName: string | undefined) => {
+  const handleSaveRequest = (request: ParsedRequest, saveToCollectionName: string | undefined) => {
     const collectionRequest = transformToCollectionRequest(request);
     //if newCollectionName exists in collections, we are updating an existing collection s use filename & collection name from there
-    const existingCollection =  newCollectionName && collections.find((collection) => collection.name === newCollectionName);
+    const currentCollections = useAppStateStore.getState().collections;
+    const existingCollection =  saveToCollectionName && currentCollections.find((collection) => collection.name === saveToCollectionName);
+    if (existingCollection) {
+      const duplicateRequest = existingCollection.requests.find((req) => req.name === request.name);
+      if (duplicateRequest) {
+        setErrorMessage(`Request with name "${request.name}" already exists in collection "${existingCollection.name}".`);
+        return;
+      }
+    }
+
     if (vsCodeRef.current) {
       vsCodeRef.current.postMessage({
         type: 'saveRequestToCollection',
@@ -69,7 +78,7 @@ const App: React.FC = () => {
           requestName: request.name,
           collectionFileName: existingCollection ? existingCollection.filename : request.sourceRef.collectionFilename,
           folderPath: request.sourceRef.itemPath,
-          newCollectionName: existingCollection ? undefined : newCollectionName
+          newCollectionName: existingCollection ? undefined : saveToCollectionName,
         }
       });
     }
@@ -105,7 +114,8 @@ const App: React.FC = () => {
   };
 
   const handleExportCollection = (collectionName: string) => {
-    const collection =  collectionName && collections.find((collection) => collection.name === collectionName);
+    const currentCollections = useAppStateStore.getState().collections;
+    const collection =  collectionName && currentCollections.find((collection) => collection.name === collectionName);
     if (vsCodeRef.current && collection) {
       vsCodeRef.current.postMessage({
         type: 'exportCollection',
@@ -150,7 +160,9 @@ const App: React.FC = () => {
         try {
           const collection = parseCollection(message.collection, message.collection.filename);
           //if collection does not exist, add it
-          const existingCollection = collections.find((c) => c.name === collection.name);
+          // Get current collections from the store to avoid stale closure
+          const currentCollections = useAppStateStore.getState().collections;
+          const existingCollection = currentCollections.find((c) => c.name === collection.name);
           if (!existingCollection) {
             addCollection(collection);
             return;
