@@ -8,6 +8,7 @@ import {
 } from "../components/ui/tabs"
 import CollectionsPane from '../components/common/CollectionsPane';
 import EnvironmentsPane from '../components/common/EnvironmentsPane';
+import HistoryPane from '../components/common/HistoryPane';
 import {
   Tooltip,
   TooltipContent,
@@ -104,9 +105,9 @@ const ConfigPanel: React.FC<ConfigPanelProps> = ({ onRequestSelect, onEnvSelect,
               />
           </TabsContent>
           <TabsContent value="history" className="h-full overflow-hidden">
-            <p className="text-slate-600 dark:text-slate-400 px-4 py-3 text-xs">
-              Content for History
-            </p>
+            <HistoryPane 
+                onRequestSelect={onRequestSelect}
+              />
           </TabsContent>
           <TabsContent value="environments" className="h-full overflow-hidden">
             <EnvironmentsPane 

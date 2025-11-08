@@ -23,6 +23,11 @@ const App: React.FC = () => {
   const onSendRequest = useAppStateStore((state) => state.handleSendRequest);
   const updateEnvironment = useAppStateStore((state) => state.updateEnvironment);
   const setErrorMessage = useAppStateStore((state) => state.setErrorMessage);
+  const getCurrentRequest = useAppStateStore((state) => state.getParsedRequest);
+  const addHistory = useAppStateStore((state) => state.addHistory);
+  const refreshHistory = useAppStateStore((state) => state.refreshHistory);
+  const setHistory = useAppStateStore((state) => state.setHistory);
+  const setHistoryLoadError = useAppStateStore((state) => state.setHistoryLoadError);
   const activeEnvironment = useAppStateStore((state) => state.activeEnvironment);
   const vsCodeRef = useRef<any>(null);
 
@@ -32,6 +37,7 @@ const App: React.FC = () => {
       vsCodeRef.current = acquireVsCodeApi();
       refreshEnvironments(vsCodeRef.current);
       refreshCollections(vsCodeRef.current);
+      refreshHistory(vsCodeRef.current);
     }
   }, []);
 
@@ -50,6 +56,7 @@ const App: React.FC = () => {
 
   const handleSendRequest = () => {
     if (vsCodeRef.current) {
+      addHistory(getCurrentRequest(), vsCodeRef.current);
       onSendRequest(vsCodeRef.current, activeEnvironment?.values);
     }
     else{
@@ -177,13 +184,16 @@ const App: React.FC = () => {
         setEnvironments(message.environments);
       } else if (message.type === 'environmentsError') {
         setEnvironmentLoadError(message.error);
-      }
-      else if (message.type === 'environmentUpdated') {
+      } else if (message.type === 'environmentUpdated') {
         try {
           updateEnvironment(message.environment.id, message.environment);
         } catch (error: any) {
           console.error('Error updating environment:', error);
         }
+      } else if (message.type === 'historyLoaded') {
+        setHistory(message.history);
+      } else if (message.type === 'historyError') {
+        setHistoryLoadError(message.error);
       }
     };
 

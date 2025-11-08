@@ -5,7 +5,7 @@ import axios from 'axios';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
-import { Environment, Collection, CollectionRequest } from './types/collection';
+import { Environment, Collection, CollectionRequest, ParsedRequest } from './types/collection';
 
 /**
  * Converts various data types to base64 string for safe transfer to webview
@@ -227,6 +227,37 @@ export function activate(context: vscode.ExtensionContext) {
 							error: error.message
 						});
 					}
+				} else if (message.type === 'loadHistory') {
+					try {
+						const history = await loadHistory();
+						panel.webview.postMessage({
+							type: 'historyLoaded',
+							history
+						});
+					} catch (error: any) {
+						panel.webview.postMessage({
+							type: 'historyError',
+							error: error.message
+						});
+					} 
+				} else if (message.type === 'saveRequestToHistory') {
+					try {
+						const { requestContent } = message.data;
+						await saveRequestToHistory(requestContent);
+
+						//reload full history
+						const history = await loadHistory();
+						panel.webview.postMessage({
+							type: 'historyLoaded',
+							history
+						});
+					} catch (error: any) {
+						console.error('Error saving request to history:', error);
+						panel.webview.postMessage({
+							type: 'historyError',
+							error: error.message
+						});
+					}
 				} else if (message.type === 'downloadResponse') {
 					try {
 						const { body, fileName, contentType } = message.data;
@@ -337,6 +368,36 @@ export function activate(context: vscode.ExtensionContext) {
 						}
 					} catch (error: any) {
 						vscode.window.showErrorMessage(`Failed to save Environments file: ${error.message}`);
+					}
+				} else if (message.type === 'loadHistory') {
+					try {
+						const history = await loadHistory();
+						panel.webview.postMessage({
+							type: 'historyLoaded',
+							history
+						});
+					} catch (error: any) {
+						panel.webview.postMessage({
+							type: 'historyError',
+							error: error.message
+						});
+					}
+				} else if (message.type === 'saveRequestToHistory') {
+					try {
+						const request = message.data.request;
+						await saveRequestToHistory(request);
+						
+						// Reload history to reflect the changes
+						const history = await loadHistory();
+						panel.webview.postMessage({
+							type: 'historyLoaded',
+							history
+						});
+					} catch (error: any) {
+						panel.webview.postMessage({
+							type: 'historyError',
+							error: error.message
+						});
 					}
 				}
 			});
@@ -597,6 +658,149 @@ async function saveEnvironment(env: Environment) {
 	const filePath = path.join(environmentsDir, `${fileName}.json`);
 	fs.writeFileSync(filePath, JSON.stringify(env, null, 2));
 }
+
+/**
+ * Loads request history from the default directory (~/.waveclient/history)
+ */
+async function loadHistory(): Promise<ParsedRequest[]> {
+	const homeDir = os.homedir();
+	const historyDir = path.join(homeDir, '.waveclient', 'history');
+
+	// Ensure the history directory exists
+	if (!fs.existsSync(historyDir)) {
+		fs.mkdirSync(historyDir, { recursive: true });
+		return [];
+	}
+
+	const history: (ParsedRequest & { baseFileName: string })[] = [];
+	const files = fs.readdirSync(historyDir);
+
+	for (const file of files) {
+		if (path.extname(file).toLowerCase() === '.json') {
+			try {
+				const filePath = path.join(historyDir, file);
+				const fileContent = fs.readFileSync(filePath, 'utf8');
+				const requestData = JSON.parse(fileContent);
+				const baseFileName = path.basename(file, '.json');
+				history.push({ ...requestData, baseFileName: baseFileName });
+			} catch (error: any) {
+				console.error(`Error loading history file ${file}:`, error.message);
+			}
+		}
+	}
+
+	history.sort((a, b) => {
+		const aNum = parseInt(a.baseFileName);
+		const bNum = parseInt(b.baseFileName);
+		return bNum - aNum;
+	});
+
+	return history;
+}
+
+/**
+ * Saves a request to history with sequential numeric filenames
+ * Maintains maximum 10 history files and removes duplicates
+ * @param request The parsed request to save
+ */
+async function saveRequestToHistory(requestContent: string): Promise<void> {
+	const request = JSON.parse(requestContent) as ParsedRequest;
+	const homeDir = os.homedir();
+	const historyDir = path.join(homeDir, '.waveclient', 'history');
+
+	// Ensure the history directory exists
+	if (!fs.existsSync(historyDir)) {
+		fs.mkdirSync(historyDir, { recursive: true });
+	}
+
+	// Get all existing history files
+	const files = fs.readdirSync(historyDir)
+		.filter(file => path.extname(file).toLowerCase() === '.json')
+		.map(file => {
+			const num = parseInt(path.basename(file, '.json'));
+			return { file, num };
+		})
+		.filter(item => !isNaN(item.num))
+		.sort((a, b) => a.num - b.num);
+
+	// Check for duplicate content
+	const incomingContent = JSON.stringify({
+		method: request.method,
+		url: request.url,
+		params: request.params,
+		headers: request.headers,
+		body: request.body
+	});
+
+	let duplicateIndex = -1;
+	for (let i = 0; i < files.length; i++) {
+		try {
+			const filePath = path.join(historyDir, files[i].file);
+			const fileContent = fs.readFileSync(filePath, 'utf8');
+			const existingRequest = JSON.parse(fileContent);
+			const existingContent = JSON.stringify({
+				method: existingRequest.method,
+				url: existingRequest.url,
+				params: existingRequest.params,
+				headers: existingRequest.headers,
+				body: existingRequest.body
+			});
+
+			if (incomingContent === existingContent) {
+				duplicateIndex = i;
+				break;
+			}
+		} catch (error: any) {
+			console.error(`Error reading history file ${files[i].file}:`, error.message);
+		}
+	}
+
+	// Remove duplicate file if found
+	if (duplicateIndex !== -1) {
+		const duplicateFile = path.join(historyDir, files[duplicateIndex].file);
+		fs.unlinkSync(duplicateFile);
+		files.splice(duplicateIndex, 1);
+	}
+
+	// Enforce maximum 10 files - remove oldest if at limit
+	if (files.length >= 10) {
+		const oldestFile = path.join(historyDir, files[0].file);
+		fs.unlinkSync(oldestFile);
+		files.shift();
+	}
+
+	// Renumber all files to maintain sequence (1.json, 2.json, etc.)
+	const tempFiles: { oldPath: string; newNum: number }[] = [];
+	for (let i = 0; i < files.length; i++) {
+		const oldPath = path.join(historyDir, files[i].file);
+		const newNum = i + 1;
+		if (files[i].num !== newNum) {
+			tempFiles.push({ oldPath, newNum });
+		}
+	}
+
+	// Rename files to temporary names first to avoid conflicts
+	const tempRenamed: { tempPath: string; finalPath: string }[] = [];
+	for (const item of tempFiles) {
+		const tempPath = path.join(historyDir, `temp_${crypto.randomUUID()}_${item.newNum}.json`);
+		fs.renameSync(item.oldPath, tempPath);
+		tempRenamed.push({
+			tempPath,
+			finalPath: path.join(historyDir, `${item.newNum}.json`)
+		});
+	}
+
+	// Rename from temporary names to final sequential names
+	for (const item of tempRenamed) {
+		fs.renameSync(item.tempPath, item.finalPath);
+	}
+
+	// Save the new request with the next available number
+	const nextNum = files.length + 1;
+	const newFilePath = path.join(historyDir, `${nextNum}.json`);
+	fs.writeFileSync(newFilePath, JSON.stringify(request, null, 2), 'utf8');
+}
+
 
 function sanitizeFileName(name: string): string {
 	// Replace characters that are invalid in Windows, Linux, and macOS filesystems
