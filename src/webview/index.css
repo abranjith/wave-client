@@ -9,11 +9,11 @@
   }
   
   .param-exists {
-    @apply text-emerald-500;
+    @apply text-blue-600 font-semibold;
   }
   
   .param-missing {
-    @apply text-red-500;
+    @apply text-gray-500;
   }
 }
 

@@ -2,23 +2,11 @@ import React from 'react';
 import { ClockIcon } from 'lucide-react';
 import { ParsedRequest } from '../../types/collection';
 import useAppStateStore from '../../hooks/store/useAppStateStore';
+import { getHttpMethodColor } from '../../utils/common';
 
 interface HistoryPaneProps {
   onRequestSelect: (request: ParsedRequest) => void;
 }
-
-const getMethodColor = (method: string): string => {
-  switch (method.toLowerCase()) {
-    case 'get': return 'bg-green-500';
-    case 'post': return 'bg-blue-500';
-    case 'put': return 'bg-orange-500';
-    case 'delete': return 'bg-red-500';
-    case 'patch': return 'bg-purple-500';
-    case 'head': return 'bg-gray-500';
-    case 'options': return 'bg-yellow-500';
-    default: return 'bg-slate-500';
-  }
-};
 
 const HistoryPane: React.FC<HistoryPaneProps> = ({ onRequestSelect }) => {
   const history = useAppStateStore((state) => state.history);
@@ -114,7 +102,7 @@ const HistoryPane: React.FC<HistoryPaneProps> = ({ onRequestSelect }) => {
               onClick={() => handleRequestClick(request)}
             >
               <div className="flex items-center flex-1 min-w-0">
-                <span className={`text-xs font-medium mr-3 px-2 py-1 rounded-full text-white flex-shrink-0 ${getMethodColor(request.method)}`}>
+                <span className={`text-xs font-medium mr-3 px-2 py-1 rounded-full flex-shrink-0 ${getHttpMethodColor(request.method)}`}>
                   {request.method}
                 </span>
                 <span className="text-sm text-slate-600 dark:text-slate-300 truncate">

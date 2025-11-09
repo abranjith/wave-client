@@ -61,7 +61,8 @@ module.exports = {
         'pastel-orange': '#FFAB40',
         'pastel-purple': '#EAB8FF',
         'pastel-red': '#FFABAB',
-        'pastel-gray': '#D3D3D3'
+        'pastel-gray': '#D3D3D3',
+        'bright-blue': '#0000ff'
       },
       keyframes: {
         "accordion-down": {

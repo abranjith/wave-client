@@ -57,6 +57,7 @@ const App: React.FC = () => {
   const handleSendRequest = () => {
     if (vsCodeRef.current) {
       addHistory(getCurrentRequest(), vsCodeRef.current);
+      useAppStateStore.getState().setIsRequestProcessing(true);
       onSendRequest(vsCodeRef.current, activeEnvironment?.values);
     }
     else{
@@ -153,6 +154,7 @@ const App: React.FC = () => {
     const messageHandler = (event: MessageEvent) => {
       const message = event.data;
       if (message.type === 'httpResponse') {
+        useAppStateStore.getState().setIsRequestProcessing(false);
         setResponseData(message.response);
       } else if (message.type === 'collectionsLoaded') {
         try {

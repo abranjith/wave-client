@@ -1,5 +1,5 @@
 import React, { useState, useId, useEffect, useMemo } from 'react';
-import { SendHorizonalIcon, SaveIcon } from 'lucide-react';
+import { SendHorizonalIcon, SaveIcon, LoaderCircleIcon } from 'lucide-react';
 import { Button } from "../components/ui/button"
 import StyledInput from "../components/ui/styled-input"
 import RequestParams from "../components/common/RequestParams"
@@ -69,6 +69,7 @@ const RequestPanel: React.FC<RequestPanelProps> = ({ onSendRequest, onSaveReques
   const requestName = useAppStateStore((state) => state.name || 'Untitled Request');
   const errorMessage = useAppStateStore((state) => state.errorMessage);
   const setErrorMessage = useAppStateStore((state) => state.setErrorMessage);
+  const isRequestProcessing = useAppStateStore((state) => state.isRequestProcessing);
 
   const [isRequestSaveWizardOpen, setIsRequestSaveWizardOpen] = useState(false);
   const [collectionInfoToSave, setCollectionInfoToSave] = useState<CollectionToSaveInfo | undefined>(undefined);
@@ -299,8 +300,9 @@ const RequestPanel: React.FC<RequestPanelProps> = ({ onSendRequest, onSaveReques
                   onSendRequest();
                 }}
                 className="bg-blue-600 hover:bg-blue-700 text-white font-medium px-6 py-2 transition-colors dark:bg-blue-500 dark:hover:bg-blue-600"
+                disabled={isRequestProcessing}
               >
-                <SendHorizonalIcon/>
+                {isRequestProcessing ? <LoaderCircleIcon className="animate-spin" /> : <SendHorizonalIcon />}
               </Button>
             </TooltipTrigger>
             <TooltipContent className="px-2 py-1 text-xs">
