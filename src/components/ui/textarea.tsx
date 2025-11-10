@@ -17,4 +17,3 @@ function Textarea({ className, ...props }: React.ComponentProps<"textarea">) {
 Textarea.displayName = "Textarea"
 
 export { Textarea }
-

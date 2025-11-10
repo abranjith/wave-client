@@ -9,11 +9,11 @@
   }
   
   .param-exists {
-    @apply text-blue-600 font-semibold;
+    @apply bg-blue-100 text-blue-600 dark:text-blue-400 font-semibold;
   }
   
   .param-missing {
-    @apply text-gray-500;
+    @apply bg-gray-100 text-gray-500 dark:text-gray-300 font-semibold;
   }
 }
 

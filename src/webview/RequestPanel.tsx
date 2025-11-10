@@ -266,7 +266,7 @@ const RequestPanel: React.FC<RequestPanelProps> = ({ onSendRequest, onSaveReques
 
         {/* HTTP Method Dropdown */}
         <div className="*:not-first:mt-2">
-          <Select defaultValue={method} onValueChange={setMethod}>
+          <Select defaultValue={HTTP_METHODS[0]} value={method} onValueChange={setMethod}>
             <SelectTrigger id={httpMethodSelectId} className="w-auto max-w-full min-w-24 bg-white border-slate-300 text-slate-900 hover:bg-slate-50 dark:bg-slate-800 dark:border-slate-600 dark:text-slate-100 dark:hover:bg-slate-700">
               <SelectValue placeholder="Select Method" />
             </SelectTrigger>

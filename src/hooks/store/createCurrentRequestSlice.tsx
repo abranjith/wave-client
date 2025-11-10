@@ -328,7 +328,7 @@ const createCurrentRequestSlice: StateCreator<CurrentRequestSlice> = (set, get) 
         params: (request?.params && request?.params.length > 0) ? request.params : [{ id: `param-${crypto.randomUUID()}`, key: '', value: '', disabled: false }],
         headers: (request?.headers && request?.headers.length > 0) ? request.headers : [{ id: `header-${crypto.randomUUID()}`, key: '', value: '', disabled: false }],
         body: request?.body ? {
-            textData: { data: (request.body && typeof request.body === 'string') ? request.body : null, textType: 'text' },
+            textData: { data: (request.body && typeof request.body === 'string') ? request.body : null, textType: 'none' },
             binaryData: null,
             formData: {data: [emptyFormField()]},
             multiPartFormData: {data: [emptyMultiPartFormField()]},

@@ -1,10 +1,11 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Button } from '../ui/button';
 import { Textarea } from '../ui/textarea';
 import { Tooltip, TooltipTrigger, TooltipContent } from '../ui/tooltip';
 import { CopyIcon, ClipboardPasteIcon, InfoIcon, FileTextIcon } from 'lucide-react';
 import useAppStateStore from '../../hooks/store/useAppStateStore';
 import {RequestBodyTextType, RequestBodyType} from '../../types/collection';
+import { renderParameterizedText } from '../../utils/styling'; 
 
 interface TextBodyProps {
   dropdownElement?: React.ReactNode;
@@ -66,17 +67,63 @@ const getBodyType = (content: string): RequestBodyTextType => {
     return 'text';
 }
 
+const getTypeInfo = (bodyType : string): { label: string; color: string; description: string } => {
+  switch (bodyType) {
+    case 'json':
+      return {
+        label: 'JSON',
+        color: 'bg-green-100 text-green-800 border-green-200 dark:bg-green-900/20 dark:text-green-400 dark:border-green-800',
+        description: 'JavaScript Object Notation'
+      };
+    case 'xml':
+      return {
+        label: 'XML',
+        color: 'bg-blue-100 text-blue-800 border-blue-200 dark:bg-blue-900/20 dark:text-blue-400 dark:border-blue-800',
+        description: 'Extensible Markup Language'
+      };
+    case 'html':
+      return {
+        label: 'HTML',
+        color: 'bg-orange-100 text-orange-800 border-orange-200 dark:bg-orange-900/20 dark:text-orange-400 dark:border-orange-800',
+        description: 'HyperText Markup Language'
+      };
+    case 'text':
+      return {
+        label: 'Text',
+        color: 'bg-gray-100 text-gray-800 border-gray-200 dark:bg-gray-900/20 dark:text-gray-400 dark:border-gray-800',
+        description: 'Plain Text'
+      };
+    default:
+      return {
+        label: 'Unknown',
+        color: 'bg-slate-100 text-slate-800 border-slate-200 dark:bg-slate-900/20 dark:text-slate-400 dark:border-slate-800',
+        description: 'Type not detected'
+      };
+  }
+};
+
 const TextBody: React.FC<TextBodyProps> = ({ dropdownElement }) => {
   const updateBody = useAppStateStore((state) => state.updateTextBody);
   const body = useAppStateStore((state) => state.body);
   const [showExamples, setShowExamples] = useState(false);
+  const [bodyContent, setBodyContent] = useState(body.textData?.data || '');
+  const [bodyTypeInfo, setBodyTypeInfo] = useState<{ label: string; color: string; description: string }>({ label: '', color: '', description: '' });
+
+  useEffect(() => {
+    setBodyContent(body.textData?.data?.trim() || '');
+    let bodyType = body.textData?.textType || 'unknown';
+    if(bodyType === 'none' || bodyType === 'unknown') {
+      bodyType = getBodyType(body.textData?.data || '');
+    }
+    setBodyTypeInfo(getTypeInfo(bodyType));
+  }, [body]);
 
   const handleBodyChange = (newValue: string) => {
     updateBody(newValue, getBodyType(newValue));
   };
 
   const formatContent = () => {
-    const strBody = getBody();
+    const strBody = bodyContent || '';
     if (!strBody.trim()) {
       return;
     }
@@ -163,41 +210,6 @@ const TextBody: React.FC<TextBodyProps> = ({ dropdownElement }) => {
     }
   };
 
-  const getTypeInfo = (): { label: string; color: string; description: string } => {
-    switch (body.textData?.textType as string) {
-      case 'json':
-        return {
-          label: 'JSON',
-          color: 'bg-green-100 text-green-800 border-green-200 dark:bg-green-900/20 dark:text-green-400 dark:border-green-800',
-          description: 'JavaScript Object Notation'
-        };
-      case 'xml':
-        return {
-          label: 'XML',
-          color: 'bg-blue-100 text-blue-800 border-blue-200 dark:bg-blue-900/20 dark:text-blue-400 dark:border-blue-800',
-          description: 'Extensible Markup Language'
-        };
-      case 'html':
-        return {
-          label: 'HTML',
-          color: 'bg-orange-100 text-orange-800 border-orange-200 dark:bg-orange-900/20 dark:text-orange-400 dark:border-orange-800',
-          description: 'HyperText Markup Language'
-        };
-      case 'text':
-        return {
-          label: 'Text',
-          color: 'bg-gray-100 text-gray-800 border-gray-200 dark:bg-gray-900/20 dark:text-gray-400 dark:border-gray-800',
-          description: 'Plain Text'
-        };
-      default:
-        return {
-          label: 'Unknown',
-          color: 'bg-slate-100 text-slate-800 border-slate-200 dark:bg-slate-900/20 dark:text-slate-400 dark:border-slate-800',
-          description: 'Type not detected'
-        };
-    }
-  };
-
   const loadExample = (type: RequestBodyType | string) => {
     const examples: Record<string, string> = {
       json: '{\n  "name": "John Doe",\n  "email": "john@example.com",\n  "age": 30,\n  "active": true\n}',
@@ -211,15 +223,6 @@ const TextBody: React.FC<TextBodyProps> = ({ dropdownElement }) => {
     setShowExamples(false);
   };
 
-  const getBody = (): string => {
-    if (body.textData && typeof body.textData.data === 'string' && body.textData.data.trim()) {
-      return body.textData.data;
-    }
-    return '';
-  };
-
-  const typeInfo = getTypeInfo();
-
   return (
     <div className="flex flex-col h-full overflow-auto">
       {/* Header with Dropdown and Actions */}
@@ -227,13 +230,13 @@ const TextBody: React.FC<TextBodyProps> = ({ dropdownElement }) => {
         {/* Left side - Dropdown and Type Badge */}
         <div className="flex items-center gap-2">
           {dropdownElement}
-          {getBody() && (
+          {bodyContent && (
             <>
-              <span className={`text-xs px-2 py-1 rounded border ${typeInfo.color}`}>
-                {typeInfo.label}
+              <span className={`text-xs px-2 py-1 rounded border ${bodyTypeInfo.color}`}>
+                {bodyTypeInfo.label}
               </span>
               <span className="text-xs text-slate-400 dark:text-slate-500">
-                {getBody().length} characters
+                {bodyContent.length} characters
               </span>
             </>
           )}
@@ -248,7 +251,7 @@ const TextBody: React.FC<TextBodyProps> = ({ dropdownElement }) => {
                 variant="outline"
                 size="sm"
                 onClick={copyToClipboard}
-                disabled={!getBody()}
+                disabled={!bodyContent}
                 className="h-9 w-9 p-0 flex items-center justify-center"
               >
                 <CopyIcon size={16} />
@@ -276,13 +279,13 @@ const TextBody: React.FC<TextBodyProps> = ({ dropdownElement }) => {
               <Button
                 variant="outline"
                 size="sm"
-                disabled={!getBody()}
+                disabled={!bodyContent}
                 className="h-9 w-9 p-0 flex items-center justify-center"
               >
                 <InfoIcon size={16} />
               </Button>
             </TooltipTrigger>
-            <TooltipContent className="px-2 py-1 text-xs">{typeInfo.description}</TooltipContent>
+            <TooltipContent className="px-2 py-1 text-xs">{bodyTypeInfo.description}</TooltipContent>
           </Tooltip>
 
           <Tooltip>
@@ -300,12 +303,12 @@ const TextBody: React.FC<TextBodyProps> = ({ dropdownElement }) => {
           </Tooltip>
 
           {/* Divider */}
-          {(getBody() && body.currentBodyType as string !== 'unknown') && (
+          {(bodyContent && body.currentBodyType as string !== 'unknown') && (
             <div className="h-6 w-px bg-slate-300 dark:bg-slate-600 mx-1" />
           )}
 
           {/* Format & Clear Buttons */}
-          {getBody() && body.currentBodyType as string !== 'unknown' && (
+          {bodyContent && body.currentBodyType as string !== 'unknown' && (
             <Button
               variant="outline"
               size="sm"
@@ -314,7 +317,7 @@ const TextBody: React.FC<TextBodyProps> = ({ dropdownElement }) => {
               Format
             </Button>
           )}
-          {getBody() && (
+          {bodyContent && (
             <Button
               variant="outline"
               size="sm"
@@ -331,7 +334,7 @@ const TextBody: React.FC<TextBodyProps> = ({ dropdownElement }) => {
       <div className="flex-1 flex flex-col min-h-0">
         <Textarea
           placeholder="Enter request body (JSON, XML, HTML, plain text, etc.)"
-          value={getBody()}
+          value={bodyContent}
           onChange={e => handleBodyChange(e.target.value)}
           className="flex-1 font-mono text-sm resize-none text-slate-800 dark:text-slate-200 min-h-[300px] bg-white dark:bg-slate-900"
           spellCheck={false}
