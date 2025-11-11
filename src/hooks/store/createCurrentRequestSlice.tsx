@@ -370,14 +370,16 @@ const createCurrentRequestSlice: StateCreator<CurrentRequestSlice> = (set, get) 
     getParsedRequest: () => {
         const state = get();
         const { id, name, method, url, headers, body, params, folderPath } = state;
+        let nonEmptyHeaders = headers?.filter(header => header.key && header.value) || [];
+        let nonEmptyParams = params?.filter(param => param.key && param.value) || [];
         return {
             id,
             name: name || '',
             method: method || 'GET',
             url: url || '',
-            headers: headers || [],
+            headers: nonEmptyHeaders || [],
             body: body?.textData?.data ? body.textData.data : null,
-            params: params || [],
+            params: nonEmptyParams || [],
             sourceRef: state.collectionRef || { collectionFilename: '', collectionName: '', itemPath: folderPath ? folderPath : [] }
         };
     },
@@ -685,7 +687,11 @@ const createCurrentRequestSlice: StateCreator<CurrentRequestSlice> = (set, get) 
 
         //if url is missing protocol, prepend protocol
         if (!finalUrl.startsWith('http://') && !finalUrl.startsWith('https://')) {
-            finalUrl = `${state.protocol}://${finalUrl}`;
+            if(Boolean(state.protocol)){
+                finalUrl = `${state.protocol}://${finalUrl}`;
+            } else {
+                finalUrl = `https://${finalUrl}`;
+            }
         }
         //remove params from url if present as it is being sent separately as paramsString (also url encode)
         const urlObj = new URL(finalUrl);

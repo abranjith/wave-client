@@ -443,3 +443,18 @@ export function getHttpMethodColor(method: string): string {
       return 'bg-slate-100 text-slate-800 hover:bg-slate-200';
   }
 }
+
+/** * Removes the protocol (http:// or https://) from a given URL string.
+ * If the URL is empty or only contains the protocol, returns an empty string.
+ * @param fullUrl - The full URL string
+ * @returns The URL without the protocol
+ */
+export function getUrlWithoutProtocol(fullUrl: string): string {
+    if (!fullUrl) {
+      return '';
+    }
+    // Remove protocol (http:// or https://)
+    const withoutProtocol = fullUrl.replace(/^https?:\/\//, '');
+    // If the result is empty or just '/', return empty string
+    return withoutProtocol === '/' ? '' : withoutProtocol;
+}

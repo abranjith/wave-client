@@ -55,8 +55,6 @@ const TABS = [
 ];
 
 const RequestPanel: React.FC<RequestPanelProps> = ({ onSendRequest, onSaveRequest })  => {
-  const protocol = useAppStateStore((state) => state.protocol || 'HTTPS');
-  const setProtocol = useAppStateStore((state) => state.updateProtocol);
   const method = useAppStateStore((state) => state.method || 'GET');
   const setMethod = useAppStateStore((state) => state.updateMethod);
   const url = useAppStateStore((state) => state.url || '');
@@ -77,18 +75,8 @@ const RequestPanel: React.FC<RequestPanelProps> = ({ onSendRequest, onSaveReques
   const [activeTab, setActiveTab] = useState<'Params' | 'Headers' | 'Body'>('Params');
   const urlInputId = useId();
   const httpMethodSelectId = useId();
-  const protocolSelectId = useId();
   const environmentSelectId = useId();
-
-  const getUrlWithoutProtocol = (fullUrl: string) => {
-    if (!fullUrl) {
-      return '';
-    }
-    // Remove protocol (http:// or https://)
-    const withoutProtocol = fullUrl.replace(/^https?:\/\//, '');
-    // If the result is empty or just '/', return empty string
-    return withoutProtocol === '/' ? '' : withoutProtocol;
-  }
+  //const protocolSelectId = useId();
 
   // Memoize the styled text so it updates when activeEnvironment or url changes
   const styledUrlText = useMemo(() => {
@@ -100,8 +88,7 @@ const RequestPanel: React.FC<RequestPanelProps> = ({ onSendRequest, onSaveReques
         }
       });
     }
-    const urlWithoutProtocol = getUrlWithoutProtocol(url);
-    return renderParameterizedText(urlWithoutProtocol, activeEnvVariables);
+    return renderParameterizedText(url, activeEnvVariables);
   }, [activeEnvironment, url]);
 
   const handleSaveRequest = () => {
@@ -144,9 +131,9 @@ const RequestPanel: React.FC<RequestPanelProps> = ({ onSendRequest, onSaveReques
         {/* Breadcrumb on the left */}
         <Breadcrumb>
           <BreadcrumbList>
-            {folderPath && folderPath.length > 1 ? (
+            {folderPath && folderPath.length > 0 ? (
               <>
-                {folderPath.slice(1).map((item, index) => (
+                {folderPath.map((item, index) => (
                       <>
                         <BreadcrumbItem>
                           <BreadcrumbLink>{item}</BreadcrumbLink>
@@ -237,7 +224,6 @@ const RequestPanel: React.FC<RequestPanelProps> = ({ onSendRequest, onSaveReques
             <option key={p} value={p}>{p}</option>
           ))}
         </select>
-        */}
         <div className="*:not-first:mt-2">
           <Select defaultValue='HTTPS' value={protocol.toUpperCase()} onValueChange={setProtocol}>
             <SelectTrigger id={protocolSelectId} className="w-auto max-w-full min-w-24 bg-white border-slate-300 text-slate-900 hover:bg-slate-50 dark:bg-slate-800 dark:border-slate-600 dark:text-slate-100 dark:hover:bg-slate-700">
@@ -252,6 +238,7 @@ const RequestPanel: React.FC<RequestPanelProps> = ({ onSendRequest, onSaveReques
             </SelectContent>
           </Select>
         </div>
+        */}
 
         {/* HTTP Method Dropdown
         <select
@@ -285,7 +272,7 @@ const RequestPanel: React.FC<RequestPanelProps> = ({ onSendRequest, onSaveReques
           id={urlInputId}
           type="text"
           className="bg-white border-slate-300 focus:border-blue-500 dark:bg-slate-800 dark:border-slate-600 dark:focus:border-blue-400"
-          value={getUrlWithoutProtocol(url)}
+          value={url}
           onChange={e => setUrl(e.target.value)}
           styledValue={styledUrlText}
           placeholder="Enter request URL..."

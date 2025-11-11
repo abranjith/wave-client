@@ -64,6 +64,7 @@ const CollectionsPane: React.FC<CollectionsPaneProps> = ({
   const collections = useAppStateStore((state) => state.collections);
   const isLoading = useAppStateStore((state) => state.isCollectionsLoading);
   const error = useAppStateStore((state) => state.collectionLoadError);
+  const currentRequestId = useAppStateStore((state) => state.id);
 
   const [expandedCollections, setExpandedCollections] = useState<Set<string>>(new Set());
   const [sortedCollections, setSortedCollections] = useState<ParsedCollection[]>([]);
@@ -240,10 +241,16 @@ const CollectionsPane: React.FC<CollectionsPaneProps> = ({
                 {expandedCollections.has(collection.filename) && (
                     <div className="p-3 space-y-1">
                         {/* Top-level requests */}
-                        {collection.requests.map(request => (
+                        {collection.requests.map(request => {
+                            const isActive = request.id === currentRequestId;
+                            return (
                             <div
                                 key={request.id}
-                                className="flex items-center py-2 px-2 hover:bg-blue-50 dark:hover:bg-blue-900/20 cursor-pointer rounded-md group transition-colors"
+                                className={`flex items-center py-2 px-2 cursor-pointer rounded-md group transition-colors ${
+                                    isActive 
+                                        ? 'bg-blue-100 dark:bg-blue-900/40 border-l-2 border-blue-500' 
+                                        : 'hover:bg-blue-50 dark:hover:bg-blue-900/20'
+                                }`}
                                 onClick={() => onRequestSelect(request)}
                             >
                                 <div className="flex items-center flex-1 min-w-0">
@@ -255,7 +262,8 @@ const CollectionsPane: React.FC<CollectionsPaneProps> = ({
                                     </span>
                                 </div>
                             </div>
-                        ))}
+                            );
+                        })}
                         
                         {/* Folders */}
                         {collection.folders.map(folder => {
@@ -288,10 +296,16 @@ const CollectionsPane: React.FC<CollectionsPaneProps> = ({
                                     {/* Folder Requests */}
                                     {isFolderExpanded && (
                                         <div className="ml-6 space-y-1">
-                                            {folder.requests.map(request => (
+                                            {folder.requests.map(request => {
+                                                const isActive = request.id === currentRequestId;
+                                                return (
                                                 <div
                                                     key={request.id}
-                                                    className="flex items-center py-2 px-2 hover:bg-blue-50 dark:hover:bg-blue-900/20 cursor-pointer rounded-md group transition-colors"
+                                                    className={`flex items-center py-2 px-2 cursor-pointer rounded-md group transition-colors ${
+                                                        isActive 
+                                                            ? 'bg-blue-100 dark:bg-blue-900/40 border-l-2 border-blue-500' 
+                                                            : 'hover:bg-blue-50 dark:hover:bg-blue-900/20'
+                                                    }`}
                                                     onClick={() => onRequestSelect(request)}
                                                 >
                                                     <div className="flex items-center flex-1 min-w-0">
@@ -303,7 +317,8 @@ const CollectionsPane: React.FC<CollectionsPaneProps> = ({
                                                         </span>
                                                     </div>
                                                 </div>
-                                            ))}
+                                                );
+                                            })}
                                         </div>
                                     )}
                                 </div>

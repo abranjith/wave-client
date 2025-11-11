@@ -12,6 +12,7 @@ const HistoryPane: React.FC<HistoryPaneProps> = ({ onRequestSelect }) => {
   const history = useAppStateStore((state) => state.history);
   const isLoading = useAppStateStore((state) => state.isHistoryLoading);
   const error = useAppStateStore((state) => state.historyLoadError);
+  const currentRequestId = useAppStateStore((state) => state.id);
 
   const handleRequestClick = (request: ParsedRequest) => {
     if (onRequestSelect) {
@@ -95,10 +96,16 @@ const HistoryPane: React.FC<HistoryPaneProps> = ({ onRequestSelect }) => {
         </div>
         
         <div className="space-y-2">
-          {history.map((request, index) => (
+          {history.map((request, index) => {
+            const isActive = request.id === currentRequestId;
+            return (
             <div
               key={request.id || index}
-              className="flex items-center py-2 px-3 border border-slate-200 dark:border-slate-700 hover:bg-blue-50 dark:hover:bg-blue-900/20 cursor-pointer rounded-lg group transition-colors"
+              className={`flex items-center py-2 px-3 border border-slate-200 dark:border-slate-700 cursor-pointer rounded-lg group transition-colors ${
+                isActive 
+                  ? 'bg-blue-100 dark:bg-blue-900/40 border-l-2 border-blue-500' 
+                  : 'hover:bg-blue-50 dark:hover:bg-blue-900/20'
+              }`}
               onClick={() => handleRequestClick(request)}
             >
               <div className="flex items-center flex-1 min-w-0">
@@ -110,7 +117,8 @@ const HistoryPane: React.FC<HistoryPaneProps> = ({ onRequestSelect }) => {
                 </span>
               </div>
             </div>
-          ))}
+            );
+          })}
         </div>
       </div>
     </div>
