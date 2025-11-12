@@ -1,5 +1,5 @@
 import React, { useState, useEffect, JSX } from 'react';
-import { Trash2Icon, PlusIcon } from 'lucide-react';
+import { Trash2Icon, PlusIcon, CheckCircleIcon, XCircleIcon } from 'lucide-react';
 import { Button } from '../ui/button';
 import StyledInput from "../ui/styled-input";
 import useAppStateStore from '../../hooks/store/useAppStateStore';
@@ -10,6 +10,7 @@ const RequestHeaders: React.FC = () => {
   const addEmptyHeader = useAppStateStore((state) => state.addEmptyHeader);
   const upsertHeader = useAppStateStore((state) => state.upsertHeader);
   const removeHeader = useAppStateStore((state) => state.removeHeader);
+  const toggleHeaderEnabled = useAppStateStore((state) => state.toggleHeaderEnabled);
   const activeEnvironment = useAppStateStore((state) => state.activeEnvironment);
   const activeEnvVariables = new Set<string>();
     if (activeEnvironment && activeEnvironment.values) {
@@ -104,46 +105,75 @@ const RequestHeaders: React.FC = () => {
             </tr>
           </thead>
           <tbody>
-            {headers.map((header, index) => (
-              <tr key={header.id} className="border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/50">
-                <td className="py-2 px-3">
-                  <StyledInput
-                    type="text"
-                    placeholder="Header name (e.g., Content-Type)"
-                    value={localHeaders[header.id]?.key ?? header.key}
-                    styledValue={styledLocalHeaders[header.id]?.key ?? renderParameterizedText(header.key, activeEnvVariables)}
-                    onChange={e => updateLocalHeader(header.id, 'key', e.target.value)}
-                    onBlur={() => commitHeader(header.id)}
-                    onKeyDown={e => handleKeyDown(e, header.id)}
-                    className="bg-white border-slate-300 focus:border-blue-500 dark:bg-slate-800 dark:border-slate-600 dark:focus:border-blue-400"
-                  />
-                </td>
-                <td className="py-2 px-3">
-                  <StyledInput
-                    type="text"
-                    placeholder="Header value (e.g., application/json)"
-                    value={localHeaders[header.id]?.value ?? header.value}
-                    styledValue={styledLocalHeaders[header.id]?.value ?? renderParameterizedText(header.value, activeEnvVariables)}
-                    onChange={e => updateLocalHeader(header.id, 'value', e.target.value)}
-                    onBlur={() => commitHeader(header.id)}
-                    onKeyDown={e => handleKeyDown(e, header.id)}
-                    className="bg-white border-slate-300 focus:border-blue-500 dark:bg-slate-800 dark:border-slate-600 dark:focus:border-blue-400"
-                  />
-                </td>
-                <td className="py-2 px-3">
-                  {headers.length > 1 && (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => removeHeader(header.id)}
-                      className="text-red-600 hover:text-red-700 hover:border-red-300"
-                    >
-                      <Trash2Icon className="h-4 w-4" />
-                    </Button>
-                  )}
-                </td>
-              </tr>
-            ))}
+            {headers.map((header, index) => {
+              const isDisabled = header.disabled;
+              
+              return (
+                <tr 
+                  key={header.id} 
+                  className={`border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/50 ${
+                    isDisabled ? 'opacity-40' : ''
+                  }`}
+                >
+                  <td className="py-2 px-3">
+                    <StyledInput
+                      type="text"
+                      placeholder="Header name (e.g., Content-Type)"
+                      value={localHeaders[header.id]?.key ?? header.key}
+                      styledValue={styledLocalHeaders[header.id]?.key ?? renderParameterizedText(header.key, activeEnvVariables)}
+                      onChange={e => updateLocalHeader(header.id, 'key', e.target.value)}
+                      onBlur={() => commitHeader(header.id)}
+                      onKeyDown={e => handleKeyDown(e, header.id)}
+                      className="bg-white border-slate-300 focus:border-blue-500 dark:bg-slate-800 dark:border-slate-600 dark:focus:border-blue-400"
+                    />
+                  </td>
+                  <td className="py-2 px-3">
+                    <StyledInput
+                      type="text"
+                      placeholder="Header value (e.g., application/json)"
+                      value={localHeaders[header.id]?.value ?? header.value}
+                      styledValue={styledLocalHeaders[header.id]?.value ?? renderParameterizedText(header.value, activeEnvVariables)}
+                      onChange={e => updateLocalHeader(header.id, 'value', e.target.value)}
+                      onBlur={() => commitHeader(header.id)}
+                      onKeyDown={e => handleKeyDown(e, header.id)}
+                      className="bg-white border-slate-300 focus:border-blue-500 dark:bg-slate-800 dark:border-slate-600 dark:focus:border-blue-400"
+                    />
+                  </td>
+                  <td className="py-2 px-3">
+                    <div className="flex items-center gap-2">
+                      {(Boolean(header.key) || Boolean(header.value)) && (<Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => toggleHeaderEnabled(header.id, header.disabled)}
+                        className={`${
+                          !isDisabled
+                            ? 'text-green-600 hover:text-green-700 hover:border-green-300'
+                            : 'text-slate-400 hover:text-slate-600 hover:border-slate-300'
+                        }`}
+                        title={!isDisabled ? 'Disable header' : 'Enable header'}
+                      >
+                        {!isDisabled ? (
+                          <CheckCircleIcon className="h-4 w-4" />
+                        ) : (
+                          <XCircleIcon className="h-4 w-4" />
+                        )}
+                      </Button>)}
+                      {headers.length > 1 && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => removeHeader(header.id)}
+                          className="text-red-600 hover:text-red-700 hover:border-red-300"
+                          title="Delete header"
+                        >
+                          <Trash2Icon className="h-4 w-4" />
+                        </Button>
+                      )}
+                    </div>
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>

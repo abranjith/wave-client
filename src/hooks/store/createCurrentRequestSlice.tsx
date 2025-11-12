@@ -70,11 +70,13 @@ interface CurrentRequestSlice {
     addEmptyHeader: () => void;
     upsertHeader: (id: string, key: string | undefined, value: string | undefined) => void;
     removeHeader: (id: string) => void;
+    toggleHeaderEnabled: (id: string, currentDisabled: boolean) => void;
     
     // URL Parameters management
     addEmptyParam: () => void;
     upsertParam: (id: string, key: string | undefined, value: string | undefined) => void;
     removeParam: (id: string) => void;
+    toggleParamEnabled: (id: string, currentDisabled: boolean) => void;
 
     // Response management
     setResponseData: (response: ResponseData | null) => void;
@@ -537,6 +539,14 @@ const createCurrentRequestSlice: StateCreator<CurrentRequestSlice> = (set, get) 
         }
         set({ headers: filteredHeaders });
     },
+    toggleHeaderEnabled: (id: string, currentDisabled: boolean) => {
+        const state = get();
+        const currentHeaders = state.headers || [];
+        const updatedHeaders = currentHeaders.map(header =>
+            header.id === id ? { ...header, disabled: !currentDisabled } : header
+        );
+        set({ headers: updatedHeaders });
+    },
     
     // URL Parameters management
     addEmptyParam: () => {
@@ -587,6 +597,18 @@ const createCurrentRequestSlice: StateCreator<CurrentRequestSlice> = (set, get) 
         const updatedUrl = updateUrlWithParams(state.url, filteredParams);
         
         set({ params: filteredParams, url: updatedUrl });
+    },
+    toggleParamEnabled: (id: string, currentDisabled: boolean) => {
+        const state = get();
+        const currentParams = state.params || [];
+        const updatedParams = currentParams.map(param =>
+            param.id === id ? { ...param, disabled: !currentDisabled } : param
+        );
+        
+        // Update URL with modified params
+        const updatedUrl = updateUrlWithParams(state.url, updatedParams);
+        
+        set({ params: updatedParams, url: updatedUrl });
     },
 
     // Response management

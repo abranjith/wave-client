@@ -1,5 +1,5 @@
 import React, { useState, useEffect, JSX } from 'react';
-import { Trash2Icon, PlusIcon } from 'lucide-react';
+import { Trash2Icon, PlusIcon, CheckCircleIcon, XCircleIcon } from 'lucide-react';
 import { Button } from '../ui/button';
 import StyledInput from "../ui/styled-input"
 import useAppStateStore from '../../hooks/store/useAppStateStore';
@@ -10,6 +10,7 @@ const RequestParams: React.FC = () => {
   const addEmptyParam = useAppStateStore((state) => state.addEmptyParam);
   const upsertParam = useAppStateStore((state) => state.upsertParam);
   const removeParam = useAppStateStore((state) => state.removeParam);
+  const toggleParamEnabled = useAppStateStore((state) => state.toggleParamEnabled);
   const activeEnvironment = useAppStateStore((state) => state.activeEnvironment);
   const activeEnvVariables = new Set<string>();
     if (activeEnvironment && activeEnvironment.values) {
@@ -104,46 +105,75 @@ const RequestParams: React.FC = () => {
             </tr>
           </thead>
           <tbody>
-            {params.map((param, index) => (
-              <tr key={param.id} className="border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/50">
-                <td className="py-2 px-3">
-                  <StyledInput
-                    type="text"
-                    placeholder="Parameter key"
-                    value={localParams[param.id]?.key ?? param.key}
-                    styledValue={styledLocalParams[param.id]?.key ?? renderParameterizedText(param.key, activeEnvVariables)}
-                    onChange={e => updateLocalParam(param.id, 'key', e.target.value)}
-                    onBlur={() => commitParam(param.id)}
-                    onKeyDown={e => handleKeyDown(e, param.id)}
-                    className="bg-white border-slate-300 focus:border-blue-500 dark:bg-slate-800 dark:border-slate-600 dark:focus:border-blue-400"
-                  />
-                </td>
-                <td className="py-2 px-3">
-                  <StyledInput
-                    type="text"
-                    placeholder="Parameter value"
-                    value={localParams[param.id]?.value ?? param.value}
-                    styledValue={styledLocalParams[param.id]?.value ?? renderParameterizedText(param.value, activeEnvVariables)}
-                    onChange={e => updateLocalParam(param.id, 'value', e.target.value)}
-                    onBlur={() => commitParam(param.id)}
-                    onKeyDown={e => handleKeyDown(e, param.id)}
-                    className="bg-white border-slate-300 focus:border-blue-500 dark:bg-slate-800 dark:border-slate-600 dark:focus:border-blue-400"
-                  />
-                </td>
-                <td className="py-2 px-3">
-                  {params.length > 1 && (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => removeParam(param.id)}
-                      className="text-red-600 hover:text-red-700 hover:border-red-300"
-                    >
-                    <Trash2Icon className="h-4 w-4" />
-                    </Button>
-                  )}
-                </td>
-              </tr>
-            ))}
+            {params.map((param, index) => {
+              const isDisabled = param.disabled;
+              
+              return (
+                <tr 
+                  key={param.id} 
+                  className={`border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/50 ${
+                    isDisabled ? 'opacity-40' : ''
+                  }`}
+                >
+                  <td className="py-2 px-3">
+                    <StyledInput
+                      type="text"
+                      placeholder="Parameter key"
+                      value={localParams[param.id]?.key ?? param.key}
+                      styledValue={styledLocalParams[param.id]?.key ?? renderParameterizedText(param.key, activeEnvVariables)}
+                      onChange={e => updateLocalParam(param.id, 'key', e.target.value)}
+                      onBlur={() => commitParam(param.id)}
+                      onKeyDown={e => handleKeyDown(e, param.id)}
+                      className="bg-white border-slate-300 focus:border-blue-500 dark:bg-slate-800 dark:border-slate-600 dark:focus:border-blue-400"
+                    />
+                  </td>
+                  <td className="py-2 px-3">
+                    <StyledInput
+                      type="text"
+                      placeholder="Parameter value"
+                      value={localParams[param.id]?.value ?? param.value}
+                      styledValue={styledLocalParams[param.id]?.value ?? renderParameterizedText(param.value, activeEnvVariables)}
+                      onChange={e => updateLocalParam(param.id, 'value', e.target.value)}
+                      onBlur={() => commitParam(param.id)}
+                      onKeyDown={e => handleKeyDown(e, param.id)}
+                      className="bg-white border-slate-300 focus:border-blue-500 dark:bg-slate-800 dark:border-slate-600 dark:focus:border-blue-400"
+                    />
+                  </td>
+                  <td className="py-2 px-3">
+                    <div className="flex items-center gap-2">
+                      {(Boolean(param.key) || Boolean(param.value)) && (<Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => toggleParamEnabled(param.id, param.disabled)}
+                        className={`${
+                          !isDisabled
+                            ? 'text-green-600 hover:text-green-700 hover:border-green-300'
+                            : 'text-slate-400 hover:text-slate-600 hover:border-slate-300'
+                        }`}
+                        title={!isDisabled ? 'Disable parameter' : 'Enable parameter'}
+                      >
+                        {!isDisabled ? (
+                          <CheckCircleIcon className="h-4 w-4" />
+                        ) : (
+                          <XCircleIcon className="h-4 w-4" />
+                        )}
+                      </Button>)}
+                      {params.length > 1 && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => removeParam(param.id)}
+                          className="text-red-600 hover:text-red-700 hover:border-red-300"
+                          title="Delete parameter"
+                        >
+                          <Trash2Icon className="h-4 w-4" />
+                        </Button>
+                      )}
+                    </div>
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>

@@ -188,7 +188,7 @@ const RequestPanel: React.FC<RequestPanelProps> = ({ onSendRequest, onSaveReques
               <TooltipTrigger asChild>
                 <Button
                   onClick={handleSaveRequest}
-                  className="bg-green-600 hover:bg-green-700 text-white font-medium px-6 py-2 transition-colors dark:bg-green-500 dark:hover:bg-green-600"
+                  className="bg-green-400 hover:bg-green-600 text-green-100 font-medium px-6 py-2 transition-colors dark:bg-green-500 dark:hover:bg-green-800 dark:text-slate-100"
                 >
                   <SaveIcon size={16} />
                 </Button>
@@ -286,7 +286,7 @@ const RequestPanel: React.FC<RequestPanelProps> = ({ onSendRequest, onSaveReques
                 onClick={() => {
                   onSendRequest();
                 }}
-                className="bg-blue-600 hover:bg-blue-700 text-white font-medium px-6 py-2 transition-colors dark:bg-blue-500 dark:hover:bg-blue-600"
+                className="bg-blue-400 hover:bg-blue-600 text-blue-100 font-medium px-6 py-2 transition-colors dark:bg-blue-500 dark:hover:bg-blue-800 dark:text-slate-100"
                 disabled={isRequestProcessing}
               >
                 {isRequestProcessing ? <LoaderCircleIcon className="animate-spin" /> : <SendHorizonalIcon />}

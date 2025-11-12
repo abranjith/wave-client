@@ -3,9 +3,9 @@ import { Collection, CollectionItem, ParsedCollection, ParsedFolder, ParsedReque
 /**
  * Generates a unique ID for a request based on its path and name
  */
-function generateRequestId(folderPath: string[], requestName: string, prefix: string | null = null): string {
-  const baseId = [...folderPath, requestName].join('/').toLowerCase().replace(/[^a-z0-9\/]/g, '-');
-  return prefix ? `${prefix}-${baseId}` : baseId;
+function generateUniqueId(prefix: string): string {
+  const baseId = prefix.toLowerCase().replace(/[^a-z0-9\/]/g, '-');
+  return `${baseId}-${crypto.randomUUID()}`;
 }
 
 /**
@@ -37,7 +37,7 @@ function extractUrlParams(url: CollectionUrl | string): ParamRow[] {
   if (typeof url === 'object' && url.query) {
     // Handle Postman query array format
     return url.query.map(q => ({
-      id: q.id || generateRequestId([], q.key, 'param'),
+      id: q.id || generateUniqueId('param'),
       key: q.key,
       value: q.value,
       disabled: q.disabled || false
@@ -51,7 +51,7 @@ function extractUrlParams(url: CollectionUrl | string): ParamRow[] {
     const urlObj = new URL(urlString);
     urlObj.searchParams.forEach((value, key) => {
       params.push({
-        id: generateRequestId([], key, 'param'),
+        id: generateUniqueId('param'),
         key,
         value,
         disabled: false
@@ -172,7 +172,7 @@ function flattenFolders(
       const body = item.request.body?.raw || '';
       
       requests.push({
-        id: generateRequestId([], item.name),
+        id: generateUniqueId(item.name),
         name: item.name,
         method: item.request.method.toUpperCase(),
         url,
@@ -215,7 +215,7 @@ function getAllRequestsFromFolder(
       const body = item.request.body?.raw || '';
       
       requests.push({
-        id: generateRequestId(folderPath, item.name),
+        id: generateUniqueId(item.name),
         name: item.name,
         method: item.request.method.toUpperCase(),
         url,
