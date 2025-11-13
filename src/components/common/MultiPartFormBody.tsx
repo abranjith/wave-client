@@ -1,10 +1,12 @@
-import React, { useState, useEffect } from 'react';
-import { Trash2Icon, PlusIcon, FileIcon, XIcon } from 'lucide-react';
+import React, { useState, useEffect, JSX } from 'react';
+import { Trash2Icon, PlusIcon, XIcon, CheckCircleIcon, XCircleIcon, PaperclipIcon } from 'lucide-react';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
+import StyledInput from '../ui/styled-input';
 import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from '../ui/select';
 import {MultiPartFormField} from '../../types/collection';
 import useAppStateStore from '../../hooks/store/useAppStateStore';
+import { renderParameterizedText } from '../../utils/styling';
 
 type FieldType = 'text' | 'file';
 
@@ -14,43 +16,83 @@ interface MultiPartFormBodyProps {
 
 const MultiPartFormBody: React.FC<MultiPartFormBodyProps> = ({ dropdownElement }) => {
   const updateBody = useAppStateStore((state) => state.updateMultiPartFormBody);
+  const toggleMultiPartFormFieldEnabled = useAppStateStore((state) => state.toggleMultiPartFormFieldEnabled);
   const body = useAppStateStore((state) => state.body);
-
-  // Get form fields from store, with fallback to empty array with one field
-  const formFields = body.multiPartFormData?.data || [{ id: crypto.randomUUID(), key: '', value: '', fieldType: 'text' as const }];
+  const activeEnvironment = useAppStateStore((state) => state.activeEnvironment);
   
-  const [localFields, setLocalFields] = useState<{ [id: string]: { key: string; value: string | File | null } }>({});
-  const [pendingFileCommit, setPendingFileCommit] = useState<string | null>(null);
+  // Memoize active environment variables to avoid creating new Set on every render
+  const activeEnvVariables = React.useMemo(() => {
+    const vars = new Set<string>();
+    if (activeEnvironment && activeEnvironment.values) {
+      activeEnvironment.values.forEach((envVar) => {
+        if (envVar.enabled && envVar.value) {
+          vars.add(envVar.key);
+        }
+      });
+    }
+    return vars;
+  }, [activeEnvironment]);
 
-  // Sync local state when form fields change
+  // Get form fields from store - use useMemo to prevent creating new array reference
+  const formFields = React.useMemo(() => {
+    return body.multiPartFormData?.data || [{ id: crypto.randomUUID(), key: '', value: '', fieldType: 'text' as const, disabled: false }];
+  }, [body.multiPartFormData?.data]);
+
+  const [localFields, setLocalFields] = useState<{ [id: string]: { key: string; value: string | File | null, disabled: boolean } }>({});
+  const [styledLocalFields, setStyledLocalFields] = useState<{ [id: string]: { key: JSX.Element; value: JSX.Element } }>({});
+  const [pendingFileCommit, setPendingFileCommit] = useState<string | null>(null);
+  const [fileInputKeys, setFileInputKeys] = useState<{ [id: string]: number }>({});
+
+  // Initialize local fields only when formFields structure changes (new fields added/removed)
   useEffect(() => {
-    console.log('Form Fields length changed:', formFields);
-    console.log('Form Fields length changed, before local fields:', localFields);
-    const newLocalFields: { [id: string]: { key: string; value: string | File | null } } = {};
+    const newLocalFields: { [id: string]: { key: string; value: string | File | null, disabled: boolean } } = {};
+    
     formFields.forEach(field => {
-      if (!localFields[field.id]) {
-        newLocalFields[field.id] = { key: field.key, value: field.value };
-      } else {
-        // Preserve existing local fields (which may contain File objects)
+      // Preserve existing local values (which may contain File objects), or initialize from formFields
+      if (localFields[field.id]) {
         newLocalFields[field.id] = localFields[field.id];
+      } else {
+        newLocalFields[field.id] = { key: field.key, value: field.value, disabled: field.disabled };
       }
     });
-    setLocalFields(newLocalFields);
-    console.log('Form Fields length changed, after local fields:', newLocalFields);
-  }, [formFields.length]);
+    
+    // Only update if fields were added or removed
+    const fieldIdsChanged = 
+      formFields.length !== Object.keys(localFields).length ||
+      formFields.some(field => !localFields[field.id]);
+    
+    if (fieldIdsChanged) {
+      setLocalFields(newLocalFields);
+    }
+  }, [formFields]);
+
+  // Regenerate styled fields whenever localFields or activeEnvVariables change
+  useEffect(() => {
+    const newStyledLocalFields: { [id: string]: { key: JSX.Element; value: JSX.Element } } = {};
+    
+    Object.keys(localFields).forEach(id => {
+      const localValue = localFields[id].value;
+      newStyledLocalFields[id] = {
+        key: renderParameterizedText(localFields[id].key, activeEnvVariables),
+        value: typeof localValue === 'string' 
+          ? renderParameterizedText(localValue, activeEnvVariables) 
+          : renderParameterizedText('', activeEnvVariables)
+      };
+    });
+    
+    setStyledLocalFields(newStyledLocalFields);
+  }, [localFields, activeEnvVariables]);
 
   // Handle pending file commit after state update
   //TODO may not work when multiple files are added quickly
   useEffect(() => {
     if (pendingFileCommit) {
-      console.log(`Processing pending file commit for field ${pendingFileCommit}`);
       commitField(pendingFileCommit);
       setPendingFileCommit(null);
     }
   }, [localFields, pendingFileCommit]);
 
   const updateLocalField = (id: string, field: 'key' | 'value', newValue: string | File | null) => {
-    console.log(`Updating local field ${id}: ${field} = ${newValue}`, newValue instanceof File ? 'File' : typeof newValue);
     setLocalFields(prev => ({
       ...prev,
       [id]: {
@@ -62,8 +104,6 @@ const MultiPartFormBody: React.FC<MultiPartFormBodyProps> = ({ dropdownElement }
 
   const commitField = (id: string) => {
     const localField = localFields[id];
-    console.log(`Committing field ${id}:`, localField);
-    console.log(`Committing With field value type:`, localField?.value instanceof File ? 'File' : typeof localField?.value);
     
     if (localField) {
       const updatedFields = formFields.map(field =>
@@ -89,7 +129,7 @@ const MultiPartFormBody: React.FC<MultiPartFormBodyProps> = ({ dropdownElement }
 
         if (isLastRow && !hasEmptyRow) {
           // Add empty field to the updated array before committing
-          const fieldsWithEmpty = [...updatedFields, { id: crypto.randomUUID(), key: '', value: '', fieldType: 'text' as const }];
+          const fieldsWithEmpty = [...updatedFields, { id: crypto.randomUUID(), key: '', value: '', fieldType: 'text' as const, disabled: false }];
           updateBody(fieldsWithEmpty);
           return;
         }
@@ -127,7 +167,6 @@ const MultiPartFormBody: React.FC<MultiPartFormBodyProps> = ({ dropdownElement }
 
   const handleFileChange = (id: string, file: File | null) => {
     if (file) {
-      console.log(`File selected for field ${id}:`, file, file instanceof File ? 'File' : typeof file);
       updateLocalField(id, 'value', file);
       // Queue the commit to run after state update
       setPendingFileCommit(id);
@@ -143,10 +182,16 @@ const MultiPartFormBody: React.FC<MultiPartFormBodyProps> = ({ dropdownElement }
     );
     
     updateBody(updatedFields);
+    
+    // Force remount of file input by changing its key
+    setFileInputKeys(prev => ({
+      ...prev,
+      [id]: (prev[id] || 0) + 1
+    }));
   };
 
   const addEmptyField = () => {
-    updateBody([...formFields, { id: crypto.randomUUID(), key: '', value: '', fieldType: 'text' }]);
+    updateBody([...formFields, { id: crypto.randomUUID(), key: '', value: '', fieldType: 'text', disabled: false }]);
   };
 
   const removeField = (id: string) => {
@@ -162,7 +207,7 @@ const MultiPartFormBody: React.FC<MultiPartFormBodyProps> = ({ dropdownElement }
   };
 
   const clearAll = () => {
-    updateBody([{ id: crypto.randomUUID(), key: '', value: '', fieldType: 'text' }]);
+    updateBody([{ id: crypto.randomUUID(), key: '', value: '', fieldType: 'text', disabled: false }]);
     setLocalFields({});
   };
 
@@ -179,7 +224,7 @@ const MultiPartFormBody: React.FC<MultiPartFormBodyProps> = ({ dropdownElement }
     const hasValue = typeof field.value === 'string' 
       ? field.value.trim() 
       : field.value instanceof File;
-    return hasKey && hasValue;
+    return hasKey && hasValue && !field.disabled;
   }).length;
 
   const getFieldTypeLabel = (type: FieldType): string => {
@@ -198,6 +243,7 @@ const MultiPartFormBody: React.FC<MultiPartFormBodyProps> = ({ dropdownElement }
       return (
         <div className="flex items-center gap-2 w-full">
           <Input
+            key={`file-${field.id}-${fileInputKeys[field.id] || 0}`}
             type="file"
             onChange={e => {
               const file = e.target.files?.[0] || null;
@@ -206,30 +252,29 @@ const MultiPartFormBody: React.FC<MultiPartFormBodyProps> = ({ dropdownElement }
             className="w-full text-sm rounded bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-200 focus:outline-none file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:text-xs file:bg-slate-100 dark:file:bg-slate-800 file:text-slate-700 dark:file:text-slate-300 hover:file:bg-slate-200 dark:hover:file:bg-slate-700"
           />
           {currentFile && (
-            <div className="flex items-center gap-1 px-2 py-1 bg-blue-50 dark:bg-blue-900/20 rounded text-xs text-blue-700 dark:text-blue-400 whitespace-nowrap">
-              <FileIcon size={14} />
+            <div className="flex items-center gap-1 px-2 py-1 bg-blue-50 dark:bg-blue-900/20 rounded text-xs text-blue-600 dark:text-blue-400 whitespace-nowrap">
+              <PaperclipIcon
+                className="text-blue-600 dark:text-blue-400 size-4 shrink-0 opacity-60"
+                aria-hidden="true"
+              />
               <span className="max-w-[100px] truncate">{currentFile.name}</span>
-              <button
-                onClick={() => clearFile(field.id)}
-                className="ml-1 hover:text-blue-900 dark:hover:text-blue-300"
-              >
-                <XIcon size={14} />
-              </button>
             </div>
           )}
         </div>
       );
     }
 
+    // For text fields, use StyledInput with parameterized text support
     return (
-      <Input
+      <StyledInput
         type="text"
         placeholder="Field value (e.g., john_doe)"
-        value={localFields[field.id]?.value as string ?? field.value as string}
+        value={localFields[field.id]?.value as string ?? field.value as string ?? ''}
+        styledValue={styledLocalFields[field.id]?.value ?? renderParameterizedText(field.value as string ?? '', activeEnvVariables)}
         onChange={e => updateLocalField(field.id, 'value', e.target.value)}
         onBlur={() => commitField(field.id)}
         onKeyDown={e => handleKeyDown(e, field.id)}
-        className="w-full text-sm rounded bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-200 focus:outline-none"
+        className="bg-white border-slate-300 focus:border-blue-500 dark:bg-slate-800 dark:border-slate-600 dark:focus:border-blue-400"
       />
     );
   };
@@ -276,17 +321,26 @@ const MultiPartFormBody: React.FC<MultiPartFormBodyProps> = ({ dropdownElement }
             </tr>
           </thead>
           <tbody>
-            {formFields.map((field, index) => (
-              <tr key={field.id} className="border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/50">
-                <td className="py-2 px-3">
-                  <Input
+            {formFields.map((field, index) => {
+              const isDisabled = field.disabled;
+              
+              return (
+                <tr 
+                  key={field.id} 
+                  className={`border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/50 ${
+                    isDisabled ? 'opacity-40' : ''
+                  }`}
+                >
+                  <td className="py-2 px-3">
+                  <StyledInput
                     type="text"
                     placeholder="Field name (e.g., username)"
                     value={localFields[field.id]?.key ?? field.key}
+                    styledValue={styledLocalFields[field.id]?.key ?? renderParameterizedText(field.key, activeEnvVariables)}
                     onChange={e => updateLocalField(field.id, 'key', e.target.value)}
                     onBlur={() => commitField(field.id)}
                     onKeyDown={e => handleKeyDown(e, field.id)}
-                    className="w-full text-sm rounded bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-200 focus:outline-none"
+                    className="bg-white border-slate-300 focus:border-blue-500 dark:bg-slate-800 dark:border-slate-600 dark:focus:border-blue-400"
                   />
                 </td>
                 <td className="py-2 px-3">
@@ -307,19 +361,53 @@ const MultiPartFormBody: React.FC<MultiPartFormBodyProps> = ({ dropdownElement }
                   {renderValueInput(field)}
                 </td>
                 <td className="py-2 px-3">
-                  {formFields.length > 1 && (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => removeField(field.id)}
-                      className="text-red-600 hover:text-red-700 hover:border-red-300 dark:text-red-400 dark:hover:text-red-300"
-                    >
-                      <Trash2Icon className="h-4 w-4" />
-                    </Button>
-                  )}
+                  <div className="flex items-center gap-2">
+                    {field.fieldType === 'file' && field.value instanceof File && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => clearFile(field.id)}
+                        className="text-orange-600 hover:text-orange-700 hover:border-orange-300 dark:text-orange-400 dark:hover:text-orange-300"
+                        title="Clear file"
+                      >
+                        <XIcon className="h-4 w-4" />
+                      </Button>
+                    )}
+                    {(Boolean(field.key) || Boolean(field.value)) && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => toggleMultiPartFormFieldEnabled(field.id, field.disabled)}
+                        className={`${
+                          !isDisabled
+                            ? 'text-green-600 hover:text-green-700 hover:border-green-300'
+                            : 'text-slate-400 hover:text-slate-600 hover:border-slate-300'
+                        }`}
+                        title={!isDisabled ? 'Disable field' : 'Enable field'}
+                      >
+                        {!isDisabled ? (
+                          <CheckCircleIcon className="h-4 w-4" />
+                        ) : (
+                          <XCircleIcon className="h-4 w-4" />
+                        )}
+                      </Button>
+                    )}
+                    {formFields.length > 1 && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => removeField(field.id)}
+                        className="text-red-600 hover:text-red-700 hover:border-red-300 dark:text-red-400 dark:hover:text-red-300"
+                        title="Delete field"
+                      >
+                        <Trash2Icon className="h-4 w-4" />
+                      </Button>
+                    )}
+                  </div>
                 </td>
               </tr>
-            ))}
+              );
+            })}
           </tbody>
         </table>
       </div>

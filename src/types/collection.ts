@@ -112,12 +112,14 @@ export interface FormField {
   id: string;
   key: string;
   value: string | null;
+  disabled: boolean;
 }
 
 export interface MultiPartFormField {
   id: string;
   key: string;
   value: string | File | null;
+  disabled: boolean;
   fieldType: 'text' | 'file';
 }
 

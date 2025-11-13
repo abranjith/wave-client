@@ -109,17 +109,30 @@ const TextBody: React.FC<TextBodyProps> = ({ dropdownElement }) => {
   const [bodyContent, setBodyContent] = useState(body.textData?.data || '');
   const [bodyTypeInfo, setBodyTypeInfo] = useState<{ label: string; color: string; description: string }>({ label: '', color: '', description: '' });
 
+  // Only sync from global state when it changes from external sources (not from this component)
   useEffect(() => {
-    setBodyContent(body.textData?.data?.trim() || '');
+    const globalContent = body.textData?.data || '';
+    // Only update local state if content is different (prevents interference while typing)
+    if (globalContent !== bodyContent) {
+      setBodyContent(globalContent);
+    }
+    
     let bodyType = body.textData?.textType || 'unknown';
     if(bodyType === 'none' || bodyType === 'unknown') {
-      bodyType = getBodyType(body.textData?.data || '');
+      bodyType = getBodyType(globalContent);
     }
     setBodyTypeInfo(getTypeInfo(bodyType));
-  }, [body]);
+  }, [body.textData?.data, body.textData?.textType]); // More specific dependencies
 
+  // Update local state immediately for responsive typing
   const handleBodyChange = (newValue: string) => {
-    updateBody(newValue, getBodyType(newValue));
+    setBodyContent(newValue);
+    setBodyTypeInfo(getTypeInfo(getBodyType(newValue)));
+  };
+
+  // Sync to global state on blur
+  const handleBlur = () => {
+    updateBody(bodyContent, getBodyType(bodyContent));
   };
 
   const formatContent = () => {
@@ -129,28 +142,29 @@ const TextBody: React.FC<TextBodyProps> = ({ dropdownElement }) => {
     }
 
     try {
-      switch (body.textData?.textType as string) {
+      let formattedContent = '';
+      const detectedType = getBodyType(strBody);
+      
+      switch (detectedType) {
         case 'json':
           const parsed = JSON.parse(strBody);
-          updateBody(JSON.stringify(parsed, null, 2), 'json');
+          formattedContent = JSON.stringify(parsed, null, 2);
           break;
         
         case 'xml':
-          // Simple XML/HTML formatting
-          const formattedXml = formatXmlHtml(strBody);
-          updateBody(formattedXml, 'xml');
+          formattedContent = formatXmlHtml(strBody);
           break;
 
         case 'html':
-          // Simple XML/HTML formatting
-          const formattedHtml = formatXmlHtml(strBody);
-          updateBody(formattedHtml, 'html');
+          formattedContent = formatXmlHtml(strBody);
           break;
         
         default:
-          // For plain text, just clean up extra whitespace
-          updateBody(strBody.trim(), 'text');
+          formattedContent = strBody.trim();
       }
+      
+      setBodyContent(formattedContent);
+      updateBody(formattedContent, detectedType);
     } catch (e) {
       console.warn('Failed to format content:', e);
     }
@@ -204,7 +218,10 @@ const TextBody: React.FC<TextBodyProps> = ({ dropdownElement }) => {
   const pasteFromClipboard = async () => {
     try {
       const text = await navigator.clipboard.readText();
-      updateBody(text, getBodyType(text));
+      const detectedType = getBodyType(text);
+      setBodyContent(text);
+      setBodyTypeInfo(getTypeInfo(detectedType));
+      updateBody(text, detectedType);
     } catch (err) {
       console.error('Failed to paste:', err);
     }
@@ -219,7 +236,11 @@ const TextBody: React.FC<TextBodyProps> = ({ dropdownElement }) => {
       unknown: ''
     };
     
-    updateBody(examples[type], getBodyType(examples[type]));
+    const exampleContent = examples[type];
+    const detectedType = getBodyType(exampleContent);
+    setBodyContent(exampleContent);
+    setBodyTypeInfo(getTypeInfo(detectedType));
+    updateBody(exampleContent, detectedType);
     setShowExamples(false);
   };
 
@@ -321,7 +342,11 @@ const TextBody: React.FC<TextBodyProps> = ({ dropdownElement }) => {
             <Button
               variant="outline"
               size="sm"
-              onClick={() => handleBodyChange('')}
+              onClick={() => {
+                setBodyContent('');
+                setBodyTypeInfo(getTypeInfo('unknown'));
+                updateBody('', 'unknown');
+              }}
               className="text-red-600 hover:text-red-700 hover:bg-red-50 dark:text-red-400 dark:hover:text-red-300 dark:hover:bg-red-900/20"
             >
               Clear
@@ -336,6 +361,7 @@ const TextBody: React.FC<TextBodyProps> = ({ dropdownElement }) => {
           placeholder="Enter request body (JSON, XML, HTML, plain text, etc.)"
           value={bodyContent}
           onChange={e => handleBodyChange(e.target.value)}
+          onBlur={handleBlur}
           className="flex-1 font-mono text-sm resize-none text-slate-800 dark:text-slate-200 min-h-[300px] bg-white dark:bg-slate-900"
           spellCheck={false}
         />

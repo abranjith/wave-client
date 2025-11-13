@@ -1,6 +1,7 @@
-import { AlertCircleIcon, PaperclipIcon, UploadIcon, XIcon } from "lucide-react"
+import { PaperclipIcon, UploadIcon, XIcon } from "lucide-react"
 import { FileWithPreview, useFileUpload } from "../../hooks/useFileUpload"
 import { Button } from './button';
+import Banner from "./banner";
 
 export interface FileInputProps {
   onFilesAdded?: (addedFiles: FileWithPreview[]) => void;
@@ -26,17 +27,20 @@ function FileInput({ onFilesAdded, onFileRemoved, initialFiles }: FileInputProps
   const file = files[0]
 
   return (
-    <div className="flex flex-col gap-2">
+    <>
       {/* Drop area */}
-      <div
+      {!Boolean(file) && (<div
         role="button"
         onClick={openFileDialog}
         onDragEnter={handleDragEnter}
         onDragLeave={handleDragLeave}
         onDragOver={handleDragOver}
         onDrop={handleDrop}
-        data-dragging={isDragging || undefined}
-        className="border-input hover:bg-accent/50 data-[dragging=true]:bg-accent/50 has-[input:focus]:border-ring has-[input:focus]:ring-ring/50 flex min-h-40 flex-col items-center justify-center rounded-xl border border-dashed p-4 transition-colors has-disabled:pointer-events-none has-disabled:opacity-50 has-[input:focus]:ring-[3px]"
+        className={`border-input hover:bg-accent/50 flex min-h-40 flex-col items-center justify-center rounded-xl border border-dashed p-4 transition-colors ${
+          isDragging ? 'bg-accent/50' : ''
+        } ${
+          file ? 'pointer-events-none opacity-50' : ''
+        }`}
       >
         <input
           {...getInputProps()}
@@ -50,23 +54,18 @@ function FileInput({ onFilesAdded, onFileRemoved, initialFiles }: FileInputProps
             className="bg-background mb-2 flex size-11 shrink-0 items-center justify-center rounded-full border"
             aria-hidden="true"
           >
-            <UploadIcon className="size-4 opacity-60" />
+            <UploadIcon className="size-4 opacity-60 text-slate-500 dark:text-slate-500" />
           </div>
-          <p className="mb-1.5 text-sm font-medium">Upload file</p>
-          <p className="text-muted-foreground text-xs">
+          <p className="mb-1.5 text-sm font-medium text-slate-500 dark:text-slate-400">Upload file</p>
+          <p className="text-muted-foreground text-xs text-slate-500 dark:text-slate-400">
             Drag & drop or click to browse
           </p>
         </div>
-      </div>
+      </div>)}
 
+      {/* Error messages */}
       {errors.length > 0 && (
-        <div
-          className="text-destructive flex items-center gap-1 text-xs"
-          role="alert"
-        >
-          <AlertCircleIcon className="size-3 shrink-0" />
-          <span>{errors[0]}</span>
-        </div>
+        <Banner message={errors.join(", ")} messageType="error" />
       )}
 
       {/* File list */}
@@ -78,11 +77,11 @@ function FileInput({ onFilesAdded, onFileRemoved, initialFiles }: FileInputProps
           >
             <div className="flex items-center gap-3 overflow-hidden">
               <PaperclipIcon
-                className="size-4 shrink-0 opacity-60"
+                className="text-blue-600 dark:text-blue-400 size-4 shrink-0 opacity-60"
                 aria-hidden="true"
               />
               <div className="min-w-0">
-                <p className="truncate text-[13px] font-medium">
+                <p className="text-[13px] text-sm font-medium text-slate-800 dark:text-slate-200 truncate">
                   {file.file.name}
                 </p>
               </div>
@@ -92,7 +91,7 @@ function FileInput({ onFilesAdded, onFileRemoved, initialFiles }: FileInputProps
               size="icon"
               variant="ghost"
               className="text-muted-foreground/80 hover:text-foreground -me-2 size-8 hover:bg-transparent"
-              onClick={() => removeFile(files[0]?.id)}
+              onClick={() => removeFile(file?.id)}
               aria-label="Remove file"
             >
               <XIcon className="size-4" aria-hidden="true" />
@@ -100,7 +99,7 @@ function FileInput({ onFilesAdded, onFileRemoved, initialFiles }: FileInputProps
           </div>
         </div>
       )}
-    </div>
+    </>
   )
 }
 

@@ -1,9 +1,10 @@
-import React, { useState, useEffect } from 'react';
-import { Trash2Icon, CopyIcon, ClipboardPasteIcon, PlusIcon } from 'lucide-react';
+import React, { useState, useEffect, JSX } from 'react';
+import { Trash2Icon, CopyIcon, ClipboardPasteIcon, PlusIcon, CheckCircleIcon, XCircleIcon } from 'lucide-react';
 import { Button } from '../ui/button';
-import { Input } from '../ui/input';
+import StyledInput from "../ui/styled-input";
 import { Tooltip, TooltipTrigger, TooltipContent } from '../ui/tooltip';
 import useAppStateStore from '../../hooks/store/useAppStateStore';
+import { renderParameterizedText } from '../../utils/styling';
 
 interface FormBodyProps {
   dropdownElement?: React.ReactNode;
@@ -11,25 +12,67 @@ interface FormBodyProps {
 
 const FormBody: React.FC<FormBodyProps> = ({ dropdownElement }) => {
   const updateBody = useAppStateStore((state) => state.updateFormBody);
+  const toggleFormFieldEnabled = useAppStateStore((state) => state.toggleFormFieldEnabled);
   const body = useAppStateStore((state) => state.body);
+  const activeEnvironment = useAppStateStore((state) => state.activeEnvironment);
   
-  // Get form fields from store, with fallback to empty array with one field
-  const formFields = body.formData?.data || [{ id: crypto.randomUUID(), key: '', value: '' }];
+  // Memoize active environment variables to avoid creating new Set on every render
+  const activeEnvVariables = React.useMemo(() => {
+    const vars = new Set<string>();
+    if (activeEnvironment && activeEnvironment.values) {
+      activeEnvironment.values.forEach((envVar) => {
+        if (envVar.enabled && envVar.value) {
+          vars.add(envVar.key);
+        }
+      });
+    }
+    return vars;
+  }, [activeEnvironment]);
   
-  const [localFields, setLocalFields] = useState<{ [id: string]: { key: string; value: string | null } }>({});
+  // Get form fields from store - use useMemo to prevent creating new array reference
+  const formFields = React.useMemo(() => {
+    return body.formData?.data || [{ id: crypto.randomUUID(), key: '', value: '', disabled: false }];
+  }, [body.formData?.data]);
+  
+  const [localFields, setLocalFields] = useState<{ [id: string]: { key: string; value: string | null, disabled: boolean } }>({});
+  const [styledLocalFields, setStyledLocalFields] = useState<{ [id: string]: { key: JSX.Element; value: JSX.Element } }>({});
 
-  // Sync local state when form fields change
+  // Initialize local fields only when formFields structure changes (new fields added/removed)
   useEffect(() => {
-    const newLocalFields: { [id: string]: { key: string; value: string | null } } = {};
+    const newLocalFields: { [id: string]: { key: string; value: string | null, disabled: boolean } } = {};
+    
     formFields.forEach(field => {
-      if (!localFields[field.id]) {
-        newLocalFields[field.id] = { key: field.key, value: field.value };
-      } else {
+      // Preserve existing local values, or initialize from formFields
+      if (localFields[field.id]) {
         newLocalFields[field.id] = localFields[field.id];
+      } else {
+        newLocalFields[field.id] = { key: field.key, value: field.value, disabled: field.disabled };
       }
     });
-    setLocalFields(newLocalFields);
-  }, [formFields.length]);
+    
+    // Only update if fields were added or removed
+    const fieldIdsChanged = 
+      formFields.length !== Object.keys(localFields).length ||
+      formFields.some(field => !localFields[field.id]);
+    
+    if (fieldIdsChanged) {
+      setLocalFields(newLocalFields);
+    }
+  }, [formFields]);
+
+  // Regenerate styled fields whenever localFields or activeEnvVariables change
+  useEffect(() => {
+    const newStyledLocalFields: { [id: string]: { key: JSX.Element; value: JSX.Element } } = {};
+    
+    Object.keys(localFields).forEach(id => {
+      newStyledLocalFields[id] = {
+        key: renderParameterizedText(localFields[id].key, activeEnvVariables),
+        value: renderParameterizedText(localFields[id].value || '', activeEnvVariables)
+      };
+    });
+    
+    setStyledLocalFields(newStyledLocalFields);
+  }, [localFields, activeEnvVariables]);
 
   const updateLocalField = (id: string, field: 'key' | 'value', newValue: string | null) => {
     setLocalFields(prev => ({
@@ -57,7 +100,7 @@ const FormBody: React.FC<FormBodyProps> = ({ dropdownElement }) => {
 
         if (isLastRow && !hasEmptyRow) {
           // Add empty field to the updated array before committing
-          const fieldsWithEmpty = [...updatedFields, { id: crypto.randomUUID(), key: '', value: '' }];
+          const fieldsWithEmpty = [...updatedFields, { id: crypto.randomUUID(), key: '', value: '', disabled: false }];
           updateBody(fieldsWithEmpty);
           return;
         }
@@ -75,7 +118,7 @@ const FormBody: React.FC<FormBodyProps> = ({ dropdownElement }) => {
   };
 
   const addEmptyField = () => {
-    let emptyRow = { id: crypto.randomUUID(), key: '', value: '' };
+    let emptyRow = { id: crypto.randomUUID(), key: '', value: '', disabled: false };
     updateBody([...formFields, emptyRow]);
   };
 
@@ -92,7 +135,7 @@ const FormBody: React.FC<FormBodyProps> = ({ dropdownElement }) => {
   };
 
   const clearAll = () => {
-    updateBody([{ id: crypto.randomUUID(), key: '', value: '' }]);
+    updateBody([{ id: crypto.randomUUID(), key: '', value: '', disabled: false }]);
     setLocalFields({});
   };
 
@@ -118,12 +161,13 @@ const FormBody: React.FC<FormBodyProps> = ({ dropdownElement }) => {
         return {
           id: crypto.randomUUID(),
           key: decodeURIComponent(key || ''),
-          value: decodeURIComponent(value || '')
+          value: decodeURIComponent(value || ''),
+          disabled: false
         };
       }).filter(pair => pair.key);
 
       if (pairs.length > 0) {
-        updateBody([...pairs, { id: crypto.randomUUID(), key: '', value: '' }]);
+        updateBody([...pairs, { id: crypto.randomUUID(), key: '', value: '', disabled: false }]);
       }
     } catch (err) {
       console.error('Failed to paste:', err);
@@ -131,7 +175,7 @@ const FormBody: React.FC<FormBodyProps> = ({ dropdownElement }) => {
   };
 
   const hasData = formFields.some(field => field.key.trim() || field.value?.trim());
-  const validFieldCount = formFields.filter(field => field.key.trim() && field.value?.trim()).length;
+  const validFieldCount = formFields.filter(field => field.key.trim() && field.value?.trim() && !field.disabled).length;
 
   return (
     <div className="flex flex-col h-full">
@@ -209,44 +253,77 @@ const FormBody: React.FC<FormBodyProps> = ({ dropdownElement }) => {
             </tr>
           </thead>
           <tbody>
-            {formFields.map((field, index) => (
-              <tr key={field.id} className="border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/50">
-                <td className="py-2 px-3">
-                  <Input
-                    type="text"
-                    placeholder="Field name (e.g., username)"
-                    value={localFields[field.id]?.key ?? field.key}
-                    onChange={e => updateLocalField(field.id, 'key', e.target.value)}
-                    onBlur={() => commitField(field.id)}
-                    onKeyDown={e => handleKeyDown(e, field.id)}
-                    className="w-full text-sm rounded bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-200 focus:outline-none"
-                  />
-                </td>
-                <td className="py-2 px-3">
-                  <Input
-                    type="text"
-                    placeholder="Field value (e.g., john_doe)"
-                    value={(localFields[field.id]?.value ?? field.value) || ''}
-                    onChange={e => updateLocalField(field.id, 'value', e.target.value)}
-                    onBlur={() => commitField(field.id)}
-                    onKeyDown={e => handleKeyDown(e, field.id)}
-                    className="w-full text-sm rounded bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-200 focus:outline-none"
-                  />
-                </td>
-                <td className="py-2 px-3">
-                  {formFields.length > 1 && (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => removeField(field.id)}
-                      className="text-red-600 hover:text-red-700 hover:border-red-300 dark:text-red-400 dark:hover:text-red-300"
-                    >
-                      <Trash2Icon className="h-4 w-4" />
-                    </Button>
-                  )}
-                </td>
-              </tr>
-            ))}
+            {formFields.map((field, index) => {
+              const isDisabled = field.disabled;
+              
+              return (
+                <tr 
+                  key={field.id} 
+                  className={`border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/50 ${
+                    isDisabled ? 'opacity-40' : ''
+                  }`}
+                >
+                  <td className="py-2 px-3">
+                    <StyledInput
+                      type="text"
+                      placeholder="Field name (e.g., username)"
+                      value={localFields[field.id]?.key ?? field.key}
+                      styledValue={styledLocalFields[field.id]?.key ?? renderParameterizedText(field.key, activeEnvVariables)}
+                      onChange={e => updateLocalField(field.id, 'key', e.target.value)}
+                      onBlur={() => commitField(field.id)}
+                      onKeyDown={e => handleKeyDown(e, field.id)}
+                      className="bg-white border-slate-300 focus:border-blue-500 dark:bg-slate-800 dark:border-slate-600 dark:focus:border-blue-400"
+                    />
+                  </td>
+                  <td className="py-2 px-3">
+                    <StyledInput
+                      type="text"
+                      placeholder="Field value (e.g., john_doe)"
+                      value={(localFields[field.id]?.value ?? field.value) || ''}
+                      styledValue={styledLocalFields[field.id]?.value ?? renderParameterizedText(field.value || '', activeEnvVariables)}
+                      onChange={e => updateLocalField(field.id, 'value', e.target.value)}
+                      onBlur={() => commitField(field.id)}
+                      onKeyDown={e => handleKeyDown(e, field.id)}
+                      className="bg-white border-slate-300 focus:border-blue-500 dark:bg-slate-800 dark:border-slate-600 dark:focus:border-blue-400"
+                    />
+                  </td>
+                  <td className="py-2 px-3">
+                    <div className="flex items-center gap-2">
+                      {(Boolean(field.key) || Boolean(field.value)) && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => toggleFormFieldEnabled(field.id, field.disabled)}
+                          className={`${
+                            !isDisabled
+                              ? 'text-green-600 hover:text-green-700 hover:border-green-300'
+                              : 'text-slate-400 hover:text-slate-600 hover:border-slate-300'
+                          }`}
+                          title={!isDisabled ? 'Disable field' : 'Enable field'}
+                        >
+                          {!isDisabled ? (
+                            <CheckCircleIcon className="h-4 w-4" />
+                          ) : (
+                            <XCircleIcon className="h-4 w-4" />
+                          )}
+                        </Button>
+                      )}
+                      {formFields.length > 1 && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => removeField(field.id)}
+                          className="text-red-600 hover:text-red-700 hover:border-red-300 dark:text-red-400 dark:hover:text-red-300"
+                          title="Delete field"
+                        >
+                          <Trash2Icon className="h-4 w-4" />
+                        </Button>
+                      )}
+                    </div>
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>

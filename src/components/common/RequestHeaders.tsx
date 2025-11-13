@@ -12,46 +12,60 @@ const RequestHeaders: React.FC = () => {
   const removeHeader = useAppStateStore((state) => state.removeHeader);
   const toggleHeaderEnabled = useAppStateStore((state) => state.toggleHeaderEnabled);
   const activeEnvironment = useAppStateStore((state) => state.activeEnvironment);
-  const activeEnvVariables = new Set<string>();
+  
+  // Memoize active environment variables to avoid creating new Set on every render
+  const activeEnvVariables = React.useMemo(() => {
+    const vars = new Set<string>();
     if (activeEnvironment && activeEnvironment.values) {
       activeEnvironment.values.forEach((envVar) => {
         if (envVar.enabled && envVar.value) {
-          activeEnvVariables.add(envVar.key);
+          vars.add(envVar.key);
         }
       });
     }
+    return vars;
+  }, [activeEnvironment]);
 
   // Local state to track input values for all headers
   const [localHeaders, setLocalHeaders] = useState<{ [id: string]: { key: string; value: string } }>({});
   const [styledLocalHeaders, setStyledLocalHeaders] = useState<{ [id: string]: { key: JSX.Element; value: JSX.Element } }>({});
 
-  // Sync local state when global headers change (e.g., when adding/removing headers)
+  // Initialize local headers only when headers structure changes (new headers added/removed)
   useEffect(() => {
     const newLocalHeaders: { [id: string]: { key: string; value: string } } = {};
-    const newStyledLocalHeaders: { [id: string]: { key: JSX.Element; value: JSX.Element } } = {};
+    
     headers.forEach(header => {
-      if (!localHeaders[header.id]) {
-        newLocalHeaders[header.id] = { key: header.key, value: header.value };
-        newStyledLocalHeaders[header.id] = { key: renderParameterizedText(header.key, activeEnvVariables), value: renderParameterizedText(header.value, activeEnvVariables) };
-      } else {
+      // Preserve existing local values, or initialize from headers
+      if (localHeaders[header.id]) {
         newLocalHeaders[header.id] = localHeaders[header.id];
-        newStyledLocalHeaders[header.id] = { key: renderParameterizedText(localHeaders[header.id].key, activeEnvVariables), value: renderParameterizedText(localHeaders[header.id].value, activeEnvVariables) };
+      } else {
+        newLocalHeaders[header.id] = { key: header.key, value: header.value };
       }
     });
-    setLocalHeaders(newLocalHeaders);
-    setStyledLocalHeaders(newStyledLocalHeaders);
-  }, [headers.length]); // Only trigger when headers are added/removed
+    
+    // Only update if headers were added or removed
+    const headerIdsChanged = 
+      headers.length !== Object.keys(localHeaders).length ||
+      headers.some(header => !localHeaders[header.id]);
+    
+    if (headerIdsChanged) {
+      setLocalHeaders(newLocalHeaders);
+    }
+  }, [headers]);
 
+  // Regenerate styled headers whenever localHeaders or activeEnvVariables change
   useEffect(() => {
     const newStyledLocalHeaders: { [id: string]: { key: JSX.Element; value: JSX.Element } } = {};
+    
     Object.keys(localHeaders).forEach(id => {
       newStyledLocalHeaders[id] = {
         key: renderParameterizedText(localHeaders[id].key, activeEnvVariables),
         value: renderParameterizedText(localHeaders[id].value, activeEnvVariables)
       };
     });
+    
     setStyledLocalHeaders(newStyledLocalHeaders);
-  }, [activeEnvVariables]);
+  }, [localHeaders, activeEnvVariables]);
 
   const updateLocalHeader = (id: string, field: 'key' | 'value', newValue: string) => {
     setLocalHeaders(prev => ({
@@ -59,13 +73,6 @@ const RequestHeaders: React.FC = () => {
       [id]: {
         ...prev[id],
         [field]: newValue
-      }
-    }));
-    setStyledLocalHeaders(prev => ({
-      ...prev,
-      [id]: {
-        ...prev[id],
-        [field]: renderParameterizedText(newValue, activeEnvVariables)
       }
     }));
   };

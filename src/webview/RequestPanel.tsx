@@ -189,6 +189,7 @@ const RequestPanel: React.FC<RequestPanelProps> = ({ onSendRequest, onSaveReques
                 <Button
                   onClick={handleSaveRequest}
                   className="bg-green-400 hover:bg-green-600 text-green-100 font-medium px-6 py-2 transition-colors dark:bg-green-500 dark:hover:bg-green-800 dark:text-slate-100"
+                  disabled={isRequestProcessing || !Boolean(url?.trim())}
                 >
                   <SaveIcon size={16} />
                 </Button>

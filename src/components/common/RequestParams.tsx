@@ -12,46 +12,60 @@ const RequestParams: React.FC = () => {
   const removeParam = useAppStateStore((state) => state.removeParam);
   const toggleParamEnabled = useAppStateStore((state) => state.toggleParamEnabled);
   const activeEnvironment = useAppStateStore((state) => state.activeEnvironment);
-  const activeEnvVariables = new Set<string>();
+  
+  // Memoize active environment variables to avoid creating new Set on every render
+  const activeEnvVariables = React.useMemo(() => {
+    const vars = new Set<string>();
     if (activeEnvironment && activeEnvironment.values) {
       activeEnvironment.values.forEach((envVar) => {
         if (envVar.enabled && envVar.value) {
-          activeEnvVariables.add(envVar.key);
+          vars.add(envVar.key);
         }
       });
     }
+    return vars;
+  }, [activeEnvironment]);
 
   // Local state to track input values for all params
   const [localParams, setLocalParams] = useState<{ [id: string]: { key: string; value: string } }>({});
   const [styledLocalParams, setStyledLocalParams] = useState<{ [id: string]: { key: JSX.Element; value: JSX.Element } }>({});
 
-  // Sync local state when global params change (e.g., when adding/removing params)
+  // Initialize local params only when params structure changes (new params added/removed)
   useEffect(() => {
     const newLocalParams: { [id: string]: { key: string; value: string } } = {};
-    const newStyledLocalParams: { [id: string]: { key: JSX.Element; value: JSX.Element } } = {};
+    
     params.forEach(param => {
-      if (!localParams[param.id]) {
-        newLocalParams[param.id] = { key: param.key, value: param.value };
-        newStyledLocalParams[param.id] = { key: renderParameterizedText(param.key, activeEnvVariables), value: renderParameterizedText(param.value, activeEnvVariables) };
-      } else {
+      // Preserve existing local values, or initialize from params
+      if (localParams[param.id]) {
         newLocalParams[param.id] = localParams[param.id];
-        newStyledLocalParams[param.id] = { key: renderParameterizedText(localParams[param.id].key, activeEnvVariables), value: renderParameterizedText(localParams[param.id].value, activeEnvVariables) };
+      } else {
+        newLocalParams[param.id] = { key: param.key, value: param.value };
       }
     });
-    setLocalParams(newLocalParams);
-    setStyledLocalParams(newStyledLocalParams);
-  }, [params.length]); // Only trigger when params are added/removed
+    
+    // Only update if params were added or removed
+    const paramIdsChanged = 
+      params.length !== Object.keys(localParams).length ||
+      params.some(param => !localParams[param.id]);
+    
+    if (paramIdsChanged) {
+      setLocalParams(newLocalParams);
+    }
+  }, [params]);
 
+  // Regenerate styled params whenever localParams or activeEnvVariables change
   useEffect(() => {
     const newStyledLocalParams: { [id: string]: { key: JSX.Element; value: JSX.Element } } = {};
+    
     Object.keys(localParams).forEach(id => {
       newStyledLocalParams[id] = {
         key: renderParameterizedText(localParams[id].key, activeEnvVariables),
         value: renderParameterizedText(localParams[id].value, activeEnvVariables)
       };
     });
+    
     setStyledLocalParams(newStyledLocalParams);
-  }, [activeEnvVariables]);
+  }, [localParams, activeEnvVariables]);
 
   const updateLocalParam = (id: string, field: 'key' | 'value', newValue: string) => {
     setLocalParams(prev => ({
@@ -59,13 +73,6 @@ const RequestParams: React.FC = () => {
       [id]: {
         ...prev[id],
         [field]: newValue
-      }
-    }));
-    setStyledLocalParams(prev => ({
-      ...prev,
-      [id]: {
-        ...prev[id],
-        [field]: renderParameterizedText(newValue, activeEnvVariables)
       }
     }));
   };

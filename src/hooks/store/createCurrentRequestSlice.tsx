@@ -66,6 +66,12 @@ interface CurrentRequestSlice {
     updateName: (name: string) => void;
     updateFolderPath: (folderPath: string[]) => void;
     
+    // Form fields management
+    toggleFormFieldEnabled: (id: string, currentDisabled: boolean) => void;
+    
+    // Multi-part form fields management
+    toggleMultiPartFormFieldEnabled: (id: string, currentDisabled: boolean) => void;
+    
     // Headers management
     addEmptyHeader: () => void;
     upsertHeader: (id: string, key: string | undefined, value: string | undefined) => void;
@@ -238,7 +244,7 @@ async function convertBodyToRequestBody(
             if (Array.isArray(multiPartData)) {
                 const formData = new FormData();
                 for (const field of multiPartData) {
-                    if (field.key && field.key.trim()) {
+                    if (field.key && field.key.trim() && !field.disabled) {
                         // Resolve key
                         const keyResult = resolveParameterizedValue(field.key, envVarsMap);
                         keyResult.unresolved.forEach(u => unresolved.add(u));
@@ -264,7 +270,7 @@ async function convertBodyToRequestBody(
                 const formFields = Array.isArray(urlEncodedFormData) ? urlEncodedFormData as FormField[] : [];
                 const dataRecord: Record<string, string> = {};
                 for (const field of formFields) {
-                    if (field.key && field.key.trim() && field.value !== undefined) {
+                    if (field.key && field.key.trim() && field.value !== undefined && !field.disabled) {
                         const keyResult = resolveParameterizedValue(field.key, envVarsMap);
                         keyResult.unresolved.forEach(u => unresolved.add(u));
                         const resolvedKey = keyResult.resolved;
@@ -292,11 +298,11 @@ async function convertBodyToRequestBody(
 }
 
 function emptyFormField(): FormField {
-    return { id: crypto.randomUUID(), key: '', value: '' };
+    return { id: crypto.randomUUID(), key: '', value: '', disabled: false };
 }
 
 function emptyMultiPartFormField(): MultiPartFormField {
-    return { id: crypto.randomUUID(), key: '', value: '', fieldType: 'text' };
+    return { id: crypto.randomUUID(), key: '', value: '', fieldType: 'text', disabled: false };
 }
 
 const createCurrentRequestSlice: StateCreator<CurrentRequestSlice> = (set, get) => ({
@@ -472,7 +478,7 @@ const createCurrentRequestSlice: StateCreator<CurrentRequestSlice> = (set, get) 
     },
     updateFormBody: (data) => {
         // If data is null or empty array, add an empty row
-        const formData = data && data.length > 0 ? data : [{ id: crypto.randomUUID(), key: '', value: '' }];
+        const formData = data && data.length > 0 ? data : [{ id: crypto.randomUUID(), key: '', value: '', disabled: false }];
         
         set(state => ({
             body: {
@@ -483,7 +489,7 @@ const createCurrentRequestSlice: StateCreator<CurrentRequestSlice> = (set, get) 
     },
     updateMultiPartFormBody: (data) => {
         // If data is null or empty array, add an empty row
-        const multiPartFormData = data && data.length > 0 ? data : [{ id: crypto.randomUUID(), key: '', value: '', fieldType: 'text' as const }];
+        const multiPartFormData = data && data.length > 0 ? data : [{ id: crypto.randomUUID(), key: '', value: '', fieldType: 'text' as const, disabled: false }];
         
         set(state => ({
             body: {
@@ -609,6 +615,36 @@ const createCurrentRequestSlice: StateCreator<CurrentRequestSlice> = (set, get) 
         const updatedUrl = updateUrlWithParams(state.url, updatedParams);
         
         set({ params: updatedParams, url: updatedUrl });
+    },
+
+    // Form fields management
+    toggleFormFieldEnabled: (id: string, currentDisabled: boolean) => {
+        const state = get();
+        const currentFormData = state.body.formData?.data || [];
+        const updatedFormData = currentFormData.map(field =>
+            field.id === id ? { ...field, disabled: !currentDisabled } : field
+        );
+        set(prevState => ({
+            body: {
+                ...prevState.body,
+                formData: { data: updatedFormData }
+            }
+        }));
+    },
+    
+    // Multi-part form fields management
+    toggleMultiPartFormFieldEnabled: (id: string, currentDisabled: boolean) => {
+        const state = get();
+        const currentMultiPartFormData = state.body.multiPartFormData?.data || [];
+        const updatedMultiPartFormData = currentMultiPartFormData.map(field =>
+            field.id === id ? { ...field, disabled: !currentDisabled } : field
+        );
+        set(prevState => ({
+            body: {
+                ...prevState.body,
+                multiPartFormData: { data: updatedMultiPartFormData }
+            }
+        }));
     },
 
     // Response management
