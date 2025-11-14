@@ -4,6 +4,7 @@ import { Button } from '../ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/tooltip';
 import { base64ToText, base64ToJson } from '../../utils/encoding';
 import {getExtensionFromContentType} from '../../utils/common';
+import SyntaxHighlighter from '../ui/syntax-highlighter';
 
 interface ResponseBodyProps {
   body: string;
@@ -142,7 +143,7 @@ const ResponseBody: React.FC<ResponseBodyProps> = ({ body, headers, statusCode, 
         // Send download request to extension host
         onDownloadResponse({ body, fileName, contentType: headers['content-type'] || 'application/octet-stream' });
         
-        // Show success feedback
+        // TODO: Show success feedback
         setDownloadSuccess(true);
         setTimeout(() => setDownloadSuccess(false), 2000);
     } catch (error) {
@@ -156,7 +157,7 @@ const ResponseBody: React.FC<ResponseBodyProps> = ({ body, headers, statusCode, 
       <div className="flex flex-col items-center justify-center h-full p-8 bg-white dark:bg-slate-900">
         <div className="text-center space-y-4">
           <div className="text-slate-600 dark:text-slate-400">
-            <FileIcon className="mx-auto mb-2 w-8 h-8" />
+            <FileIcon className="mx-auto mb-2 w-8 h-8 text-blue-600 dark:text-blue-400" />
             <p className="text-xs text-slate-500 dark:text-slate-400 mb-4">
               This response contains data that cannot be displayed.
             </p>
@@ -236,9 +237,7 @@ const ResponseBody: React.FC<ResponseBodyProps> = ({ body, headers, statusCode, 
 
       {/* Response Body Content */}
       <div className="flex-1 min-h-0 overflow-auto">
-        <pre className="p-4 text-xs text-slate-800 dark:text-slate-200 font-mono leading-relaxed whitespace-pre-wrap break-words">
-          {formattedBodyString}
-        </pre>
+        <SyntaxHighlighter text={formattedBodyString}/>
       </div>
     </div>
   );

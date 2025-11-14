@@ -92,14 +92,9 @@ export function activate(context: vscode.ExtensionContext) {
 						padding: 0; 
 						font-family: system-ui, -apple-system, sans-serif;
 					  }
-					  /* Override VS Code's theme variables */
-					  #root {
-						--vscode-foreground: initial;
-						--vscode-background: initial;
-					  }
 					</style>
 				</head>
-				<body class="light">
+				<body>
 					<div id="root"></div>
 					<script src="${webviewUri}" type="text/javascript"></script>
 				</body>

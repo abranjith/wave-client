@@ -138,3 +138,119 @@
     color: var(--vscode-editor-foreground);
   }
 }
+
+/* Syntax Highlighter Styles - Outside @layer to ensure they're included */
+.syntax-highlighter-pre {
+  @apply rounded-md overflow-auto p-4 mt-2 mb-2;
+  @apply bg-slate-50 border border-slate-200;
+  @apply dark:bg-slate-900 dark:border-slate-700;
+}
+
+.syntax-highlighter-code {
+  @apply block text-sm font-mono leading-6;
+  @apply text-slate-900 dark:text-slate-200;
+}
+
+/* Highlight.js base */
+.hljs {
+  @apply block overflow-x-auto p-0 bg-transparent;
+}
+
+/* Keywords (if, else, return, function, class, etc.) */
+.hljs-keyword,
+.hljs-selector-tag,
+.hljs-section,
+.hljs-link {
+  @apply text-blue-600 font-medium dark:text-blue-400;
+}
+
+/* Strings */
+.hljs-string,
+.hljs-template-variable,
+.hljs-addition {
+  @apply text-green-600 dark:text-green-400;
+}
+
+/* Numbers */
+.hljs-number {
+  @apply text-purple-600 dark:text-purple-400;
+}
+
+/* Comments */
+.hljs-comment,
+.hljs-quote,
+.hljs-deletion,
+.hljs-meta {
+  @apply text-slate-500 italic dark:text-slate-500;
+}
+
+/* Functions */
+.hljs-function .hljs-title,
+.hljs-title.function_,
+.hljs-built_in {
+  @apply text-yellow-600 dark:text-yellow-400;
+}
+
+/* Variables */
+.hljs-variable,
+.hljs-name,
+.hljs-params {
+  @apply text-cyan-600 dark:text-cyan-400;
+}
+
+/* Classes and types */
+.hljs-class .hljs-title,
+.hljs-title.class_,
+.hljs-type {
+  @apply text-teal-600 dark:text-teal-400;
+}
+
+/* Properties and attributes - JSON keys */
+.hljs-attr,
+.hljs-property,
+.hljs-attribute {
+  @apply text-blue-600 font-bold dark:text-blue-400;
+}
+
+/* Operators */
+.hljs-operator,
+.hljs-punctuation {
+  @apply text-slate-600 dark:text-slate-400;
+}
+
+/* Tags (HTML/XML) */
+.hljs-tag,
+.hljs-tag .hljs-name {
+  @apply text-blue-600 dark:text-blue-400;
+}
+
+/* Tag attributes */
+.hljs-tag .hljs-attr {
+  @apply text-cyan-600 dark:text-cyan-400;
+}
+
+/* Regular expressions */
+.hljs-regexp,
+.hljs-symbol {
+  @apply text-red-600 dark:text-red-400;
+}
+
+/* Special keywords (this, self, super) */
+.hljs-builtin-name,
+.hljs-literal {
+  @apply text-orange-600 font-medium dark:text-orange-400;
+}
+
+/* Emphasis */
+.hljs-emphasis {
+  @apply italic;
+}
+
+.hljs-strong {
+  @apply font-bold;
+}
+
+/* Constants */
+.hljs-constant {
+  @apply text-orange-600 dark:text-orange-400;
+}
