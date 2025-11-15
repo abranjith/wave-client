@@ -1,4 +1,4 @@
-import { PaperclipIcon, UploadIcon, XIcon } from "lucide-react"
+import { FileIcon, PaperclipIcon, UploadIcon, XIcon } from "lucide-react"
 import { FileWithPreview, useFileUpload } from "../../hooks/useFileUpload"
 import { Button } from './button';
 import Banner from "./banner";
@@ -7,10 +7,11 @@ export interface FileInputProps {
   onFilesAdded?: (addedFiles: FileWithPreview[]) => void;
   onFileRemoved?: (removedFile: FileWithPreview) => void;
   initialFiles?: FileWithPreview[];
+  useFileIcon?: boolean;
 }
 
 //Accept props onFilesRemoved and onFilesAdded to notify parent component when files are added or removed.
-function FileInput({ onFilesAdded, onFileRemoved, initialFiles }: FileInputProps) {
+function FileInput({ onFilesAdded, onFileRemoved, initialFiles, useFileIcon }: FileInputProps) {
   const [
     { files, isDragging, errors },
     {
@@ -76,10 +77,16 @@ function FileInput({ onFilesAdded, onFileRemoved, initialFiles }: FileInputProps
             className="flex items-center justify-between gap-2 rounded-xl border px-4 py-2"
           >
             <div className="flex items-center gap-3 overflow-hidden">
-              <PaperclipIcon
+              {useFileIcon ? (<FileIcon
                 className="text-blue-600 dark:text-blue-400 size-4 shrink-0 opacity-60"
                 aria-hidden="true"
               />
+              ) : (
+                <PaperclipIcon
+                  className="text-blue-600 dark:text-blue-400 size-4 shrink-0 opacity-60"
+                  aria-hidden="true"
+                />
+              )}
               <div className="min-w-0">
                 <p className="text-[13px] text-sm font-medium text-slate-800 dark:text-slate-200 truncate">
                   {file.file.name}

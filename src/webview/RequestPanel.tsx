@@ -288,7 +288,7 @@ const RequestPanel: React.FC<RequestPanelProps> = ({ onSendRequest, onSaveReques
                   onSendRequest();
                 }}
                 className="bg-blue-400 hover:bg-blue-600 text-blue-100 font-medium px-6 py-2 transition-colors dark:bg-blue-500 dark:hover:bg-blue-800 dark:text-slate-100"
-                disabled={isRequestProcessing}
+                disabled={isRequestProcessing || !Boolean(url?.trim())}
               >
                 {isRequestProcessing ? <LoaderCircleIcon className="animate-spin" /> : <SendHorizonalIcon />}
               </Button>

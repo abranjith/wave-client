@@ -209,7 +209,7 @@
 .hljs-attr,
 .hljs-property,
 .hljs-attribute {
-  @apply text-blue-600 font-bold dark:text-blue-400;
+  @apply text-blue-600 dark:text-blue-400;
 }
 
 /* Operators */

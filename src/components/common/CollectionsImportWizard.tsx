@@ -1,5 +1,4 @@
 import React, { useState } from 'react';
-import { FileIcon, UploadIcon, XIcon } from 'lucide-react';
 import { Button } from '../ui/button';
 import { Label } from '../ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
@@ -12,6 +11,8 @@ import {
   DialogTitle,
 } from '../ui/dialog';
 import Banner from '../ui/banner';
+import { FileInput } from '../ui/fileinput';
+import { FileWithPreview } from '../../hooks/useFileUpload';
 
 interface CollectionsImportWizardProps {
   isOpen: boolean;
@@ -26,9 +27,8 @@ const CollectionsImportWizard: React.FC<CollectionsImportWizardProps> = ({
   onClose,
   onImportCollection,
 }) => {
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [selectedFile, setSelectedFile] = useState<FileWithPreview | null>(null);
   const [collectionType, setCollectionType] = useState<CollectionType>('json');
-  const [isDragging, setIsDragging] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isImporting, setIsImporting] = useState(false);
 
@@ -46,50 +46,26 @@ const CollectionsImportWizard: React.FC<CollectionsImportWizardProps> = ({
   };
 
   /**
-   * Handles file selection
+   * Handles file selection from FileInput
    */
-  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const files = event.target.files;
-    if (files && files.length > 0) {
-      const file = files[0];
+  const handleFilesAdded = (addedFiles: FileWithPreview[]) => {
+    if (addedFiles.length > 0) {
+      const file = addedFiles[0];
       setSelectedFile(file);
-      setCollectionType(getCollectionTypeFromFile(file));
+      // Get the actual File object to determine type
+      if (file.file instanceof File) {
+        setCollectionType(getCollectionTypeFromFile(file.file));
+      }
       setError(null);
     }
   };
 
   /**
-   * Handles drag and drop
+   * Handles file removal from FileInput
    */
-  const handleDragEnter = (e: React.DragEvent<HTMLDivElement>) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setIsDragging(true);
-  };
-
-  const handleDragLeave = (e: React.DragEvent<HTMLDivElement>) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setIsDragging(false);
-  };
-
-  const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => {
-    e.preventDefault();
-    e.stopPropagation();
-  };
-
-  const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setIsDragging(false);
-
-    const files = e.dataTransfer.files;
-    if (files && files.length > 0) {
-      const file = files[0];
-      setSelectedFile(file);
-      setCollectionType(getCollectionTypeFromFile(file));
-      setError(null);
-    }
+  const handleFileRemoved = () => {
+    setSelectedFile(null);
+    setError(null);
   };
 
   /**
@@ -106,10 +82,21 @@ const CollectionsImportWizard: React.FC<CollectionsImportWizardProps> = ({
 
     try {
       // Read file content
-      const fileContent = await selectedFile.text();
+      let fileContent: string;
+      let fileName: string;
+
+      if (selectedFile.file instanceof File) {
+        fileContent = await selectedFile.file.text();
+        fileName = selectedFile.file.name;
+      } else {
+        // Handle FileMetadata case (shouldn't happen in this flow, but for type safety)
+        setError('Invalid file type');
+        setIsImporting(false);
+        return;
+      }
 
       // Send import request to extension host
-      onImportCollection(selectedFile.name, fileContent, collectionType);
+      onImportCollection(fileName, fileContent, collectionType);
 
       // Close the dialog
       handleClose();
@@ -131,14 +118,6 @@ const CollectionsImportWizard: React.FC<CollectionsImportWizardProps> = ({
     onClose();
   };
 
-  /**
-   * Removes selected file
-   */
-  const handleRemoveFile = () => {
-    setSelectedFile(null);
-    setError(null);
-  };
-
   return (
     <Dialog open={isOpen} onOpenChange={handleClose}>
       <DialogContent className="sm:max-w-[500px]">
@@ -153,63 +132,12 @@ const CollectionsImportWizard: React.FC<CollectionsImportWizardProps> = ({
 
         <div className="space-y-4 py-4">
           {/* File Upload Area */}
-          {!selectedFile ? (
-            <div
-              className={`border-2 border-dashed rounded-lg p-8 text-center transition-colors ${
-                isDragging
-                  ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
-                  : 'border-slate-300 dark:border-slate-600 hover:border-slate-400 dark:hover:border-slate-500'
-              }`}
-              onDragEnter={handleDragEnter}
-              onDragLeave={handleDragLeave}
-              onDragOver={handleDragOver}
-              onDrop={handleDrop}
-            >
-              <UploadIcon className="mx-auto h-12 w-12 text-slate-400 dark:text-slate-500 mb-4" />
-              <p className="text-sm text-slate-600 dark:text-slate-400 mb-2">
-                Drag and drop a collection file here, or click to browse
-              </p>
-              <input
-                type="file"
-                id="collection-file-input"
-                accept=".json,.http"
-                onChange={handleFileChange}
-                className="hidden"
-              />
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => document.getElementById('collection-file-input')?.click()}
-                className="mt-2"
-              >
-                Browse Files
-              </Button>
-            </div>
-          ) : (
-            <div className="border border-slate-200 dark:border-slate-700 rounded-lg p-4 bg-slate-50 dark:bg-slate-800">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3 flex-1 min-w-0">
-                  <FileIcon className="h-8 w-8 text-blue-500 flex-shrink-0" />
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-slate-800 dark:text-slate-200 truncate">
-                      {selectedFile.name}
-                    </p>
-                    <p className="text-xs text-slate-500 dark:text-slate-400">
-                      {(selectedFile.size / 1024).toFixed(2)} KB
-                    </p>
-                  </div>
-                </div>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={handleRemoveFile}
-                  className="h-8 w-8 p-0 flex-shrink-0"
-                >
-                  <XIcon className="h-4 w-4" />
-                </Button>
-              </div>
-            </div>
-          )}
+          <FileInput
+            onFilesAdded={handleFilesAdded}
+            onFileRemoved={handleFileRemoved}
+            initialFiles={selectedFile ? [selectedFile] : []}
+            useFileIcon={true}
+          />
 
           {/* Collection Type Selection */}
           {selectedFile && (
