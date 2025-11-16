@@ -31,7 +31,7 @@ const CollectionsPaneHeader: React.FC<CollectionsPaneHeaderProps> = ({ label, on
               variant="ghost"
               size="sm"
               onClick={onImportClick}
-              className="h-8 w-8 p-0"
+              className="h-8 w-8 p-0 text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-100"
             >
               <ImportIcon className="h-4 w-4" />
             </Button>
@@ -44,7 +44,7 @@ const CollectionsPaneHeader: React.FC<CollectionsPaneHeaderProps> = ({ label, on
               variant="ghost"
               size="sm"
               onClick={onExportClick}
-              className="h-8 w-8 p-0"
+              className="h-8 w-8 p-0 text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-100"
             >
               <DownloadIcon className="h-4 w-4" />
             </Button>

@@ -12,6 +12,48 @@ interface EnvironmentsPaneProps {
   onExportEnvironments: () => void;
 }
 
+interface EnvironmentsPaneHeaderProps {
+  label: string;
+  onImportClick: () => void;
+  onExportClick: () => void;
+}
+
+const EnvironmentsPaneHeader: React.FC<EnvironmentsPaneHeaderProps> = ({ label, onImportClick, onExportClick }) => {
+  return (
+    <div className="flex items-center justify-between mb-4">
+      <h2 className="text-lg font-semibold text-slate-800 dark:text-slate-200">{label}</h2>
+      <div className="flex items-center gap-2">
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={onImportClick}
+              className="h-8 w-8 p-0 text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-100"
+            >
+              <ImportIcon className="h-4 w-4" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>Import Environments</TooltipContent>
+        </Tooltip>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={onExportClick}
+              className="h-8 w-8 p-0 text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-100"
+            >
+              <DownloadIcon className="h-4 w-4" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>Export Environments</TooltipContent>
+        </Tooltip>
+      </div>
+    </div>
+  );
+};
+
 const EnvironmentsPane: React.FC<EnvironmentsPaneProps> = ({ onEnvSelect, onImportEnvironments, onExportEnvironments }) => {
   const environments = useAppStateStore((state) => state.environments);
   const isLoading = useAppStateStore((state) => state.isEnvironmentsLoading);
@@ -34,37 +76,11 @@ const EnvironmentsPane: React.FC<EnvironmentsPaneProps> = ({ onEnvSelect, onImpo
     return (
       <div className="h-full overflow-hidden bg-white dark:bg-slate-900">
         <div className="p-4">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-semibold text-slate-800 dark:text-slate-200">Environments</h2>
-            <div className="flex items-center gap-2">
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setIsImportWizardOpen(true)}
-                    className="h-8 w-8 p-0"
-                  >
-                    <ImportIcon className="h-4 w-4" />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>Import Environments</TooltipContent>
-              </Tooltip>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => onExportEnvironments()}
-                    className="h-8 w-8 p-0"
-                  >
-                    <DownloadIcon className="h-4 w-4" />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>Export Environments</TooltipContent>
-              </Tooltip>
-            </div>
-          </div>
+          <EnvironmentsPaneHeader 
+            label="Environments" 
+            onImportClick={() => setIsImportWizardOpen(true)} 
+            onExportClick={onExportEnvironments}
+          />
         </div>
         <div className="flex items-center justify-center h-[calc(100%-5rem)]">
           <div className="text-center">
@@ -85,37 +101,11 @@ const EnvironmentsPane: React.FC<EnvironmentsPaneProps> = ({ onEnvSelect, onImpo
     return (
       <div className="h-full overflow-hidden bg-white dark:bg-slate-900">
         <div className="p-4">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-semibold text-slate-800 dark:text-slate-200">Environments</h2>
-            <div className="flex items-center gap-2">
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setIsImportWizardOpen(true)}
-                    className="h-8 w-8 p-0"
-                  >
-                    <ImportIcon className="h-4 w-4" />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>Import Environments</TooltipContent>
-              </Tooltip>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => onExportEnvironments()}
-                    className="h-8 w-8 p-0"
-                  >
-                    <DownloadIcon className="h-4 w-4" />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>Export Environments</TooltipContent>
-              </Tooltip>
-            </div>
-          </div>
+          <EnvironmentsPaneHeader 
+            label="Environments" 
+            onImportClick={() => setIsImportWizardOpen(true)} 
+            onExportClick={onExportEnvironments}
+          />
         </div>
         <div className="flex items-center justify-center h-[calc(100%-5rem)] p-4">
           <div className="text-center">
@@ -137,37 +127,11 @@ const EnvironmentsPane: React.FC<EnvironmentsPaneProps> = ({ onEnvSelect, onImpo
     return (
       <div className="h-full overflow-hidden bg-white dark:bg-slate-900">
         <div className="p-4">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-semibold text-slate-800 dark:text-slate-200">Environments</h2>
-            <div className="flex items-center gap-2">
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setIsImportWizardOpen(true)}
-                    className="h-8 w-8 p-0"
-                  >
-                    <ImportIcon className="h-4 w-4" />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>Import Environments</TooltipContent>
-              </Tooltip>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => onExportEnvironments()}
-                    className="h-8 w-8 p-0"
-                  >
-                    <DownloadIcon className="h-4 w-4" />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>Export Environments</TooltipContent>
-              </Tooltip>
-            </div>
-          </div>
+          <EnvironmentsPaneHeader 
+            label="Environments" 
+            onImportClick={() => setIsImportWizardOpen(true)} 
+            onExportClick={onExportEnvironments}
+          />
         </div>
         <div className="flex items-center justify-center h-[calc(100%-5rem)] p-4">
           <div className="text-center">
@@ -190,37 +154,11 @@ const EnvironmentsPane: React.FC<EnvironmentsPaneProps> = ({ onEnvSelect, onImpo
   return (
     <div className="h-full overflow-hidden bg-white dark:bg-slate-900">
       <div className="h-full overflow-auto p-4">
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-semibold text-slate-800 dark:text-slate-200">Environments</h2>
-          <div className="flex items-center gap-2">
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setIsImportWizardOpen(true)}
-                  className="h-8 w-8 p-0"
-                >
-                  <ImportIcon className="h-4 w-4" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>Import Environments</TooltipContent>
-            </Tooltip>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => onExportEnvironments()}
-                  className="h-8 w-8 p-0"
-                >
-                  <DownloadIcon className="h-4 w-4" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>Export Environments</TooltipContent>
-            </Tooltip>
-          </div>
-        </div>
+        <EnvironmentsPaneHeader 
+          label="Environments" 
+          onImportClick={() => setIsImportWizardOpen(true)} 
+          onExportClick={onExportEnvironments}
+        />
         
         <div className="space-y-2">
           {environments.map(environment => {
