@@ -793,10 +793,8 @@ async function saveRequestToHistory(requestContent: string): Promise<void> {
 	// Save the new request with the next available number
 	const nextNum = files.length + 1;
 	const newFilePath = path.join(historyDir, `${nextNum}.json`);
-	//change request id to new id for uniqueness (say user overwrites an existing request) in case sourceref (unsaved request) is not present
-	if(!Boolean(request.sourceRef)){
-		request.id = crypto.randomUUID();
-	}
+	//change request id to new id for uniqueness (say user overwrites an existing request)
+	request.id = `${request.id}_${Date.now()}_hist_${Math.random().toString(36).substring(2, 8)}`;
 	fs.writeFileSync(newFilePath, JSON.stringify(request, null, 2), 'utf8');
 }
 

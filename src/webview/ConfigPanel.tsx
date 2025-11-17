@@ -1,5 +1,5 @@
 import React from 'react';
-import { SunIcon , LibraryIcon , HistoryIcon, PlusIcon } from 'lucide-react';
+import { SunIcon , LibraryIcon , HistoryIcon, PlusIcon, ShieldCheckIcon } from 'lucide-react';
 import {
    Tabs,
    TabsContent,
@@ -9,6 +9,7 @@ import {
 import CollectionsPane from '../components/common/CollectionsPane';
 import EnvironmentsPane from '../components/common/EnvironmentsPane';
 import HistoryPane from '../components/common/HistoryPane';
+import CredsPane from '../components/common/CredsPane';
 import {
   Tooltip,
   TooltipContent,
@@ -31,6 +32,7 @@ const TABS = [
   { key: 'collections', label: 'Collections', icon: <LibraryIcon size={20} /> },
   { key: 'history', label: 'History', icon: <HistoryIcon size={20} /> },
   { key: 'environments', label: 'Environments', icon: <SunIcon size={20} /> },
+  { key: 'credstore', label: 'Cred Store', icon: <ShieldCheckIcon size={20} /> },
 ];
 
 const ConfigPanel: React.FC<ConfigPanelProps> = ({ onRequestSelect, onEnvSelect, onImportCollection, onExportCollection, onImportEnvironments, onExportEnvironments }) => {
@@ -115,6 +117,9 @@ const ConfigPanel: React.FC<ConfigPanelProps> = ({ onRequestSelect, onEnvSelect,
                 onImportEnvironments={onImportEnvironments}
                 onExportEnvironments={onExportEnvironments}
               />
+          </TabsContent>
+          <TabsContent value="credstore" className="h-full overflow-hidden">
+            <CredsPane />
           </TabsContent>
         </div>
     </Tabs>
