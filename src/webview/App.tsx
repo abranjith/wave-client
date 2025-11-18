@@ -3,12 +3,15 @@ import ConfigPanel from './ConfigPanel';
 import RequestPanel from './RequestPanel';
 import ResponsePanel from './ResponsePanel';
 import EnvironmentGrid from '../components/common/EnvironmentGrid';
+import CookieStoreGrid from '../components/common/CookieStoreGrid';
+import AuthStoreGrid from '../components/common/AuthStoreGrid';
 import { ParsedRequest, Collection, Environment } from '../types/collection';
 import { parseCollection, transformToCollectionRequest } from '../utils/collectionParser';
 import useAppStateStore from '../hooks/store/useAppStateStore';
 
 const App: React.FC = () => {
   const [selectedEnvironment, setSelectedEnvironment] = useState<Environment | null>(null);
+  const [selectedStore, setSelectedStore] = useState<'cookie' | 'auth' | null>(null);
 
   const refreshCollections = useAppStateStore((state) => state.refreshCollections);
   const setCollections = useAppStateStore((state) => state.setCollections);
@@ -44,14 +47,25 @@ const App: React.FC = () => {
   const handleRequestSelect = (request: ParsedRequest) => {
     setCurrentRequest(request);
     setSelectedEnvironment(null); // Clear environment selection when selecting a request
+    setSelectedStore(null); // Clear store selection when selecting a request
   };
 
   const handleEnvironmentSelect = (environment: Environment) => {
     setSelectedEnvironment(environment);
+    setSelectedStore(null); // Clear store selection when selecting an environment
+  };
+
+  const handleStoreSelect = (storeType: 'cookie' | 'auth') => {
+    setSelectedStore(storeType);
+    setSelectedEnvironment(null); // Clear environment selection when selecting a store
   };
 
   const handleBackFromEnvironment = () => {
     setSelectedEnvironment(null);
+  };
+
+  const handleBackFromStore = () => {
+    setSelectedStore(null);
   };
 
   const handleSendRequest = () => {
@@ -211,9 +225,9 @@ const App: React.FC = () => {
       className="min-h-screen h-screen w-screen bg-slate-50 dark:bg-slate-900 grid"
       style={{
         display: 'grid',
-        gridTemplateColumns: selectedEnvironment ? '400px 1fr' : '400px 1fr',
-        gridTemplateRows: selectedEnvironment ? '1fr' : '1fr 1fr',
-        gridTemplateAreas: selectedEnvironment
+        gridTemplateColumns: (selectedEnvironment || selectedStore) ? '400px 1fr' : '400px 1fr',
+        gridTemplateRows: (selectedEnvironment || selectedStore) ? '1fr' : '1fr 1fr',
+        gridTemplateAreas: (selectedEnvironment || selectedStore)
           ? `"config environment"`
           : `
             "config request"
@@ -227,6 +241,7 @@ const App: React.FC = () => {
         <ConfigPanel 
           onRequestSelect={handleRequestSelect}
           onEnvSelect={handleEnvironmentSelect}
+          onStoreSelect={handleStoreSelect}
           onImportCollection={handleImportCollection}
           onExportCollection={handleExportCollection}
           onImportEnvironments={handleImportEnvironments}
@@ -242,6 +257,15 @@ const App: React.FC = () => {
             onBack={handleBackFromEnvironment}
             onSaveEnvironment={handleSaveEnvironment}
           />
+        </div>
+      ) : selectedStore ? (
+        /* Store Grid - Full Height */
+        <div style={{ gridArea: 'environment' }} className="overflow-hidden">
+          {selectedStore === 'cookie' ? (
+            <CookieStoreGrid onBack={handleBackFromStore} />
+          ) : (
+            <AuthStoreGrid onBack={handleBackFromStore} />
+          )}
         </div>
       ) : (
         <>

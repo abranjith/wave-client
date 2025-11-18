@@ -136,3 +136,16 @@ export interface ResponseData {
 export type RequestBodyTextType = 'none' | 'json' | 'xml' | 'html' | 'text' | 'csv' | 'unknown';
 
 export type RequestBodyType = 'none' | 'text' | 'binary' | 'form' | 'multipart';
+
+// Cookie types
+export interface Cookie {
+  id: string;
+  domain: string;
+  path: string;
+  name: string;
+  value: string;
+  expires?: string; // ISO date string or empty for session cookies
+  httpOnly: boolean;
+  secure: boolean;
+  enabled: boolean;
+}

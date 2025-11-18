@@ -1,9 +1,9 @@
-import React, { useState } from 'react';
-import { CookieIcon, KeyRoundIcon, ShieldIcon } from 'lucide-react';
-import CookieStoreGrid from './CookieStoreGrid';
-import AuthStoreGrid from './AuthStoreGrid';
+import React from 'react';
+import { CookieIcon, KeyRoundIcon } from 'lucide-react';
 
-interface CredsPaneProps {}
+interface StorePaneProps {
+  onStoreSelect: (storeType: 'cookie' | 'auth') => void;
+}
 
 interface CredsPaneHeaderProps {
   label: string;
@@ -17,59 +17,13 @@ const CredsPaneHeader: React.FC<CredsPaneHeaderProps> = ({ label }) => {
   );
 };
 
-type StoreType = 'cookie' | 'auth' | null;
-
-const CredsPane: React.FC<CredsPaneProps> = () => {
-  const [selectedStore, setSelectedStore] = useState<StoreType>(null);
-
-  const handleStoreClick = (storeType: StoreType) => {
-    setSelectedStore(storeType);
+const StorePane: React.FC<StorePaneProps> = ({ onStoreSelect }) => {
+  const handleStoreClick = (storeType: 'cookie' | 'auth') => {
+    if (onStoreSelect) {
+      onStoreSelect(storeType);
+    }
   };
 
-  const handleBackClick = () => {
-    setSelectedStore(null);
-  };
-
-  // If a store is selected, show its grid
-  if (selectedStore === 'cookie') {
-    return (
-      <div className="h-full overflow-hidden bg-white dark:bg-slate-900">
-        <div className="p-4">
-          <div className="flex items-center gap-2 mb-4">
-            <button
-              onClick={handleBackClick}
-              className="text-sm text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
-            >
-              ← Back
-            </button>
-          </div>
-          <CredsPaneHeader label="Cookie Store" />
-        </div>
-        <CookieStoreGrid />
-      </div>
-    );
-  }
-
-  if (selectedStore === 'auth') {
-    return (
-      <div className="h-full overflow-hidden bg-white dark:bg-slate-900">
-        <div className="p-4">
-          <div className="flex items-center gap-2 mb-4">
-            <button
-              onClick={handleBackClick}
-              className="text-sm text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
-            >
-              ← Back
-            </button>
-          </div>
-          <CredsPaneHeader label="Auth Store" />
-        </div>
-        <AuthStoreGrid />
-      </div>
-    );
-  }
-
-  // Default view: show store options
   return (
     <div className="h-full overflow-hidden bg-white dark:bg-slate-900">
       <div className="h-full overflow-auto p-4">
@@ -88,7 +42,6 @@ const CredsPane: React.FC<CredsPaneProps> = () => {
                   Cookie Store
                 </h3>
               </div>
-              <span className="text-xs text-slate-400 ml-2">→</span>
             </div>
           </div>
 
@@ -104,7 +57,6 @@ const CredsPane: React.FC<CredsPaneProps> = () => {
                   Auth Store
                 </h3>
               </div>
-              <span className="text-xs text-slate-400 ml-2">→</span>
             </div>
           </div>
         </div>
@@ -113,5 +65,5 @@ const CredsPane: React.FC<CredsPaneProps> = () => {
   );
 };
 
-export type { CredsPaneProps };
-export default CredsPane;
+export type { StorePaneProps as CredsPaneProps };
+export default StorePane;
