@@ -4,6 +4,7 @@ import createCurrentRequestSlice from "./createCurrentRequestSlice"
 import createEnvironmentsSlice from "./createEnvironmentsSlice"
 import createHistorySlice from "./createHistorySlice"
 import createCookiesSlice from "./createCookiesSlice"
+import createAuthSlice from "./createAuthSlice"
 
 // Combined store type that includes all slices
 type AppStateStore = 
@@ -11,7 +12,8 @@ type AppStateStore =
     ReturnType<typeof createCurrentRequestSlice> & 
     ReturnType<typeof createEnvironmentsSlice> &
     ReturnType<typeof createHistorySlice> &
-    ReturnType<typeof createCookiesSlice>
+    ReturnType<typeof createCookiesSlice> &
+    ReturnType<typeof createAuthSlice>
 
 // Global App state management store
 const useAppStateStore = create<AppStateStore>()((...args) => ({
@@ -20,6 +22,7 @@ const useAppStateStore = create<AppStateStore>()((...args) => ({
     ...createEnvironmentsSlice(...args),
     ...createHistorySlice(...args),
     ...createCookiesSlice(...args),
+    ...createAuthSlice(...args),
 }))
 
 export default useAppStateStore
