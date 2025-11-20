@@ -8,10 +8,13 @@ interface CookiesSlice {
     updateCookie: (id: string, updates: Partial<Cookie>) => void;
     toggleCookieEnabled: (id: string) => void;
     clearAllCookies: () => void;
+    setCookies: (cookies: Cookie[]) => void;
 }
 
 const createCookiesSlice: StateCreator<CookiesSlice> = (set) => ({
     cookies: [],
+
+    setCookies: (cookies) => set({ cookies }),
 
     addCookie: (cookie) => set((state) => ({
         cookies: [...state.cookies, cookie]

@@ -1,26 +1,75 @@
-import React, { useState } from 'react';
-import { ArrowLeftIcon, PencilIcon, Trash2Icon, CheckCircleIcon, XCircleIcon, PlusIcon, KeyIcon, UserIcon, ShieldIcon } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { ArrowLeftIcon, PencilIcon, Trash2Icon, CheckCircleIcon, XCircleIcon, PlusIcon, KeyIcon, UserIcon, ShieldIcon, AlertTriangleIcon } from 'lucide-react';
 import { Button } from '../ui/button';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '../ui/dialog';
 import useAppStateStore from '../../hooks/store/useAppStateStore';
 import AuthWizard from './AuthWizard';
 import { Auth, AuthType } from '../../hooks/store/createAuthSlice';
 
 interface AuthStoreGridProps {
   onBack: () => void;
+  onSaveAuths: (auths: Auth[]) => void;
 }
 
-const AuthStoreGrid: React.FC<AuthStoreGridProps> = ({ onBack }) => {
+const AuthStoreGrid: React.FC<AuthStoreGridProps> = ({ onBack, onSaveAuths }) => {
   const auths = useAppStateStore((state) => state.auths);
   const addAuth = useAppStateStore((state) => state.addAuth);
   const removeAuth = useAppStateStore((state) => state.removeAuth);
   const updateAuth = useAppStateStore((state) => state.updateAuth);
   const toggleAuthEnabled = useAppStateStore((state) => state.toggleAuthEnabled);
-  const clearAllAuths = useAppStateStore((state) => state.clearAllAuths);
+
+  const isInitialMount = useRef(true);
+  const lastSavedAuths = useRef<string>('');
+
+  useEffect(() => {
+    if (isInitialMount.current) {
+      isInitialMount.current = false;
+      lastSavedAuths.current = JSON.stringify(auths);
+      return;
+    }
+
+    const currentAuthsString = JSON.stringify(auths);
+    if (currentAuthsString !== lastSavedAuths.current) {
+      const now = new Date();
+      let hasChanges = false;
+      
+      // Check for expired auths and update isExpired flag
+      auths.forEach(auth => {
+        if (auth.expiryDate) {
+          const expiryDate = new Date(auth.expiryDate);
+          const isExpired = !isNaN(expiryDate.getTime()) && expiryDate <= now;
+          
+          if (auth.isExpired !== isExpired) {
+            updateAuth(auth.id, { isExpired });
+            hasChanges = true;
+          }
+        }
+      });
+
+      // If we updated any auths, the state will change and this effect will run again
+      // So we only save if we didn't make any changes in this pass
+      if (!hasChanges) {
+        onSaveAuths(auths);
+        lastSavedAuths.current = currentAuthsString;
+      }
+    }
+  }, [auths, updateAuth, onSaveAuths]);
 
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingAuth, setEditingAuth] = useState<Auth | undefined>(undefined);
   const [error, setError] = useState<string | null>(null);
+
+  const [confirmDialog, setConfirmDialog] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+    onConfirm: () => void;
+  }>({
+    isOpen: false,
+    title: '',
+    message: '',
+    onConfirm: () => {},
+  });
 
   const handleAddNew = () => {
     setEditingAuth(undefined);
@@ -69,18 +118,18 @@ const AuthStoreGrid: React.FC<AuthStoreGridProps> = ({ onBack }) => {
   };
 
   const handleDelete = (id: string) => {
-    if (confirm('Are you sure you want to delete this auth configuration?')) {
-      const result = removeAuth(id);
-      if (result.isErr) {
-        console.error('Failed to delete auth:', result.error);
-      }
-    }
-  };
-
-  const handleClearAll = () => {
-    if (confirm('Are you sure you want to delete all auth configurations?')) {
-      clearAllAuths();
-    }
+    setConfirmDialog({
+      isOpen: true,
+      title: 'Delete Auth Configuration',
+      message: 'Are you sure you want to delete this auth configuration?',
+      onConfirm: () => {
+        const result = removeAuth(id);
+        if (result.isErr) {
+          console.error('Failed to delete auth:', result.error);
+        }
+        setConfirmDialog((prev) => ({ ...prev, isOpen: false }));
+      },
+    });
   };
 
   const getAuthIcon = (type: AuthType) => {
@@ -155,16 +204,19 @@ const AuthStoreGrid: React.FC<AuthStoreGridProps> = ({ onBack }) => {
             <table className="w-full border-collapse">
               <thead>
                 <tr className="border-b border-gray-200 dark:border-slate-700">
-                  <th className="text-left py-3 px-4 text-sm font-medium text-gray-700 dark:text-slate-300 w-[15%]">
+                  <th className="text-left py-3 px-4 text-sm font-medium text-gray-700 dark:text-slate-300 w-[10%]">
                     Type
                   </th>
                   <th className="text-left py-3 px-4 text-sm font-medium text-gray-700 dark:text-slate-300 w-[20%]">
                     Name
                   </th>
-                  <th className="text-left py-3 px-4 text-sm font-medium text-gray-700 dark:text-slate-300 w-[40%]">
+                  <th className="text-left py-3 px-4 text-sm font-medium text-gray-700 dark:text-slate-300 w-[15%]">
+                    Expires
+                  </th>
+                  <th className="text-left py-3 px-4 text-sm font-medium text-gray-700 dark:text-slate-300 w-[35%]">
                     Domain Filters
                   </th>
-                  <th className="text-left py-3 px-4 text-sm font-medium text-gray-700 dark:text-slate-300 w-[25%]">
+                  <th className="text-left py-3 px-4 text-sm font-medium text-gray-700 dark:text-slate-300 w-[20%]">
                     Actions
                   </th>
                 </tr>
@@ -193,14 +245,26 @@ const AuthStoreGrid: React.FC<AuthStoreGridProps> = ({ onBack }) => {
                           isEnabled ? 'text-slate-700 dark:text-slate-300' : 'text-slate-500 dark:text-slate-400'
                         }`}>
                           {auth.name}
+                          {auth.isExpired && (
+                            <span className="ml-2 inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400">
+                              <AlertTriangleIcon className="w-3 h-3 mr-1" />
+                              Expired
+                            </span>
+                          )}
                         </div>
-                        {auth.expiryDate && (
-                          <div className={`text-xs mt-1 ${
-                            isEnabled ? 'text-slate-500 dark:text-slate-400' : 'text-slate-400 dark:text-slate-500'
-                          }`}>
-                            Expires: {new Date(auth.expiryDate).toLocaleDateString()}
-                          </div>
-                        )}
+                      </td>
+                      <td className="py-3 px-4">
+                        <div className={`text-sm ${
+                          isEnabled ? 'text-slate-700 dark:text-slate-300' : 'text-slate-500 dark:text-slate-400'
+                        }`}>
+                          {auth.expiryDate ? (
+                            <span className={auth.isExpired ? 'text-red-600 dark:text-red-400 font-medium' : ''}>
+                              {new Date(auth.expiryDate).toLocaleString()}
+                            </span>
+                          ) : (
+                            <span className="text-slate-400 dark:text-slate-500 italic">Never expires</span>
+                          )}
+                        </div>
                       </td>
                       <td className="py-3 px-4">
                         <div className="text-xs">
@@ -306,6 +370,30 @@ const AuthStoreGrid: React.FC<AuthStoreGridProps> = ({ onBack }) => {
             onCancel={handleCancel}
             existingNames={editingAuth ? existingNames.filter(n => n !== editingAuth.name) : existingNames}
           />
+        </DialogContent>
+      </Dialog>
+
+      {/* Confirmation Dialog */}
+      <Dialog open={confirmDialog.isOpen} onOpenChange={(open) => setConfirmDialog((prev) => ({ ...prev, isOpen: open }))}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{confirmDialog.title}</DialogTitle>
+            <DialogDescription>{confirmDialog.message}</DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setConfirmDialog((prev) => ({ ...prev, isOpen: false }))}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={confirmDialog.onConfirm}
+            >
+              Confirm
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

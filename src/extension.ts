@@ -5,7 +5,7 @@ import axios from 'axios';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
-import { Environment, Collection, CollectionRequest, ParsedRequest } from './types/collection';
+import { Environment, Collection, CollectionRequest, ParsedRequest, Cookie } from './types/collection';
 
 /**
  * Converts various data types to base64 string for safe transfer to webview
@@ -391,6 +391,60 @@ export function activate(context: vscode.ExtensionContext) {
 					} catch (error: any) {
 						panel.webview.postMessage({
 							type: 'historyError',
+							error: error.message
+						});
+					}
+				} else if (message.type === 'loadCookies') {
+					try {
+						const cookies = await loadCookies();
+						panel.webview.postMessage({
+							type: 'cookiesLoaded',
+							cookies
+						});
+					} catch (error: any) {
+						panel.webview.postMessage({
+							type: 'cookiesError',
+							error: error.message
+						});
+					}
+				} else if (message.type === 'saveCookies') {
+					try {
+						const cookies = JSON.parse(message.data.cookies);
+						await saveCookies(cookies);
+						panel.webview.postMessage({
+							type: 'cookiesSaved'
+						});
+					} catch (error: any) {
+						console.error('Error saving cookies:', error);
+						panel.webview.postMessage({
+							type: 'cookiesError',
+							error: error.message
+						});
+					}
+				} else if (message.type === 'loadAuths') {
+					try {
+						const auths = await loadAuths();
+						panel.webview.postMessage({
+							type: 'authsLoaded',
+							auths
+						});
+					} catch (error: any) {
+						panel.webview.postMessage({
+							type: 'authsError',
+							error: error.message
+						});
+					}
+				} else if (message.type === 'saveAuths') {
+					try {
+						const auths = JSON.parse(message.data.auths);
+						await saveAuths(auths);
+						panel.webview.postMessage({
+							type: 'authsSaved'
+						});
+					} catch (error: any) {
+						console.error('Error saving auths:', error);
+						panel.webview.postMessage({
+							type: 'authsError',
 							error: error.message
 						});
 					}
@@ -816,6 +870,80 @@ function base64ToUint8Array(base64: string): Uint8Array {
     bytes[i] = binaryString.charCodeAt(i);
   }
   return bytes;
+}
+
+/**
+ * Loads cookies from the store directory (~/.waveclient/store/cookies.json)
+ */
+async function loadCookies() {
+    const homeDir = os.homedir();
+    const storeDir = path.join(homeDir, '.waveclient', 'store');
+    const cookiesFile = path.join(storeDir, 'cookies.json');
+
+    if (!fs.existsSync(cookiesFile)) {
+        return [];
+    }
+
+    try {
+        const fileContent = fs.readFileSync(cookiesFile, 'utf8');
+        return JSON.parse(fileContent);
+    } catch (error: any) {
+        console.error(`Error loading cookies:`, error.message);
+        return [];
+    }
+}
+
+/**
+ * Saves cookies to the store directory (~/.waveclient/store/cookies.json)
+ */
+async function saveCookies(cookies: any[]) {
+    const homeDir = os.homedir();
+    const storeDir = path.join(homeDir, '.waveclient', 'store');
+
+    // Ensure the store directory exists
+    if (!fs.existsSync(storeDir)) {
+        fs.mkdirSync(storeDir, { recursive: true });
+    }
+
+    const cookiesFile = path.join(storeDir, 'cookies.json');
+    fs.writeFileSync(cookiesFile, JSON.stringify(cookies, null, 2));
+}
+
+/**
+ * Loads auths from the store directory (~/.waveclient/store/auth.json)
+ */
+async function loadAuths() {
+    const homeDir = os.homedir();
+    const storeDir = path.join(homeDir, '.waveclient', 'store');
+    const authsFile = path.join(storeDir, 'auth.json');
+
+    if (!fs.existsSync(authsFile)) {
+        return [];
+    }
+
+    try {
+        const fileContent = fs.readFileSync(authsFile, 'utf8');
+        return JSON.parse(fileContent);
+    } catch (error: any) {
+        console.error(`Error loading auths:`, error.message);
+        return [];
+    }
+}
+
+/**
+ * Saves auths to the store directory (~/.waveclient/store/auth.json)
+ */
+async function saveAuths(auths: any[]) {
+    const homeDir = os.homedir();
+    const storeDir = path.join(homeDir, '.waveclient', 'store');
+
+    // Ensure the store directory exists
+    if (!fs.existsSync(storeDir)) {
+        fs.mkdirSync(storeDir, { recursive: true });
+    }
+
+    const authsFile = path.join(storeDir, 'auth.json');
+    fs.writeFileSync(authsFile, JSON.stringify(auths, null, 2));
 }
 
 // This method is called when your extension is deactivated

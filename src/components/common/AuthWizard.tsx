@@ -19,7 +19,6 @@ const AuthWizard: React.FC<AuthWizardProps> = ({ auth, onSave, onCancel, existin
   // Form state
   const [authType, setAuthType] = useState<AuthType>(auth?.type || AuthType.API_KEY);
   const [name, setName] = useState(auth?.name || '');
-  const [enabled, setEnabled] = useState(auth?.enabled ?? true);
   const [domainFilters, setDomainFilters] = useState(auth?.domainFilters.join(', ') || '');
   const [expiryDate, setExpiryDate] = useState(auth?.expiryDate || '');
   const [base64Encode, setBase64Encode] = useState(auth?.base64Encode ?? false);
@@ -108,7 +107,7 @@ const AuthWizard: React.FC<AuthWizardProps> = ({ auth, onSave, onCancel, existin
     const baseAuth = {
       id: auth?.id || `auth-${crypto.randomUUID()}`,
       name: name.trim(),
-      enabled,
+      enabled: true,
       domainFilters: domainFilters.split(',').map(d => d.trim()).filter(d => d.length > 0),
       expiryDate: expiryDate || undefined,
       base64Encode,
@@ -185,19 +184,6 @@ const AuthWizard: React.FC<AuthWizardProps> = ({ auth, onSave, onCancel, existin
           className="mt-1"
         />
         {errors.name && <p className="text-xs text-red-500 mt-1">{errors.name}</p>}
-      </div>
-
-      <div>
-        <Label htmlFor="enabled" className="flex items-center gap-2">
-          <input
-            type="checkbox"
-            id="enabled"
-            checked={enabled}
-            onChange={(e) => setEnabled(e.target.checked)}
-            className="rounded"
-          />
-          Enabled
-        </Label>
       </div>
 
       <div>
@@ -484,7 +470,7 @@ const AuthWizard: React.FC<AuthWizardProps> = ({ auth, onSave, onCancel, existin
           className="text-green-600 hover:text-green-700 hover:border-green-300"
           title={isEditing ? "Update auth" : "Save auth"}
         >
-          <SaveIcon className="h-4 w-4" />
+          Save <SaveIcon className="h-4 w-4" />
         </Button>
         <Button
           variant="outline"
@@ -493,7 +479,7 @@ const AuthWizard: React.FC<AuthWizardProps> = ({ auth, onSave, onCancel, existin
           className="text-red-600 hover:text-red-700 hover:border-red-300"
           title="Cancel"
         >
-          <XIcon className="h-4 w-4" />
+          Cancel <XIcon className="h-4 w-4" />
         </Button>
       </div>
     </div>

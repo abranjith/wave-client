@@ -1,12 +1,14 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { ArrowLeftIcon, PencilIcon, Trash2Icon, CheckCircleIcon, XCircleIcon, SaveIcon, XIcon, PlusIcon } from 'lucide-react';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '../ui/dialog';
 import { Cookie } from '../../types/collection';
 import useAppStateStore from '../../hooks/store/useAppStateStore';
 
 interface CookieStoreGridProps {
   onBack: () => void;
+  onSaveCookies: (cookies: Cookie[]) => void;
 }
 
 interface EditingCookie {
@@ -20,7 +22,7 @@ interface EditingCookie {
   secure: boolean;
 }
 
-const CookieStoreGrid: React.FC<CookieStoreGridProps> = ({ onBack }) => {
+const CookieStoreGrid: React.FC<CookieStoreGridProps> = ({ onBack, onSaveCookies }) => {
   const cookies = useAppStateStore((state) => state.cookies);
   const addCookie = useAppStateStore((state) => state.addCookie);
   const updateCookie = useAppStateStore((state) => state.updateCookie);
@@ -28,10 +30,51 @@ const CookieStoreGrid: React.FC<CookieStoreGridProps> = ({ onBack }) => {
   const toggleCookieEnabled = useAppStateStore((state) => state.toggleCookieEnabled);
   const clearAllCookies = useAppStateStore((state) => state.clearAllCookies);
 
+  const isInitialMount = useRef(true);
+  const lastSavedCookies = useRef<string>('');
+
+  useEffect(() => {
+    if (isInitialMount.current) {
+      isInitialMount.current = false;
+      lastSavedCookies.current = JSON.stringify(cookies);
+      return;
+    }
+
+    const currentCookiesString = JSON.stringify(cookies);
+    if (currentCookiesString !== lastSavedCookies.current) {
+      const now = new Date();
+      const expiredCookies = cookies.filter(cookie => {
+        if (!cookie.expires || cookie.expires === 'Session') return false;
+        const expiryDate = new Date(cookie.expires);
+        return !isNaN(expiryDate.getTime()) && expiryDate <= now;
+      });
+
+      if (expiredCookies.length > 0) {
+        expiredCookies.forEach(c => removeCookie(c.id));
+        return;
+      }
+
+      onSaveCookies(cookies);
+      lastSavedCookies.current = currentCookiesString;
+    }
+  }, [cookies, removeCookie, onSaveCookies]);
+
   const [editingRow, setEditingRow] = useState<string | null>(null);
   const [editingData, setEditingData] = useState<EditingCookie | null>(null);
   const [isAddingNew, setIsAddingNew] = useState<boolean>(false);
   const [fieldError, setFieldError] = useState<string | null>(null);
+
+  const [confirmDialog, setConfirmDialog] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+    onConfirm: () => void;
+  }>({
+    isOpen: false,
+    title: '',
+    message: '',
+    onConfirm: () => {},
+  });
 
   const startEditing = (cookie: Cookie) => {
     setEditingRow(cookie.id);
@@ -87,7 +130,7 @@ const CookieStoreGrid: React.FC<CookieStoreGridProps> = ({ onBack }) => {
     if (isAddingNew) {
       // Add new cookie
       const newCookie: Cookie = {
-        id: `cookie-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+        id: `cookie-${crypto.randomUUID()}`,
         domain: editingData.domain.trim(),
         path: editingData.path.trim() || '/',
         name: editingData.name.trim(),
@@ -115,8 +158,16 @@ const CookieStoreGrid: React.FC<CookieStoreGridProps> = ({ onBack }) => {
   };
 
   const handleClearAll = () => {
-    if (cookies.length > 0 && confirm(`Are you sure you want to clear all ${cookies.length} cookie(s)?`)) {
-      clearAllCookies();
+    if (cookies.length > 0) {
+      setConfirmDialog({
+        isOpen: true,
+        title: 'Clear All Cookies',
+        message: `Are you sure you want to clear all ${cookies.length} cookie(s)?`,
+        onConfirm: () => {
+          clearAllCookies();
+          setConfirmDialog((prev) => ({ ...prev, isOpen: false }));
+        },
+      });
     }
   };
 
@@ -559,6 +610,30 @@ const CookieStoreGrid: React.FC<CookieStoreGridProps> = ({ onBack }) => {
           </span>
         </div>
       </div>
+
+      {/* Confirmation Dialog */}
+      <Dialog open={confirmDialog.isOpen} onOpenChange={(open) => setConfirmDialog((prev) => ({ ...prev, isOpen: open }))}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{confirmDialog.title}</DialogTitle>
+            <DialogDescription>{confirmDialog.message}</DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setConfirmDialog((prev) => ({ ...prev, isOpen: false }))}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={confirmDialog.onConfirm}
+            >
+              Confirm
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

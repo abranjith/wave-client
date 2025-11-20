@@ -8,6 +8,7 @@ interface BaseAuth {
     enabled: boolean; // Enable/disable flag
     domainFilters: string[]; // Will be sent only for these domains
     expiryDate?: string; // Optional expiry date (ISO string)
+    isExpired?: boolean; // Flag to indicate if the auth is expired
     base64Encode: boolean; // Flag to indicate if credentials should be base64 encoded
 }
 
@@ -61,21 +62,20 @@ interface AuthSlice {
     updateAuth: (id: string, updates: Partial<Auth>) => Result<Auth, string>;
     
     // Utility operations
-    toggleAuthEnabled: (id: string) => Result<Auth, string>;
+    toggleAuthEnabled: (id: string) => Result<void, string>;
     getAuthById: (id: string) => Auth | undefined;
     getAuthByName: (name: string) => Auth | undefined;
     getEnabledAuths: () => Auth[];
     getAuthsForDomain: (domain: string) => Auth[];
     isAuthNameUnique: (name: string, excludeId?: string) => boolean;
     clearAllAuths: () => void;
-    
-    // Expiry management
-    removeExpiredAuths: () => void;
-    isAuthExpired: (auth: Auth) => boolean;
+    setAuths: (auths: Auth[]) => void;
 }
 
 const createAuthSlice: StateCreator<AuthSlice> = (set, get) => ({
     auths: [],
+
+    setAuths: (auths) => set({ auths }),
 
     // Add a new auth configuration
     addAuth: (auth) => {
@@ -147,7 +147,7 @@ const createAuthSlice: StateCreator<AuthSlice> = (set, get) => ({
             )
         }));
         
-        return ok(updatedAuth);
+        return ok(undefined);
     },
 
     // Get auth by ID
@@ -209,7 +209,7 @@ const createAuthSlice: StateCreator<AuthSlice> = (set, get) => ({
     })),
 
     // Check if an auth is expired
-    isAuthExpired: (auth) => {
+    isAuthExpired: (auth: Auth) => {
         if (!auth.expiryDate) {
             return false;
         }

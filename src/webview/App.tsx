@@ -5,9 +5,10 @@ import ResponsePanel from './ResponsePanel';
 import EnvironmentGrid from '../components/common/EnvironmentGrid';
 import CookieStoreGrid from '../components/common/CookieStoreGrid';
 import AuthStoreGrid from '../components/common/AuthStoreGrid';
-import { ParsedRequest, Collection, Environment } from '../types/collection';
+import { ParsedRequest, Collection, Environment, Cookie } from '../types/collection';
 import { parseCollection, transformToCollectionRequest } from '../utils/collectionParser';
 import useAppStateStore from '../hooks/store/useAppStateStore';
+import { Auth } from '../hooks/store/createAuthSlice';
 
 const App: React.FC = () => {
   const [selectedEnvironment, setSelectedEnvironment] = useState<Environment | null>(null);
@@ -26,6 +27,8 @@ const App: React.FC = () => {
   const onSendRequest = useAppStateStore((state) => state.handleSendRequest);
   const updateEnvironment = useAppStateStore((state) => state.updateEnvironment);
   const setErrorMessage = useAppStateStore((state) => state.setErrorMessage);
+  const setCookies = useAppStateStore((state) => state.setCookies);
+  const setAuths = useAppStateStore((state) => state.setAuths);
   const getCurrentRequest = useAppStateStore((state) => state.getParsedRequest);
   const addHistory = useAppStateStore((state) => state.addHistory);
   const refreshHistory = useAppStateStore((state) => state.refreshHistory);
@@ -41,6 +44,10 @@ const App: React.FC = () => {
       refreshEnvironments(vsCodeRef.current);
       refreshCollections(vsCodeRef.current);
       refreshHistory(vsCodeRef.current);
+      if (vsCodeRef.current) {
+        vsCodeRef.current.postMessage({ type: 'loadCookies' });
+        vsCodeRef.current.postMessage({ type: 'loadAuths' });
+      }
     }
   }, []);
 
@@ -112,6 +119,28 @@ const App: React.FC = () => {
         type: 'saveEnvironment',
         data: {
           environment: JSON.stringify(environment, null, 2)
+        }
+      });
+    }
+  };
+
+  const handleSaveCookies = (cookies: Cookie[]) => {
+    if (vsCodeRef.current) {
+      vsCodeRef.current.postMessage({
+        type: 'saveCookies',
+        data: {
+          cookies: JSON.stringify(cookies, null, 2)
+        }
+      });
+    }
+  };
+
+  const handleSaveAuths = (auths: Auth[]) => {
+    if (vsCodeRef.current) {
+      vsCodeRef.current.postMessage({
+        type: 'saveAuths',
+        data: {
+          auths: JSON.stringify(auths, null, 2)
         }
       });
     }
@@ -206,6 +235,14 @@ const App: React.FC = () => {
         } catch (error: any) {
           console.error('Error updating environment:', error);
         }
+      } else if (message.type === 'cookiesLoaded') {
+        setCookies(message.cookies);
+      } else if (message.type === 'cookiesError') {
+        console.error('Cookies error:', message.error);
+      } else if (message.type === 'authsLoaded') {
+        setAuths(message.auths);
+      } else if (message.type === 'authsError') {
+        console.error('Auths error:', message.error);
       } else if (message.type === 'historyLoaded') {
         setHistory(message.history);
       } else if (message.type === 'historyError') {
@@ -262,9 +299,9 @@ const App: React.FC = () => {
         /* Store Grid - Full Height */
         <div style={{ gridArea: 'environment' }} className="overflow-hidden">
           {selectedStore === 'cookie' ? (
-            <CookieStoreGrid onBack={handleBackFromStore} />
+            <CookieStoreGrid onBack={handleBackFromStore} onSaveCookies={handleSaveCookies} />
           ) : (
-            <AuthStoreGrid onBack={handleBackFromStore} />
+            <AuthStoreGrid onBack={handleBackFromStore} onSaveAuths={handleSaveAuths} />
           )}
         </div>
       ) : (
