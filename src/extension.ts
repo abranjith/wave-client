@@ -5,6 +5,8 @@ import axios from 'axios';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
+import { URL } from 'url';
+import * as crypto from 'crypto';
 import { Environment, Collection, CollectionRequest, ParsedRequest, Cookie } from './types/collection';
 
 /**
@@ -107,15 +109,49 @@ export function activate(context: vscode.ExtensionContext) {
 					const req = message.request;
 					const start = Date.now();
 					try {
+						// Load cookies and add to headers
+						const cookies = await loadCookies();
+						const cookieHeader = getCookiesForUrl(cookies, req.url);
+						
+						const headers = { ...req.headers };
+						if (cookieHeader) {
+							headers['Cookie'] = cookieHeader;
+						}
+
 						const response = await axios({
 							method: req.method,
 							url: req.url,
 							params: new URLSearchParams(req.params),
-							headers: req.headers,
+							headers: headers,
 							data: req.body,
 							responseType: 'arraybuffer'
 						});
 						const elapsedTime = Date.now() - start;
+
+						// Process Set-Cookie headers
+						let newCookies: Cookie[] = [];
+						const setCookieHeader = response.headers['set-cookie'];
+						if (setCookieHeader) {
+							const setCookies = Array.isArray(setCookieHeader) ? setCookieHeader : [setCookieHeader];
+							const url = new URL(req.url);
+							
+							setCookies.forEach(header => {
+								const cookie = parseSetCookie(header, url.hostname);
+								if (cookie) {
+									newCookies.push(cookie);
+								}
+							});
+							
+							if (newCookies.length > 0) {
+								const updatedCookies = mergeCookies(cookies, newCookies);
+								await saveCookies(updatedCookies);
+								// Notify webview about updated cookies
+								panel.webview.postMessage({
+									type: 'cookiesLoaded',
+									cookies: updatedCookies
+								});
+							}
+						}
 						// Convert ArrayBuffer to base64 for efficient transfer
 						const bodyBase64 = convertToBase64(response.data);
 						panel.webview.postMessage({
@@ -944,6 +980,154 @@ async function saveAuths(auths: any[]) {
 
     const authsFile = path.join(storeDir, 'auth.json');
     fs.writeFileSync(authsFile, JSON.stringify(auths, null, 2));
+}
+
+/**
+ * Helper functions for Cookie management
+ */
+
+function getCookiesForUrl(cookies: Cookie[], urlStr: string): string {
+    try {
+        const url = new URL(urlStr);
+        const now = new Date();
+        
+        const validCookies = cookies.filter(cookie => {
+            if (!cookie.enabled) {
+                return false;
+            }
+            
+            // Check expiration
+            if (cookie.expires) {
+                const expiresDate = new Date(cookie.expires);
+                if (expiresDate < now) {
+                    return false;
+                }
+            }
+            
+            // Check domain
+            let cookieDomain = cookie.domain;
+            if (cookieDomain.startsWith('.')) {
+                cookieDomain = cookieDomain.substring(1);
+            }
+            
+            // Host match: exact or suffix
+            if (url.hostname !== cookieDomain && !url.hostname.endsWith('.' + cookieDomain)) {
+                 return false;
+            }
+            
+            // Check path
+			if(Boolean(cookie.path) && cookie.path !== '/') {
+				if (!url.pathname.startsWith(cookie.path)) {
+					return false;
+				}
+			}
+            
+            // Check secure
+            if (cookie.secure && url.protocol !== 'https:') {
+                return false;
+            }
+            
+            return true;
+        });
+        
+        return validCookies.map(c => `${c.name}=${c.value}`).join('; ');
+    } catch (e) {
+        console.error('Error processing cookies for URL:', e);
+        return '';
+    }
+}
+
+function parseSetCookie(header: string, defaultDomain: string): Cookie | null {
+    const parts = header.split(';').map(p => p.trim());
+    if (parts.length === 0) {
+        return null;
+    }
+    
+    const [nameValue, ...attributes] = parts;
+    const separatorIndex = nameValue.indexOf('=');
+    if (separatorIndex === -1) {
+        return null;
+    }
+    
+    const name = nameValue.substring(0, separatorIndex);
+    const value = nameValue.substring(separatorIndex + 1);
+    
+    const cookie: Cookie = {
+        id: crypto.randomUUID(),
+        name,
+        value,
+        domain: defaultDomain,
+        path: '/',
+        httpOnly: false,
+        secure: false,
+        enabled: true
+    };
+    
+    for (const attr of attributes) {
+        const lowerAttr = attr.toLowerCase();
+        if (lowerAttr.startsWith('domain=')) {
+            cookie.domain = attr.substring(7);
+        } else if (lowerAttr.startsWith('path=')) {
+            cookie.path = attr.substring(5);
+        } else if (lowerAttr.startsWith('expires=')) {
+            try {
+                const date = new Date(attr.substring(8));
+                if (!isNaN(date.getTime())) {
+                    cookie.expires = date.toISOString();
+                }
+            } catch (e) {}
+        } else if (lowerAttr.startsWith('max-age=')) {
+             const maxAge = parseInt(attr.substring(8));
+             if (!isNaN(maxAge)) {
+                 const date = new Date();
+                 date.setSeconds(date.getSeconds() + maxAge);
+                 cookie.expires = date.toISOString();
+             }
+        } else if (lowerAttr === 'secure') {
+            cookie.secure = true;
+        } else if (lowerAttr === 'httponly') {
+            cookie.httpOnly = true;
+        }
+    }
+    
+    return cookie;
+}
+
+function mergeCookies(existingCookies: Cookie[], newCookies: Cookie[]): Cookie[] {
+    let result = [...existingCookies];
+    const now = new Date();
+
+    for (const newCookie of newCookies) {
+        // Check if new cookie is expired (deletion)
+        let isExpired = false;
+        if (newCookie.expires) {
+             const expiresDate = new Date(newCookie.expires);
+             if (expiresDate < now) {
+                 isExpired = true;
+             }
+        }
+
+        const index = result.findIndex(c => 
+            c.name === newCookie.name && 
+            c.domain === newCookie.domain && 
+            c.path === newCookie.path
+        );
+        
+        if (isExpired) {
+            if (index !== -1) {
+                result.splice(index, 1);
+            }
+        } else {
+            if (index !== -1) {
+                newCookie.id = result[index].id;
+                newCookie.enabled = result[index].enabled; 
+                result[index] = newCookie;
+            } else {
+                result.push(newCookie);
+            }
+        }
+    }
+    return result;
 }
 
 // This method is called when your extension is deactivated

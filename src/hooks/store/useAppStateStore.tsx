@@ -25,4 +25,5 @@ const useAppStateStore = create<AppStateStore>()((...args) => ({
     ...createAuthSlice(...args),
 }))
 
+// Force update
 export default useAppStateStore

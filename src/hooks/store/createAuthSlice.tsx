@@ -70,6 +70,8 @@ interface AuthSlice {
     isAuthNameUnique: (name: string, excludeId?: string) => boolean;
     clearAllAuths: () => void;
     setAuths: (auths: Auth[]) => void;
+    removeExpiredAuths: () => void;
+    isAuthExpired: (auth: Auth) => boolean;
 }
 
 const createAuthSlice: StateCreator<AuthSlice> = (set, get) => ({
@@ -220,4 +222,3 @@ const createAuthSlice: StateCreator<AuthSlice> = (set, get) => ({
 });
 
 export default createAuthSlice;
-export type { AuthSlice, BaseAuth };
