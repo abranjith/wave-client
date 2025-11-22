@@ -107,7 +107,7 @@ const AuthWizard: React.FC<AuthWizardProps> = ({ auth, onSave, onCancel, existin
     const baseAuth = {
       id: auth?.id || `auth-${crypto.randomUUID()}`,
       name: name.trim(),
-      enabled: true,
+      enabled: auth?.enabled ?? true,
       domainFilters: domainFilters.split(',').map(d => d.trim()).filter(d => d.length > 0),
       expiryDate: expiryDate || undefined,
       base64Encode,
@@ -121,9 +121,9 @@ const AuthWizard: React.FC<AuthWizardProps> = ({ auth, onSave, onCancel, existin
           ...baseAuth,
           type: AuthType.API_KEY,
           key: apiKey.trim(),
-          value: apiValue.trim(),
+          value: apiValue,
           sendIn,
-          prefix: prefix.trim() || undefined,
+          prefix: prefix || undefined,
         } as ApiKeyAuth;
         break;
       case AuthType.BASIC:
@@ -131,7 +131,7 @@ const AuthWizard: React.FC<AuthWizardProps> = ({ auth, onSave, onCancel, existin
           ...baseAuth,
           type: AuthType.BASIC,
           username: username.trim(),
-          password: password.trim(),
+          password: password,
         } as BasicAuth;
         break;
       case AuthType.DIGEST:
@@ -139,7 +139,7 @@ const AuthWizard: React.FC<AuthWizardProps> = ({ auth, onSave, onCancel, existin
           ...baseAuth,
           type: AuthType.DIGEST,
           username: username.trim(),
-          password: password.trim(),
+          password: password,
           realm: realm.trim() || undefined,
           nonce: nonce.trim() || undefined,
           algorithm: algorithm || undefined,
@@ -284,7 +284,7 @@ const AuthWizard: React.FC<AuthWizardProps> = ({ auth, onSave, onCancel, existin
               id="prefix"
               value={prefix}
               onChange={(e) => setPrefix(e.target.value)}
-              placeholder="e.g., Bearer, Token"
+              placeholder="e.g., Bearer , Token "
               className="mt-1"
             />
             <p className="text-xs text-slate-500 mt-1">Prefix to add before the value (e.g., "Bearer ")</p>

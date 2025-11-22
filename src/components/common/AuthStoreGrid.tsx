@@ -11,49 +11,19 @@ interface AuthStoreGridProps {
   onSaveAuths: (auths: Auth[]) => void;
 }
 
+function isAuthExpired(auth: Auth): boolean {
+  if (!auth.expiryDate) return false;
+  const expiryDate = new Date(auth.expiryDate);
+  const now = new Date();
+  return !isNaN(expiryDate.getTime()) && expiryDate <= now;
+}
+
 const AuthStoreGrid: React.FC<AuthStoreGridProps> = ({ onBack, onSaveAuths }) => {
   const auths = useAppStateStore((state) => state.auths);
   const addAuth = useAppStateStore((state) => state.addAuth);
   const removeAuth = useAppStateStore((state) => state.removeAuth);
   const updateAuth = useAppStateStore((state) => state.updateAuth);
   const toggleAuthEnabled = useAppStateStore((state) => state.toggleAuthEnabled);
-
-  const isInitialMount = useRef(true);
-  const lastSavedAuths = useRef<string>('');
-
-  useEffect(() => {
-    if (isInitialMount.current) {
-      isInitialMount.current = false;
-      lastSavedAuths.current = JSON.stringify(auths);
-      return;
-    }
-
-    const currentAuthsString = JSON.stringify(auths);
-    if (currentAuthsString !== lastSavedAuths.current) {
-      const now = new Date();
-      let hasChanges = false;
-      
-      // Check for expired auths and update isExpired flag
-      auths.forEach(auth => {
-        if (auth.expiryDate) {
-          const expiryDate = new Date(auth.expiryDate);
-          const isExpired = !isNaN(expiryDate.getTime()) && expiryDate <= now;
-          
-          if (auth.isExpired !== isExpired) {
-            updateAuth(auth.id, { isExpired });
-            hasChanges = true;
-          }
-        }
-      });
-
-      // If we updated any auths, the state will change and this effect will run again
-      // So we only save if we didn't make any changes in this pass
-      if (!hasChanges) {
-        onSaveAuths(auths);
-        lastSavedAuths.current = currentAuthsString;
-      }
-    }
-  }, [auths, updateAuth, onSaveAuths]);
 
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingAuth, setEditingAuth] = useState<Auth | undefined>(undefined);
@@ -224,6 +194,7 @@ const AuthStoreGrid: React.FC<AuthStoreGridProps> = ({ onBack, onSaveAuths }) =>
               <tbody>
                 {auths.map((auth) => {
                   const isEnabled = auth.enabled;
+                  const isExpired = isAuthExpired(auth);
                   
                   return (
                     <tr
@@ -245,7 +216,7 @@ const AuthStoreGrid: React.FC<AuthStoreGridProps> = ({ onBack, onSaveAuths }) =>
                           isEnabled ? 'text-slate-700 dark:text-slate-300' : 'text-slate-500 dark:text-slate-400'
                         }`}>
                           {auth.name}
-                          {auth.isExpired && (
+                          {isExpired && (
                             <span className="ml-2 inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400">
                               <AlertTriangleIcon className="w-3 h-3 mr-1" />
                               Expired
@@ -258,7 +229,7 @@ const AuthStoreGrid: React.FC<AuthStoreGridProps> = ({ onBack, onSaveAuths }) =>
                           isEnabled ? 'text-slate-700 dark:text-slate-300' : 'text-slate-500 dark:text-slate-400'
                         }`}>
                           {auth.expiryDate ? (
-                            <span className={auth.isExpired ? 'text-red-600 dark:text-red-400 font-medium' : ''}>
+                            <span className={isExpired ? 'text-red-600 dark:text-red-400 font-medium' : ''}>
                               {new Date(auth.expiryDate).toLocaleString()}
                             </span>
                           ) : (

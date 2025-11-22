@@ -63,6 +63,9 @@ const RequestPanel: React.FC<RequestPanelProps> = ({ onSendRequest, onSaveReques
   const environments = useAppStateStore((state) => state.environments);
   const activeEnvironment = useAppStateStore((state) => state.activeEnvironment);
   const setActiveEnvironment = useAppStateStore((state) => state.setActiveEnvironment);
+  const auths = useAppStateStore((state) => state.auths);
+  const activeAuth = useAppStateStore((state) => state.activeAuth);
+  const setActiveAuth = useAppStateStore((state) => state.setActiveAuth);
   const getParsedRequest = useAppStateStore((state) => state.getParsedRequest);
   const requestName = useAppStateStore((state) => state.name || 'Untitled Request');
   const errorMessage = useAppStateStore((state) => state.errorMessage);
@@ -76,6 +79,7 @@ const RequestPanel: React.FC<RequestPanelProps> = ({ onSendRequest, onSaveReques
   const urlInputId = useId();
   const httpMethodSelectId = useId();
   const environmentSelectId = useId();
+  const authSelectId = useId();
   //const protocolSelectId = useId();
 
   // Memoize the styled text so it updates when activeEnvironment or url changes
@@ -111,6 +115,17 @@ const RequestPanel: React.FC<RequestPanelProps> = ({ onSendRequest, onSaveReques
       const selectedEnv = environments?.find((env) => env.id === value);
       if (selectedEnv) {
         setActiveEnvironment(selectedEnv);
+      }
+    }
+  };
+
+  const handleAuthChange = (value: string) => {
+    if (value === 'none') {
+      setActiveAuth(null);
+    } else {
+      const selectedAuth = auths?.find((auth) => auth.id === value);
+      if (selectedAuth) {
+        setActiveAuth(selectedAuth);
       }
     }
   };
@@ -155,6 +170,33 @@ const RequestPanel: React.FC<RequestPanelProps> = ({ onSendRequest, onSaveReques
 
         {/* Environment Selector and Save Button on the right */}
         <div className="flex items-center gap-3">
+          {/* Auth Dropdown */}
+          <Select 
+            value={activeAuth?.id || 'none'} 
+            onValueChange={handleAuthChange}
+          >
+            <SelectTrigger 
+              id={authSelectId} 
+              className="w-auto max-w-full min-w-40 bg-white border-slate-300 text-slate-900 hover:bg-slate-50 dark:bg-slate-800 dark:border-slate-600 dark:text-slate-100 dark:hover:bg-slate-700"
+            >
+              <SelectValue placeholder="Select Auth" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="none" className="hover:bg-slate-100 dark:hover:bg-slate-700">
+                No Auth
+              </SelectItem>
+              {auths && auths.map((auth) => (
+                <SelectItem 
+                  key={auth.id} 
+                  value={auth.id} 
+                  className="hover:bg-slate-100 dark:hover:bg-slate-700"
+                >
+                  {auth.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
           {/* Environment Dropdown */}
           <Select 
             value={activeEnvironment?.id || 'none'} 

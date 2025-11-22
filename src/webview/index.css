@@ -169,7 +169,7 @@
 .hljs-string,
 .hljs-template-variable,
 .hljs-addition {
-  @apply text-green-600 dark:text-green-400 !important;
+  @apply text-orange-600 dark:text-orange-400 !important;
 }
 
 /* Numbers */
@@ -210,7 +210,7 @@
 .hljs-attr,
 .hljs-property,
 .hljs-attribute {
-  @apply text-cyan-600 dark:text-cyan-400 !important;
+  @apply text-blue-600 dark:text-blue-400 !important;
 }
 
 /* Operators and punctuation - including JSON braces, brackets, colons */

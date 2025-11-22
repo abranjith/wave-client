@@ -458,3 +458,40 @@ export function getUrlWithoutProtocol(fullUrl: string): string {
     // If the result is empty or just '/', return empty string
     return withoutProtocol === '/' ? '' : withoutProtocol;
 }
+
+/*
+  * Checks if a given URL's domain matches any in a list of domains.
+  * Supports exact matches, wildcard subdomains (*.example.com), and dot-prefix (.example.com)
+  * 
+  * @param url - The URL to check
+  * @param domains - Array of domain strings to match against
+  * @returns True if the URL's domain matches any in the list, false otherwise
+  */
+export function isUrlInDomains(url: string, domains: string[]): boolean {
+  try {
+    const urlObj = new URL(url);
+    const hostname = urlObj.hostname.toLowerCase();
+    
+    return domains.some(domain => {
+      const normalizedDomain = domain.toLowerCase().trim();
+      
+      // Handle wildcard domain (*.example.com)
+      if (normalizedDomain.startsWith('*.')) {
+        const baseDomain = normalizedDomain.substring(2);
+        return hostname.endsWith(baseDomain) && hostname !== baseDomain;
+      }
+      
+      // Handle dot-prefix domain (.example.com) - matches example.com and all subdomains
+      if (normalizedDomain.startsWith('.')) {
+        const baseDomain = normalizedDomain.substring(1);
+        return hostname === baseDomain || hostname.endsWith(normalizedDomain);
+      }
+      
+      // Exact match
+      return hostname === normalizedDomain;
+    });
+  } catch (e) {
+    // If URL is invalid, return false
+    return false;
+  }
+}

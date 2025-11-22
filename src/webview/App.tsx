@@ -79,7 +79,8 @@ const App: React.FC = () => {
     if (vsCodeRef.current) {
       addHistory(getCurrentRequest(), vsCodeRef.current);
       useAppStateStore.getState().setIsRequestProcessing(true);
-      onSendRequest(vsCodeRef.current, activeEnvironment?.values);
+      const activeAuth = useAppStateStore.getState().activeAuth;
+      onSendRequest(vsCodeRef.current, activeEnvironment?.values, activeAuth);
     }
     else{
       console.error('VS Code API is not available.');

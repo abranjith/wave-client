@@ -1,7 +1,8 @@
 import { StateCreator } from 'zustand'
 import { ParsedRequest, HeaderRow, ParamRow, ResponseData, RequestBodyType, RequestBodyTextType, FormField, MultiPartFormField, CollectionReference, EnvironmentVariable } from '../../types/collection';
-import { parseUrlQueryParams, getContentTypeFromBody, resolveParameterizedValue } from '../../utils/common';
+import { parseUrlQueryParams, getContentTypeFromBody, resolveParameterizedValue, isUrlInDomains } from '../../utils/common';
 import { FileWithPreview } from '../useFileUpload';
+import { Auth, AuthType } from './createAuthSlice';
 
 interface RequestTextBody {
     data: string | null;
@@ -97,7 +98,7 @@ interface CurrentRequestSlice {
     setRequestError: (error: string | null) => void;
     setErrorMessage: (error: string) => void;
 
-    handleSendRequest: (vsCodeApi: any, activeEnvironmentVariables?: EnvironmentVariable[] | null) => void;
+    handleSendRequest: (vsCodeApi: any, activeEnvironmentVariables?: EnvironmentVariable[] | null, activeAuth?: Auth | null) => void;
 }
 
 const getDictFromHeaderRows = (headerRows: HeaderRow[], envVarsMap: Map<string, string>, unresolved: Set<string>): Record<string, string | string[]> => {
@@ -665,7 +666,7 @@ const createCurrentRequestSlice: StateCreator<CurrentRequestSlice> = (set, get) 
     setErrorMessage: (error) => set({ errorMessage: error }),
 
     //Add method to start Processing request
-    handleSendRequest: async (vsCodeApi, activeEnvironmentVariables) => {
+    handleSendRequest: async (vsCodeApi, activeEnvironmentVariables, activeAuth) => {
         const state = get();
         
         if (!state.method || !state.url) {
@@ -697,9 +698,74 @@ const createCurrentRequestSlice: StateCreator<CurrentRequestSlice> = (set, get) 
         const urlResult = resolveParameterizedValue(state.url, envVarsMap);
         urlResult.unresolved.forEach(u => allUnresolved.add(u));
         let finalUrl = urlResult.resolved;
+        //if url is missing protocol, prepend protocol
+        if (!finalUrl.startsWith('http://') && !finalUrl.startsWith('https://')) {
+            if(Boolean(state.protocol)){
+                finalUrl = `${state.protocol}://${finalUrl}`;
+            } else {
+                finalUrl = `https://${finalUrl}`;
+            }
+        }
 
         // Resolve and convert headers
         const headers = getDictFromHeaderRows(state.headers || [], envVarsMap, allUnresolved);
+
+        // Handle Authentication
+        const requestAuth = getAuthForRequest(activeAuth, finalUrl);
+        let authUrlParams: { [key: string]: string } = {};
+        if (requestAuth) {
+            switch (requestAuth.type) {
+                case AuthType.API_KEY: {
+                    const keyResult = resolveParameterizedValue(requestAuth.key, envVarsMap);
+                    const valueResult = resolveParameterizedValue(requestAuth.value, envVarsMap);
+                    keyResult.unresolved.forEach(u => allUnresolved.add(u));
+                    valueResult.unresolved.forEach(u => allUnresolved.add(u));
+                    
+                    const key = keyResult.resolved;
+                    let value = valueResult.resolved;
+                    
+                    if (requestAuth.prefix) {
+                        value = `${requestAuth.prefix}${value}`;
+                    }
+
+                    if (requestAuth.sendIn === 'header') {
+                        // Only add if not already present (case-insensitive check)
+                        const headerExists = Object.keys(headers).some(k => k.toLowerCase() === key.toLowerCase());
+                        if (!headerExists) {
+                            headers[key] = value;
+                        }
+                    } else if (requestAuth.sendIn === 'query') {
+                        authUrlParams[key] = value;
+                    }
+                    break;
+                }
+                case AuthType.BASIC: {
+                    const usernameResult = resolveParameterizedValue(requestAuth.username, envVarsMap);
+                    const passwordResult = resolveParameterizedValue(requestAuth.password, envVarsMap);
+                    usernameResult.unresolved.forEach(u => allUnresolved.add(u));
+                    passwordResult.unresolved.forEach(u => allUnresolved.add(u));
+                    
+                    const username = usernameResult.resolved;
+                    const password = passwordResult.resolved;
+                    
+                    const authString = `${username}:${password}`;
+                    const encodedAuth = btoa(authString);
+                    const authHeaderValue = `Basic ${encodedAuth}`;
+                    
+                    const headerExists = Object.keys(headers).some(k => k.toLowerCase() === 'authorization');
+                    if (!headerExists) {
+                        headers['Authorization'] = authHeaderValue;
+                    }
+                    break;
+                }
+                case AuthType.DIGEST: {
+                    // TODO: Implement Digest Auth handling
+                    resolveParameterizedValue(requestAuth.username, envVarsMap).unresolved.forEach(u => allUnresolved.add(u));
+                    resolveParameterizedValue(requestAuth.password, envVarsMap).unresolved.forEach(u => allUnresolved.add(u));
+                    break;
+                }
+            }
+        }
 
         // If headers does not have content-type and body is present, set content-type from body
         if (state.body && state.body.currentBodyType !== 'none') {
@@ -713,7 +779,19 @@ const createCurrentRequestSlice: StateCreator<CurrentRequestSlice> = (set, get) 
         }
 
         // Resolve and convert params to URLSearchParams
-        const urlParams = state.params ? getURLSearchParamsFromParamRows(state.params, envVarsMap, allUnresolved).toString() : '';
+        const urlParamsObj = state.params ? getURLSearchParamsFromParamRows(state.params, envVarsMap, allUnresolved) : new URLSearchParams();
+
+        // Handle API Key in Query Params
+        if (authUrlParams && Object.keys(authUrlParams).length > 0) {
+            for (const [key, value] of Object.entries(authUrlParams)) {
+                // Only add if not already present
+                if (!urlParamsObj.has(key)) {
+                    urlParamsObj.append(key, value);
+                }
+             }
+        }
+
+        const urlParams = urlParamsObj.toString();
         
         // Prepare body based on body type and resolve placeholders
         let requestBody: string | ArrayBuffer | FormData | Record<string, string> | null = null;
@@ -743,14 +821,6 @@ const createCurrentRequestSlice: StateCreator<CurrentRequestSlice> = (set, get) 
             serializableBody = { type: 'formdata', entries: formDataEntries } as any;
         }
 
-        //if url is missing protocol, prepend protocol
-        if (!finalUrl.startsWith('http://') && !finalUrl.startsWith('https://')) {
-            if(Boolean(state.protocol)){
-                finalUrl = `${state.protocol}://${finalUrl}`;
-            } else {
-                finalUrl = `https://${finalUrl}`;
-            }
-        }
         //remove params from url if present as it is being sent separately as paramsString (also url encode)
         const urlObj = new URL(finalUrl);
         urlObj.search = '';
@@ -782,4 +852,32 @@ function getRequestFolderPath(request: ParsedRequest | null): string[] | null | 
         }
     }
     return fullFolderPath;
+}
+
+
+function getAuthForRequest(activeAuth: Auth | null | undefined, requestUrl: string): Auth | null | undefined {
+    if(!activeAuth || !activeAuth.enabled){
+        return null;
+    }
+    // Check if auth is expired
+    if (activeAuth.expiryDate) {
+        const expiryTime = new Date(activeAuth.expiryDate).getTime();
+        const now = Date.now();
+        if (expiryTime <= now) {
+            console.warn(`Auth ${activeAuth.name} is expired.`);
+            return null;
+        }
+    }
+
+    // Check domain filters
+    let domainMatch = true;
+    if (activeAuth.domainFilters && activeAuth.domainFilters.length > 0) {
+        if(!isUrlInDomains(requestUrl, activeAuth.domainFilters)){
+            domainMatch = false;
+        }
+    }
+    if (!domainMatch) {
+        return null;
+    }
+    return activeAuth;
 }

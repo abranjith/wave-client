@@ -41,3 +41,41 @@ export function base64ToJson<T = any>(base64: string): T | null {
     return null;
   }
 }
+
+
+/**
+ * Converts various data types to base64 string for safe transfer to webview
+ */
+export function convertToBase64(data: any): string {
+    // Handle binary data types
+    if (data instanceof ArrayBuffer) {
+        return Buffer.from(data).toString('base64');
+    }
+    
+    if (Buffer.isBuffer(data)) {
+        // Node.js Buffer (which is a Uint8Array subclass)
+        return data.toString('base64');
+    }
+    
+    if (data instanceof Uint8Array) {
+        return Buffer.from(data).toString('base64');
+    }
+    
+    // Handle string data
+    if (typeof data === 'string') {
+        return Buffer.from(data, 'utf8').toString('base64');
+    }
+    
+    // Handle objects (JSON, etc.)
+    if (data && typeof data === 'object') {
+        try {
+            return Buffer.from(JSON.stringify(data, null, 2), 'utf8').toString('base64');
+        } catch (error) {
+            // Fallback for objects that can't be stringified
+            return Buffer.from('[Object: Unable to serialize]', 'utf8').toString('base64');
+        }
+    }
+    
+    // Fallback for any other type
+    return Buffer.from(String(data), 'utf8').toString('base64');
+}

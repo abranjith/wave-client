@@ -8,43 +8,8 @@ import * as os from 'os';
 import { URL } from 'url';
 import * as crypto from 'crypto';
 import { Environment, Collection, CollectionRequest, ParsedRequest, Cookie } from './types/collection';
-
-/**
- * Converts various data types to base64 string for safe transfer to webview
- */
-function convertToBase64(data: any): string {
-    // Handle binary data types
-    if (data instanceof ArrayBuffer) {
-        return Buffer.from(data).toString('base64');
-    }
-    
-    if (Buffer.isBuffer(data)) {
-        // Node.js Buffer (which is a Uint8Array subclass)
-        return data.toString('base64');
-    }
-    
-    if (data instanceof Uint8Array) {
-        return Buffer.from(data).toString('base64');
-    }
-    
-    // Handle string data
-    if (typeof data === 'string') {
-        return Buffer.from(data, 'utf8').toString('base64');
-    }
-    
-    // Handle objects (JSON, etc.)
-    if (data && typeof data === 'object') {
-        try {
-            return Buffer.from(JSON.stringify(data, null, 2), 'utf8').toString('base64');
-        } catch (error) {
-            // Fallback for objects that can't be stringified
-            return Buffer.from('[Object: Unable to serialize]', 'utf8').toString('base64');
-        }
-    }
-    
-    // Fallback for any other type
-    return Buffer.from(String(data), 'utf8').toString('base64');
-}
+import { convertToBase64 } from './utils/encoding';
+import {isUrlInDomains} from './utils/common';
 
 // This method is called when your extension is activated
 // Your extension is activated the very first time the command is executed
@@ -1005,15 +970,9 @@ function getCookiesForUrl(cookies: Cookie[], urlStr: string): string {
             }
             
             // Check domain
-            let cookieDomain = cookie.domain;
-            if (cookieDomain.startsWith('.')) {
-                cookieDomain = cookieDomain.substring(1);
-            }
-            
-            // Host match: exact or suffix
-            if (url.hostname !== cookieDomain && !url.hostname.endsWith('.' + cookieDomain)) {
-                 return false;
-            }
+			if(!isUrlInDomains(urlStr, [cookie.domain])) {
+				return false;
+			}
             
             // Check path
 			if(Boolean(cookie.path) && cookie.path !== '/') {

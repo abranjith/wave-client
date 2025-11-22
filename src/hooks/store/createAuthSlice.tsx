@@ -8,7 +8,6 @@ interface BaseAuth {
     enabled: boolean; // Enable/disable flag
     domainFilters: string[]; // Will be sent only for these domains
     expiryDate?: string; // Optional expiry date (ISO string)
-    isExpired?: boolean; // Flag to indicate if the auth is expired
     base64Encode: boolean; // Flag to indicate if credentials should be base64 encoded
 }
 
@@ -55,11 +54,13 @@ export type Auth = ApiKeyAuth | BasicAuth | DigestAuth;
 // Auth store interface
 interface AuthSlice {
     auths: Auth[];
+    activeAuth: Auth | null;
     
     // CRUD operations
     addAuth: (auth: Auth) => Result<Auth, string>;
     removeAuth: (id: string) => Result<void, string>;
     updateAuth: (id: string, updates: Partial<Auth>) => Result<Auth, string>;
+    setActiveAuth: (auth: Auth | null) => void;
     
     // Utility operations
     toggleAuthEnabled: (id: string) => Result<void, string>;
@@ -76,8 +77,10 @@ interface AuthSlice {
 
 const createAuthSlice: StateCreator<AuthSlice> = (set, get) => ({
     auths: [],
+    activeAuth: null,
 
     setAuths: (auths) => set({ auths }),
+    setActiveAuth: (auth) => set({ activeAuth: auth }),
 
     // Add a new auth configuration
     addAuth: (auth) => {
@@ -102,7 +105,8 @@ const createAuthSlice: StateCreator<AuthSlice> = (set, get) => ({
         }
         
         set((state) => ({
-            auths: state.auths.filter((auth) => auth.id !== id)
+            auths: state.auths.filter((auth) => auth.id !== id),
+            activeAuth: state.activeAuth?.id === id ? null : state.activeAuth
         }));
         
         return ok(undefined);
@@ -128,7 +132,8 @@ const createAuthSlice: StateCreator<AuthSlice> = (set, get) => ({
         set((state) => ({
             auths: state.auths.map((a) =>
                 a.id === id ? updatedAuth : a
-            )
+            ),
+            activeAuth: state.activeAuth?.id === id ? updatedAuth : state.activeAuth
         }));
         
         return ok(updatedAuth);
