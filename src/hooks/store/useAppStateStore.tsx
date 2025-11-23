@@ -5,6 +5,7 @@ import createEnvironmentsSlice from "./createEnvironmentsSlice"
 import createHistorySlice from "./createHistorySlice"
 import createCookiesSlice from "./createCookiesSlice"
 import createAuthSlice from "./createAuthSlice"
+import createProxySlice from "./createProxySlice"
 
 // Combined store type that includes all slices
 type AppStateStore = 
@@ -13,7 +14,8 @@ type AppStateStore =
     ReturnType<typeof createEnvironmentsSlice> &
     ReturnType<typeof createHistorySlice> &
     ReturnType<typeof createCookiesSlice> &
-    ReturnType<typeof createAuthSlice>
+    ReturnType<typeof createAuthSlice> &
+    ReturnType<typeof createProxySlice>
 
 // Global App state management store
 const useAppStateStore = create<AppStateStore>()((...args) => ({
@@ -23,6 +25,7 @@ const useAppStateStore = create<AppStateStore>()((...args) => ({
     ...createHistorySlice(...args),
     ...createCookiesSlice(...args),
     ...createAuthSlice(...args),
+    ...createProxySlice(...args),
 }))
 
 // Force update

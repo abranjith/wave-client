@@ -5,14 +5,15 @@ import ResponsePanel from './ResponsePanel';
 import EnvironmentGrid from '../components/common/EnvironmentGrid';
 import CookieStoreGrid from '../components/common/CookieStoreGrid';
 import AuthStoreGrid from '../components/common/AuthStoreGrid';
-import { ParsedRequest, Collection, Environment, Cookie, EnvironmentVariable } from '../types/collection';
+import ProxyStoreGrid from '../components/common/ProxyStoreGrid';
+import { ParsedRequest, Collection, Environment, Cookie, EnvironmentVariable, Proxy } from '../types/collection';
 import { parseCollection, transformToCollectionRequest } from '../utils/collectionParser';
 import useAppStateStore from '../hooks/store/useAppStateStore';
 import { Auth } from '../hooks/store/createAuthSlice';
 
 const App: React.FC = () => {
   const [selectedEnvironment, setSelectedEnvironment] = useState<Environment | null>(null);
-  const [selectedStore, setSelectedStore] = useState<'cookie' | 'auth' | null>(null);
+  const [selectedStore, setSelectedStore] = useState<'cookie' | 'auth' | 'proxy' | null>(null);
 
   const refreshCollections = useAppStateStore((state) => state.refreshCollections);
   const setCollections = useAppStateStore((state) => state.setCollections);
@@ -29,6 +30,7 @@ const App: React.FC = () => {
   const setErrorMessage = useAppStateStore((state) => state.setErrorMessage);
   const setCookies = useAppStateStore((state) => state.setCookies);
   const setAuths = useAppStateStore((state) => state.setAuths);
+  const setProxies = useAppStateStore((state) => state.setProxies);
   const getCurrentRequest = useAppStateStore((state) => state.getParsedRequest);
   const addHistory = useAppStateStore((state) => state.addHistory);
   const refreshHistory = useAppStateStore((state) => state.refreshHistory);
@@ -60,6 +62,7 @@ const App: React.FC = () => {
       if (vsCodeRef.current) {
         vsCodeRef.current.postMessage({ type: 'loadCookies' });
         vsCodeRef.current.postMessage({ type: 'loadAuths' });
+        vsCodeRef.current.postMessage({ type: 'loadProxies' });
       }
     }
   }, []);
@@ -75,7 +78,7 @@ const App: React.FC = () => {
     setSelectedStore(null); // Clear store selection when selecting an environment
   };
 
-  const handleStoreSelect = (storeType: 'cookie' | 'auth') => {
+  const handleStoreSelect = (storeType: 'cookie' | 'auth' | 'proxy') => {
     setSelectedStore(storeType);
     setSelectedEnvironment(null); // Clear environment selection when selecting a store
   };
@@ -155,6 +158,17 @@ const App: React.FC = () => {
         type: 'saveAuths',
         data: {
           auths: JSON.stringify(auths, null, 2)
+        }
+      });
+    }
+  };
+
+  const handleSaveProxies = (proxies: Proxy[]) => {
+    if (vsCodeRef.current) {
+      vsCodeRef.current.postMessage({
+        type: 'saveProxies',
+        data: {
+          proxies: JSON.stringify(proxies, null, 2)
         }
       });
     }
@@ -257,6 +271,10 @@ const App: React.FC = () => {
         setAuths(message.auths);
       } else if (message.type === 'authsError') {
         console.error('Auths error:', message.error);
+      } else if (message.type === 'proxiesLoaded') {
+        setProxies(message.proxies);
+      } else if (message.type === 'proxiesError') {
+        console.error('Proxies error:', message.error);
       } else if (message.type === 'historyLoaded') {
         setHistory(message.history);
       } else if (message.type === 'historyError') {
@@ -314,8 +332,10 @@ const App: React.FC = () => {
         <div style={{ gridArea: 'environment' }} className="overflow-hidden">
           {selectedStore === 'cookie' ? (
             <CookieStoreGrid onBack={handleBackFromStore} onSaveCookies={handleSaveCookies} />
-          ) : (
+          ) : selectedStore === 'auth' ? (
             <AuthStoreGrid onBack={handleBackFromStore} onSaveAuths={handleSaveAuths} />
+          ) : (
+            <ProxyStoreGrid onBack={handleBackFromStore} onSaveProxies={handleSaveProxies} />
           )}
         </div>
       ) : (

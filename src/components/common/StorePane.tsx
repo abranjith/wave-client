@@ -1,8 +1,8 @@
 import React from 'react';
-import { CookieIcon, KeyRoundIcon } from 'lucide-react';
+import { CookieIcon, KeyRoundIcon, WaypointsIcon } from 'lucide-react';
 
 interface StorePaneProps {
-  onStoreSelect: (storeType: 'cookie' | 'auth') => void;
+  onStoreSelect: (storeType: 'cookie' | 'auth' | 'proxy') => void;
 }
 
 interface CredsPaneHeaderProps {
@@ -18,7 +18,7 @@ const CredsPaneHeader: React.FC<CredsPaneHeaderProps> = ({ label }) => {
 };
 
 const StorePane: React.FC<StorePaneProps> = ({ onStoreSelect }) => {
-  const handleStoreClick = (storeType: 'cookie' | 'auth') => {
+  const handleStoreClick = (storeType: 'cookie' | 'auth' | 'proxy') => {
     if (onStoreSelect) {
       onStoreSelect(storeType);
     }
@@ -55,6 +55,21 @@ const StorePane: React.FC<StorePaneProps> = ({ onStoreSelect }) => {
                 <KeyRoundIcon className="h-4 w-4 text-blue-600 mr-2 flex-shrink-0" />
                 <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-200 break-words">
                   Auth Store
+                </h3>
+              </div>
+            </div>
+          </div>
+
+          {/* Proxy Store Option */}
+          <div 
+            className="border border-slate-200 dark:border-slate-700 rounded-lg hover:shadow-sm transition-shadow cursor-pointer"
+            onClick={() => handleStoreClick('proxy')}
+          >
+            <div className="flex items-center p-3 bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg group transition-colors">
+              <div className="flex items-center flex-1">
+                <WaypointsIcon className="h-4 w-4 text-purple-600 mr-2 flex-shrink-0" />
+                <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-200 break-words">
+                  Proxy Store
                 </h3>
               </div>
             </div>

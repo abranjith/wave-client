@@ -22,7 +22,7 @@ import { ParsedRequest, Environment } from '../types/collection';
 interface ConfigPanelProps {
   onRequestSelect: ((request: ParsedRequest) => void)
   onEnvSelect: ((environment: Environment) => void)
-  onStoreSelect: ((storeType: 'cookie' | 'auth') => void)
+  onStoreSelect: ((storeType: 'cookie' | 'auth' | 'proxy') => void)
   onImportCollection: (fileName: string, fileContent: string, collectionType: string) => void;
   onExportCollection: (collectionName: string) => void;
   onImportEnvironments: (fileName: string, fileContent: string) => void;

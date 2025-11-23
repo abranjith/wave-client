@@ -7,7 +7,7 @@ import * as path from 'path';
 import * as os from 'os';
 import { URL } from 'url';
 import * as crypto from 'crypto';
-import { Environment, Collection, CollectionRequest, ParsedRequest, Cookie } from './types/collection';
+import { Environment, Collection, CollectionRequest, ParsedRequest, Cookie, Proxy } from './types/collection';
 import { convertToBase64 } from './utils/encoding';
 import {isUrlInDomains} from './utils/common';
 
@@ -83,13 +83,15 @@ export function activate(context: vscode.ExtensionContext) {
 							headers['Cookie'] = cookieHeader;
 						}
 
+						const proxy = await getProxyForUrl(req.url);
 						const response = await axios({
 							method: req.method,
 							url: req.url,
 							params: new URLSearchParams(req.params),
 							headers: headers,
 							data: req.body,
-							responseType: 'arraybuffer'
+							responseType: 'arraybuffer',
+							proxy: proxy || undefined,
 						});
 						const elapsedTime = Date.now() - start;
 
@@ -446,6 +448,33 @@ export function activate(context: vscode.ExtensionContext) {
 						console.error('Error saving auths:', error);
 						panel.webview.postMessage({
 							type: 'authsError',
+							error: error.message
+						});
+					}
+				} else if (message.type === 'loadProxies') {
+					try {
+						const proxies = await loadProxies();
+						panel.webview.postMessage({
+							type: 'proxiesLoaded',
+							proxies
+						});
+					} catch (error: any) {
+						panel.webview.postMessage({
+							type: 'proxiesError',
+							error: error.message
+						});
+					}
+				} else if (message.type === 'saveProxies') {
+					try {
+						const proxies = JSON.parse(message.data.proxies);
+						await saveProxies(proxies);
+						panel.webview.postMessage({
+							type: 'proxiesSaved'
+						});
+					} catch (error: any) {
+						console.error('Error saving proxies:', error);
+						panel.webview.postMessage({
+							type: 'proxiesError',
 							error: error.message
 						});
 					}
@@ -957,6 +986,43 @@ async function saveAuths(auths: any[]) {
 }
 
 /**
+ * Loads proxies from the store directory (~/.waveclient/store/proxies.json)
+ */
+async function loadProxies() {
+    const homeDir = os.homedir();
+    const storeDir = path.join(homeDir, '.waveclient', 'store');
+    const proxiesFile = path.join(storeDir, 'proxies.json');
+
+    if (!fs.existsSync(proxiesFile)) {
+        return [];
+    }
+
+    try {
+        const fileContent = fs.readFileSync(proxiesFile, 'utf8');
+        return JSON.parse(fileContent);
+    } catch (error: any) {
+        console.error(`Error loading proxies:`, error.message);
+        return [];
+    }
+}
+
+/**
+ * Saves proxies to the store directory (~/.waveclient/store/proxies.json)
+ */
+async function saveProxies(proxies: any[]) {
+    const homeDir = os.homedir();
+    const storeDir = path.join(homeDir, '.waveclient', 'store');
+
+    // Ensure the store directory exists
+    if (!fs.existsSync(storeDir)) {
+        fs.mkdirSync(storeDir, { recursive: true });
+    }
+
+    const proxiesFile = path.join(storeDir, 'proxies.json');
+    fs.writeFileSync(proxiesFile, JSON.stringify(proxies, null, 2));
+}
+
+/**
  * Helper functions for Cookie management
  */
 
@@ -1096,6 +1162,90 @@ function mergeCookies(existingCookies: Cookie[], newCookies: Cookie[]): Cookie[]
         }
     }
     return result;
+}
+
+/**
+ * Axios proxy configuration interface
+ */
+interface AxiosProxyConfig {
+    protocol?: string;
+    host: string;
+    port: number;
+    auth?: {
+        username: string;
+        password: string;
+    };
+}
+
+/**
+ * getProxyForUrl - Load proxies and get matching proxy for given URL accounting for enabled status, domain filter and exclude filter
+ * Returns proxy configuration in the format expected by axios
+ */
+async function getProxyForUrl(urlStr: string): Promise<AxiosProxyConfig | null> {
+    try {
+        // Load all proxies
+        const proxies = await loadProxies();
+        
+        // Filter for enabled proxies only
+        const enabledProxies = proxies.filter((proxy: Proxy) => proxy.enabled);
+        
+        // Find the first proxy that matches the URL
+        for (const proxy of enabledProxies) {
+            // Check if URL is in exclude list - if so, skip this proxy
+            if (proxy.excludeDomains && proxy.excludeDomains.length > 0) {
+                if (isUrlInDomains(urlStr, proxy.excludeDomains)) {
+                    continue; // This proxy explicitly excludes this domain
+                }
+            }
+            
+            // Check if URL matches domain filters
+            // If domainFilters is empty, proxy applies to all domains (unless excluded)
+            if (!proxy.domainFilters || proxy.domainFilters.length === 0) {
+                return parseProxyConfig(proxy); // First enabled proxy with no domain filter wins
+            }
+            
+            // Check if URL is in the domain filters
+            if (isUrlInDomains(urlStr, proxy.domainFilters)) {
+                return parseProxyConfig(proxy); // Found a matching proxy
+            }
+        }
+        
+        // No matching proxy found
+        return null;
+    } catch (error: any) {
+        console.error('Error getting proxy for URL:', error);
+        return null;
+    }
+}
+
+/**
+ * Parse proxy URL and credentials into axios proxy config format
+ * @param proxy The proxy object from store
+ * @returns Axios-compatible proxy configuration
+ */
+function parseProxyConfig(proxy: Proxy): AxiosProxyConfig | null {
+    try {
+        const proxyUrl = new URL(proxy.url);
+        
+        const config: AxiosProxyConfig = {
+            protocol: proxyUrl.protocol.replace(':', ''), // Remove trailing colon
+            host: proxyUrl.hostname,
+            port: parseInt(proxyUrl.port) || (proxyUrl.protocol === 'https:' ? 443 : 80)
+        };
+        
+        // Add authentication if provided
+        if (proxy.userName && proxy.password) {
+            config.auth = {
+                username: proxy.userName,
+                password: proxy.password
+            };
+        }
+        
+        return config;
+    } catch (error: any) {
+        console.error('Error parsing proxy config:', error);
+        return null;
+    }
 }
 
 // This method is called when your extension is deactivated

@@ -149,3 +149,15 @@ export interface Cookie {
   secure: boolean;
   enabled: boolean;
 }
+
+// Proxy configuration interface
+export interface Proxy {
+    id: string; // Cryptographically unique per record
+    name: string; // User-friendly name (must be unique)
+    enabled: boolean; // Enable/disable flag
+    domainFilters: string[]; // Will be used only for these domains (supports wildcards)
+    excludeDomains: string[]; // Domains to explicitly exclude from proxy (supports wildcards)
+    url: string; // Proxy server URL (e.g., "http://proxy.example.com:8080")
+    userName?: string; // Optional username for proxy authentication
+    password?: string; // Optional password for proxy authentication
+}
