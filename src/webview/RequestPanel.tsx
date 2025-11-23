@@ -212,7 +212,7 @@ const RequestPanel: React.FC<RequestPanelProps> = ({ onSendRequest, onSaveReques
               <SelectItem value="none" className="hover:bg-slate-100 dark:hover:bg-slate-700">
                 None
               </SelectItem>
-              {environments && environments.map((env) => (
+              {environments && environments.filter(env => env.name.toLowerCase() !== 'global').map((env) => (
                 <SelectItem 
                   key={env.id} 
                   value={env.id} 

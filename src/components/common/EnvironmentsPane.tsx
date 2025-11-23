@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
-import { CloudIcon, SettingsIcon, ImportIcon, DownloadIcon } from 'lucide-react';
+import { CloudIcon, SettingsIcon, ImportIcon, DownloadIcon, PlusIcon } from 'lucide-react';
 import { Environment } from '../../types/collection';
 import useAppStateStore from '../../hooks/store/useAppStateStore';
 import { Button } from '../ui/button';
 import { Tooltip, TooltipTrigger, TooltipContent } from '../ui/tooltip';
 import EnvImportWizard from './EnvImportWizard';
+import EnvAddWizard from './EnvAddWizard';
 
 interface EnvironmentsPaneProps {
   onEnvSelect: (environment: Environment) => void;
@@ -14,15 +15,29 @@ interface EnvironmentsPaneProps {
 
 interface EnvironmentsPaneHeaderProps {
   label: string;
+  onAddClick: () => void;
   onImportClick: () => void;
   onExportClick: () => void;
 }
 
-const EnvironmentsPaneHeader: React.FC<EnvironmentsPaneHeaderProps> = ({ label, onImportClick, onExportClick }) => {
+const EnvironmentsPaneHeader: React.FC<EnvironmentsPaneHeaderProps> = ({ label, onAddClick, onImportClick, onExportClick }) => {
   return (
     <div className="flex items-center justify-between mb-4">
       <h2 className="text-lg font-semibold text-slate-800 dark:text-slate-200">{label}</h2>
       <div className="flex items-center gap-2">
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={onAddClick}
+              className="h-8 w-8 p-0 text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-100"
+            >
+              <PlusIcon className="h-4 w-4" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>Add Environment</TooltipContent>
+        </Tooltip>
         <Tooltip>
           <TooltipTrigger asChild>
             <Button
@@ -58,7 +73,9 @@ const EnvironmentsPane: React.FC<EnvironmentsPaneProps> = ({ onEnvSelect, onImpo
   const environments = useAppStateStore((state) => state.environments);
   const isLoading = useAppStateStore((state) => state.isEnvironmentsLoading);
   const error = useAppStateStore((state) => state.environmentLoadError);
+  const addEnvironment = useAppStateStore((state) => state.addEnvironment);
   const [isImportWizardOpen, setIsImportWizardOpen] = useState(false);
+  const [isAddWizardOpen, setIsAddWizardOpen] = useState(false);
 
   const handleEnvironmentClick = (environment: Environment) => {
     if (onEnvSelect) {
@@ -72,12 +89,27 @@ const EnvironmentsPane: React.FC<EnvironmentsPaneProps> = ({ onEnvSelect, onImpo
     }
   };
 
+  const handleAddEnvironment = (name: string): { success: boolean; error?: string } => {
+    const result = addEnvironment({
+      id: crypto.randomUUID(),
+      name: name,
+      values: []
+    });
+
+    if (result.isOk) {
+      return { success: true };
+    } else {
+      return { success: false, error: result.error };
+    }
+  };
+
   if (isLoading) {
     return (
       <div className="h-full overflow-hidden bg-white dark:bg-slate-900">
         <div className="p-4">
           <EnvironmentsPaneHeader 
             label="Environments" 
+            onAddClick={() => setIsAddWizardOpen(true)}
             onImportClick={() => setIsImportWizardOpen(true)} 
             onExportClick={onExportEnvironments}
           />
@@ -93,6 +125,11 @@ const EnvironmentsPane: React.FC<EnvironmentsPaneProps> = ({ onEnvSelect, onImpo
           onClose={() => setIsImportWizardOpen(false)}
           onImportEnvironments={handleImport}
         />
+        <EnvAddWizard
+          isOpen={isAddWizardOpen}
+          onClose={() => setIsAddWizardOpen(false)}
+          onAddEnvironment={handleAddEnvironment}
+        />
       </div>
     );
   }
@@ -103,6 +140,7 @@ const EnvironmentsPane: React.FC<EnvironmentsPaneProps> = ({ onEnvSelect, onImpo
         <div className="p-4">
           <EnvironmentsPaneHeader 
             label="Environments" 
+            onAddClick={() => setIsAddWizardOpen(true)}
             onImportClick={() => setIsImportWizardOpen(true)} 
             onExportClick={onExportEnvironments}
           />
@@ -119,6 +157,11 @@ const EnvironmentsPane: React.FC<EnvironmentsPaneProps> = ({ onEnvSelect, onImpo
           onClose={() => setIsImportWizardOpen(false)}
           onImportEnvironments={handleImport}
         />
+        <EnvAddWizard
+          isOpen={isAddWizardOpen}
+          onClose={() => setIsAddWizardOpen(false)}
+          onAddEnvironment={handleAddEnvironment}
+        />
       </div>
     );
   }
@@ -129,6 +172,7 @@ const EnvironmentsPane: React.FC<EnvironmentsPaneProps> = ({ onEnvSelect, onImpo
         <div className="p-4">
           <EnvironmentsPaneHeader 
             label="Environments" 
+            onAddClick={() => setIsAddWizardOpen(true)}
             onImportClick={() => setIsImportWizardOpen(true)} 
             onExportClick={onExportEnvironments}
           />
@@ -147,15 +191,26 @@ const EnvironmentsPane: React.FC<EnvironmentsPaneProps> = ({ onEnvSelect, onImpo
           onClose={() => setIsImportWizardOpen(false)}
           onImportEnvironments={handleImport}
         />
+        <EnvAddWizard
+          isOpen={isAddWizardOpen}
+          onClose={() => setIsAddWizardOpen(false)}
+          onAddEnvironment={handleAddEnvironment}
+        />
       </div>
     );
   }
   
+  environments.sort((a, b) => {
+    if (a.name.toLowerCase() === 'global') return -1;
+    if (b.name.toLowerCase() === 'global') return 1;
+    return a.name.localeCompare(b.name);
+  });
   return (
     <div className="h-full overflow-hidden bg-white dark:bg-slate-900">
       <div className="h-full overflow-auto p-4">
         <EnvironmentsPaneHeader 
           label="Environments" 
+          onAddClick={() => setIsAddWizardOpen(true)}
           onImportClick={() => setIsImportWizardOpen(true)} 
           onExportClick={onExportEnvironments}
         />
@@ -191,6 +246,11 @@ const EnvironmentsPane: React.FC<EnvironmentsPaneProps> = ({ onEnvSelect, onImpo
         isOpen={isImportWizardOpen}
         onClose={() => setIsImportWizardOpen(false)}
         onImportEnvironments={handleImport}
+      />
+      <EnvAddWizard
+        isOpen={isAddWizardOpen}
+        onClose={() => setIsAddWizardOpen(false)}
+        onAddEnvironment={handleAddEnvironment}
       />
     </div>
   );

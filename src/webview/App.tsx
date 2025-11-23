@@ -1,11 +1,11 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import ConfigPanel from './ConfigPanel';
 import RequestPanel from './RequestPanel';
 import ResponsePanel from './ResponsePanel';
 import EnvironmentGrid from '../components/common/EnvironmentGrid';
 import CookieStoreGrid from '../components/common/CookieStoreGrid';
 import AuthStoreGrid from '../components/common/AuthStoreGrid';
-import { ParsedRequest, Collection, Environment, Cookie } from '../types/collection';
+import { ParsedRequest, Collection, Environment, Cookie, EnvironmentVariable } from '../types/collection';
 import { parseCollection, transformToCollectionRequest } from '../utils/collectionParser';
 import useAppStateStore from '../hooks/store/useAppStateStore';
 import { Auth } from '../hooks/store/createAuthSlice';
@@ -35,7 +35,20 @@ const App: React.FC = () => {
   const setHistory = useAppStateStore((state) => state.setHistory);
   const setHistoryLoadError = useAppStateStore((state) => state.setHistoryLoadError);
   const activeEnvironment = useAppStateStore((state) => state.activeEnvironment);
+  const environments = useAppStateStore((state) => state.environments);
   const vsCodeRef = useRef<any>(null);
+
+  const activeEnvVars = useMemo(() => {
+    const globalEnv = environments.find(e => e.name === 'global');
+    const globalVars = globalEnv?.values.filter(v => v.enabled) || [];
+    const activeVars = activeEnvironment?.values.filter(v => v.enabled) || [];
+
+    const varMap = new Map<string, EnvironmentVariable>();
+    globalVars.forEach(v => varMap.set(v.key, v));
+    activeVars.forEach(v => varMap.set(v.key, v));
+    
+    return Array.from(varMap.values());
+  }, [environments, activeEnvironment]);
 
   // Initialize Collections and Environments
   useEffect(() => {
@@ -80,7 +93,7 @@ const App: React.FC = () => {
       addHistory(getCurrentRequest(), vsCodeRef.current);
       useAppStateStore.getState().setIsRequestProcessing(true);
       const activeAuth = useAppStateStore.getState().activeAuth;
-      onSendRequest(vsCodeRef.current, activeEnvironment?.values, activeAuth);
+      onSendRequest(vsCodeRef.current, activeEnvVars, activeAuth);
     }
     else{
       console.error('VS Code API is not available.');

@@ -206,8 +206,8 @@ const EnvironmentGrid: React.FC<EnvironmentGridProps> = ({ environment, onBack, 
 
       {/* Environment Variables Table */}
       <div className="flex-1 overflow-auto p-4">
-        {allVariables.length === 0 ? (
-          <div className="flex items-center justify-center h-full">
+        {allVariables.length === 0 && !isAddingNew && (
+          <div className="py-8">
             <div className="text-center">
               <p className="text-lg text-slate-600 dark:text-slate-400 mb-2">No variables</p>
               <p className="text-sm text-slate-500 dark:text-slate-400">
@@ -215,7 +215,8 @@ const EnvironmentGrid: React.FC<EnvironmentGridProps> = ({ environment, onBack, 
               </p>
             </div>
           </div>
-        ) : (
+        )}
+        {(allVariables.length > 0 || isAddingNew) && (
           <div className="overflow-x-auto">
             <table className="w-full border-collapse">
               <thead>
@@ -480,21 +481,19 @@ const EnvironmentGrid: React.FC<EnvironmentGridProps> = ({ environment, onBack, 
           </div>
         )}
         
-        {/* Add Variable Button - Beneath the data grid */}
-        {allVariables.length > 0 && (
-          <div className="flex justify-start pt-3">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={startAddingNew}
-              disabled={editingRow !== null}
-              className="text-blue-600 hover:text-blue-700 hover:border-blue-300 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              <PlusIcon className="h-4 w-4 mr-2" />
-              Add Variable
-            </Button>
-          </div>
-        )}
+        {/* Add Variable Button - Always shown */}
+        <div className="flex justify-start pt-3">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={startAddingNew}
+            disabled={editingRow !== null}
+            className="text-blue-600 hover:text-blue-700 hover:border-blue-300 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <PlusIcon className="h-4 w-4 mr-2" />
+            Add Variable
+          </Button>
+        </div>
       </div>
 
       {/* Footer Info */}

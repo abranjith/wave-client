@@ -628,11 +628,16 @@ function generateFileNameForCollection(newCollectionName: string) {
 async function loadEnvironments() {
 	const homeDir = os.homedir();
 	const environmentsDir = path.join(homeDir, '.waveclient', 'environments');
+	const defaultGlobalEnv: Environment = {
+			id: 'global',
+			name: 'Global',
+			values: []
+		};
 	
 	// Ensure the environments directory exists
 	if (!fs.existsSync(environmentsDir)) {
 		fs.mkdirSync(environmentsDir, { recursive: true });
-		return [];
+		return [defaultGlobalEnv];
 	}
 	
 	const environments = [];
@@ -661,6 +666,10 @@ async function loadEnvironments() {
 				// Continue loading other environments even if one fails
 			}
 		}
+	}
+
+	if (!seenNames.has(defaultGlobalEnv.name)) {
+		environments.unshift(defaultGlobalEnv);
 	}
 	
 	return environments;
