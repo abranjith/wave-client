@@ -6,6 +6,7 @@ import createHistorySlice from "./createHistorySlice"
 import createCookiesSlice from "./createCookiesSlice"
 import createAuthSlice from "./createAuthSlice"
 import createProxySlice from "./createProxySlice"
+import createCertSlice from "./createCertSlice"
 
 // Combined store type that includes all slices
 type AppStateStore = 
@@ -15,7 +16,8 @@ type AppStateStore =
     ReturnType<typeof createHistorySlice> &
     ReturnType<typeof createCookiesSlice> &
     ReturnType<typeof createAuthSlice> &
-    ReturnType<typeof createProxySlice>
+    ReturnType<typeof createProxySlice> & 
+    ReturnType<typeof createCertSlice>
 
 // Global App state management store
 const useAppStateStore = create<AppStateStore>()((...args) => ({
@@ -26,6 +28,7 @@ const useAppStateStore = create<AppStateStore>()((...args) => ({
     ...createCookiesSlice(...args),
     ...createAuthSlice(...args),
     ...createProxySlice(...args),
+    ...createCertSlice(...args),
 }))
 
 // Force update

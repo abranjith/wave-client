@@ -3,7 +3,7 @@ import { FileWithPreview, useFileUpload } from "../../hooks/useFileUpload"
 import { Button } from './button';
 import Banner from "./banner";
 
-export interface FileInputProps {
+export interface FileInputProps extends Omit<React.InputHTMLAttributes<HTMLInputElement>, 'onChange' | 'value' | 'multiple'> {
   onFilesAdded?: (addedFiles: FileWithPreview[]) => void;
   onFileRemoved?: (removedFile: FileWithPreview) => void;
   initialFiles?: FileWithPreview[];
@@ -11,7 +11,7 @@ export interface FileInputProps {
 }
 
 //Accept props onFilesRemoved and onFilesAdded to notify parent component when files are added or removed.
-function FileInput({ onFilesAdded, onFileRemoved, initialFiles, useFileIcon }: FileInputProps) {
+function FileInput({ onFilesAdded, onFileRemoved, initialFiles, useFileIcon, id, className, placeholder, accept, ...inputProps }: FileInputProps) {
   const [
     { files, isDragging, errors },
     {
@@ -41,10 +41,13 @@ function FileInput({ onFilesAdded, onFileRemoved, initialFiles, useFileIcon }: F
           isDragging ? 'bg-accent/50' : ''
         } ${
           file ? 'pointer-events-none opacity-50' : ''
-        }`}
+        } ${className || ''}`}
       >
         <input
           {...getInputProps()}
+          {...inputProps}
+          id={id}
+          accept={accept}
           className="sr-only"
           aria-label="Upload file"
           disabled={Boolean(file)}
@@ -57,7 +60,9 @@ function FileInput({ onFilesAdded, onFileRemoved, initialFiles, useFileIcon }: F
           >
             <UploadIcon className="size-4 opacity-60 text-slate-500 dark:text-slate-500" />
           </div>
-          <p className="mb-1.5 text-sm font-medium text-slate-500 dark:text-slate-400">Upload file</p>
+          <p className="mb-1.5 text-sm font-medium text-slate-500 dark:text-slate-400">
+            {placeholder || 'Upload file'}
+          </p>
           <p className="text-muted-foreground text-xs text-slate-500 dark:text-slate-400">
             Drag & drop or click to browse
           </p>

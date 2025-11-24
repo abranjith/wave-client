@@ -7,7 +7,8 @@ import * as path from 'path';
 import * as os from 'os';
 import { URL } from 'url';
 import * as crypto from 'crypto';
-import { Environment, Collection, CollectionRequest, ParsedRequest, Cookie, Proxy } from './types/collection';
+import https from 'https';
+import { Environment, Collection, CollectionRequest, ParsedRequest, Cookie, Proxy, Cert, CertType } from './types/collection';
 import { convertToBase64 } from './utils/encoding';
 import {isUrlInDomains} from './utils/common';
 
@@ -84,6 +85,7 @@ export function activate(context: vscode.ExtensionContext) {
 						}
 
 						const proxy = await getProxyForUrl(req.url);
+						const agent = await getHttpsAgentForUrl(req.url);
 						const response = await axios({
 							method: req.method,
 							url: req.url,
@@ -92,6 +94,7 @@ export function activate(context: vscode.ExtensionContext) {
 							data: req.body,
 							responseType: 'arraybuffer',
 							proxy: proxy || undefined,
+							httpAgent: agent,
 						});
 						const elapsedTime = Date.now() - start;
 
@@ -475,6 +478,33 @@ export function activate(context: vscode.ExtensionContext) {
 						console.error('Error saving proxies:', error);
 						panel.webview.postMessage({
 							type: 'proxiesError',
+							error: error.message
+						});
+					}
+				} else if (message.type === 'loadCerts') {
+					try {
+						const certs = await loadCerts();
+						panel.webview.postMessage({
+							type: 'certsLoaded',
+							certs
+						});
+					} catch (error: any) {
+						panel.webview.postMessage({
+							type: 'certsError',
+							error: error.message
+						});
+					}
+				} else if (message.type === 'saveCerts') {
+					try {
+						const certs = JSON.parse(message.data.certs);
+						await saveCerts(certs);
+						panel.webview.postMessage({
+							type: 'certsSaved'
+						});
+					} catch (error: any) {
+						console.error('Error saving certs:', error);
+						panel.webview.postMessage({
+							type: 'certsError',
 							error: error.message
 						});
 					}
@@ -1023,6 +1053,43 @@ async function saveProxies(proxies: any[]) {
 }
 
 /**
+ * Loads certs from the store directory (~/.waveclient/store/certs.json)
+ */
+async function loadCerts() {
+    const homeDir = os.homedir();
+    const storeDir = path.join(homeDir, '.waveclient', 'store');
+    const certsFile = path.join(storeDir, 'certs.json');
+
+    if (!fs.existsSync(certsFile)) {
+        return [];
+    }
+
+    try {
+        const fileContent = fs.readFileSync(certsFile, 'utf8');
+        return JSON.parse(fileContent);
+    } catch (error: any) {
+        console.error(`Error loading certs:`, error.message);
+        return [];
+    }
+}
+
+/**
+ * Saves certs to the store directory (~/.waveclient/store/certs.json)
+ */
+async function saveCerts(certs: any[]) {
+    const homeDir = os.homedir();
+    const storeDir = path.join(homeDir, '.waveclient', 'store');
+
+    // Ensure the store directory exists
+    if (!fs.existsSync(storeDir)) {
+        fs.mkdirSync(storeDir, { recursive: true });
+    }
+
+    const certsFile = path.join(storeDir, 'certs.json');
+    fs.writeFileSync(certsFile, JSON.stringify(certs, null, 2));
+}
+
+/**
  * Helper functions for Cookie management
  */
 
@@ -1246,6 +1313,54 @@ function parseProxyConfig(proxy: Proxy): AxiosProxyConfig | null {
         console.error('Error parsing proxy config:', error);
         return null;
     }
+}
+
+/**
+ * function to return https Agent with cert configured for the given URL if a matching cert is found
+ */
+async function getHttpsAgentForUrl(urlStr: string): Promise<https.Agent | null> {
+	try {
+		const url = new URL(urlStr);
+		if (url.protocol !== 'https:') {
+			return null; // Only HTTPS URLs need certs
+		}
+		const certs = await loadCerts() as Cert[];
+		for (const cert of certs) {
+			if(!cert.enabled){
+				continue;
+			}
+			if(!isUrlInDomains(urlStr, cert.domainFilters)) {
+				continue;
+			}
+			//check for expiration
+			if (cert.expiryDate) {
+				const expiresDate = new Date(cert.expiryDate);
+				const now = new Date();
+				if (expiresDate < now) {
+					continue; // Skip expired certs
+				}
+			}
+			if (cert.type === CertType.CA) {
+				// CA type certs only set the 'ca' field
+				const httpsAgent = new https.Agent({
+					ca: cert.certFile,
+					passphrase: cert.passPhrase,
+				});
+				return httpsAgent;
+			}
+			const httpsAgent = new https.Agent({
+				cert: cert.certFile,
+				key: cert.keyFile,
+				pfx: cert.pfxFile,
+				passphrase: cert.passPhrase,
+			});
+			return httpsAgent;
+		}
+		return null;
+	} catch (error: any) {
+		console.error('Error getting HTTPS agent for URL:', error);
+		return null;
+	}
 }
 
 // This method is called when your extension is deactivated

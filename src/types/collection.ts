@@ -161,3 +161,37 @@ export interface Proxy {
     userName?: string; // Optional username for proxy authentication
     password?: string; // Optional password for proxy authentication
 }
+
+
+// Base interface with common properties for all cert types
+interface BaseCert {
+    id: string; // Cryptographically unique per record
+    name: string; // User-friendly name (must be unique)
+    enabled: boolean; // Enable/disable flag
+    domainFilters: string[]; // Will be sent only for these domains
+    expiryDate?: string; // Optional expiry date (ISO string)
+    passPhrase?: string; // Optional passphrase for encrypted key/pfx
+}
+
+// Cert type enum for type discrimination
+export enum CertType {
+    CA = 'ca',
+    SELF_SIGNED = 'selfSigned',
+}
+
+// CA Certificate - only requires cert file
+export interface CACert extends BaseCert {
+    type: CertType.CA;
+    certFile: string; // Path to certificate file
+}
+
+// Self-Signed Certificate - can have cert, key, pfx files and passphrase
+export interface SelfSignedCert extends BaseCert {
+    type: CertType.SELF_SIGNED;
+    certFile?: string; // Path to certificate file (optional if using PFX)
+    keyFile?: string; // Path to key file (optional if using PFX)
+    pfxFile?: string; // Path to PFX file (optional if using cert+key)
+}
+
+// Union type for all cert types - makes it easy to add more types
+export type Cert = CACert | SelfSignedCert;
