@@ -174,7 +174,8 @@ const CertWizard: React.FC<CertWizardProps> = ({ cert, onSave, onCancel, existin
           placeholder="e.g., api1.example.com, api2.example.com"
           className="mt-1"
         />
-        <p className="text-xs text-slate-500 mt-1">Leave empty to apply to all domains. Use * for wildcards.</p>
+        <p className="text-xs text-slate-500 mt-1">Use * for wildcards.</p>
+        {errors.domainFilters && <p className="text-xs text-red-500 mt-1">{errors.domainFilters}</p>}
       </div>
 
       <div>
