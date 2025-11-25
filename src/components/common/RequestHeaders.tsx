@@ -2,8 +2,10 @@ import React, { useState, useEffect, JSX } from 'react';
 import { Trash2Icon, PlusIcon, CheckCircleIcon, XCircleIcon } from 'lucide-react';
 import { Button } from '../ui/button';
 import StyledInput from "../ui/styled-input";
+import StyledAutocompleteInput from '../ui/styled-autocomplete-input';
 import useAppStateStore from '../../hooks/store/useAppStateStore';
 import { renderParameterizedText } from '../../utils/styling';
+import { getCommonHeaderNames } from '../../utils/common';
 
 const RequestHeaders: React.FC = () => {
   const headers = useAppStateStore((state) => state.headers || []);
@@ -111,7 +113,7 @@ const RequestHeaders: React.FC = () => {
               <th className="text-left py-2 px-3 text-sm font-medium text-slate-700 dark:text-slate-300 w-2/12">Actions</th>
             </tr>
           </thead>
-          <tbody>
+          <tbody className="mb-4">
             {headers.map((header, index) => {
               const isDisabled = header.disabled;
               
@@ -123,15 +125,16 @@ const RequestHeaders: React.FC = () => {
                   }`}
                 >
                   <td className="py-2 px-3">
-                    <StyledInput
+                    <StyledAutocompleteInput
                       type="text"
                       placeholder="Header name (e.g., Content-Type)"
                       value={localHeaders[header.id]?.key ?? header.key}
                       styledValue={styledLocalHeaders[header.id]?.key ?? renderParameterizedText(header.key, activeEnvVariables)}
-                      onChange={e => updateLocalHeader(header.id, 'key', e.target.value)}
+                      onValueChange={val => updateLocalHeader(header.id, 'key', val)}
                       onBlur={() => commitHeader(header.id)}
                       onKeyDown={e => handleKeyDown(e, header.id)}
                       className="bg-white border-slate-300 focus:border-blue-500 dark:bg-slate-800 dark:border-slate-600 dark:focus:border-blue-400"
+                      suggestions={getCommonHeaderNames()}
                     />
                   </td>
                   <td className="py-2 px-3">

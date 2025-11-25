@@ -495,3 +495,104 @@ export function isUrlInDomains(url: string, domains: string[]): boolean {
     return false;
   }
 }
+
+/**
+ * Returns a list of common HTTP header names used in requests
+ * @returns Array of common header names
+ */
+export function getCommonHeaderNames(): string[] {
+  return [
+    // Authentication & Authorization
+    'Authorization',
+    'WWW-Authenticate',
+    'Proxy-Authorization',
+    'Proxy-Authenticate',
+    
+    // Content Negotiation
+    'Accept',
+    'Accept-Charset',
+    'Accept-Encoding',
+    'Accept-Language',
+    'Content-Type',
+    'Content-Encoding',
+    'Content-Language',
+    'Content-Length',
+    
+    // Caching
+    'Cache-Control',
+    'Pragma',
+    'Expires',
+    'ETag',
+    'If-Match',
+    'If-None-Match',
+    'If-Modified-Since',
+    'If-Unmodified-Since',
+    'Last-Modified',
+    'Age',
+    
+    // Cookies
+    'Cookie',
+    'Set-Cookie',
+    
+    // CORS
+    'Access-Control-Allow-Origin',
+    'Access-Control-Allow-Methods',
+    'Access-Control-Allow-Headers',
+    'Access-Control-Allow-Credentials',
+    'Access-Control-Expose-Headers',
+    'Access-Control-Max-Age',
+    'Access-Control-Request-Method',
+    'Access-Control-Request-Headers',
+    'Origin',
+    
+    // Connection Management
+    'Connection',
+    'Keep-Alive',
+    'Transfer-Encoding',
+    'Upgrade',
+    
+    // Request Context
+    'User-Agent',
+    'Referer',
+    'Host',
+    'From',
+    
+    // Response Context
+    'Server',
+    'Allow',
+    'Location',
+    'Retry-After',
+    
+    // Range Requests
+    'Range',
+    'Accept-Ranges',
+    'Content-Range',
+    'If-Range',
+    
+    // Security
+    'Strict-Transport-Security',
+    'Content-Security-Policy',
+    'X-Content-Type-Options',
+    'X-Frame-Options',
+    'X-XSS-Protection',
+    'X-CSRF-Token',
+    'X-Request-ID',
+    'X-Correlation-ID',
+    
+    // Custom Headers
+    'X-API-Key',
+    'X-Auth-Token',
+    'X-Requested-With',
+    'X-Forwarded-For',
+    'X-Forwarded-Host',
+    'X-Forwarded-Proto',
+    'X-Real-IP',
+    
+    // Other Common Headers
+    'Date',
+    'Via',
+    'Warning',
+    'Vary',
+    'Link',
+  ];
+}
