@@ -7,14 +7,18 @@ import CookieStoreGrid from '../components/common/CookieStoreGrid';
 import AuthStoreGrid from '../components/common/AuthStoreGrid';
 import ProxyStoreGrid from '../components/common/ProxyStoreGrid';
 import CertStoreGrid from '../components/common/CertStoreGrid';
+import SettingsWizard from '../components/common/SettingsWizard';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '../components/ui/dialog';
 import { ParsedRequest, Collection, Environment, Cookie, EnvironmentVariable, Proxy, Cert } from '../types/collection';
 import { parseCollection, transformToCollectionRequest } from '../utils/collectionParser';
 import useAppStateStore from '../hooks/store/useAppStateStore';
 import { Auth } from '../hooks/store/createAuthSlice';
+import { AppSettings } from '../hooks/store/createSettingsSlice';
 
 const App: React.FC = () => {
   const [selectedEnvironment, setSelectedEnvironment] = useState<Environment | null>(null);
   const [selectedStore, setSelectedStore] = useState<'cookie' | 'auth' | 'proxy' | 'cert' | null>(null);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
 
   const refreshCollections = useAppStateStore((state) => state.refreshCollections);
   const setCollections = useAppStateStore((state) => state.setCollections);
@@ -33,6 +37,8 @@ const App: React.FC = () => {
   const setAuths = useAppStateStore((state) => state.setAuths);
   const setProxies = useAppStateStore((state) => state.setProxies);
   const setCerts = useAppStateStore((state) => state.setCerts);
+  const settings = useAppStateStore((state) => state.settings);
+  const setSettings = useAppStateStore((state) => state.setSettings);
   const getCurrentRequest = useAppStateStore((state) => state.getParsedRequest);
   const addHistory = useAppStateStore((state) => state.addHistory);
   const refreshHistory = useAppStateStore((state) => state.refreshHistory);
@@ -66,6 +72,7 @@ const App: React.FC = () => {
         vsCodeRef.current.postMessage({ type: 'loadAuths' });
         vsCodeRef.current.postMessage({ type: 'loadProxies' });
         vsCodeRef.current.postMessage({ type: 'loadCerts' });
+        vsCodeRef.current.postMessage({ type: 'loadSettings' });
       }
     }
   }, []);
@@ -234,6 +241,23 @@ const App: React.FC = () => {
     }
   };
 
+  const handleSettingsSelect = () => {
+    setIsSettingsOpen(true);
+  };
+
+  const handleSaveSettings = (updatedSettings: AppSettings) => {
+    setSettings(updatedSettings);
+    if (vsCodeRef.current) {
+      vsCodeRef.current.postMessage({
+        type: 'saveSettings',
+        data: {
+          settings: JSON.stringify(updatedSettings, null, 2)
+        }
+      });
+    }
+    setIsSettingsOpen(false);
+  };
+
   useEffect(() => {
     // Listen for messages from the VS Code extension
     const messageHandler = (event: MessageEvent) => {
@@ -293,6 +317,10 @@ const App: React.FC = () => {
         setCerts(message.certs);
       } else if (message.type === 'certsError') {
         console.error('Certs error:', message.error);
+      } else if (message.type === 'settingsLoaded') {
+        setSettings(message.settings);
+      } else if (message.type === 'settingsError') {
+        console.error('Settings error:', message.error);
       } else if (message.type === 'historyLoaded') {
         setHistory(message.history);
       } else if (message.type === 'historyError') {
@@ -329,6 +357,7 @@ const App: React.FC = () => {
           onRequestSelect={handleRequestSelect}
           onEnvSelect={handleEnvironmentSelect}
           onStoreSelect={handleStoreSelect}
+          onSettingsSelect={handleSettingsSelect}
           onImportCollection={handleImportCollection}
           onExportCollection={handleExportCollection}
           onImportEnvironments={handleImportEnvironments}
@@ -374,6 +403,20 @@ const App: React.FC = () => {
           </div>
         </>
       )}
+
+      {/* Settings Modal */}
+      <Dialog open={isSettingsOpen} onOpenChange={setIsSettingsOpen}>
+        <DialogContent className="sm:max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Settings</DialogTitle>
+          </DialogHeader>
+          <SettingsWizard
+            settings={settings}
+            onSave={handleSaveSettings}
+            onCancel={() => setIsSettingsOpen(false)}
+          />
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

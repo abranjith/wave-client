@@ -508,6 +508,33 @@ export function activate(context: vscode.ExtensionContext) {
 							error: error.message
 						});
 					}
+				} else if (message.type === 'loadSettings') {
+					try {
+						const settings = await loadSettings();
+						panel.webview.postMessage({
+							type: 'settingsLoaded',
+							settings
+						});
+					} catch (error: any) {
+						panel.webview.postMessage({
+							type: 'settingsError',
+							error: error.message
+						});
+					}
+				} else if (message.type === 'saveSettings') {
+					try {
+						const settings = JSON.parse(message.data.settings);
+						await saveSettings(settings);
+						panel.webview.postMessage({
+							type: 'settingsSaved'
+						});
+					} catch (error: any) {
+						console.error('Error saving settings:', error);
+						panel.webview.postMessage({
+							type: 'settingsError',
+							error: error.message
+						});
+					}
 				}
 			});
 		});
@@ -1090,6 +1117,79 @@ async function saveCerts(certs: any[]) {
 }
 
 /**
+ * Default settings configuration
+ */
+interface AppSettings {
+    saveFilesLocation: string;
+    maxRedirects: number;
+    requestTimeoutSeconds: number;
+    maxHistoryItems: number;
+    commonHeaderNames: string[];
+    encryptionKeyEnvVar: string;
+    ignoreCertificateValidation: boolean;
+}
+
+function getDefaultSettings(): AppSettings {
+    const homeDir = os.homedir();
+    return {
+        saveFilesLocation: path.join(homeDir, '.waveclient'),
+        maxRedirects: 5,
+        requestTimeoutSeconds: 0,
+        maxHistoryItems: 10,
+        commonHeaderNames: [],
+        encryptionKeyEnvVar: 'WAVECLIENT_SECRET_KEY',
+        ignoreCertificateValidation: false,
+    };
+}
+
+/**
+ * Loads settings from the settings file (~/.waveclient/settings.json)
+ * Always stored in homeDir/.waveclient to avoid data loss
+ */
+async function loadSettings(): Promise<AppSettings> {
+    const homeDir = os.homedir();
+    const waveclientDir = path.join(homeDir, '.waveclient');
+    const settingsFile = path.join(waveclientDir, 'settings.json');
+
+    // Ensure the waveclient directory exists
+    if (!fs.existsSync(waveclientDir)) {
+        fs.mkdirSync(waveclientDir, { recursive: true });
+    }
+
+    // Return default settings if file doesn't exist
+    if (!fs.existsSync(settingsFile)) {
+        return getDefaultSettings();
+    }
+
+    try {
+        const fileContent = fs.readFileSync(settingsFile, 'utf8');
+        const savedSettings = JSON.parse(fileContent);
+        // Merge with defaults to ensure all properties exist
+        return { ...getDefaultSettings(), ...savedSettings };
+    } catch (error: any) {
+        console.error(`Error loading settings:`, error.message);
+        return getDefaultSettings();
+    }
+}
+
+/**
+ * Saves settings to the settings file (~/.waveclient/settings.json)
+ * Always stored in homeDir/.waveclient to avoid data loss
+ */
+async function saveSettings(settings: AppSettings): Promise<void> {
+    const homeDir = os.homedir();
+    const waveclientDir = path.join(homeDir, '.waveclient');
+
+    // Ensure the waveclient directory exists
+    if (!fs.existsSync(waveclientDir)) {
+        fs.mkdirSync(waveclientDir, { recursive: true });
+    }
+
+    const settingsFile = path.join(waveclientDir, 'settings.json');
+    fs.writeFileSync(settingsFile, JSON.stringify(settings, null, 2));
+}
+
+/**
  * Helper functions for Cookie management
  */
 
@@ -1360,6 +1460,19 @@ async function getHttpsAgentForUrl(urlStr: string): Promise<https.Agent | null> 
 	} catch (error: any) {
 		console.error('Error getting HTTPS agent for URL:', error);
 		return null;
+	}
+}
+
+function getAppDir(settings? : AppSettings): string {
+	const saveLocation = settings?.saveFilesLocation || '';
+	const homeDir = os.homedir();
+	if(!saveLocation || saveLocation.trim() === '') {
+		return path.join(homeDir, '.waveclient');
+	}
+	if (path.isAbsolute(saveLocation)) {
+		return saveLocation;
+	} else {
+		return path.join(homeDir, saveLocation);
 	}
 }
 

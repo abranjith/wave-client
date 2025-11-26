@@ -1,5 +1,5 @@
 import React from 'react';
-import { SunIcon , LibraryIcon , HistoryIcon, PlusIcon, ShieldCheckIcon } from 'lucide-react';
+import { SunIcon , LibraryIcon , HistoryIcon, PlusIcon, ShieldCheckIcon, SettingsIcon } from 'lucide-react';
 import {
    Tabs,
    TabsContent,
@@ -23,6 +23,7 @@ interface ConfigPanelProps {
   onRequestSelect: ((request: ParsedRequest) => void)
   onEnvSelect: ((environment: Environment) => void)
   onStoreSelect: ((storeType: 'cookie' | 'auth' | 'proxy' | 'cert') => void)
+  onSettingsSelect: () => void;
   onImportCollection: (fileName: string, fileContent: string, collectionType: string) => void;
   onExportCollection: (collectionName: string) => void;
   onImportEnvironments: (fileName: string, fileContent: string) => void;
@@ -36,7 +37,7 @@ const TABS = [
   { key: 'store', label: 'Wave Store', icon: <ShieldCheckIcon size={20} /> },
 ];
 
-const ConfigPanel: React.FC<ConfigPanelProps> = ({ onRequestSelect, onEnvSelect, onStoreSelect, onImportCollection, onExportCollection, onImportEnvironments, onExportEnvironments }) => {
+const ConfigPanel: React.FC<ConfigPanelProps> = ({ onRequestSelect, onEnvSelect, onStoreSelect, onSettingsSelect, onImportCollection, onExportCollection, onImportEnvironments, onExportEnvironments }) => {
   return (
     <div className="flex h-full w-full overflow-hidden">
       <Tabs
@@ -98,6 +99,25 @@ const ConfigPanel: React.FC<ConfigPanelProps> = ({ onRequestSelect, onEnvSelect,
           </TooltipProvider>
           ))}
           </TabsList>
+          {/* Settings Button at the bottom */}
+          <div className="mt-auto pt-2 border-t border-slate-200 dark:border-slate-700">
+            <TooltipProvider delayDuration={0}>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    onClick={onSettingsSelect}
+                    className="flex items-center justify-center w-full h-12 text-slate-600 hover:bg-slate-100 hover:text-blue-600 rounded-md transition-colors dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-blue-400"
+                  >
+                    <SettingsIcon size={20}/>
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent className="px-2 py-1 text-xs">
+                  Settings
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          </div>
         </div>
         <div className="flex-1 overflow-hidden">
           <TabsContent value="collections" className="h-full overflow-hidden">
