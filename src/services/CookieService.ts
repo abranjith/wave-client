@@ -26,7 +26,7 @@ export class CookieService extends BaseStorageService {
      */
     async loadAll(): Promise<Cookie[]> {
         const cookiesFile = await this.getCookiesFilePath();
-        return this.readJsonFile<Cookie[]>(cookiesFile, []);
+        return await this.readJsonFileSecure<Cookie[]>(cookiesFile, []);
     }
 
     /**
@@ -35,7 +35,7 @@ export class CookieService extends BaseStorageService {
      */
     async saveAll(cookies: Cookie[]): Promise<void> {
         const cookiesFile = await this.getCookiesFilePath();
-        this.writeJsonFile(cookiesFile, cookies);
+        await this.writeJsonFileSecure(cookiesFile, cookies);
     }
 
     /**

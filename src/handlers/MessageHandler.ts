@@ -8,7 +8,8 @@ import {
     historyService,
     cookieService,
     storeService,
-    settingsService
+    settingsService,
+    securityService
 } from '../services';
 
 /**
@@ -103,6 +104,25 @@ export class MessageHandler {
                 break;
             case 'saveSettings':
                 await this.handleSaveSettings(message);
+                break;
+            // Security/Encryption handlers
+            case 'getEncryptionStatus':
+                await this.handleGetEncryptionStatus();
+                break;
+            case 'encryptAllFiles':
+                await this.handleEncryptAllFiles();
+                break;
+            case 'decryptAllFiles':
+                await this.handleDecryptAllFiles();
+                break;
+            case 'reEncryptAllFiles':
+                await this.handleReEncryptAllFiles(message);
+                break;
+            case 'exportRecoveryKey':
+                await this.handleExportRecoveryKey();
+                break;
+            case 'recoverWithKeyFile':
+                await this.handleRecoverWithKeyFile(message);
                 break;
         }
     }
@@ -515,6 +535,166 @@ export class MessageHandler {
             console.error('Error saving settings:', error);
             this.postMessage({
                 type: 'settingsError',
+                error: error.message
+            });
+        }
+    }
+
+    // ==================== Security/Encryption Handlers ====================
+
+    /**
+     * Gets the current encryption status.
+     */
+    private async handleGetEncryptionStatus(): Promise<void> {
+        try {
+            const status = await securityService.getEncryptionStatus();
+            this.postMessage({
+                type: 'encryptionStatus',
+                status
+            });
+        } catch (error: any) {
+            console.error('Error getting encryption status:', error);
+            this.postMessage({
+                type: 'encryptionError',
+                error: error.message
+            });
+        }
+    }
+
+    /**
+     * Encrypts all files in the app directory.
+     */
+    private async handleEncryptAllFiles(): Promise<void> {
+        try {
+            const result = await securityService.encryptAllFiles();
+            this.postMessage({
+                type: 'encryptionComplete',
+                result
+            });
+        } catch (error: any) {
+            console.error('Error encrypting files:', error);
+            this.postMessage({
+                type: 'encryptionError',
+                error: error.message
+            });
+        }
+    }
+
+    /**
+     * Decrypts all files in the app directory.
+     */
+    private async handleDecryptAllFiles(): Promise<void> {
+        try {
+            const result = await securityService.decryptAllFiles();
+            this.postMessage({
+                type: 'decryptionComplete',
+                result
+            });
+        } catch (error: any) {
+            console.error('Error decrypting files:', error);
+            this.postMessage({
+                type: 'encryptionError',
+                error: error.message
+            });
+        }
+    }
+
+    /**
+     * Re-encrypts all files with a new key after key rotation.
+     */
+    private async handleReEncryptAllFiles(message: any): Promise<void> {
+        try {
+            const oldKey = message.data?.oldKey;
+            if (!oldKey) {
+                throw new Error('Old key is required for re-encryption');
+            }
+            const result = await securityService.reEncryptAllFiles(oldKey);
+            this.postMessage({
+                type: 'reEncryptionComplete',
+                result
+            });
+        } catch (error: any) {
+            console.error('Error re-encrypting files:', error);
+            this.postMessage({
+                type: 'encryptionError',
+                error: error.message
+            });
+        }
+    }
+
+    /**
+     * Exports a recovery key file.
+     */
+    private async handleExportRecoveryKey(): Promise<void> {
+        try {
+            // Show save dialog for recovery key file
+            const uri = await vscode.window.showSaveDialog({
+                defaultUri: vscode.Uri.file(path.join(os.homedir(), '.waveclient-key')),
+                filters: {
+                    'Wave Client Recovery Key': ['waveclient-key']
+                },
+                saveLabel: 'Export Recovery Key'
+            });
+
+            if (!uri) {
+                // User cancelled
+                this.postMessage({
+                    type: 'exportRecoveryKeyCancelled'
+                });
+                return;
+            }
+
+            await securityService.exportRecoveryKey(uri.fsPath);
+            this.postMessage({
+                type: 'recoveryKeyExported',
+                path: uri.fsPath
+            });
+        } catch (error: any) {
+            console.error('Error exporting recovery key:', error);
+            this.postMessage({
+                type: 'encryptionError',
+                error: error.message
+            });
+        }
+    }
+
+    /**
+     * Recovers encryption configuration from a recovery key file.
+     */
+    private async handleRecoverWithKeyFile(message: any): Promise<void> {
+        try {
+            const recoveryKey = message.data?.recoveryKey;
+            if (!recoveryKey) {
+                throw new Error('Recovery key value is required');
+            }
+
+            // Show open dialog for recovery key file
+            const uris = await vscode.window.showOpenDialog({
+                canSelectFiles: true,
+                canSelectFolders: false,
+                canSelectMany: false,
+                filters: {
+                    'Wave Client Recovery Key': ['waveclient-key']
+                },
+                openLabel: 'Select Recovery Key File'
+            });
+
+            if (!uris || uris.length === 0) {
+                // User cancelled
+                this.postMessage({
+                    type: 'recoveryCancelled'
+                });
+                return;
+            }
+
+            await securityService.recoverWithKeyFile(uris[0].fsPath, recoveryKey);
+            this.postMessage({
+                type: 'recoveryComplete'
+            });
+        } catch (error: any) {
+            console.error('Error recovering with key file:', error);
+            this.postMessage({
+                type: 'encryptionError',
                 error: error.message
             });
         }

@@ -8,7 +8,8 @@ export {
     AppSettings, 
     SettingsProvider, 
     setGlobalSettingsProvider, 
-    getGlobalSettings 
+    getGlobalSettings,
+    setSecurityServiceInstance
 } from './BaseStorageService';
 export { SettingsService, settingsService } from './SettingsService';
 export { EnvironmentService, environmentService } from './EnvironmentService';
@@ -17,5 +18,7 @@ export { HistoryService, historyService } from './HistoryService';
 export { CookieService, cookieService } from './CookieService';
 export { StoreService, storeService, AuthEntry, AxiosProxyConfig } from './StoreService';
 export { HttpService, httpService, HttpRequestConfig, HttpResponseResult } from './HttpService';
+export { SecurityService, securityService, EncryptionStatus } from './SecurityService';
 
 // Note: Importing settingsService triggers global settings provider registration
+// Note: Importing securityService triggers its registration with BaseStorageService

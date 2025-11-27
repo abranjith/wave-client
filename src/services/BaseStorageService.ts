@@ -2,6 +2,28 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
 
+// Forward declaration to avoid circular dependency
+// SecurityService will be imported dynamically when needed
+let securityServiceInstance: any = null;
+
+/**
+ * Sets the SecurityService instance for use in BaseStorageService.
+ * Called after SecurityService is initialized.
+ */
+export function setSecurityServiceInstance(service: any): void {
+    securityServiceInstance = service;
+}
+
+/**
+ * Gets the SecurityService instance.
+ * @throws Error if SecurityService is not initialized
+ */
+function getSecurityService(): any {
+    if (!securityServiceInstance) {
+        throw new Error('SecurityService not initialized. Ensure SecurityService is imported before use.');
+    }
+    return securityServiceInstance;
+}
 /**
  * Application settings interface (duplicated to avoid circular dependency)
  */
@@ -185,5 +207,47 @@ export abstract class BaseStorageService {
      */
     protected renameFile(oldPath: string, newPath: string): void {
         fs.renameSync(oldPath, newPath);
+    }
+
+    /**
+     * Reads and parses a JSON file with encryption support.
+     * Uses SecurityService to decrypt if encryption is enabled.
+     * @param filePath The path to the JSON file
+     * @param defaultValue The default value to return if the file doesn't exist or is invalid
+     * @returns The parsed JSON content or the default value
+     * @throws Error if decryption fails
+     */
+    protected async readJsonFileSecure<T>(filePath: string, defaultValue: T): Promise<T> {
+        if (!fs.existsSync(filePath)) {
+            return defaultValue;
+        }
+
+        try {
+            const securityService = getSecurityService();
+            return await securityService.readEncryptedFile(filePath, defaultValue) as T;
+        } catch (error: any) {
+            console.error(`Error reading secure file ${filePath}:`, error.message);
+            throw error;
+        }
+    }
+
+    /**
+     * Writes data to a JSON file with encryption support.
+     * Uses SecurityService to encrypt if encryption is enabled.
+     * @param filePath The path to the JSON file
+     * @param data The data to write
+     * @throws Error if encryption fails
+     */
+    protected async writeJsonFileSecure<T>(filePath: string, data: T): Promise<void> {
+        const dir = path.dirname(filePath);
+        this.ensureDirectoryExists(dir);
+
+        try {
+            const securityService = getSecurityService();
+            await securityService.writeEncryptedFile(filePath, data);
+        } catch (error: any) {
+            console.error(`Error writing secure file ${filePath}:`, error.message);
+            throw error;
+        }
     }
 }

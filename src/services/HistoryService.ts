@@ -40,7 +40,7 @@ export class HistoryService extends BaseStorageService {
         for (const file of files) {
             try {
                 const filePath = path.join(historyDir, file);
-                const requestData = this.readJsonFile<ParsedRequest | null>(filePath, null);
+                const requestData = await this.readJsonFileSecure<ParsedRequest | null>(filePath, null);
                 if (requestData) {
                     const baseFileName = path.basename(file, '.json');
                     history.push({ ...requestData, baseFileName });
@@ -89,7 +89,7 @@ export class HistoryService extends BaseStorageService {
         for (let i = 0; i < files.length; i++) {
             try {
                 const filePath = path.join(historyDir, files[i].file);
-                const existingRequest = this.readJsonFile<ParsedRequest | null>(filePath, null);
+                const existingRequest = await this.readJsonFileSecure<ParsedRequest | null>(filePath, null);
                 if (existingRequest) {
                     const existingContent = this.getRequestSignature(existingRequest);
                     if (incomingContent === existingContent) {
@@ -125,7 +125,7 @@ export class HistoryService extends BaseStorageService {
         
         // Change request id to new id for uniqueness
         request.id = `${request.id}_${Date.now()}_hist_${Math.random().toString(36).substring(2, 8)}`;
-        this.writeJsonFile(newFilePath, request);
+        await this.writeJsonFileSecure(newFilePath, request);
     }
 
     /**

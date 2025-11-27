@@ -54,7 +54,7 @@ export class CollectionService extends BaseStorageService {
             return null;
         }
 
-        return this.readJsonFile<Collection | null>(filePath, null);
+        return await this.readJsonFileSecure<Collection | null>(filePath, null);
     }
 
     /**
@@ -68,7 +68,7 @@ export class CollectionService extends BaseStorageService {
         this.ensureDirectoryExists(collectionsDir);
 
         const filePath = path.join(collectionsDir, fileName);
-        this.writeJsonFile(filePath, collection);
+        await this.writeJsonFileSecure(filePath, collection);
         return collection;
     }
 

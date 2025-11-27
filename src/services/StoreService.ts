@@ -54,7 +54,7 @@ export class StoreService extends BaseStorageService {
     async loadAuths(): Promise<AuthEntry[]> {
         const storeDir = await this.getStoreDirectory();
         const authsFile = path.join(storeDir, this.authFileName);
-        return this.readJsonFile<AuthEntry[]>(authsFile, []);
+        return await this.readJsonFileSecure<AuthEntry[]>(authsFile, []);
     }
 
     /**
@@ -64,7 +64,7 @@ export class StoreService extends BaseStorageService {
     async saveAuths(auths: AuthEntry[]): Promise<void> {
         const storeDir = await this.getStoreDirectory();
         const authsFile = path.join(storeDir, this.authFileName);
-        this.writeJsonFile(authsFile, auths);
+        await this.writeJsonFileSecure(authsFile, auths);
     }
 
     // ==================== Proxy Methods ====================
@@ -76,7 +76,7 @@ export class StoreService extends BaseStorageService {
     async loadProxies(): Promise<Proxy[]> {
         const storeDir = await this.getStoreDirectory();
         const proxiesFile = path.join(storeDir, this.proxiesFileName);
-        return this.readJsonFile<Proxy[]>(proxiesFile, []);
+        return await this.readJsonFileSecure<Proxy[]>(proxiesFile, []);
     }
 
     /**
@@ -86,7 +86,7 @@ export class StoreService extends BaseStorageService {
     async saveProxies(proxies: Proxy[]): Promise<void> {
         const storeDir = await this.getStoreDirectory();
         const proxiesFile = path.join(storeDir, this.proxiesFileName);
-        this.writeJsonFile(proxiesFile, proxies);
+        await this.writeJsonFileSecure(proxiesFile, proxies);
     }
 
     /**
@@ -165,7 +165,7 @@ export class StoreService extends BaseStorageService {
     async loadCerts(): Promise<Cert[]> {
         const storeDir = await this.getStoreDirectory();
         const certsFile = path.join(storeDir, this.certsFileName);
-        return this.readJsonFile<Cert[]>(certsFile, []);
+        return await this.readJsonFileSecure<Cert[]>(certsFile, []);
     }
 
     /**
@@ -175,7 +175,7 @@ export class StoreService extends BaseStorageService {
     async saveCerts(certs: Cert[]): Promise<void> {
         const storeDir = await this.getStoreDirectory();
         const certsFile = path.join(storeDir, this.certsFileName);
-        this.writeJsonFile(certsFile, certs);
+        await this.writeJsonFileSecure(certsFile, certs);
     }
 
     /**

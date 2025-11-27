@@ -7,6 +7,7 @@
 
 import * as vscode from 'vscode';
 import { MessageHandler } from './handlers';
+import { securityService } from './services';
 
 /**
  * Activates the extension.
@@ -14,6 +15,9 @@ import { MessageHandler } from './handlers';
  */
 export function activate(context: vscode.ExtensionContext) {
 	console.log('Congratulations, your extension "wave-client" is now active!');
+
+	// Initialize SecurityService with VS Code's SecretStorage
+	securityService.initialize(context.secrets);
 
 	// Register the main command to open Wave Client
 	const openDisposable = vscode.commands.registerCommand('waveclient.open', () => {

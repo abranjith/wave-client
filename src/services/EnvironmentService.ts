@@ -42,7 +42,7 @@ export class EnvironmentService extends BaseStorageService {
         for (const file of files) {
             try {
                 const filePath = path.join(envDir, file);
-                const environmentData = this.readJsonFile<Environment | null>(filePath, null);
+                const environmentData = await this.readJsonFileSecure<Environment | null>(filePath, null);
 
                 if (environmentData && !seenNames.has(environmentData.name)) {
                     seenNames.add(environmentData.name);
@@ -81,7 +81,7 @@ export class EnvironmentService extends BaseStorageService {
 
         const fileName = this.sanitizeFileName(env.name);
         const filePath = path.join(envDir, `${fileName}.json`);
-        this.writeJsonFile(filePath, env);
+        await this.writeJsonFileSecure(filePath, env);
     }
 
     /**
