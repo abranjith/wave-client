@@ -23,10 +23,13 @@ For icons use lucide-react https://lucide.dev/
 2.  **Code Quality:** Follow best practices for code quality, including:
     - Use TypeScript for type safety.
     - Use ESLint and Prettier for consistent code formatting.
+    - Follow idiomatic React, TypeScript patterns.
+    - Write clear, maintainable code with appropriate comments.
 3.  **Error Handling:** Implement robust error handling for API calls, including user-friendly error messages.
 4. Do not create/ update tests in the initial version, we can update this later.
 5. Do not create/ update documentation in the initial version, we can update this later.
-6. Follow existing code patterns, styling, conventions throughout the project.
+6. Follow consistent code patterns, styling, conventions throughout the project.
 7. When any current file is being changed, be extra careful about not breaking existing functionality.
 8.  **Performance:** Ensure the webview is performant, avoiding unnecessary re-renders and optimizing API call handling.
 9.  Since this project uses webviews, for any I/O operations, use the VS Code API to communicate between the webview and the extension backend.
+10. Before deleting any files ask for user confirmation.

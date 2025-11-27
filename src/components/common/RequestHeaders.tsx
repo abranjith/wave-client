@@ -1,4 +1,4 @@
-import React, { useState, useEffect, JSX } from 'react';
+import React, { useState, useEffect, useMemo, JSX } from 'react';
 import { Trash2Icon, PlusIcon, CheckCircleIcon, XCircleIcon } from 'lucide-react';
 import { Button } from '../ui/button';
 import StyledInput from "../ui/styled-input";
@@ -14,6 +14,15 @@ const RequestHeaders: React.FC = () => {
   const removeHeader = useAppStateStore((state) => state.removeHeader);
   const toggleHeaderEnabled = useAppStateStore((state) => state.toggleHeaderEnabled);
   const activeEnvironment = useAppStateStore((state) => state.activeEnvironment);
+  const settingsCommonHeaderNames = useAppStateStore((state) => state.settings.commonHeaderNames);
+  
+  // Memoize merged header names from default list and user settings, removing duplicates
+  const mergedHeaderNames = useMemo(() => {
+    const defaultHeaders = getCommonHeaderNames();
+    const combinedHeaders = [...defaultHeaders, ...settingsCommonHeaderNames];
+    // Use Set to remove duplicates (case-sensitive)
+    return [...new Set(combinedHeaders)];
+  }, [settingsCommonHeaderNames]);
   
   // Memoize active environment variables to avoid creating new Set on every render
   const activeEnvVariables = React.useMemo(() => {
@@ -134,7 +143,7 @@ const RequestHeaders: React.FC = () => {
                       onBlur={() => commitHeader(header.id)}
                       onKeyDown={e => handleKeyDown(e, header.id)}
                       className="bg-white border-slate-300 focus:border-blue-500 dark:bg-slate-800 dark:border-slate-600 dark:focus:border-blue-400"
-                      suggestions={getCommonHeaderNames()}
+                      suggestions={mergedHeaderNames}
                     />
                   </td>
                   <td className="py-2 px-3">
