@@ -20,5 +20,8 @@ export { StoreService, storeService, AuthEntry, AxiosProxyConfig } from './Store
 export { HttpService, httpService, HttpRequestConfig, HttpResponseResult } from './HttpService';
 export { SecurityService, securityService, EncryptionStatus } from './SecurityService';
 
+// Auth services
+export * from './auth';
+
 // Note: Importing settingsService triggers global settings provider registration
 // Note: Importing securityService triggers its registration with BaseStorageService

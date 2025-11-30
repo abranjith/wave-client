@@ -710,62 +710,8 @@ const createCurrentRequestSlice: StateCreator<CurrentRequestSlice> = (set, get) 
         // Resolve and convert headers
         const headers = getDictFromHeaderRows(state.headers || [], envVarsMap, allUnresolved);
 
-        // Handle Authentication
+        // Get auth for request (validates domain, expiry, etc.)
         const requestAuth = getAuthForRequest(activeAuth, finalUrl);
-        let authUrlParams: { [key: string]: string } = {};
-        if (requestAuth) {
-            switch (requestAuth.type) {
-                case AuthType.API_KEY: {
-                    const keyResult = resolveParameterizedValue(requestAuth.key, envVarsMap);
-                    const valueResult = resolveParameterizedValue(requestAuth.value, envVarsMap);
-                    keyResult.unresolved.forEach(u => allUnresolved.add(u));
-                    valueResult.unresolved.forEach(u => allUnresolved.add(u));
-                    
-                    const key = keyResult.resolved;
-                    let value = valueResult.resolved;
-                    
-                    if (requestAuth.prefix) {
-                        value = `${requestAuth.prefix}${value}`;
-                    }
-
-                    if (requestAuth.sendIn === 'header') {
-                        // Only add if not already present (case-insensitive check)
-                        const headerExists = Object.keys(headers).some(k => k.toLowerCase() === key.toLowerCase());
-                        if (!headerExists) {
-                            headers[key] = value;
-                        }
-                    } else if (requestAuth.sendIn === 'query') {
-                        authUrlParams[key] = value;
-                    }
-                    break;
-                }
-                case AuthType.BASIC: {
-                    const usernameResult = resolveParameterizedValue(requestAuth.username, envVarsMap);
-                    const passwordResult = resolveParameterizedValue(requestAuth.password, envVarsMap);
-                    usernameResult.unresolved.forEach(u => allUnresolved.add(u));
-                    passwordResult.unresolved.forEach(u => allUnresolved.add(u));
-                    
-                    const username = usernameResult.resolved;
-                    const password = passwordResult.resolved;
-                    
-                    const authString = `${username}:${password}`;
-                    const encodedAuth = btoa(authString);
-                    const authHeaderValue = `Basic ${encodedAuth}`;
-                    
-                    const headerExists = Object.keys(headers).some(k => k.toLowerCase() === 'authorization');
-                    if (!headerExists) {
-                        headers['Authorization'] = authHeaderValue;
-                    }
-                    break;
-                }
-                case AuthType.DIGEST: {
-                    // TODO: Implement Digest Auth handling
-                    resolveParameterizedValue(requestAuth.username, envVarsMap).unresolved.forEach(u => allUnresolved.add(u));
-                    resolveParameterizedValue(requestAuth.password, envVarsMap).unresolved.forEach(u => allUnresolved.add(u));
-                    break;
-                }
-            }
-        }
 
         // If headers does not have content-type and body is present, set content-type from body
         if (state.body && state.body.currentBodyType !== 'none') {
@@ -780,17 +726,6 @@ const createCurrentRequestSlice: StateCreator<CurrentRequestSlice> = (set, get) 
 
         // Resolve and convert params to URLSearchParams
         const urlParamsObj = state.params ? getURLSearchParamsFromParamRows(state.params, envVarsMap, allUnresolved) : new URLSearchParams();
-
-        // Handle API Key in Query Params
-        if (authUrlParams && Object.keys(authUrlParams).length > 0) {
-            for (const [key, value] of Object.entries(authUrlParams)) {
-                // Only add if not already present
-                if (!urlParamsObj.has(key)) {
-                    urlParamsObj.append(key, value);
-                }
-             }
-        }
-
         const urlParams = urlParamsObj.toString();
         
         // Prepare body based on body type and resolve placeholders
@@ -831,7 +766,9 @@ const createCurrentRequestSlice: StateCreator<CurrentRequestSlice> = (set, get) 
             url: finalUrl, 
             params: urlParams || undefined, 
             headers, 
-            body: serializableBody
+            body: serializableBody,
+            auth: requestAuth || undefined,
+            envVars: Object.fromEntries(envVarsMap)
         };
         
         // Send request to VS Code

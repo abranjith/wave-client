@@ -6,6 +6,7 @@ import { cookieService } from './CookieService';
 import { storeService } from './StoreService';
 import { getGlobalSettings } from './BaseStorageService';
 import { convertToBase64 } from '../utils/encoding';
+import { AuthServiceFactory, Auth, AuthType, EnvVarsMap, AuthRequestConfig } from './auth';
 
 /**
  * HTTP request configuration
@@ -15,8 +16,10 @@ export interface HttpRequestConfig {
     method: string;
     url: string;
     headers: Record<string, string>;
-    params: Record<string, string>;
+    params?: string | Record<string, string>; // Can be string or object
     body?: any;
+    auth?: Auth;
+    envVars?: EnvVarsMap;
 }
 
 /**
@@ -34,11 +37,11 @@ export interface HttpResponseResult {
 
 /**
  * Service for executing HTTP requests.
- * Handles cookie management, proxy configuration, and certificate handling.
+ * Handles cookie management, proxy configuration, certificate handling, and authentication.
  */
 export class HttpService {
     /**
-     * Executes an HTTP request with all configured middleware (cookies, proxy, certs).
+     * Executes an HTTP request with all configured middleware (cookies, proxy, certs, auth).
      * @param request The request configuration
      * @returns The response result and any new cookies
      */
@@ -56,9 +59,92 @@ export class HttpService {
             const cookieHeader = cookieService.getCookiesForUrl(cookies, request.url);
 
             // Build headers with cookies
-            const headers = { ...request.headers };
+            const headers: Record<string, string> = { ...request.headers };
             if (cookieHeader) {
                 headers['Cookie'] = cookieHeader;
+            }
+
+            // Build URL with params
+            let fullUrl = request.url;
+            let paramsString = '';
+            if (request.params) {
+                if (typeof request.params === 'string') {
+                    paramsString = request.params;
+                } else if (Object.keys(request.params).length > 0) {
+                    paramsString = new URLSearchParams(request.params).toString();
+                }
+            }
+
+            // Handle authentication if provided
+            if (request.auth && request.auth.enabled) {
+                const authService = AuthServiceFactory.getService(request.auth.type as AuthType);
+                if (authService) {
+                    const authConfig: AuthRequestConfig = {
+                        method: request.method,
+                        url: fullUrl,
+                        headers: headers,
+                        params: paramsString,
+                        body: request.body,
+                    };
+
+                    const authResult = await authService.applyAuth(
+                        authConfig,
+                        request.auth,
+                        request.envVars || {}
+                    );
+
+                    // Check for auth error
+                    if (authResult.error) {
+                        throw new Error(`Auth error: ${authResult.error}`);
+                    }
+
+                    // If auth handled internally (like Digest), process and return its response
+                    if (authResult.handledInternally && authResult.response) {
+                        const elapsedTime = Date.now() - start;
+                        const internalResponse = authResult.response;
+
+                        // Process cookies from internal response
+                        const newCookies = this.processSetCookieHeadersFromRaw(
+                            internalResponse.headers,
+                            request.url
+                        );
+
+                        if (newCookies.length > 0) {
+                            const updatedCookies = cookieService.mergeCookies(cookies, newCookies);
+                            await cookieService.saveAll(updatedCookies);
+                        }
+
+                        const bodyBase64 = convertToBase64(internalResponse.data);
+
+                        return {
+                            response: {
+                                id: request.id,
+                                status: internalResponse.status,
+                                statusText: internalResponse.statusText,
+                                elapsedTime,
+                                size: internalResponse.data ? internalResponse.data.byteLength : 0,
+                                headers: internalResponse.headers as Record<string, string>,
+                                body: bodyBase64,
+                            },
+                            newCookies,
+                        };
+                    }
+
+                    // Apply auth headers
+                    if (authResult.headers) {
+                        Object.assign(headers, authResult.headers);
+                    }
+
+                    // Apply auth query params
+                    if (authResult.queryParams) {
+                        const authParams = new URLSearchParams(authResult.queryParams).toString();
+                        if (paramsString) {
+                            paramsString = `${paramsString}&${authParams}`;
+                        } else {
+                            paramsString = authParams;
+                        }
+                    }
+                }
             }
 
             // Get proxy and HTTPS agent configurations
@@ -91,10 +177,16 @@ export class HttpService {
             // Execute the request
             start = Date.now();
 
+            // Build final URL with params
+            let requestUrl = fullUrl;
+            if (paramsString) {
+                const separator = fullUrl.includes('?') ? '&' : '?';
+                requestUrl = `${fullUrl}${separator}${paramsString}`;
+            }
+
             const response = await axios({
                 method: request.method,
-                url: request.url,
-                params: new URLSearchParams(request.params),
+                url: requestUrl,
                 headers: headers,
                 data: request.body,
                 responseType: 'arraybuffer',
@@ -172,6 +264,32 @@ export class HttpService {
             const url = new URL(requestUrl);
 
             setCookies.forEach(header => {
+                const cookie = cookieService.parseSetCookie(header, url.hostname);
+                if (cookie) {
+                    newCookies.push(cookie);
+                }
+            });
+        }
+
+        return newCookies;
+    }
+
+    /**
+     * Processes Set-Cookie headers from raw headers object.
+     * Used when auth service handles request internally.
+     * @param headers The response headers
+     * @param requestUrl The original request URL
+     * @returns Array of parsed cookies
+     */
+    private processSetCookieHeadersFromRaw(headers: Record<string, any>, requestUrl: string): Cookie[] {
+        const newCookies: Cookie[] = [];
+        const setCookieHeader = headers['set-cookie'];
+
+        if (setCookieHeader) {
+            const setCookies = Array.isArray(setCookieHeader) ? setCookieHeader : [setCookieHeader];
+            const url = new URL(requestUrl);
+
+            setCookies.forEach((header: string) => {
                 const cookie = cookieService.parseSetCookie(header, url.hostname);
                 if (cookie) {
                     newCookies.push(cookie);
