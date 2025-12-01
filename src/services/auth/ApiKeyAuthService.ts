@@ -4,7 +4,7 @@
  */
 
 import { AuthServiceBase } from './AuthServiceBase';
-import { Auth, AuthResult, AuthRequestConfig, AuthType, ApiKeyAuth, EnvVarsMap } from './types';
+import { Auth, AuthResult, AuthRequestConfig, AuthType, ApiKeyAuth, EnvVarsMap, authOk, authErr } from './types';
 
 export class ApiKeyAuthService extends AuthServiceBase {
     getAuthType(): string {
@@ -18,7 +18,7 @@ export class ApiKeyAuthService extends AuthServiceBase {
     ): Promise<AuthResult> {
         // Validate auth type
         if (auth.type !== AuthType.API_KEY) {
-            return { error: 'Invalid auth type for ApiKeyAuthService' };
+            return authErr('Invalid auth type for ApiKeyAuthService');
         }
 
         const apiKeyAuth = auth as ApiKeyAuth;
@@ -26,7 +26,7 @@ export class ApiKeyAuthService extends AuthServiceBase {
         // Validate auth configuration
         const validationError = this.validateAuth(auth, config.url);
         if (validationError) {
-            return { error: validationError };
+            return authErr(validationError);
         }
 
         // Resolve key and value placeholders
@@ -36,7 +36,7 @@ export class ApiKeyAuthService extends AuthServiceBase {
         // Check for unresolved placeholders
         const unresolved = [...keyResult.unresolved, ...valueResult.unresolved];
         if (unresolved.length > 0) {
-            return { error: `Unresolved placeholders: ${unresolved.join(', ')}` };
+            return authErr(`Unresolved placeholders: ${unresolved.join(', ')}`);
         }
 
         const key = keyResult.resolved.trim();
@@ -56,17 +56,17 @@ export class ApiKeyAuthService extends AuthServiceBase {
 
             if (headerExists) {
                 // Don't overwrite existing header
-                return { headers: {} };
+                return authOk({ headers: {} });
             }
 
-            return {
+            return authOk({
                 headers: { [key]: value },
-            };
+            });
         } else {
             // Query parameter
-            return {
+            return authOk({
                 queryParams: { [key]: value },
-            };
+            });
         }
     }
 }

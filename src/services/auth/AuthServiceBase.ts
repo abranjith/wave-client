@@ -4,6 +4,7 @@
  */
 
 import { Auth, AuthResult, AuthRequestConfig, CachedAuthData, EnvVarsMap } from './types';
+import { resolveParameterizedValue, isUrlInDomains } from '../../utils/common';
 
 /**
  * Abstract base class for authentication services.
@@ -95,9 +96,9 @@ export abstract class AuthServiceBase {
 
     /**
      * Resolve placeholders in a value using environment variables.
-     * Replaces {{key}} with the corresponding value from envVars.
+     * Delegates to the common resolveParameterizedValue utility.
      * @param value The value that may contain placeholders
-     * @param envVars Environment variables map
+     * @param envVars Environment variables map (Record<string, string>)
      * @returns Object with resolved value and any unresolved placeholders
      */
     protected resolveValue(
@@ -107,18 +108,9 @@ export abstract class AuthServiceBase {
         if (!value) {
             return { resolved: '', unresolved: [] };
         }
-
-        const unresolved: string[] = [];
-        const resolved = value.replace(/\{\{([^}]+)\}\}/g, (match, key) => {
-            const trimmedKey = key.trim();
-            if (envVars.hasOwnProperty(trimmedKey)) {
-                return envVars[trimmedKey];
-            }
-            unresolved.push(trimmedKey);
-            return match; // Keep original placeholder if not found
-        });
-
-        return { resolved, unresolved };
+        // Convert Record to Map for the common util
+        const envVarsMap = new Map(Object.entries(envVars));
+        return resolveParameterizedValue(value, envVarsMap);
     }
 
     /**
@@ -158,6 +150,7 @@ export abstract class AuthServiceBase {
 
     /**
      * Check if a URL matches the auth's domain filters.
+     * Delegates to the common isUrlInDomains utility.
      * @param auth The auth configuration
      * @param url The request URL
      * @returns true if the URL matches (or no filters defined)
@@ -166,20 +159,7 @@ export abstract class AuthServiceBase {
         if (!auth.domainFilters || auth.domainFilters.length === 0) {
             return true;
         }
-
-        try {
-            const urlObj = new URL(url);
-            const hostname = urlObj.hostname;
-
-            return auth.domainFilters.some(filter => {
-                // Support wildcard matching
-                const pattern = filter.replace(/\*/g, '.*');
-                const regex = new RegExp(`^${pattern}$`, 'i');
-                return regex.test(hostname);
-            });
-        } catch {
-            return false;
-        }
+        return isUrlInDomains(url, auth.domainFilters);
     }
 
     /**

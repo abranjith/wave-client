@@ -4,7 +4,7 @@
  */
 
 import { AuthServiceBase } from './AuthServiceBase';
-import { Auth, AuthResult, AuthRequestConfig, AuthType, BasicAuth, EnvVarsMap } from './types';
+import { Auth, AuthResult, AuthRequestConfig, AuthType, BasicAuth, EnvVarsMap, authOk, authErr } from './types';
 
 export class BasicAuthService extends AuthServiceBase {
     getAuthType(): string {
@@ -18,7 +18,7 @@ export class BasicAuthService extends AuthServiceBase {
     ): Promise<AuthResult> {
         // Validate auth type
         if (auth.type !== AuthType.BASIC) {
-            return { error: 'Invalid auth type for BasicAuthService' };
+            return authErr('Invalid auth type for BasicAuthService');
         }
 
         const basicAuth = auth as BasicAuth;
@@ -26,12 +26,12 @@ export class BasicAuthService extends AuthServiceBase {
         // Validate auth configuration
         const validationError = this.validateAuth(auth, config.url);
         if (validationError) {
-            return { error: validationError };
+            return authErr(validationError);
         }
 
         // Check if Authorization header already exists
         if (this.hasAuthorizationHeader(config.headers)) {
-            return { headers: {} };
+            return authOk({ headers: {} });
         }
 
         // Resolve username and password placeholders
@@ -41,7 +41,7 @@ export class BasicAuthService extends AuthServiceBase {
         // Check for unresolved placeholders
         const unresolved = [...usernameResult.unresolved, ...passwordResult.unresolved];
         if (unresolved.length > 0) {
-            return { error: `Unresolved placeholders: ${unresolved.join(', ')}` };
+            return authErr(`Unresolved placeholders: ${unresolved.join(', ')}`);
         }
 
         const username = usernameResult.resolved;
@@ -52,8 +52,8 @@ export class BasicAuthService extends AuthServiceBase {
         const encodedCredentials = this.base64Encode(credentials);
         const authHeaderValue = `Basic ${encodedCredentials}`;
 
-        return {
+        return authOk({
             headers: { 'Authorization': authHeaderValue },
-        };
+        });
     }
 }

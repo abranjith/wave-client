@@ -5,12 +5,9 @@
  */
 
 import * as crypto from 'crypto';
-import axios, { AxiosRequestConfig, AxiosResponse } from 'axios';
-import * as https from 'https';
 import { AuthServiceBase } from './AuthServiceBase';
-import { Auth, AuthResult, AuthRequestConfig, AuthType, DigestAuth, EnvVarsMap } from './types';
-import { getGlobalSettings } from '../BaseStorageService';
-import { storeService } from '../StoreService';
+import { Auth, AuthResult, AuthRequestConfig, AuthType, DigestAuth, EnvVarsMap, authOk, authErr } from './types';
+import { httpService, SendConfig } from '../HttpService';
 
 /**
  * Parsed WWW-Authenticate header for Digest auth
@@ -55,7 +52,7 @@ export class DigestAuthService extends AuthServiceBase {
     ): Promise<AuthResult> {
         // Validate auth type
         if (auth.type !== AuthType.DIGEST) {
-            return { error: 'Invalid auth type for DigestAuthService' };
+            return authErr('Invalid auth type for DigestAuthService');
         }
 
         const digestAuth = auth as DigestAuth;
@@ -63,7 +60,7 @@ export class DigestAuthService extends AuthServiceBase {
         // Validate auth configuration
         const validationError = this.validateAuth(auth, config.url);
         if (validationError) {
-            return { error: validationError };
+            return authErr(validationError);
         }
 
         // Resolve username and password placeholders
@@ -73,7 +70,7 @@ export class DigestAuthService extends AuthServiceBase {
         // Check for unresolved placeholders
         const unresolved = [...usernameResult.unresolved, ...passwordResult.unresolved];
         if (unresolved.length > 0) {
-            return { error: `Unresolved placeholders: ${unresolved.join(', ')}` };
+            return authErr(`Unresolved placeholders: ${unresolved.join(', ')}`);
         }
 
         const username = usernameResult.resolved;
@@ -83,8 +80,8 @@ export class DigestAuthService extends AuthServiceBase {
             // Check cache for existing nonce
             let cached = this.getCached<DigestCacheData>(auth.id);
 
-            // Get common axios config
-            const axiosConfig = await this.buildAxiosConfig(config);
+            // Build send config
+            const sendConfig = this.buildSendConfig(config);
 
             if (cached) {
                 // Try with cached nonce first
@@ -96,92 +93,107 @@ export class DigestAuthService extends AuthServiceBase {
                     cached
                 );
 
-                axiosConfig.headers = {
-                    ...axiosConfig.headers,
-                    'Authorization': authHeader,
+                const authenticatedConfig: SendConfig = {
+                    ...sendConfig,
+                    headers: {
+                        ...sendConfig.headers,
+                        'Authorization': authHeader,
+                    },
+                    validateStatus: true,
                 };
 
-                try {
-                    const response = await axios(axiosConfig);
-                    return {
-                        handledInternally: true,
-                        response: this.formatResponse(response),
-                    };
-                } catch (error: any) {
-                    // If 401 with stale=true, refresh nonce
-                    if (error.response?.status === 401) {
-                        const wwwAuth = error.response.headers['www-authenticate'];
-                        if (wwwAuth) {
-                            const challenge = this.parseWwwAuthenticate(wwwAuth);
-                            if (challenge?.stale) {
-                                // Update cache with new nonce, reset nc
-                                cached = {
-                                    ...cached,
-                                    nonce: challenge.nonce,
-                                    nc: 0,
-                                };
-                                this.setCache(auth.id, cached);
-                                // Retry with new nonce
-                                return this.retryWithChallenge(
-                                    config,
-                                    axiosConfig,
-                                    username,
-                                    password,
-                                    challenge,
-                                    auth.id
-                                );
-                            }
+                const result = await httpService.send(authenticatedConfig);
+
+                // If 401 with stale=true, refresh nonce
+                if (result.response.status === 401) {
+                    const wwwAuth = result.response.headers['www-authenticate'];
+                    if (wwwAuth) {
+                        const challenge = this.parseWwwAuthenticate(wwwAuth);
+                        if (challenge?.stale) {
+                            // Update cache with new nonce, reset nc
+                            cached = {
+                                ...cached,
+                                nonce: challenge.nonce,
+                                nc: 0,
+                            };
+                            this.setCache(auth.id, cached);
+                            // Retry with new nonce
+                            return this.retryWithChallenge(
+                                config,
+                                sendConfig,
+                                username,
+                                password,
+                                challenge,
+                                auth.id
+                            );
                         }
                     }
                     // Not a stale nonce issue, clear cache and do full flow
                     this.clearCache(auth.id);
+                } else {
+                    // Success or other status
+                    return authOk({
+                        handledInternally: true,
+                        response: result.response,
+                    });
                 }
             }
 
             // No cache or cache failed - do full 401 challenge flow
             // Make initial request without auth to get 401
-            try {
-                const initialResponse = await axios(axiosConfig);
-                // If we got a success without auth, return it
-                return {
+            const initialConfig: SendConfig = {
+                ...sendConfig,
+                validateStatus: true,
+            };
+
+            const initialResult = await httpService.send(initialConfig);
+
+            // If we got a success without auth, return it
+            if (initialResult.response.status !== 401) {
+                return authOk({
                     handledInternally: true,
-                    response: this.formatResponse(initialResponse),
-                };
-            } catch (error: any) {
-                if (error.response?.status !== 401) {
-                    // Not a 401, return the error
-                    return {
-                        handledInternally: true,
-                        response: this.formatErrorResponse(error),
-                    };
-                }
-
-                // Parse WWW-Authenticate header
-                const wwwAuth = error.response.headers['www-authenticate'];
-                if (!wwwAuth || !wwwAuth.toLowerCase().startsWith('digest')) {
-                    return {
-                        handledInternally: true,
-                        response: this.formatErrorResponse(error),
-                    };
-                }
-
-                const challenge = this.parseWwwAuthenticate(wwwAuth);
-                if (!challenge) {
-                    return { error: 'Failed to parse Digest challenge' };
-                }
-
-                return this.retryWithChallenge(
-                    config,
-                    axiosConfig,
-                    username,
-                    password,
-                    challenge,
-                    auth.id
-                );
+                    response: initialResult.response,
+                });
             }
+
+            // Parse WWW-Authenticate header
+            const wwwAuth = initialResult.response.headers['www-authenticate'];
+            if (!wwwAuth || !wwwAuth.toLowerCase().startsWith('digest')) {
+                return authOk({
+                    handledInternally: true,
+                    response: initialResult.response,
+                });
+            }
+
+            const challenge = this.parseWwwAuthenticate(wwwAuth);
+            if (!challenge) {
+                return authErr('Failed to parse Digest challenge');
+            }
+
+            return this.retryWithChallenge(
+                config,
+                sendConfig,
+                username,
+                password,
+                challenge,
+                auth.id
+            );
         } catch (error: any) {
-            return { error: error.message || 'Digest auth failed' };
+            return authErr(error.message || 'Digest auth failed');
         }
+    }
+
+    /**
+     * Build send config from auth request config.
+     */
+    private buildSendConfig(config: AuthRequestConfig): SendConfig {
+        return {
+            method: config.method,
+            url: config.url,
+            headers: config.headers as Record<string, string>,
+            params: config.params,
+            body: config.body,
+        };
     }
 
     /**
@@ -189,7 +201,7 @@ export class DigestAuthService extends AuthServiceBase {
      */
     private async retryWithChallenge(
         config: AuthRequestConfig,
-        axiosConfig: AxiosRequestConfig,
+        sendConfig: SendConfig,
         username: string,
         password: string,
         challenge: DigestChallenge,
@@ -218,72 +230,21 @@ export class DigestAuthService extends AuthServiceBase {
         this.setCache(authId, cacheData);
 
         // Make authenticated request
-        axiosConfig.headers = {
-            ...axiosConfig.headers,
-            'Authorization': authHeader,
+        const authenticatedConfig: SendConfig = {
+            ...sendConfig,
+            headers: {
+                ...sendConfig.headers,
+                'Authorization': authHeader,
+            },
+            validateStatus: true,
         };
 
-        try {
-            const response = await axios(axiosConfig);
-            return {
-                handledInternally: true,
-                response: this.formatResponse(response),
-            };
-        } catch (error: any) {
-            return {
-                handledInternally: true,
-                response: this.formatErrorResponse(error),
-            };
-        }
-    }
+        const result = await httpService.send(authenticatedConfig);
 
-    /**
-     * Build the axios request configuration.
-     */
-    private async buildAxiosConfig(config: AuthRequestConfig): Promise<AxiosRequestConfig> {
-        const settings = await getGlobalSettings();
-
-        // Get proxy and HTTPS agent
-        const proxy = await storeService.getProxyForUrl(config.url);
-        let httpsAgent: https.Agent | undefined;
-
-        const customAgent = await storeService.getHttpsAgentForUrl(config.url);
-        if (settings.ignoreCertificateValidation) {
-            if (customAgent) {
-                httpsAgent = new https.Agent({
-                    ...customAgent.options,
-                    rejectUnauthorized: false,
-                });
-            } else {
-                httpsAgent = new https.Agent({ rejectUnauthorized: false });
-            }
-        } else {
-            httpsAgent = customAgent || undefined;
-        }
-
-        const timeout = settings.requestTimeoutSeconds > 0
-            ? settings.requestTimeoutSeconds * 1000
-            : 0;
-
-        // Build URL with params
-        let fullUrl = config.url;
-        if (config.params) {
-            const separator = config.url.includes('?') ? '&' : '?';
-            fullUrl = `${config.url}${separator}${config.params}`;
-        }
-
-        return {
-            method: config.method as any,
-            url: fullUrl,
-            headers: config.headers as Record<string, string>,
-            data: config.body,
-            responseType: 'arraybuffer',
-            proxy: proxy || undefined,
-            httpsAgent,
-            maxRedirects: settings.maxRedirects,
-            timeout,
-            validateStatus: () => true, // Don't throw on any status
-        };
+        return authOk({
+            handledInternally: true,
+            response: result.response,
+        });
     }
 
     /**
@@ -386,37 +347,5 @@ export class DigestAuthService extends AuthServiceBase {
      */
     private hash(value: string, algorithm: 'md5' | 'sha256'): string {
         return crypto.createHash(algorithm).update(value).digest('hex');
-    }
-
-    /**
-     * Format a successful response.
-     */
-    private formatResponse(response: AxiosResponse): any {
-        return {
-            status: response.status,
-            statusText: response.statusText,
-            headers: response.headers,
-            data: response.data,
-        };
-    }
-
-    /**
-     * Format an error response.
-     */
-    private formatErrorResponse(error: any): any {
-        if (error.response) {
-            return {
-                status: error.response.status,
-                statusText: error.response.statusText,
-                headers: error.response.headers,
-                data: error.response.data,
-            };
-        }
-        return {
-            status: 0,
-            statusText: error.message || 'Error',
-            headers: {},
-            data: Buffer.from(error.message || 'Unknown error'),
-        };
     }
 }

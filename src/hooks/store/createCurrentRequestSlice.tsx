@@ -2,7 +2,7 @@ import { StateCreator } from 'zustand'
 import { ParsedRequest, HeaderRow, ParamRow, ResponseData, RequestBodyType, RequestBodyTextType, FormField, MultiPartFormField, CollectionReference, EnvironmentVariable } from '../../types/collection';
 import { parseUrlQueryParams, getContentTypeFromBody, resolveParameterizedValue, isUrlInDomains } from '../../utils/common';
 import { FileWithPreview } from '../useFileUpload';
-import { Auth, AuthType } from './createAuthSlice';
+import { Auth } from './createAuthSlice';
 
 interface RequestTextBody {
     data: string | null;

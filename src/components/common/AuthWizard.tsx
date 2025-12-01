@@ -149,6 +149,10 @@ const AuthWizard: React.FC<AuthWizardProps> = ({ auth, onSave, onCancel, existin
           opaque: opaque.trim() || undefined,
         } as DigestAuth;
         break;
+      default:
+        // OAuth2 and other auth types not yet supported in UI
+        console.error(`Unsupported auth type: ${authType}`);
+        return;
     }
 
     onSave(authData);

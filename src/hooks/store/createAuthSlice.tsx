@@ -1,55 +1,18 @@
 import { StateCreator } from 'zustand';
 import { Result, ok, err } from '../../utils/result';
+import {
+    AuthType,
+    BaseAuth,
+    ApiKeyAuth,
+    BasicAuth,
+    DigestAuth,
+    OAuth2RefreshAuth,
+    Auth,
+} from '../../types/auth';
 
-// Base interface with common properties for all auth types
-interface BaseAuth {
-    id: string; // Cryptographically unique per record
-    name: string; // User-friendly name (must be unique)
-    enabled: boolean; // Enable/disable flag
-    domainFilters: string[]; // Will be sent only for these domains
-    expiryDate?: string; // Optional expiry date (ISO string)
-    base64Encode: boolean; // Flag to indicate if credentials should be base64 encoded
-}
-
-// Auth type enum for type discrimination
-export enum AuthType {
-    API_KEY = 'apiKey',
-    BASIC = 'basic',
-    DIGEST = 'digest',
-}
-
-// API Key Auth - stores direct key
-export interface ApiKeyAuth extends BaseAuth {
-    type: AuthType.API_KEY;
-    key: string;
-    value: string;
-    sendIn: 'header' | 'query'; // Flag to indicate where to send (header or query param)
-    prefix?: string; // Optional prefix (e.g., "Bearer ", "Token ")
-}
-
-// Basic Auth - username and password
-export interface BasicAuth extends BaseAuth {
-    type: AuthType.BASIC;
-    username: string;
-    password: string;
-}
-
-// Digest Auth - username, password, and digest-specific fields
-export interface DigestAuth extends BaseAuth {
-    type: AuthType.DIGEST;
-    username: string;
-    password: string;
-    realm?: string;
-    nonce?: string;
-    algorithm?: 'MD5' | 'MD5-sess' | 'SHA-256' | 'SHA-256-sess';
-    qop?: 'auth' | 'auth-int';
-    nc?: string; // Nonce count
-    cnonce?: string; // Client nonce
-    opaque?: string;
-}
-
-// Union type for all auth types - makes it easy to add more types
-export type Auth = ApiKeyAuth | BasicAuth | DigestAuth;
+// Re-export types for backward compatibility
+export { AuthType, Auth, ApiKeyAuth, BasicAuth, DigestAuth, OAuth2RefreshAuth };
+export type { BaseAuth };
 
 // Auth store interface
 interface AuthSlice {

@@ -5,7 +5,7 @@
 
 import axios from 'axios';
 import { AuthServiceBase } from './AuthServiceBase';
-import { Auth, AuthResult, AuthRequestConfig, AuthType, OAuth2RefreshAuth, EnvVarsMap } from './types';
+import { Auth, AuthResult, AuthRequestConfig, AuthType, OAuth2RefreshAuth, EnvVarsMap, authOk, authErr } from './types';
 
 /**
  * Cached OAuth2 token data
@@ -17,8 +17,8 @@ interface OAuth2TokenCache {
 }
 
 export class OAuth2RefreshService extends AuthServiceBase {
-    // Buffer time before expiry to refresh token (5 minutes)
-    private readonly EXPIRY_BUFFER_MS = 5 * 60 * 1000;
+    // Buffer time before expiry to refresh token (1 minute)
+    private readonly EXPIRY_BUFFER_MS = 1 * 60 * 1000;
 
     getAuthType(): string {
         return AuthType.OAUTH2_REFRESH;
@@ -31,7 +31,7 @@ export class OAuth2RefreshService extends AuthServiceBase {
     ): Promise<AuthResult> {
         // Validate auth type
         if (auth.type !== AuthType.OAUTH2_REFRESH) {
-            return { error: 'Invalid auth type for OAuth2RefreshService' };
+            return authErr('Invalid auth type for OAuth2RefreshService');
         }
 
         const oauth2Auth = auth as OAuth2RefreshAuth;
@@ -39,12 +39,12 @@ export class OAuth2RefreshService extends AuthServiceBase {
         // Validate auth configuration
         const validationError = this.validateAuth(auth, config.url);
         if (validationError) {
-            return { error: validationError };
+            return authErr(validationError);
         }
 
         // Check if Authorization header already exists
         if (this.hasAuthorizationHeader(config.headers)) {
-            return { headers: {} };
+            return authOk({ headers: {} });
         }
 
         // Resolve placeholders in auth config
@@ -64,18 +64,18 @@ export class OAuth2RefreshService extends AuthServiceBase {
         ];
 
         if (unresolved.length > 0) {
-            return { error: `Unresolved placeholders: ${unresolved.join(', ')}` };
+            return authErr(`Unresolved placeholders: ${unresolved.join(', ')}`);
         }
 
         try {
             // Check cache for valid token
             const cached = this.getCached<OAuth2TokenCache>(auth.id);
             if (cached && this.isTokenValid(cached)) {
-                return {
+                return authOk({
                     headers: {
                         'Authorization': `${cached.tokenType} ${cached.accessToken}`,
                     },
-                };
+                });
             }
 
             // Token is missing or expired, refresh it
@@ -90,13 +90,13 @@ export class OAuth2RefreshService extends AuthServiceBase {
             // Cache the new token
             this.setCache(auth.id, newToken, newToken.expiresAt - Date.now());
 
-            return {
+            return authOk({
                 headers: {
                     'Authorization': `${newToken.tokenType} ${newToken.accessToken}`,
                 },
-            };
+            });
         } catch (error: any) {
-            return { error: error.message || 'OAuth2 token refresh failed' };
+            return authErr(error.message || 'OAuth2 token refresh failed');
         }
     }
 
@@ -147,7 +147,7 @@ export class OAuth2RefreshService extends AuthServiceBase {
             }
 
             // Calculate expiry time
-            const expiresIn = data.expires_in || 3600; // Default to 1 hour
+            const expiresIn = data.expires_in || 300; // Default to 5 min if not provided
             const expiresAt = Date.now() + (expiresIn * 1000);
 
             return {
