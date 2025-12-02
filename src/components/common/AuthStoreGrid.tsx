@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { ArrowLeftIcon, PencilIcon, Trash2Icon, CheckCircleIcon, XCircleIcon, PlusIcon, KeyIcon, UserIcon, ShieldIcon, AlertTriangleIcon } from 'lucide-react';
+import { ArrowLeftIcon, PencilIcon, Trash2Icon, CheckCircleIcon, XCircleIcon, PlusIcon, KeyIcon, UserIcon, ShieldIcon, AlertTriangleIcon, RefreshCwIcon } from 'lucide-react';
 import { Button } from '../ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '../ui/dialog';
 import Banner from '../ui/banner';
@@ -128,6 +128,8 @@ const AuthStoreGrid: React.FC<AuthStoreGridProps> = ({ onBack, onSaveAuths }) =>
         return <UserIcon className="h-4 w-4" />;
       case AuthType.DIGEST:
         return <ShieldIcon className="h-4 w-4" />;
+      case AuthType.OAUTH2_REFRESH:
+        return <RefreshCwIcon className="h-4 w-4" />;
       default:
         return <KeyIcon className="h-4 w-4" />;
     }
@@ -141,6 +143,8 @@ const AuthStoreGrid: React.FC<AuthStoreGridProps> = ({ onBack, onSaveAuths }) =>
         return 'Basic Auth';
       case AuthType.DIGEST:
         return 'Digest Auth';
+      case AuthType.OAUTH2_REFRESH:
+        return 'OAuth2 Refresh';
       default:
         return type;
     }

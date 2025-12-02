@@ -4,7 +4,7 @@ import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Label } from '../ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
-import { Auth, AuthType, ApiKeyAuth, BasicAuth, DigestAuth } from '../../hooks/store/createAuthSlice';
+import { Auth, AuthType, ApiKeyAuth, BasicAuth, DigestAuth, OAuth2RefreshAuth } from '../../hooks/store/createAuthSlice';
 
 interface AuthWizardProps {
   auth?: Auth; // If provided, we're editing; otherwise, we're creating
@@ -42,11 +42,20 @@ const AuthWizard: React.FC<AuthWizardProps> = ({ auth, onSave, onCancel, existin
   const [cnonce, setCnonce] = useState((auth?.type === AuthType.DIGEST ? auth.cnonce : '') || '');
   const [opaque, setOpaque] = useState((auth?.type === AuthType.DIGEST ? auth.opaque : '') || '');
   
+  // OAuth2 Refresh specific
+  const [tokenUrl, setTokenUrl] = useState((auth?.type === AuthType.OAUTH2_REFRESH ? auth.tokenUrl : '') || '');
+  const [clientId, setClientId] = useState((auth?.type === AuthType.OAUTH2_REFRESH ? auth.clientId : '') || '');
+  const [clientSecret, setClientSecret] = useState((auth?.type === AuthType.OAUTH2_REFRESH ? auth.clientSecret : '') || '');
+  const [refreshToken, setRefreshToken] = useState((auth?.type === AuthType.OAUTH2_REFRESH ? auth.refreshToken : '') || '');
+  const [scope, setScope] = useState((auth?.type === AuthType.OAUTH2_REFRESH ? auth.scope : '') || '');
+  
   const [errors, setErrors] = useState<Record<string, string>>({});
   
   // Visibility toggles for sensitive fields
   const [showApiValue, setShowApiValue] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [showClientSecret, setShowClientSecret] = useState(false);
+  const [showRefreshToken, setShowRefreshToken] = useState(false);
 
   // Reset form when auth type changes (only when creating new)
   useEffect(() => {
@@ -65,6 +74,12 @@ const AuthWizard: React.FC<AuthWizardProps> = ({ auth, onSave, onCancel, existin
       setNc('');
       setCnonce('');
       setOpaque('');
+      // OAuth2 fields
+      setTokenUrl('');
+      setClientId('');
+      setClientSecret('');
+      setRefreshToken('');
+      setScope('');
     }
   }, [authType, isEditing]);
 
@@ -90,6 +105,10 @@ const AuthWizard: React.FC<AuthWizardProps> = ({ auth, onSave, onCancel, existin
     } else if (authType === AuthType.DIGEST) {
       if (!username.trim()) newErrors.username = 'Username is required';
       if (!password.trim()) newErrors.password = 'Password is required';
+    } else if (authType === AuthType.OAUTH2_REFRESH) {
+      if (!tokenUrl.trim()) newErrors.tokenUrl = 'Token URL is required';
+      if (!clientId.trim()) newErrors.clientId = 'Client ID is required';
+      if (!refreshToken.trim()) newErrors.refreshToken = 'Refresh Token is required';
     }
 
     // Validate expiry date format if provided
@@ -149,6 +168,17 @@ const AuthWizard: React.FC<AuthWizardProps> = ({ auth, onSave, onCancel, existin
           opaque: opaque.trim() || undefined,
         } as DigestAuth;
         break;
+      case AuthType.OAUTH2_REFRESH:
+        authData = {
+          ...baseAuth,
+          type: AuthType.OAUTH2_REFRESH,
+          tokenUrl: tokenUrl.trim(),
+          clientId: clientId.trim(),
+          clientSecret: clientSecret.trim() || undefined,
+          refreshToken: refreshToken.trim(),
+          scope: scope.trim() || undefined,
+        } as OAuth2RefreshAuth;
+        break;
       default:
         // OAuth2 and other auth types not yet supported in UI
         console.error(`Unsupported auth type: ${authType}`);
@@ -172,6 +202,7 @@ const AuthWizard: React.FC<AuthWizardProps> = ({ auth, onSave, onCancel, existin
               <SelectItem value={AuthType.API_KEY}>API Key</SelectItem>
               <SelectItem value={AuthType.BASIC}>Basic Auth</SelectItem>
               <SelectItem value={AuthType.DIGEST}>Digest Auth</SelectItem>
+              <SelectItem value={AuthType.OAUTH2_REFRESH}>OAuth2 Refresh Token</SelectItem>
             </SelectContent>
           </Select>
         </div>
@@ -461,6 +492,100 @@ const AuthWizard: React.FC<AuthWizardProps> = ({ auth, onSave, onCancel, existin
               placeholder="Server-provided opaque value"
               className="mt-1"
             />
+          </div>
+        </>
+      )}
+
+      {authType === AuthType.OAUTH2_REFRESH && (
+        <>
+          <div>
+            <Label htmlFor="tokenUrl">Token URL *</Label>
+            <Input
+              id="tokenUrl"
+              value={tokenUrl}
+              onChange={(e) => setTokenUrl(e.target.value)}
+              placeholder="e.g., https://oauth.example.com/token"
+              className="mt-1"
+            />
+            {errors.tokenUrl && <p className="text-xs text-red-500 mt-1">{errors.tokenUrl}</p>}
+          </div>
+
+          <div>
+            <Label htmlFor="clientId">Client ID *</Label>
+            <Input
+              id="clientId"
+              value={clientId}
+              onChange={(e) => setClientId(e.target.value)}
+              placeholder="Your OAuth2 client ID"
+              className="mt-1"
+            />
+            {errors.clientId && <p className="text-xs text-red-500 mt-1">{errors.clientId}</p>}
+          </div>
+
+          <div>
+            <Label htmlFor="clientSecret">Client Secret (Optional)</Label>
+            <div className="relative mt-1">
+              <Input
+                id="clientSecret"
+                type={showClientSecret ? "text" : "password"}
+                value={clientSecret}
+                onChange={(e) => setClientSecret(e.target.value)}
+                placeholder="Your OAuth2 client secret"
+                className="pr-10"
+              />
+              <button
+                type="button"
+                onClick={() => setShowClientSecret(!showClientSecret)}
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200"
+                title={showClientSecret ? "Hide secret" : "Show secret"}
+              >
+                {showClientSecret ? (
+                  <EyeOffIcon className="h-4 w-4" />
+                ) : (
+                  <EyeIcon className="h-4 w-4" />
+                )}
+              </button>
+            </div>
+            <p className="text-xs text-slate-500 mt-1">Required for confidential clients</p>
+          </div>
+
+          <div>
+            <Label htmlFor="refreshToken">Refresh Token *</Label>
+            <div className="relative mt-1">
+              <Input
+                id="refreshToken"
+                type={showRefreshToken ? "text" : "password"}
+                value={refreshToken}
+                onChange={(e) => setRefreshToken(e.target.value)}
+                placeholder="Your OAuth2 refresh token"
+                className="pr-10"
+              />
+              <button
+                type="button"
+                onClick={() => setShowRefreshToken(!showRefreshToken)}
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200"
+                title={showRefreshToken ? "Hide token" : "Show token"}
+              >
+                {showRefreshToken ? (
+                  <EyeOffIcon className="h-4 w-4" />
+                ) : (
+                  <EyeIcon className="h-4 w-4" />
+                )}
+              </button>
+            </div>
+            {errors.refreshToken && <p className="text-xs text-red-500 mt-1">{errors.refreshToken}</p>}
+          </div>
+
+          <div>
+            <Label htmlFor="scope">Scope (Optional)</Label>
+            <Input
+              id="scope"
+              value={scope}
+              onChange={(e) => setScope(e.target.value)}
+              placeholder="e.g., read write profile"
+              className="mt-1"
+            />
+            <p className="text-xs text-slate-500 mt-1">Space-separated list of scopes</p>
           </div>
         </>
       )}
