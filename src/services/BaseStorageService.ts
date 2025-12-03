@@ -34,6 +34,7 @@ export interface AppSettings {
     maxHistoryItems: number;
     commonHeaderNames: string[];
     encryptionKeyEnvVar: string;
+    encryptionKeyValidationStatus: 'none' | 'valid' | 'invalid';
     ignoreCertificateValidation: boolean;
 }
 
@@ -72,6 +73,7 @@ export async function getGlobalSettings(): Promise<AppSettings> {
         maxHistoryItems: 10,
         commonHeaderNames: [],
         encryptionKeyEnvVar: 'WAVECLIENT_SECRET_KEY',
+        encryptionKeyValidationStatus: 'none',
         ignoreCertificateValidation: false,
     };
 }

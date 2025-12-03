@@ -18,6 +18,9 @@ export interface AppSettings {
     // Encryption key environment variable name
     encryptionKeyEnvVar: string; // Default: WAVECLIENT_SECRET_KEY
     
+    // Encryption key validation status
+    encryptionKeyValidationStatus: 'none' | 'valid' | 'invalid'; // Default: none
+    
     // Security settings
     ignoreCertificateValidation: boolean; // Default: false
 }
@@ -30,6 +33,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
     maxHistoryItems: 10,
     commonHeaderNames: [],
     encryptionKeyEnvVar: 'WAVECLIENT_SECRET_KEY',
+    encryptionKeyValidationStatus: 'none',
     ignoreCertificateValidation: false,
 };
 

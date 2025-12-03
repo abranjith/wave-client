@@ -33,8 +33,30 @@ export class SettingsService extends BaseStorageService {
             maxHistoryItems: 10,
             commonHeaderNames: [],
             encryptionKeyEnvVar: 'WAVECLIENT_SECRET_KEY',
+            encryptionKeyValidationStatus: 'none',
             ignoreCertificateValidation: false,
         };
+    }
+
+    /**
+     * Validates the encryption key environment variable.
+     * Checks if the env var exists and has a non-empty value.
+     * @param envVarName The name of the environment variable to validate
+     * @returns 'valid' if found and non-empty, 'invalid' if not found or empty, 'none' if no env var name specified
+     */
+    private validateEncryptionKeyEnvVar(envVarName: string): 'none' | 'valid' | 'invalid' {
+        if (!envVarName || envVarName.trim() === '') {
+            return 'none';
+        }
+
+        // Case-insensitive lookup
+        const upperName = envVarName.toUpperCase();
+        for (const [key, value] of Object.entries(process.env)) {
+            if (key.toUpperCase() === upperName && value && value.trim() !== '') {
+                return 'valid';
+            }
+        }
+        return 'invalid';
     }
 
     /**
@@ -87,13 +109,18 @@ export class SettingsService extends BaseStorageService {
 
     /**
      * Saves settings to the settings file and updates the cache.
+     * Validates the encryption key environment variable and updates the validation status.
      * @param settings The settings to save
      */
-    async save(settings: AppSettings): Promise<void> {
+    async save(settings: AppSettings): Promise<AppSettings> {
+        // Validate encryption key env var and update status before saving
+        settings.encryptionKeyValidationStatus = this.validateEncryptionKeyEnvVar(settings.encryptionKeyEnvVar);
+        
         const settingsFile = this.getSettingsFilePath();
         this.writeJsonFile(settingsFile, settings);
         // Update cache after saving
         this.cachedSettings = settings;
+        return settings;
     }
 
     /**

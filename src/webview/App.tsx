@@ -319,6 +319,11 @@ const App: React.FC = () => {
         console.error('Certs error:', message.error);
       } else if (message.type === 'settingsLoaded') {
         setSettings(message.settings);
+      } else if (message.type === 'settingsSaved') {
+        // Update settings with the new validation status from the backend
+        if (message.settings) {
+          setSettings(message.settings);
+        }
       } else if (message.type === 'settingsError') {
         console.error('Settings error:', message.error);
       } else if (message.type === 'historyLoaded') {

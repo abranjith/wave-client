@@ -80,7 +80,7 @@ const ConfigPanel: React.FC<ConfigPanelProps> = ({ onRequestSelect, onEnvSelect,
           </TooltipProvider>
           <TabsList className="flex flex-col gap-2 bg-transparent py-0 px-0 w-full flex-shrink-0">
           {TABS.map(tab => (
-            <TooltipProvider delayDuration={0} key={tab.key}>
+            <TooltipProvider delayDuration={500} key={tab.key}>
             <Tooltip>
               <TooltipTrigger asChild>
                 <div className="w-full">

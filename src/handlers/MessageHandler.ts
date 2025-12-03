@@ -527,9 +527,10 @@ export class MessageHandler {
     private async handleSaveSettings(message: any): Promise<void> {
         try {
             const settings = JSON.parse(message.data.settings);
-            await settingsService.save(settings);
+            const savedSettings = await settingsService.save(settings);
             this.postMessage({
-                type: 'settingsSaved'
+                type: 'settingsSaved',
+                settings: savedSettings
             });
         } catch (error: any) {
             console.error('Error saving settings:', error);

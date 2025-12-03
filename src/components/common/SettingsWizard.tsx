@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { SaveIcon, XIcon, FolderOpenIcon, RotateCcwIcon, InfoIcon, AlertTriangleIcon, ShieldAlertIcon } from 'lucide-react';
+import { SaveIcon, XIcon, FolderOpenIcon, RotateCcwIcon, InfoIcon, AlertTriangleIcon, ShieldAlertIcon, CheckCircleIcon, XCircleIcon } from 'lucide-react';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Label } from '../ui/label';
@@ -83,6 +83,7 @@ const SettingsWizard: React.FC<SettingsWizardProps> = ({
       maxHistoryItems,
       commonHeaderNames: parsedHeaderNames,
       encryptionKeyEnvVar: encryptionKeyEnvVar.trim(),
+      encryptionKeyValidationStatus: settings.encryptionKeyValidationStatus, // Will be updated by SettingsService on save
       ignoreCertificateValidation,
     };
 
@@ -220,7 +221,21 @@ const SettingsWizard: React.FC<SettingsWizardProps> = ({
         </h3>
         
         <div>
-          <Label htmlFor="encryptionKeyEnvVar">Encryption Key Environment Variable *</Label>
+          <div className="flex items-center gap-2">
+            <Label htmlFor="encryptionKeyEnvVar">Encryption Key Environment Variable *</Label>
+            {settings.encryptionKeyValidationStatus === 'valid' && (
+              <span className="inline-flex items-center gap-1 text-xs text-green-600 dark:text-green-400">
+                <CheckCircleIcon className="h-3.5 w-3.5" />
+                Valid
+              </span>
+            )}
+            {settings.encryptionKeyValidationStatus === 'invalid' && (
+              <span className="inline-flex items-center gap-1 text-xs text-red-600 dark:text-red-400">
+                <XCircleIcon className="h-3.5 w-3.5" />
+                Not Found
+              </span>
+            )}
+          </div>
           <Input
             id="encryptionKeyEnvVar"
             value={encryptionKeyEnvVar}
@@ -231,11 +246,31 @@ const SettingsWizard: React.FC<SettingsWizardProps> = ({
           {errors.encryptionKeyEnvVar && (
             <p className="text-xs text-red-500 mt-1">{errors.encryptionKeyEnvVar}</p>
           )}
+          
+          {/* Show error message if env var is invalid */}
+          {settings.encryptionKeyValidationStatus === 'invalid' && (
+            <div className="flex items-start gap-2 mt-2 p-2 bg-red-50 dark:bg-red-950/30 rounded-md border border-red-200 dark:border-red-800">
+              <XCircleIcon className="h-4 w-4 text-red-600 dark:text-red-400 mt-0.5 shrink-0" />
+              <p className="text-xs text-red-700 dark:text-red-300">
+                <strong>Environment variable not found:</strong> The environment variable <code className="px-1 py-0.5 bg-red-100 dark:bg-red-900/50 rounded text-red-700 dark:text-red-300">{settings.encryptionKeyEnvVar}</code> is not set or is empty. 
+                Encryption will not work until this variable is configured in your system environment. As a result, data will be stored unencrypted, which poses a security risk.
+                Restart VS Code after setting the environment variable.
+              </p>
+            </div>
+          )}
+          
+          {/* Warning about changing encryption key */}
           <div className="flex items-start gap-2 mt-2 p-2 bg-amber-50 dark:bg-amber-950/30 rounded-md border border-amber-200 dark:border-amber-800">
             <AlertTriangleIcon className="h-4 w-4 text-amber-600 dark:text-amber-400 mt-0.5 shrink-0" />
-            <p className="text-xs text-amber-700 dark:text-amber-300">
-              <strong>WARNING:</strong> Do not change this value once set, and never lose it! Changing or losing this key will result in permanent loss of all encrypted data (secrets, passwords, etc.). Make sure to back up this environment variable.
-            </p>
+            <div className="text-xs text-amber-700 dark:text-amber-300">
+              <strong>IMPORTANT:</strong> Changing the environment variable name or its value is <strong>not recommended</strong> as it may result in data loss.
+              <ul className="mt-1.5 ml-4 list-disc space-y-1">
+                <li>If you must change the encryption key, <strong>export all your data first</strong> (collections, environments, auth stores, etc.)</li>
+                <li>Changing the key value will trigger re-encryption of all data, which may take a while</li>
+                <li>If an error occurs during re-encryption, it could result in data corruption</li>
+                <li>Always back up your data storage directory before making changes</li>
+              </ul>
+            </div>
           </div>
         </div>
 
