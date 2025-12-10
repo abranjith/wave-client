@@ -12,7 +12,8 @@ const HistoryPane: React.FC<HistoryPaneProps> = ({ onRequestSelect }) => {
   const history = useAppStateStore((state) => state.history);
   const isLoading = useAppStateStore((state) => state.isHistoryLoading);
   const error = useAppStateStore((state) => state.historyLoadError);
-  const currentRequestId = useAppStateStore((state) => state.id);
+  const activeTab = useAppStateStore((state) => state.getActiveTab());
+  const currentRequestId = activeTab?.id;
 
   const handleRequestClick = (request: ParsedRequest) => {
     if (onRequestSelect) {

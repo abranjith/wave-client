@@ -6,14 +6,16 @@ import StyledAutocompleteInput from '../ui/styled-autocomplete-input';
 import useAppStateStore from '../../hooks/store/useAppStateStore';
 import { renderParameterizedText } from '../../utils/styling';
 import { getCommonHeaderNames } from '../../utils/common';
+import { HeaderRow } from '../../types/collection';
 
 const RequestHeaders: React.FC = () => {
-  const headers = useAppStateStore((state) => state.headers || []);
+  const activeTab = useAppStateStore((state) => state.getActiveTab());
+  const headers: HeaderRow[] = activeTab?.headers || [];
   const addEmptyHeader = useAppStateStore((state) => state.addEmptyHeader);
   const upsertHeader = useAppStateStore((state) => state.upsertHeader);
   const removeHeader = useAppStateStore((state) => state.removeHeader);
   const toggleHeaderEnabled = useAppStateStore((state) => state.toggleHeaderEnabled);
-  const activeEnvironment = useAppStateStore((state) => state.activeEnvironment);
+  const getActiveEnvVariableKeys = useAppStateStore((state) => state.getActiveEnvVariableKeys);
   const settingsCommonHeaderNames = useAppStateStore((state) => state.settings.commonHeaderNames);
   
   // Memoize merged header names from default list and user settings, removing duplicates
@@ -24,18 +26,10 @@ const RequestHeaders: React.FC = () => {
     return [...new Set(combinedHeaders)];
   }, [settingsCommonHeaderNames]);
   
-  // Memoize active environment variables to avoid creating new Set on every render
-  const activeEnvVariables = React.useMemo(() => {
-    const vars = new Set<string>();
-    if (activeEnvironment && activeEnvironment.values) {
-      activeEnvironment.values.forEach((envVar) => {
-        if (envVar.enabled && envVar.value) {
-          vars.add(envVar.key);
-        }
-      });
-    }
-    return vars;
-  }, [activeEnvironment]);
+  // Get merged environment variables (global + tab's environment)
+  const activeEnvVariables = useMemo(() => {
+    return getActiveEnvVariableKeys(activeTab?.environmentId);
+  }, [activeTab?.environmentId, getActiveEnvVariableKeys]);
 
   // Local state to track input values for all headers
   const [localHeaders, setLocalHeaders] = useState<{ [id: string]: { key: string; value: string } }>({});
@@ -45,7 +39,7 @@ const RequestHeaders: React.FC = () => {
   useEffect(() => {
     const newLocalHeaders: { [id: string]: { key: string; value: string } } = {};
     
-    headers.forEach(header => {
+    headers.forEach((header: HeaderRow) => {
       // Preserve existing local values, or initialize from headers
       if (localHeaders[header.id]) {
         newLocalHeaders[header.id] = localHeaders[header.id];

@@ -1,15 +1,14 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import ConfigPanel from './ConfigPanel';
-import RequestPanel from './RequestPanel';
-import ResponsePanel from './ResponsePanel';
+import RequestEditor from './RequestEditor';
 import EnvironmentGrid from '../components/common/EnvironmentGrid';
 import CookieStoreGrid from '../components/common/CookieStoreGrid';
 import AuthStoreGrid from '../components/common/AuthStoreGrid';
 import ProxyStoreGrid from '../components/common/ProxyStoreGrid';
 import CertStoreGrid from '../components/common/CertStoreGrid';
 import SettingsWizard from '../components/common/SettingsWizard';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '../components/ui/dialog';
-import { ParsedRequest, Collection, Environment, Cookie, EnvironmentVariable, Proxy, Cert } from '../types/collection';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../components/ui/dialog';
+import { ParsedRequest, Collection, Environment, Cookie, Proxy, Cert } from '../types/collection';
 import { parseCollection, transformToCollectionRequest } from '../utils/collectionParser';
 import useAppStateStore from '../hooks/store/useAppStateStore';
 import { Auth } from '../hooks/store/createAuthSlice';
@@ -28,9 +27,9 @@ const App: React.FC = () => {
   const refreshEnvironments = useAppStateStore((state) => state.refreshEnvironments);
   const setEnvironments = useAppStateStore((state) => state.setEnvironments);
   const setEnvironmentLoadError = useAppStateStore((state) => state.setEnvironmentLoadError);
-  const setCurrentRequest = useAppStateStore((state) => state.setCurrentRequest);
-  const setResponseData = useAppStateStore((state) => state.setResponseData);
-  const onSendRequest = useAppStateStore((state) => state.handleSendRequest);
+  const loadRequestIntoTab = useAppStateStore((state) => state.loadRequestIntoTab);
+  const handleHttpResponse = useAppStateStore((state) => state.handleHttpResponse);
+  const handleSendRequestAction = useAppStateStore((state) => state.handleSendRequest);
   const updateEnvironment = useAppStateStore((state) => state.updateEnvironment);
   const setErrorMessage = useAppStateStore((state) => state.setErrorMessage);
   const setCookies = useAppStateStore((state) => state.setCookies);
@@ -39,26 +38,14 @@ const App: React.FC = () => {
   const setCerts = useAppStateStore((state) => state.setCerts);
   const settings = useAppStateStore((state) => state.settings);
   const setSettings = useAppStateStore((state) => state.setSettings);
-  const getCurrentRequest = useAppStateStore((state) => state.getParsedRequest);
+  const getParsedRequest = useAppStateStore((state) => state.getParsedRequest);
   const addHistory = useAppStateStore((state) => state.addHistory);
   const refreshHistory = useAppStateStore((state) => state.refreshHistory);
   const setHistory = useAppStateStore((state) => state.setHistory);
   const setHistoryLoadError = useAppStateStore((state) => state.setHistoryLoadError);
-  const activeEnvironment = useAppStateStore((state) => state.activeEnvironment);
   const environments = useAppStateStore((state) => state.environments);
+  const auths = useAppStateStore((state) => state.auths);
   const vsCodeRef = useRef<any>(null);
-
-  const activeEnvVars = useMemo(() => {
-    const globalEnv = environments.find(e => e.name === 'global');
-    const globalVars = globalEnv?.values.filter(v => v.enabled) || [];
-    const activeVars = activeEnvironment?.values.filter(v => v.enabled) || [];
-
-    const varMap = new Map<string, EnvironmentVariable>();
-    globalVars.forEach(v => varMap.set(v.key, v));
-    activeVars.forEach(v => varMap.set(v.key, v));
-    
-    return Array.from(varMap.values());
-  }, [environments, activeEnvironment]);
 
   // Initialize Collections and Environments
   useEffect(() => {
@@ -78,7 +65,7 @@ const App: React.FC = () => {
   }, []);
 
   const handleRequestSelect = (request: ParsedRequest) => {
-    setCurrentRequest(request);
+    loadRequestIntoTab(request);
     setSelectedEnvironment(null); // Clear environment selection when selecting a request
     setSelectedStore(null); // Clear store selection when selecting a request
   };
@@ -101,14 +88,15 @@ const App: React.FC = () => {
     setSelectedStore(null);
   };
 
-  const handleSendRequest = () => {
+  // Handle sending request for a specific tab
+  const handleSendRequest = (tabId: string) => {
     if (vsCodeRef.current) {
-      addHistory(getCurrentRequest(), vsCodeRef.current);
-      useAppStateStore.getState().setIsRequestProcessing(true);
-      const activeAuth = useAppStateStore.getState().activeAuth;
-      onSendRequest(vsCodeRef.current, activeEnvVars, activeAuth);
-    }
-    else{
+      // Add to history using the tab's parsed request
+      addHistory(getParsedRequest(tabId), vsCodeRef.current);
+      // Set the tab's processing state and send the request
+      // handleSendRequest in the store handles setting isProcessing and resolving env/auth
+      handleSendRequestAction(vsCodeRef.current, environments, auths, tabId);
+    } else {
       console.error('VS Code API is not available.');
     }
   };
@@ -263,8 +251,15 @@ const App: React.FC = () => {
     const messageHandler = (event: MessageEvent) => {
       const message = event.data;
       if (message.type === 'httpResponse') {
-        useAppStateStore.getState().setIsRequestProcessing(false);
-        setResponseData(message.response);
+        // Use the response's id field to route to the correct tab
+        const tabId = message.response?.id;
+        if (tabId) {
+          handleHttpResponse(tabId, message.response);
+        } else {
+          // Fallback: route to active tab if no id present
+          const activeTabId = useAppStateStore.getState().activeTabId;
+          handleHttpResponse(activeTabId, message.response);
+        }
       } else if (message.type === 'collectionsLoaded') {
         try {
           const parsedCollections = message.collections.map((collection: Collection & { filename: string }) => 
@@ -345,14 +340,11 @@ const App: React.FC = () => {
       className="min-h-screen h-screen w-screen bg-slate-50 dark:bg-slate-900 grid"
       style={{
         display: 'grid',
-        gridTemplateColumns: (selectedEnvironment || selectedStore) ? '400px 1fr' : '400px 1fr',
-        gridTemplateRows: (selectedEnvironment || selectedStore) ? '1fr' : '1fr 1fr',
+        gridTemplateColumns: '400px 1fr',
+        gridTemplateRows: '1fr',
         gridTemplateAreas: (selectedEnvironment || selectedStore)
           ? `"config environment"`
-          : `
-            "config request"
-            "config response"
-          `,
+          : `"config editor"`,
         height: '100vh',
       }}
     >
@@ -393,20 +385,14 @@ const App: React.FC = () => {
           )}
         </div>
       ) : (
-        <>
-          {/* Top-right RequestPanel */}
-          <div style={{ gridArea: 'request' }} className="overflow-hidden">
-            <RequestPanel 
-              onSendRequest={handleSendRequest}
-              onSaveRequest={handleSaveRequest}
-            />
-          </div>
-
-          {/* Bottom-right ResponsePanel */}
-          <div style={{ gridArea: 'response' }} className="overflow-hidden">
-            <ResponsePanel onDownloadResponse={handleDownloadResponse} />
-          </div>
-        </>
+        /* Request Editor with Tabs */
+        <div style={{ gridArea: 'editor' }} className="overflow-hidden">
+          <RequestEditor 
+            onSendRequest={handleSendRequest}
+            onSaveRequest={handleSaveRequest}
+            onDownloadResponse={handleDownloadResponse}
+          />
+        </div>
       )}
 
       {/* Settings Modal */}

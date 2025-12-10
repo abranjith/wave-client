@@ -103,26 +103,27 @@ const getTypeInfo = (bodyType : string): { label: string; color: string; descrip
 };
 
 const TextBody: React.FC<TextBodyProps> = ({ dropdownElement }) => {
+  const activeTab = useAppStateStore((state) => state.getActiveTab());
   const updateBody = useAppStateStore((state) => state.updateTextBody);
-  const body = useAppStateStore((state) => state.body);
+  const body = activeTab?.body;
   const [showExamples, setShowExamples] = useState(false);
-  const [bodyContent, setBodyContent] = useState(body.textData?.data || '');
+  const [bodyContent, setBodyContent] = useState(body?.textData?.data || '');
   const [bodyTypeInfo, setBodyTypeInfo] = useState<{ label: string; color: string; description: string }>({ label: '', color: '', description: '' });
 
   // Only sync from global state when it changes from external sources (not from this component)
   useEffect(() => {
-    const globalContent = body.textData?.data || '';
+    const globalContent = body?.textData?.data || '';
     // Only update local state if content is different (prevents interference while typing)
     if (globalContent !== bodyContent) {
       setBodyContent(globalContent);
     }
     
-    let bodyType = body.textData?.textType || 'unknown';
+    let bodyType = body?.textData?.textType || 'unknown';
     if(bodyType === 'none' || bodyType === 'unknown') {
       bodyType = getBodyType(globalContent);
     }
     setBodyTypeInfo(getTypeInfo(bodyType));
-  }, [body.textData?.data, body.textData?.textType]); // More specific dependencies
+  }, [body?.textData?.data, body?.textData?.textType]); // More specific dependencies
 
   // Update local state immediately for responsive typing
   const handleBodyChange = (newValue: string) => {
@@ -209,7 +210,7 @@ const TextBody: React.FC<TextBodyProps> = ({ dropdownElement }) => {
 
   const copyToClipboard = async () => {
     try {
-      await navigator.clipboard.writeText(body.textData?.data || '');
+      await navigator.clipboard.writeText(body?.textData?.data || '');
     } catch (err) {
       console.error('Failed to copy:', err);
     }
@@ -324,12 +325,12 @@ const TextBody: React.FC<TextBodyProps> = ({ dropdownElement }) => {
           </Tooltip>
 
           {/* Divider */}
-          {(bodyContent && body.currentBodyType as string !== 'unknown') && (
+          {(bodyContent && body?.currentBodyType as string !== 'unknown') && (
             <div className="h-6 w-px bg-slate-300 dark:bg-slate-600 mx-1" />
           )}
 
           {/* Format & Clear Buttons */}
-          {bodyContent && body.currentBodyType as string !== 'unknown' && (
+          {bodyContent && body?.currentBodyType as string !== 'unknown' && (
             <Button
               variant="outline"
               size="sm"

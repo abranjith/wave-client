@@ -55,11 +55,13 @@ const TABS = [
 ];
 
 const RequestPanel: React.FC<RequestPanelProps> = ({ onSendRequest, onSaveRequest })  => {
-  const method = useAppStateStore((state) => state.method || 'GET');
+  // Get active tab data from the tabs slice
+  const activeTabData = useAppStateStore((state) => state.getActiveTab());
+  const method = activeTabData?.method || 'GET';
   const setMethod = useAppStateStore((state) => state.updateMethod);
-  const url = useAppStateStore((state) => state.url || '');
+  const url = activeTabData?.url || '';
   const setUrl = useAppStateStore((state) => state.updateUrl);
-  const folderPath = useAppStateStore((state) => state.folderPath);
+  const folderPath = activeTabData?.folderPath;
   const environments = useAppStateStore((state) => state.environments);
   const activeEnvironment = useAppStateStore((state) => state.activeEnvironment);
   const setActiveEnvironment = useAppStateStore((state) => state.setActiveEnvironment);
@@ -67,10 +69,10 @@ const RequestPanel: React.FC<RequestPanelProps> = ({ onSendRequest, onSaveReques
   const activeAuth = useAppStateStore((state) => state.activeAuth);
   const setActiveAuth = useAppStateStore((state) => state.setActiveAuth);
   const getParsedRequest = useAppStateStore((state) => state.getParsedRequest);
-  const requestName = useAppStateStore((state) => state.name || 'Untitled Request');
-  const errorMessage = useAppStateStore((state) => state.errorMessage);
+  const requestName = activeTabData?.name || 'Untitled Request';
+  const errorMessage = activeTabData?.errorMessage || '';
   const setErrorMessage = useAppStateStore((state) => state.setErrorMessage);
-  const isRequestProcessing = useAppStateStore((state) => state.isRequestProcessing);
+  const isRequestProcessing = activeTabData?.isRequestProcessing || false;
 
   const [isRequestSaveWizardOpen, setIsRequestSaveWizardOpen] = useState(false);
   const [collectionInfoToSave, setCollectionInfoToSave] = useState<CollectionToSaveInfo | undefined>(undefined);
@@ -148,13 +150,13 @@ const RequestPanel: React.FC<RequestPanelProps> = ({ onSendRequest, onSaveReques
           <BreadcrumbList>
             {folderPath && folderPath.length > 0 ? (
               <>
-                {folderPath.map((item, index) => (
-                      <>
+                {folderPath.map((item: string, index: number) => (
+                      <React.Fragment key={`${item}-${index}`}>
                         <BreadcrumbItem>
                           <BreadcrumbLink>{item}</BreadcrumbLink>
                         </BreadcrumbItem>
                         <BreadcrumbSeparator />
-                      </>
+                      </React.Fragment>
                 ))}
                 <BreadcrumbItem>
                   <BreadcrumbPage>{requestName}</BreadcrumbPage>

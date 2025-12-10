@@ -130,12 +130,26 @@ export class MessageHandler {
     // ==================== HTTP Request Handlers ====================
 
     private async handleHttpRequest(message: any): Promise<void> {
+        // Extract the request ID (tab ID) from the message
+        // The ID can come from message.id (new format) or message.request.id (legacy)
+        const requestId = message.id || message.request?.id || '';
+        
+        // Ensure the request object has the ID for downstream processing
+        const requestWithId = {
+            ...message.request,
+            id: requestId
+        };
+        
         try {
-            const { response, newCookies } = await httpService.execute(message.request);
+            const { response, newCookies } = await httpService.execute(requestWithId);
             
+            // Always include the request ID in the response for tab correlation
             this.postMessage({
                 type: 'httpResponse',
-                response
+                response: {
+                    ...response,
+                    id: requestId  // Ensure ID is always present for concurrency handling
+                }
             });
 
             // Notify webview about updated cookies if any were received
@@ -150,6 +164,7 @@ export class MessageHandler {
             this.postMessage({
                 type: 'httpResponse',
                 response: {
+                    id: requestId,  // Use extracted requestId for error responses
                     status: 0,
                     statusText: 'Error',
                     elapsedTime: 0,

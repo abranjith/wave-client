@@ -1,10 +1,11 @@
-import React, { useState, useId, useEffect } from 'react';
+import React, { useId, useMemo } from 'react';
 import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from '../ui/select';
 import TextBody from './TextBody';
 import BinaryBody from './BinaryBody';
 import FormBody from './FormBody';
 import MultiPartFormBody from './MultiPartFormBody';
 import useAppStateStore from '../../hooks/store/useAppStateStore';
+import { RequestBodyType } from '../../types/collection';
 
 type BodyType = 'none' | 'text' | 'binary' | 'form' | 'multipart';
 
@@ -13,8 +14,9 @@ const RequestBody: React.FC = () => {
   'No Body', 'Text', 'Binary', 'Form', 'Multipart Form'
   ];
 
+  const activeTab = useAppStateStore((state) => state.getActiveTab());
   const updateBodyType = useAppStateStore((state) => state.updateCurrentBodyType);
-  const currentBodyType = useAppStateStore((state) => state.body.currentBodyType);
+  const currentBodyType: RequestBodyType = activeTab?.body?.currentBodyType || 'none';
   const bodyTypeSelectId = useId();
 
   const handleBodyTypeChange = (str: string) => {

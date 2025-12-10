@@ -4,27 +4,21 @@ import { Button } from '../ui/button';
 import StyledInput from "../ui/styled-input"
 import useAppStateStore from '../../hooks/store/useAppStateStore';
 import { renderParameterizedText } from '../../utils/styling';
+import { ParamRow } from '../../types/collection';
 
 const RequestParams: React.FC = () => {
-  const params = useAppStateStore((state) => state.params || []);
+  const activeTab = useAppStateStore((state) => state.getActiveTab());
+  const params: ParamRow[] = activeTab?.params || [];
   const addEmptyParam = useAppStateStore((state) => state.addEmptyParam);
   const upsertParam = useAppStateStore((state) => state.upsertParam);
   const removeParam = useAppStateStore((state) => state.removeParam);
   const toggleParamEnabled = useAppStateStore((state) => state.toggleParamEnabled);
-  const activeEnvironment = useAppStateStore((state) => state.activeEnvironment);
+  const getActiveEnvVariableKeys = useAppStateStore((state) => state.getActiveEnvVariableKeys);
   
-  // Memoize active environment variables to avoid creating new Set on every render
+  // Get merged environment variables (global + tab's environment)
   const activeEnvVariables = React.useMemo(() => {
-    const vars = new Set<string>();
-    if (activeEnvironment && activeEnvironment.values) {
-      activeEnvironment.values.forEach((envVar) => {
-        if (envVar.enabled && envVar.value) {
-          vars.add(envVar.key);
-        }
-      });
-    }
-    return vars;
-  }, [activeEnvironment]);
+    return getActiveEnvVariableKeys(activeTab?.environmentId);
+  }, [activeTab?.environmentId, getActiveEnvVariableKeys]);
 
   // Local state to track input values for all params
   const [localParams, setLocalParams] = useState<{ [id: string]: { key: string; value: string } }>({});
@@ -34,7 +28,7 @@ const RequestParams: React.FC = () => {
   useEffect(() => {
     const newLocalParams: { [id: string]: { key: string; value: string } } = {};
     
-    params.forEach(param => {
+    params.forEach((param: ParamRow) => {
       // Preserve existing local values, or initialize from params
       if (localParams[param.id]) {
         newLocalParams[param.id] = localParams[param.id];

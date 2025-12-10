@@ -64,7 +64,8 @@ const CollectionsPane: React.FC<CollectionsPaneProps> = ({
   const collections = useAppStateStore((state) => state.collections);
   const isLoading = useAppStateStore((state) => state.isCollectionsLoading);
   const error = useAppStateStore((state) => state.collectionLoadError);
-  const currentRequestId = useAppStateStore((state) => state.id);
+  const activeTab = useAppStateStore((state) => state.getActiveTab());
+  const currentRequestId = activeTab?.id;
 
   const [expandedCollections, setExpandedCollections] = useState<Set<string>>(new Set());
   const [sortedCollections, setSortedCollections] = useState<ParsedCollection[]>([]);

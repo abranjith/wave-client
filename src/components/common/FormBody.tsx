@@ -1,38 +1,32 @@
-import React, { useState, useEffect, JSX } from 'react';
+import React, { useState, useEffect, JSX, useMemo } from 'react';
 import { Trash2Icon, CopyIcon, ClipboardPasteIcon, PlusIcon, CheckCircleIcon, XCircleIcon } from 'lucide-react';
 import { Button } from '../ui/button';
 import StyledInput from "../ui/styled-input";
 import { Tooltip, TooltipTrigger, TooltipContent } from '../ui/tooltip';
 import useAppStateStore from '../../hooks/store/useAppStateStore';
 import { renderParameterizedText } from '../../utils/styling';
+import { FormField } from '../../types/collection';
 
 interface FormBodyProps {
   dropdownElement?: React.ReactNode;
 }
 
 const FormBody: React.FC<FormBodyProps> = ({ dropdownElement }) => {
+  const activeTab = useAppStateStore((state) => state.getActiveTab());
   const updateBody = useAppStateStore((state) => state.updateFormBody);
   const toggleFormFieldEnabled = useAppStateStore((state) => state.toggleFormFieldEnabled);
-  const body = useAppStateStore((state) => state.body);
-  const activeEnvironment = useAppStateStore((state) => state.activeEnvironment);
+  const body = activeTab?.body;
+  const getActiveEnvVariableKeys = useAppStateStore((state) => state.getActiveEnvVariableKeys);
   
-  // Memoize active environment variables to avoid creating new Set on every render
-  const activeEnvVariables = React.useMemo(() => {
-    const vars = new Set<string>();
-    if (activeEnvironment && activeEnvironment.values) {
-      activeEnvironment.values.forEach((envVar) => {
-        if (envVar.enabled && envVar.value) {
-          vars.add(envVar.key);
-        }
-      });
-    }
-    return vars;
-  }, [activeEnvironment]);
+  // Get merged environment variables (global + tab's environment)
+  const activeEnvVariables = useMemo(() => {
+    return getActiveEnvVariableKeys(activeTab?.environmentId);
+  }, [activeTab?.environmentId, getActiveEnvVariableKeys]);
   
   // Get form fields from store - use useMemo to prevent creating new array reference
-  const formFields = React.useMemo(() => {
-    return body.formData?.data || [{ id: crypto.randomUUID(), key: '', value: '', disabled: false }];
-  }, [body.formData?.data]);
+  const formFields: FormField[] = useMemo(() => {
+    return body?.formData?.data || [{ id: crypto.randomUUID(), key: '', value: '', disabled: false }];
+  }, [body?.formData?.data]);
   
   const [localFields, setLocalFields] = useState<{ [id: string]: { key: string; value: string | null, disabled: boolean } }>({});
   const [styledLocalFields, setStyledLocalFields] = useState<{ [id: string]: { key: JSX.Element; value: JSX.Element } }>({});
@@ -41,7 +35,7 @@ const FormBody: React.FC<FormBodyProps> = ({ dropdownElement }) => {
   useEffect(() => {
     const newLocalFields: { [id: string]: { key: string; value: string | null, disabled: boolean } } = {};
     
-    formFields.forEach(field => {
+    formFields.forEach((field: FormField) => {
       // Preserve existing local values, or initialize from formFields
       if (localFields[field.id]) {
         newLocalFields[field.id] = localFields[field.id];
@@ -53,7 +47,7 @@ const FormBody: React.FC<FormBodyProps> = ({ dropdownElement }) => {
     // Only update if fields were added or removed
     const fieldIdsChanged = 
       formFields.length !== Object.keys(localFields).length ||
-      formFields.some(field => !localFields[field.id]);
+      formFields.some((field: FormField) => !localFields[field.id]);
     
     if (fieldIdsChanged) {
       setLocalFields(newLocalFields);
@@ -87,7 +81,7 @@ const FormBody: React.FC<FormBodyProps> = ({ dropdownElement }) => {
   const commitField = (id: string) => {
     const localField = localFields[id];
     if (localField) {
-      const updatedFields = formFields.map(field =>
+      const updatedFields = formFields.map((field: FormField) =>
         field.id === id
           ? { ...field, key: localField.key, value: localField.value }
           : field
@@ -96,7 +90,7 @@ const FormBody: React.FC<FormBodyProps> = ({ dropdownElement }) => {
       // If both key and value are present, add an empty row for next entry
       if (localField.key.trim() && localField.value?.trim()) {
         const isLastRow = updatedFields[updatedFields.length - 1].id === id;
-        const hasEmptyRow = updatedFields.some(f => !f.key.trim() && !f.value?.trim());
+        const hasEmptyRow = updatedFields.some((f: FormField) => !f.key.trim() && !f.value?.trim());
 
         if (isLastRow && !hasEmptyRow) {
           // Add empty field to the updated array before committing
@@ -124,7 +118,7 @@ const FormBody: React.FC<FormBodyProps> = ({ dropdownElement }) => {
 
   const removeField = (id: string) => {
     if (formFields.length > 1) {
-      const filteredFields = formFields.filter(field => field.id !== id);
+      const filteredFields = formFields.filter((field: FormField) => field.id !== id);
       updateBody(filteredFields);
       setLocalFields(prev => {
         const newFields = { ...prev };
@@ -141,8 +135,8 @@ const FormBody: React.FC<FormBodyProps> = ({ dropdownElement }) => {
 
   const copyFormData = async () => {
     const data = formFields
-      .filter(field => field.key.trim() && field.value?.trim())
-      .map(field => `${field.key}=${field.value}`)
+      .filter((field: FormField) => field.key.trim() && field.value?.trim())
+      .map((field: FormField) => `${field.key}=${field.value}`)
       .join('&');
     
     try {
@@ -174,8 +168,8 @@ const FormBody: React.FC<FormBodyProps> = ({ dropdownElement }) => {
     }
   };
 
-  const hasData = formFields.some(field => field.key.trim() || field.value?.trim());
-  const validFieldCount = formFields.filter(field => field.key.trim() && field.value?.trim() && !field.disabled).length;
+  const hasData = formFields.some((field: FormField) => field.key.trim() || field.value?.trim());
+  const validFieldCount = formFields.filter((field: FormField) => field.key.trim() && field.value?.trim() && !field.disabled).length;
 
   return (
     <div className="flex flex-col h-full">
@@ -253,7 +247,7 @@ const FormBody: React.FC<FormBodyProps> = ({ dropdownElement }) => {
             </tr>
           </thead>
           <tbody>
-            {formFields.map((field, index) => {
+            {formFields.map((field: FormField, index: number) => {
               const isDisabled = field.disabled;
               
               return (

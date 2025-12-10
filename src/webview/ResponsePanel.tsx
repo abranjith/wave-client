@@ -10,12 +10,13 @@ function getStatusColor(status: number) {
 }
 
 interface ResponsePanelProps {
-  onDownloadResponse: any;
+  onDownloadResponse: (data: string) => void;
 }
 
 const ResponsePanel: React.FC<ResponsePanelProps> = ({ onDownloadResponse }) => {
   const [activeTab, setActiveTab] = useState<'body' | 'headers'>('body');
-  const response = useAppStateStore((state) => state.responseData);
+  const activeTabData = useAppStateStore((state) => state.getActiveTab());
+  const response = activeTabData?.responseData;
 
   if (!response) {
     return (
@@ -86,7 +87,7 @@ const ResponsePanel: React.FC<ResponsePanelProps> = ({ onDownloadResponse }) => 
               {Object.entries(headers).map(([key, value]) => (
                 <div key={key} className="flex gap-2 py-1 border-b border-slate-100 dark:border-slate-800 last:border-0">
                   <span className="font-mono font-bold text-slate-500 dark:text-slate-400 w-40 flex-shrink-0">{key}</span>
-                  <span className="font-mono text-slate-800 dark:text-slate-200 break-words">{value}</span>
+                  <span className="font-mono text-slate-800 dark:text-slate-200 break-words">{String(value)}</span>
                 </div>
               ))}
             </div>

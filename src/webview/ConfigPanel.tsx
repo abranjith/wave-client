@@ -46,7 +46,7 @@ const ConfigPanel: React.FC<ConfigPanelProps> = ({ onRequestSelect, onEnvSelect,
         className="w-full h-full flex flex-row overflow-hidden"
       >
         <div className="flex flex-col gap-2 bg-transparent py-4 px-2 w-16 flex-shrink-0 border-r border-slate-200 dark:border-slate-700">
-          <TooltipProvider delayDuration={0}>
+          <TooltipProvider delayDuration={500}>
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button
@@ -101,7 +101,7 @@ const ConfigPanel: React.FC<ConfigPanelProps> = ({ onRequestSelect, onEnvSelect,
           </TabsList>
           {/* Settings Button at the bottom */}
           <div className="mt-auto pt-2 border-t border-slate-200 dark:border-slate-700">
-            <TooltipProvider delayDuration={0}>
+            <TooltipProvider delayDuration={500}>
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Button

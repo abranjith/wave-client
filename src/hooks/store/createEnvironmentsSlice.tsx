@@ -16,6 +16,12 @@ interface EnvironmentsSlice {
     refreshEnvironments: (vsCodeApi: any) => void;
     setIsEnvironmentsLoading: (isLoading: boolean) => void;
     setEnvironmentLoadError: (error: string | null) => void;
+    /**
+     * Get merged environment variable keys from global + specified environment.
+     * Returns a Set of variable keys that are enabled and have values.
+     * @param environmentId - The ID of the environment to merge with global (optional)
+     */
+    getActiveEnvVariableKeys: (environmentId?: string | null) => Set<string>;
 }
 
 const createEnvironmentsSlice: StateCreator<EnvironmentsSlice> = (set, get) => ({
@@ -60,6 +66,35 @@ const createEnvironmentsSlice: StateCreator<EnvironmentsSlice> = (set, get) => (
     },
     setIsEnvironmentsLoading: (isLoading) => set({ isEnvironmentsLoading: isLoading }),
     setEnvironmentLoadError: (error) => set({ environmentLoadError: error, isEnvironmentsLoading: false }),
+    
+    getActiveEnvVariableKeys: (environmentId?: string | null) => {
+        const { environments } = get();
+        const vars = new Set<string>();
+        
+        // Add global environment variables first
+        const globalEnv = environments.find(e => e.name.toLowerCase() === 'global');
+        if (globalEnv?.values) {
+            globalEnv.values.forEach((envVar) => {
+                if (envVar.enabled && envVar.value) {
+                    vars.add(envVar.key);
+                }
+            });
+        }
+        
+        // Add/override with specified environment variables
+        if (environmentId) {
+            const selectedEnv = environments.find(e => e.id === environmentId);
+            if (selectedEnv?.values) {
+                selectedEnv.values.forEach((envVar) => {
+                    if (envVar.enabled && envVar.value) {
+                        vars.add(envVar.key);
+                    }
+                });
+            }
+        }
+        
+        return vars;
+    },
 });
 
 export default createEnvironmentsSlice;

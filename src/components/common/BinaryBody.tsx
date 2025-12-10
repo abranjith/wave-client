@@ -9,8 +9,9 @@ interface BinaryBodyProps {
 
 //TODO - error handling to the user
 const BinaryBody: React.FC<BinaryBodyProps> = ({ dropdownElement }) => {
+  const activeTab = useAppStateStore((state) => state.getActiveTab());
   const updateBody = useAppStateStore((state) => state.updateBinaryBody);
-  const body = useAppStateStore((state) => state.body);
+  const body = activeTab?.body;
   
   //enhance function to accept array of files
   const handleFileSelect = async (addedFiles: FileWithPreview[]) => {
@@ -29,7 +30,7 @@ const BinaryBody: React.FC<BinaryBodyProps> = ({ dropdownElement }) => {
   };
 
   const getInitialFiles = (): FileWithPreview[] => {
-    if (body.binaryData?.data && 'file' in body.binaryData.data) {
+    if (body?.binaryData?.data && 'file' in body.binaryData.data) {
       return [body.binaryData.data as FileWithPreview];
     }
     return [];

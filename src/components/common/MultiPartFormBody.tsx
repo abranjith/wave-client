@@ -1,4 +1,4 @@
-import React, { useState, useEffect, JSX } from 'react';
+import React, { useState, useEffect, JSX, useMemo } from 'react';
 import { Trash2Icon, PlusIcon, XIcon, CheckCircleIcon, XCircleIcon, PaperclipIcon } from 'lucide-react';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
@@ -15,28 +15,21 @@ interface MultiPartFormBodyProps {
 }
 
 const MultiPartFormBody: React.FC<MultiPartFormBodyProps> = ({ dropdownElement }) => {
+  const activeTab = useAppStateStore((state) => state.getActiveTab());
   const updateBody = useAppStateStore((state) => state.updateMultiPartFormBody);
   const toggleMultiPartFormFieldEnabled = useAppStateStore((state) => state.toggleMultiPartFormFieldEnabled);
-  const body = useAppStateStore((state) => state.body);
-  const activeEnvironment = useAppStateStore((state) => state.activeEnvironment);
+  const body = activeTab?.body;
+  const getActiveEnvVariableKeys = useAppStateStore((state) => state.getActiveEnvVariableKeys);
   
-  // Memoize active environment variables to avoid creating new Set on every render
-  const activeEnvVariables = React.useMemo(() => {
-    const vars = new Set<string>();
-    if (activeEnvironment && activeEnvironment.values) {
-      activeEnvironment.values.forEach((envVar) => {
-        if (envVar.enabled && envVar.value) {
-          vars.add(envVar.key);
-        }
-      });
-    }
-    return vars;
-  }, [activeEnvironment]);
+  // Get merged environment variables (global + tab's environment)
+  const activeEnvVariables = useMemo(() => {
+    return getActiveEnvVariableKeys(activeTab?.environmentId);
+  }, [activeTab?.environmentId, getActiveEnvVariableKeys]);
 
   // Get form fields from store - use useMemo to prevent creating new array reference
-  const formFields = React.useMemo(() => {
-    return body.multiPartFormData?.data || [{ id: crypto.randomUUID(), key: '', value: '', fieldType: 'text' as const, disabled: false }];
-  }, [body.multiPartFormData?.data]);
+  const formFields: MultiPartFormField[] = useMemo(() => {
+    return body?.multiPartFormData?.data || [{ id: crypto.randomUUID(), key: '', value: '', fieldType: 'text' as const, disabled: false }];
+  }, [body?.multiPartFormData?.data]);
 
   const [localFields, setLocalFields] = useState<{ [id: string]: { key: string; value: string | File | null, disabled: boolean } }>({});
   const [styledLocalFields, setStyledLocalFields] = useState<{ [id: string]: { key: JSX.Element; value: JSX.Element } }>({});
@@ -47,7 +40,7 @@ const MultiPartFormBody: React.FC<MultiPartFormBodyProps> = ({ dropdownElement }
   useEffect(() => {
     const newLocalFields: { [id: string]: { key: string; value: string | File | null, disabled: boolean } } = {};
     
-    formFields.forEach(field => {
+    formFields.forEach((field: MultiPartFormField) => {
       // Preserve existing local values (which may contain File objects), or initialize from formFields
       if (localFields[field.id]) {
         newLocalFields[field.id] = localFields[field.id];
@@ -59,7 +52,7 @@ const MultiPartFormBody: React.FC<MultiPartFormBodyProps> = ({ dropdownElement }
     // Only update if fields were added or removed
     const fieldIdsChanged = 
       formFields.length !== Object.keys(localFields).length ||
-      formFields.some(field => !localFields[field.id]);
+      formFields.some((field: MultiPartFormField) => !localFields[field.id]);
     
     if (fieldIdsChanged) {
       setLocalFields(newLocalFields);
@@ -106,7 +99,7 @@ const MultiPartFormBody: React.FC<MultiPartFormBodyProps> = ({ dropdownElement }
     const localField = localFields[id];
     
     if (localField) {
-      const updatedFields = formFields.map(field =>
+      const updatedFields = formFields.map((field: MultiPartFormField) =>
         field.id === id
           ? { ...field, key: localField.key, value: localField.value }
           : field
@@ -120,7 +113,7 @@ const MultiPartFormBody: React.FC<MultiPartFormBodyProps> = ({ dropdownElement }
 
       if (hasKey && hasValue) {
         const isLastRow = updatedFields[updatedFields.length - 1].id === id;
-        const hasEmptyRow = updatedFields.some(f => {
+        const hasEmptyRow = updatedFields.some((f: MultiPartFormField) => {
           const isEmpty = !f.key.trim() && (
             typeof f.value === 'string' ? !f.value.trim() : !f.value
           );
@@ -148,7 +141,7 @@ const MultiPartFormBody: React.FC<MultiPartFormBodyProps> = ({ dropdownElement }
 
   const handleFieldTypeChange = (id: string, newType: FieldType) => {
     console.log(`Field ${id} type changed to ${newType}`);
-    const updatedFields = formFields.map(field =>
+    const updatedFields = formFields.map((field: MultiPartFormField) =>
       field.id === id
         ? { ...field, fieldType: newType, value: null }
         : field
@@ -175,7 +168,7 @@ const MultiPartFormBody: React.FC<MultiPartFormBodyProps> = ({ dropdownElement }
 
   const clearFile = (id: string) => {
     updateLocalField(id, 'value', null);
-    const updatedFields = formFields.map(field =>
+    const updatedFields = formFields.map((field: MultiPartFormField) =>
       field.id === id
         ? { ...field, value: null }
         : field
@@ -196,7 +189,7 @@ const MultiPartFormBody: React.FC<MultiPartFormBodyProps> = ({ dropdownElement }
 
   const removeField = (id: string) => {
     if (formFields.length > 1) {
-      const filteredFields = formFields.filter(field => field.id !== id);
+      const filteredFields = formFields.filter((field: MultiPartFormField) => field.id !== id);
       updateBody(filteredFields);
       setLocalFields(prev => {
         const newFields = { ...prev };
@@ -211,7 +204,7 @@ const MultiPartFormBody: React.FC<MultiPartFormBodyProps> = ({ dropdownElement }
     setLocalFields({});
   };
 
-  const hasData = formFields.some(field => {
+  const hasData = formFields.some((field: MultiPartFormField) => {
     const hasKey = field.key.trim();
     const hasValue = typeof field.value === 'string' 
       ? field.value.trim() 
@@ -219,7 +212,7 @@ const MultiPartFormBody: React.FC<MultiPartFormBodyProps> = ({ dropdownElement }
     return hasKey || hasValue;
   });
 
-  const validFieldCount = formFields.filter(field => {
+  const validFieldCount = formFields.filter((field: MultiPartFormField) => {
     const hasKey = field.key.trim();
     const hasValue = typeof field.value === 'string' 
       ? field.value.trim() 
@@ -321,7 +314,7 @@ const MultiPartFormBody: React.FC<MultiPartFormBodyProps> = ({ dropdownElement }
             </tr>
           </thead>
           <tbody>
-            {formFields.map((field, index) => {
+            {formFields.map((field: MultiPartFormField, index: number) => {
               const isDisabled = field.disabled;
               
               return (
