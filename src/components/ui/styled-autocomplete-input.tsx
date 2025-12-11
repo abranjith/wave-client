@@ -2,6 +2,7 @@ import * as React from "react";
 import { cn } from "../../utils/common";
 import { Input } from "./input";
 import { JSX } from "react";
+import { Popover, PopoverAnchor, PopoverContent } from "./popover";
 
 interface StyledAutocompleteInputProps extends Omit<React.ComponentProps<"input">, "onChange"> {
   /**
@@ -39,6 +40,7 @@ const StyledAutocompleteInput = React.forwardRef<
       placeholder,
       suggestions = [],
       onValueChange,
+      onKeyDown,
       ...props
     },
     ref
@@ -46,6 +48,7 @@ const StyledAutocompleteInput = React.forwardRef<
     const inputRef = React.useRef<HTMLInputElement>(null);
     const overlayRef = React.useRef<HTMLDivElement>(null);
     const wrapperRef = React.useRef<HTMLDivElement>(null);
+    const listRef = React.useRef<HTMLUListElement>(null);
 
     const [filteredSuggestions, setFilteredSuggestions] = React.useState<
       string[]
@@ -56,6 +59,35 @@ const StyledAutocompleteInput = React.forwardRef<
     
     // Track previous value to detect external changes
     const prevValueRef = React.useRef<string>(value);
+
+    // State to track width for the popover
+    const [width, setWidth] = React.useState<number | undefined>(undefined);
+
+    // Update width on resize
+    React.useEffect(() => {
+      if (wrapperRef.current) {
+        setWidth(wrapperRef.current.offsetWidth);
+        
+        const observer = new ResizeObserver((entries) => {
+          for (const entry of entries) {
+            setWidth(entry.contentRect.width);
+          }
+        });
+        
+        observer.observe(wrapperRef.current);
+        return () => observer.disconnect();
+      }
+    }, []);
+
+    // Scroll active item into view
+    React.useEffect(() => {
+      if (activeSuggestionIndex >= 0 && listRef.current) {
+        const activeItem = listRef.current.children[activeSuggestionIndex] as HTMLElement;
+        if (activeItem) {
+          activeItem.scrollIntoView({ block: "nearest" });
+        }
+      }
+    }, [activeSuggestionIndex]);
 
     // Combine refs
     React.useImperativeHandle(ref, () => inputRef.current as HTMLInputElement);
@@ -88,21 +120,7 @@ const StyledAutocompleteInput = React.forwardRef<
       }
     }, [value, suggestions]);
 
-    // Close dropdown when clicking outside
-    React.useEffect(() => {
-      const handleClickOutside = (event: MouseEvent) => {
-        if (
-          wrapperRef.current &&
-          !wrapperRef.current.contains(event.target as Node)
-        ) {
-          setShowSuggestions(false);
-        }
-      };
 
-      document.addEventListener("mousedown", handleClickOutside);
-      return () =>
-        document.removeEventListener("mousedown", handleClickOutside);
-    }, []);
 
     const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
       const userInput = e.target.value;
@@ -134,99 +152,141 @@ const StyledAutocompleteInput = React.forwardRef<
       if (onValueChange) {
         onValueChange(suggestion);
       }
+
+      // Keep focus on input
+      inputRef.current?.focus();
     };
 
     const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-      if (e.key === "ArrowDown") {
-        e.preventDefault();
-        setActiveSuggestionIndex((prev) =>
-          prev < filteredSuggestions.length - 1 ? prev + 1 : prev
-        );
-      } else if (e.key === "ArrowUp") {
-        e.preventDefault();
-        setActiveSuggestionIndex((prev) => (prev > 0 ? prev - 1 : -1));
-      } else if (e.key === "Enter") {
-        if (activeSuggestionIndex >= 0) {
+      if (showSuggestions && filteredSuggestions.length > 0) {
+        if (e.key === "ArrowDown") {
           e.preventDefault();
-          handleSuggestionClick(filteredSuggestions[activeSuggestionIndex]);
+          e.stopPropagation();
+          setActiveSuggestionIndex((prev) =>
+            prev < filteredSuggestions.length - 1 ? prev + 1 : prev
+          );
+          return;
+        } else if (e.key === "ArrowUp") {
+          e.preventDefault();
+          e.stopPropagation();
+          setActiveSuggestionIndex((prev) => (prev > 0 ? prev - 1 : -1));
+          return;
+        } else if (e.key === "Tab") {
+          if (activeSuggestionIndex >= 0) {
+            e.preventDefault();
+            e.stopPropagation();
+            handleSuggestionClick(filteredSuggestions[activeSuggestionIndex]);
+            return;
+          }
+        } else if (e.key === "Enter") {
+          if (activeSuggestionIndex >= 0) {
+            e.preventDefault();
+            e.stopPropagation();
+            handleSuggestionClick(filteredSuggestions[activeSuggestionIndex]);
+            return;
+          }
+        } else if (e.key === "Escape") {
+          setShowSuggestions(false);
+          setActiveSuggestionIndex(-1);
+          e.preventDefault();
+          e.stopPropagation();
+          return;
         }
-      } else if (e.key === "Escape") {
-        setShowSuggestions(false);
-        setActiveSuggestionIndex(-1);
       }
 
       // Call original onKeyDown if provided
-      if (props.onKeyDown) {
-        props.onKeyDown(e);
+      if (onKeyDown) {
+        onKeyDown(e);
       }
     };
 
     return (
-      <div ref={wrapperRef} className={cn("relative flex-1", containerClassName)}>
-        {/* Actual Input - Transparent text with visible cursor */}
-        <Input
-          ref={inputRef}
-          className={cn(
-            "relative z-0",
-            // Make text transparent but keep cursor visible
-            "text-transparent caret-black dark:caret-white",
-            // Selection styling
-            "selection:bg-blue-500/30",
-            // Remove placeholder styling from input since overlay handles it
-            "placeholder:text-transparent",
-            // Remove shadow to prevent layout shifts
-            "shadow-none",
-            // Match the font-medium used by parameterized-text styling
-            "font-medium",
-            className
-          )}
-          value={value}
-          onChange={handleInputChange}
-          onKeyDown={handleKeyDown}
-          onScroll={handleScroll}
-          placeholder={placeholder}
-          autoComplete="off"
-          {...props}
-        />
+      <Popover 
+        open={showSuggestions && filteredSuggestions.length > 0} 
+        onOpenChange={(open) => {
+          setShowSuggestions(open);
+          if (!open) setActiveSuggestionIndex(-1);
+        }} 
+        modal={false}
+      >
+        <PopoverAnchor asChild>
+          <div ref={wrapperRef} className={cn("relative flex-1", containerClassName)}>
+            {/* Actual Input - Transparent text with visible cursor */}
+            <Input
+              ref={inputRef}
+              className={cn(
+                "relative z-0",
+                // Make text transparent but keep cursor visible
+                "text-transparent caret-black dark:caret-white",
+                // Selection styling
+                "selection:bg-blue-500/30",
+                // Remove placeholder styling from input since overlay handles it
+                "placeholder:text-transparent",
+                // Remove shadow to prevent layout shifts
+                "shadow-none",
+                // Match the font-medium used by parameterized-text styling
+                "font-medium",
+                className
+              )}
+              value={value}
+              onChange={handleInputChange}
+              onKeyDown={handleKeyDown}
+              onScroll={handleScroll}
+              placeholder={placeholder}
+              autoComplete="off"
+              {...props}
+            />
 
-        {/* Visual Display Overlay - Shows styled content */}
-        <div
-          ref={overlayRef}
-          className={cn(
-            // Position overlay exactly over input
-            "absolute left-0 top-0 right-0 bottom-0 z-10",
-            // Prevent interaction
-            "pointer-events-none",
-            // Match input's padding and height exactly
-            "px-3 py-1 h-9",
-            // Match text size - let line-height be natural to match browser default
-            "text-sm",
-            // Use font-medium to match the parameterized-text class styling
-            "font-medium tracking-normal",
-            // Handle overflow and text wrapping - PRESERVE whitespace!
-            "overflow-x-auto overflow-y-hidden whitespace-pre",
-            // Hide scrollbar
-            "[scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden",
-            // Text color
-            "text-slate-900 dark:text-slate-100",
-            // Use flexbox for vertical centering to match input
-            "flex items-center"
-          )}
-        >
-          {styledValue ? (
-            styledValue
-          ) : (
-            <span className="text-muted-foreground/70">{placeholder}</span>
-          )}
-        </div>
+            {/* Visual Display Overlay - Shows styled content */}
+            <div
+              ref={overlayRef}
+              className={cn(
+                // Position overlay exactly over input
+                "absolute left-0 top-0 right-0 bottom-0 z-10",
+                // Prevent interaction
+                "pointer-events-none",
+                // Match input's padding and height exactly
+                "px-3 py-1 h-9",
+                // Match text size - let line-height be natural to match browser default
+                "text-sm",
+                // Use font-medium to match the parameterized-text class styling
+                "font-medium tracking-normal",
+                // Handle overflow and text wrapping - PRESERVE whitespace!
+                "overflow-x-auto overflow-y-hidden whitespace-pre",
+                // Hide scrollbar
+                "[scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden",
+                // Text color
+                "text-slate-900 dark:text-slate-100",
+                // Use flexbox for vertical centering to match input
+                "flex items-center"
+              )}
+            >
+              {styledValue ? (
+                styledValue
+              ) : (
+                <span className="text-muted-foreground/70">{placeholder}</span>
+              )}
+            </div>
+          </div>
+        </PopoverAnchor>
 
         {/* Autocomplete Suggestions Dropdown */}
-        {showSuggestions && filteredSuggestions.length > 0 && (
+        <PopoverContent 
+          className="p-0" 
+          onOpenAutoFocus={(e) => e.preventDefault()}
+          onCloseAutoFocus={(e) => e.preventDefault()}
+          onInteractOutside={(e) => {
+            if (wrapperRef.current && wrapperRef.current.contains(e.target as Node)) {
+              e.preventDefault();
+            }
+          }}
+          style={{ width: width }}
+          align="start"
+          sideOffset={1}
+        >
           <ul
-            className={cn(
-              "absolute z-50 mt-1 max-h-60 w-full overflow-auto rounded-md border border-input bg-popover text-popover-foreground shadow-md",
-              "animate-in fade-in-0 zoom-in-95"
-            )}
+            ref={listRef}
+            className="max-h-60 w-full overflow-auto"
           >
             {filteredSuggestions.map((suggestion, index) => (
               <li
@@ -244,8 +304,8 @@ const StyledAutocompleteInput = React.forwardRef<
               </li>
             ))}
           </ul>
-        )}
-      </div>
+        </PopoverContent>
+      </Popover>
     );
   }
 );

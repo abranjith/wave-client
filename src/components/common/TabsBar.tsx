@@ -82,6 +82,10 @@ const TabsBar: React.FC<TabsBarProps> = ({ className }) => {
                 return 'text-red-600 dark:text-red-400';
             case 'PATCH':
                 return 'text-purple-600 dark:text-purple-400';
+            case 'HEAD':
+                return 'text-gray-600 dark:text-gray-400';
+            case 'OPTIONS':
+                return 'text-indigo-600 dark:text-indigo-400';
             default:
                 return 'text-slate-600 dark:text-slate-400';
         }

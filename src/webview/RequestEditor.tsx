@@ -75,7 +75,7 @@ const RequestEditor: React.FC<RequestEditorProps> = ({
     onSaveRequest,
     onDownloadResponse
 }) => {
-    // ==================== Store Selectors ====================
+    // ==================== Global Store Selectors ====================
     
     // Active tab data
     const activeTab = useAppStateStore((state) => state.getActiveTab());
@@ -108,11 +108,6 @@ const RequestEditor: React.FC<RequestEditorProps> = ({
 
     // ==================== Derived State ====================
     
-    const tabAuth = useMemo(() => {
-        if (!activeTab?.authId) return null;
-        return auths.find(a => a.id === activeTab.authId) || null;
-    }, [activeTab?.authId, auths]);
-
     // Memoize the styled URL text
     const styledUrlText = useMemo(() => {
         const activeEnvVariables = getActiveEnvVariableKeys(activeTab?.environmentId);
@@ -279,7 +274,7 @@ const RequestEditor: React.FC<RequestEditorProps> = ({
                                 <TooltipTrigger asChild>
                                     <Button
                                         onClick={handleSaveRequest}
-                                        className="bg-green-400 hover:bg-green-600 text-green-100 font-medium px-6 py-2 transition-colors dark:bg-green-500 dark:hover:bg-green-800 dark:text-slate-100"
+                                        className="bg-white hover:bg-green-600 text-green-600 hover:text-white border hover:border-green-600 font-medium px-6 py-2 transition-colors dark:bg-slate-900 dark:hover:bg-green-600 dark:text-green-500 dark:hover:text-white dark:hover:border-green-600"
                                         disabled={isRequestProcessing || !Boolean(url?.trim())}
                                     >
                                         <SaveIcon size={16} />
@@ -342,7 +337,7 @@ const RequestEditor: React.FC<RequestEditorProps> = ({
                             <TooltipTrigger asChild>
                                 <Button
                                     onClick={() => onSendRequest(activeTabId)}
-                                    className="bg-blue-400 hover:bg-blue-600 text-blue-100 font-medium px-6 py-2 transition-colors dark:bg-blue-500 dark:hover:bg-blue-800 dark:text-slate-100"
+                                    className="bg-white hover:bg-blue-600 text-blue-600 hover:text-white border hover:border-blue-600 font-medium px-6 py-2 transition-colors dark:bg-slate-900 dark:hover:bg-blue-600 dark:text-blue-500 dark:hover:text-white dark:hover:border-blue-600"
                                     disabled={isRequestProcessing || !Boolean(url?.trim())}
                                 >
                                     {isRequestProcessing 
