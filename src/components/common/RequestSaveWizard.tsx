@@ -12,11 +12,13 @@ import {
 } from '../ui/dialog';
 import useAppStateStore from '../../hooks/store/useAppStateStore';
 import SearchableSelect from '../ui/searchable-select';
+import { getFolderPathOptions } from '../../utils/collectionParser';
+import { Collection, FolderPathOption } from '../../types/collection';
 
 interface RequestSaveWizardProps {
   isOpen: boolean;
   onClose: () => void;
-  onSave: (collectionName: string, requestName: string) => void;
+  onSave: (collectionName: string, requestName: string, folderPath: string[]) => void;
 }
 
 const RequestSaveWizard: React.FC<RequestSaveWizardProps> = ({
@@ -26,11 +28,27 @@ const RequestSaveWizard: React.FC<RequestSaveWizardProps> = ({
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [requestName, setRequestName] = useState('');
+  const [selectedFolderPath, setSelectedFolderPath] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const collections = useAppStateStore((state) => state.collections);
-  const collectionNames = collections.map((col) => col.name);
+  const collectionNames = collections.map((col) => col.info.name);
   const [isCollectionInput, setIsCollectionInput] = useState(false);
+
+  /**
+   * Get folder path options for the selected collection
+   */
+  const folderPathOptions = useMemo(() => {
+    const selectedCollection = collections.find(
+      (col) => col.info.name.toLowerCase() === searchQuery.trim().toLowerCase()
+    );
+    
+    if (!selectedCollection) {
+      return [];
+    }
+    
+    return getFolderPathOptions(selectedCollection);
+  }, [collections, searchQuery]);
 
   /**
    * Filter collections based on search query
@@ -75,8 +93,8 @@ const RequestSaveWizard: React.FC<RequestSaveWizardProps> = ({
     setError(null);
 
     try {
-      // Call the onSave callback with the collection name and request name
-      onSave(collectionName, reqName);
+      // Call the onSave callback with the collection name, request name, and folder path
+      onSave(collectionName, reqName, selectedFolderPath);
 
       // Close the dialog
       handleClose();
@@ -93,6 +111,7 @@ const RequestSaveWizard: React.FC<RequestSaveWizardProps> = ({
   const handleClose = () => {
     setSearchQuery('');
     setRequestName('');
+    setSelectedFolderPath([]);
     setError(null);
     setIsSaving(false);
     onClose();
@@ -158,11 +177,15 @@ const RequestSaveWizard: React.FC<RequestSaveWizardProps> = ({
                 label: name,
                 value: name,
               }))}
-              setSelectedValue={setSearchQuery}
+              setSelectedValue={(value) => {
+                setSearchQuery(value);
+                setSelectedFolderPath([]); // Reset folder path when collection changes
+              }}
               selectedValue={searchQuery}
               includeOptionToCreateNew
               onCreateNewOption={(isSelected) => {
                 setSearchQuery('');
+                setSelectedFolderPath([]);
                 setError(null);
                 setIsCollectionInput(isSelected);
               }}
@@ -179,6 +202,31 @@ const RequestSaveWizard: React.FC<RequestSaveWizardProps> = ({
               />
             )}
           </div>
+
+          {/* Folder Path Selector - Only show for existing collections with folders */}
+          {isExistingCollection && folderPathOptions.length > 0 && (
+            <div className="space-y-2">
+              <Label htmlFor="folder-path" className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                Save to Folder (optional)
+              </Label>
+              <SearchableSelect
+                id="folder-path"
+                name="Folder"
+                options={folderPathOptions.map((opt) => ({
+                  label: opt.displayPath,
+                  value: opt.path.join('/'),
+                }))}
+                setSelectedValue={(value) => {
+                  const path = value ? value.split('/') : [];
+                  setSelectedFolderPath(path.length === 1 && path[0] === '' ? [] : path);
+                }}
+                selectedValue={selectedFolderPath.join('/')}
+              />
+              <p className="text-xs text-slate-500 dark:text-slate-400">
+                Select a folder to save the request in, or leave as "(Root)" for top-level
+              </p>
+            </div>
+          )}
          
           {/* Error Message */}
           {error && (

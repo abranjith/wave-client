@@ -1,15 +1,17 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { ChevronRightIcon, ChevronDownIcon, FolderIcon, LayoutGridIcon, ImportIcon, DownloadIcon } from 'lucide-react';
-import { ParsedCollection, ParsedRequest } from '../../types/collection';
+import { Collection, CollectionItem } from '../../types/collection';
+import { collectionItemToFormData, countRequests } from '../../utils/collectionParser';
 import useAppStateStore from '../../hooks/store/useAppStateStore';
 import { Button } from '../ui/button';
 import { Tooltip, TooltipTrigger, TooltipContent } from '../ui/tooltip';
 import CollectionsImportWizard from './CollectionsImportWizard';
 import CollectionExportWizard from './CollectionExportWizard';
-import { getHttpMethodColor } from '../../utils/common';
+import CollectionTreeItem from './CollectionTreeItem';
+import { RequestFormData } from '../../utils/collectionParser';
 
 interface CollectionsPaneProps {
-  onRequestSelect: (request: ParsedRequest) => void;
+  onRequestSelect: (request: RequestFormData) => void;
   onImportCollection: (fileName: string, fileContent: string, collectionType: string) => void;
   onExportCollection: (collectionName: string) => void;
 }
@@ -68,7 +70,7 @@ const CollectionsPane: React.FC<CollectionsPaneProps> = ({
   const currentRequestId = activeTab?.id;
 
   const [expandedCollections, setExpandedCollections] = useState<Set<string>>(new Set());
-  const [sortedCollections, setSortedCollections] = useState<ParsedCollection[]>([]);
+  const [sortedCollections, setSortedCollections] = useState<Collection[]>([]);
   
   const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set());
   const [isImportWizardOpen, setIsImportWizardOpen] = useState(false);
@@ -84,25 +86,37 @@ const CollectionsPane: React.FC<CollectionsPaneProps> = ({
     setExpandedCollections(newExpanded);
   };
   
-  const toggleFolder = (folderKey: string) => {
-    const newExpanded = new Set(expandedFolders);
-    if (newExpanded.has(folderKey)) {
-      newExpanded.delete(folderKey);
-    } else {
-      newExpanded.add(folderKey);
-    }
-    setExpandedFolders(newExpanded);
-  };
+  const toggleFolder = useCallback((folderKey: string) => {
+    setExpandedFolders(prev => {
+      const newExpanded = new Set(prev);
+      if (newExpanded.has(folderKey)) {
+        newExpanded.delete(folderKey);
+      } else {
+        newExpanded.add(folderKey);
+      }
+      return newExpanded;
+    });
+  }, []);
+
+  const handleRequestSelect = useCallback((
+    item: CollectionItem,
+    collectionFilename: string,
+    collectionName: string,
+    itemPath: string[]
+  ) => {
+    const formData = collectionItemToFormData(item, collectionFilename, collectionName, itemPath);
+    onRequestSelect(formData);
+  }, [onRequestSelect]);
 
   //TODO this default logic is flaky and needs a better approach
   // Sort collections to show default collection first
   useEffect(() => {
     const sorted = [...collections].sort((a, b) => {
-      const aIsDefault = a.filename.toLowerCase().includes('default');
-      const bIsDefault = b.filename.toLowerCase().includes('default');
+      const aIsDefault = a.filename?.toLowerCase().includes('default') || false;
+      const bIsDefault = b.filename?.toLowerCase().includes('default') || false;
       if (aIsDefault && !bIsDefault) return -1;
       if (!aIsDefault && bIsDefault) return 1;
-      return a.name.localeCompare(b.name);
+      return a.info.name.localeCompare(b.info.name);
     });
     setSortedCollections(sorted);
   }, [collections]);
@@ -212,119 +226,49 @@ const CollectionsPane: React.FC<CollectionsPaneProps> = ({
         
         <div className="space-y-2">
           {sortedCollections.map(collection => {
-            const totalRequests = collection.requests.length + 
-              collection.folders.reduce((acc, folder) => acc + folder.requests.length, 0);
+            const totalRequests = countRequests(collection.item);
+            const filename = collection.filename || '';
             
             return (
-            <div key={collection.filename} className="border border-slate-200 dark:border-slate-700 rounded-lg">
+            <div key={filename} className="border border-slate-200 dark:border-slate-700 rounded-lg">
                 {/* Collection Header */}
                 <div 
                     className="flex items-center p-3 bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 cursor-pointer rounded-t-lg group transition-colors"
-                    onClick={() => toggleCollection(collection.filename)}
+                    onClick={() => toggleCollection(filename)}
                 >
                 <div className="flex items-center flex-1 mb-1">
-                        {expandedCollections.has(collection.filename) ? (
+                        {expandedCollections.has(filename) ? (
                         <ChevronDownIcon className="h-5 w-5 text-slate-500 mr-2 flex-shrink-0" />
                         ) : (
                         <ChevronRightIcon className="h-5 w-5 text-slate-500 mr-2 flex-shrink-0" />
                         )}
                         <LayoutGridIcon className="h-4 w-4 text-amber-600 mr-2 flex-shrink-0" />
                         <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-200 break-words">
-                        {collection.name}
+                        {collection.info.name}
                         </h3>
                 </div>
                 <span className="text-xs text-slate-400 bg-slate-200 dark:bg-slate-600 px-2 py-1 rounded-full ml-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                        {collection.folders.length + collection.requests.length}
+                        {totalRequests}
                 </span>
                 </div>
                 
-                {/* Collection Content */}
-                {expandedCollections.has(collection.filename) && (
-                    <div className="p-3 space-y-1">
-                        {/* Top-level requests */}
-                        {collection.requests.map(request => {
-                            const isActive = request.id === currentRequestId;
-                            return (
-                            <div
-                                key={request.id}
-                                className={`flex items-center py-2 px-2 cursor-pointer rounded-md group transition-colors ${
-                                    isActive 
-                                        ? 'bg-blue-100 dark:bg-blue-900/40 border-l-2 border-blue-500' 
-                                        : 'hover:bg-blue-50 dark:hover:bg-blue-900/20'
-                                }`}
-                                onClick={() => onRequestSelect(request)}
-                            >
-                                <div className="flex items-center flex-1 min-w-0">
-                                    <span className={`text-xs font-medium mr-2 px-2 py-1 rounded-full flex-shrink-0 ${getHttpMethodColor(request.method)}`}>
-                                        {request.method}
-                                    </span>
-                                    <span className="text-sm text-slate-600 dark:text-slate-300 truncate">
-                                        {request.name}
-                                    </span>
-                                </div>
-                            </div>
-                            );
-                        })}
-                        
-                        {/* Folders */}
-                        {collection.folders.map(folder => {
-                            const folderKey = `${collection.filename}:${folder.name}`;
-                            const isFolderExpanded = expandedFolders.has(folderKey);
-                            
-                            return (
-                                <div key={folder.name} className="space-y-1">
-                                    {/* Folder Header */}
-                                    <div 
-                                        className="flex items-center py-2 px-2 hover:bg-slate-100 dark:hover:bg-slate-700 cursor-pointer rounded-md group transition-colors"
-                                        onClick={() => toggleFolder(folderKey)}
-                                    >
-                                        <div className="flex items-center flex-1 min-w-0">
-                                            {isFolderExpanded ? (
-                                                <ChevronDownIcon className="h-4 w-4 text-slate-500 mr-1 flex-shrink-0" />
-                                            ) : (
-                                                <ChevronRightIcon className="h-4 w-4 text-slate-500 mr-1 flex-shrink-0" />
-                                            )}
-                                            <FolderIcon className="h-4 w-4 text-amber-600 mr-2 flex-shrink-0" />
-                                            <span className="text-sm font-medium text-slate-700 dark:text-slate-200 truncate">
-                                                {folder.name}
-                                            </span>
-                                        </div>
-                                        <span className="text-xs text-slate-400 bg-slate-200 dark:bg-slate-600 px-2 py-1 rounded-full ml-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                            {folder.requests.length}
-                                        </span>
-                                    </div>
-                                    
-                                    {/* Folder Requests */}
-                                    {isFolderExpanded && (
-                                        <div className="ml-6 space-y-1">
-                                            {folder.requests.map(request => {
-                                                const isActive = request.id === currentRequestId;
-                                                return (
-                                                <div
-                                                    key={request.id}
-                                                    className={`flex items-center py-2 px-2 cursor-pointer rounded-md group transition-colors ${
-                                                        isActive 
-                                                            ? 'bg-blue-100 dark:bg-blue-900/40 border-l-2 border-blue-500' 
-                                                            : 'hover:bg-blue-50 dark:hover:bg-blue-900/20'
-                                                    }`}
-                                                    onClick={() => onRequestSelect(request)}
-                                                >
-                                                    <div className="flex items-center flex-1 min-w-0">
-                                                        <span className={`text-xs font-medium mr-2 px-2 py-1 rounded-full flex-shrink-0 ${getHttpMethodColor(request.method)}`}>
-                                                            {request.method}
-                                                        </span>
-                                                        <span className="text-sm text-slate-600 dark:text-slate-300 truncate">
-                                                            {request.name}
-                                                        </span>
-                                                    </div>
-                                                </div>
-                                                );
-                                            })}
-                                        </div>
-                                    )}
-                                </div>
-                            );
-                        })}
+                {/* Collection Content - Recursive Tree Rendering */}
+                {expandedCollections.has(filename) && (
+                    <div className="p-3 space-y-1 overflow-x-auto">
+                        {collection.item.map((item) => (
+                            <CollectionTreeItem
+                                key={item.id}
+                                item={item}
+                                depth={0}
+                                collectionFilename={filename}
+                                collectionName={collection.info.name}
+                                itemPath={[]}
+                                currentRequestId={currentRequestId}
+                                expandedFolders={expandedFolders}
+                                onToggleFolder={toggleFolder}
+                                onRequestSelect={handleRequestSelect}
+                            />
+                        ))}
                     </div>
                 )}
             </div>

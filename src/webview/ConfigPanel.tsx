@@ -17,10 +17,11 @@ import {
   TooltipTrigger,
 } from "../components/ui/tooltip"
 import { Button } from "../components/ui/button"
-import { ParsedRequest, Environment } from '../types/collection';
+import { Environment } from '../types/collection';
+import { RequestFormData } from '../utils/collectionParser';
 
 interface ConfigPanelProps {
-  onRequestSelect: ((request: ParsedRequest) => void)
+  onRequestSelect: ((request: RequestFormData) => void)
   onEnvSelect: ((environment: Environment) => void)
   onStoreSelect: ((storeType: 'cookie' | 'auth' | 'proxy' | 'cert') => void)
   onSettingsSelect: () => void;
@@ -52,7 +53,7 @@ const ConfigPanel: React.FC<ConfigPanelProps> = ({ onRequestSelect, onEnvSelect,
                 <Button
                   variant="ghost"
                   onClick={() => {
-                    const request: ParsedRequest = {
+                    const request: RequestFormData = {
                       id: '',
                       method: 'GET',
                       url: '',

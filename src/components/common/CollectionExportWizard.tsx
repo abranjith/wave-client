@@ -86,8 +86,8 @@ const CollectionExportWizard: React.FC<CollectionExportWizardProps> = ({
               id="collection-select"
               name="Collection"
               options={collections.map((collection) => ({
-                label: collection.name,
-                value: collection.name,
+                label: collection.info.name,
+                value: collection.info.name,
               }))}
               setSelectedValue={setSelectedCollection}
               selectedValue={selectedCollection}
@@ -102,11 +102,26 @@ const CollectionExportWizard: React.FC<CollectionExportWizardProps> = ({
               </p>
               <p className="text-xs text-blue-600 dark:text-blue-400">
                 {(() => {
-                  const collection = collections.find(c => c.name === selectedCollection);
+                  const collection = collections.find(c => c.info.name === selectedCollection);
                   if (!collection) return '';
-                  const totalRequests = collection.requests.length + 
-                    collection.folders.reduce((acc, folder) => acc + folder.requests.length, 0);
-                  return `${collection.folders.length} folder${collection.folders.length !== 1 ? 's' : ''}, ${totalRequests} request${totalRequests !== 1 ? 's' : ''}`;
+                  // Count folders and requests recursively
+                  const countItems = (items: typeof collection.item): { folders: number; requests: number } => {
+                    let folders = 0;
+                    let requests = 0;
+                    for (const item of items) {
+                      if (item.item) {
+                        folders++;
+                        const nested = countItems(item.item);
+                        folders += nested.folders;
+                        requests += nested.requests;
+                      } else if (item.request) {
+                        requests++;
+                      }
+                    }
+                    return { folders, requests };
+                  };
+                  const counts = countItems(collection.item);
+                  return `${counts.folders} folder${counts.folders !== 1 ? 's' : ''}, ${counts.requests} request${counts.requests !== 1 ? 's' : ''}`;
                 })()}
               </p>
             </div>

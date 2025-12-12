@@ -1,14 +1,14 @@
 import { StateCreator } from 'zustand'
-import { ParsedCollection } from '../../types/collection';
+import { Collection } from '../../types/collection';
 
 interface CollectionsSlice {
-    collections: ParsedCollection[];
+    collections: Collection[];
     isCollectionsLoading: boolean;
     collectionLoadError: string | null;
-    setCollections: (collections: ParsedCollection[]) => void;
-    addCollection: (collection: ParsedCollection) => void;
+    setCollections: (collections: Collection[]) => void;
+    addCollection: (collection: Collection) => void;
     removeCollection: (name: string) => void;
-    updateCollection: (name: string, updates: Partial<ParsedCollection>) => void;
+    updateCollection: (name: string, updates: Partial<Collection>) => void;
     refreshCollections: (vsCodeApi: any) => void;
     setIsCollectionsLoading: (isLoading: boolean) => void;
     setCollectionLoadError: (error: string | null) => void;
@@ -23,10 +23,10 @@ const createCollectionsSlice: StateCreator<CollectionsSlice> = (set) => ({
         collections: [...state.collections, collection]
     })),
     removeCollection: (name) => set((state) => ({
-        collections: state.collections.filter((c) => c.name !== name)
+        collections: state.collections.filter((c) => c.info.name !== name)
     })),
     updateCollection: (name, updates) => set((state) => ({
-        collections: state.collections.map((c) => c.name === name ? { ...c, ...updates } : c)
+        collections: state.collections.map((c) => c.info.name === name ? { ...c, ...updates } : c)
     })),
     refreshCollections: (vsCodeApi) => {
         if (vsCodeApi === 'undefined') {

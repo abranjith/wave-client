@@ -1,17 +1,53 @@
-import { Collection, CollectionItem, ParsedCollection, ParsedFolder, ParsedRequest, CollectionUrl, ParamRow, CollectionRequest, CollectionBody } from '../types/collection';
+/**
+ * Collection Utilities
+ * Utility functions for working with Collection and CollectionItem types.
+ * These replace the old parsing logic and work directly with the nested structure.
+ */
+
+import {
+  Collection,
+  CollectionItem,
+  CollectionRequest,
+  CollectionUrl,
+  CollectionBody,
+  CollectionReference,
+  HeaderRow,
+  ParamRow,
+  FolderPathOption,
+  ParsedRequest,
+  isFolder,
+  isRequest,
+} from '../types/collection';
+
+// Re-export ParsedRequest for backward compatibility
+export type { ParsedRequest };
+
+// Alias for clarity
+export type RequestFormData = ParsedRequest;
+
+// ============================================================================
+// ID Generation
+// ============================================================================
 
 /**
- * Generates a unique ID for a request based on its path and name
+ * Generates a unique ID
  */
-function generateUniqueId(prefix: string): string {
-  const baseId = prefix.toLowerCase().replace(/[^a-z0-9\/]/g, '-');
-  return `${baseId}-${crypto.randomUUID()}`;
+export function generateUniqueId(): string {
+  return crypto.randomUUID();
 }
+
+// ============================================================================
+// URL Utilities
+// ============================================================================
 
 /**
  * Converts collection URL to string format
  */
-function urlToString(url: CollectionUrl | string): string {
+export function urlToString(url: CollectionUrl | string | undefined): string {
+  if (!url) {
+    return '';
+  }
+  
   if (typeof url === 'string') {
     return url;
   }
@@ -28,33 +64,34 @@ function urlToString(url: CollectionUrl | string): string {
   return `${protocol}://${host}${path}`;
 }
 
-
 /**
- * Extracts URL parameters from both URL string and Postman query array
+ * Extracts URL parameters from CollectionUrl
  */
-function extractUrlParams(url: CollectionUrl | string): ParamRow[] {
+export function extractUrlParams(url: CollectionUrl | string | undefined): ParamRow[] {
+  if (!url) {
+    return [];
+  }
   
   if (typeof url === 'object' && url.query) {
-    // Handle Postman query array format
     return url.query.map(q => ({
-      id: q.id || generateUniqueId('param'),
+      id: q.id || generateUniqueId(),
       key: q.key,
       value: q.value,
-      disabled: q.disabled || false
+      disabled: q.disabled || false,
     }));
   }
   
-  // Also try to extract from raw URL
+  // Try to extract from raw URL
   const params: ParamRow[] = [];
   const urlString = urlToString(url);
   try {
     const urlObj = new URL(urlString);
     urlObj.searchParams.forEach((value, key) => {
       params.push({
-        id: generateUniqueId('param'),
+        id: generateUniqueId(),
         key,
         value,
-        disabled: false
+        disabled: false,
       });
     });
   } catch {
@@ -65,36 +102,17 @@ function extractUrlParams(url: CollectionUrl | string): ParamRow[] {
 }
 
 /**
- * Converts a parsed request back to Collection format
+ * Converts URL string and params to CollectionUrl format
  */
-export function transformToCollectionRequest(parsed: ParsedRequest): CollectionRequest {
-  const collectionRequest: CollectionRequest = {
-    method: parsed.method,
-    header: parsed.headers,
-    url: transformUrlToCollection(parsed.url, parsed.params),
-  };
-
-  // Add body if present
-  if (parsed.body || parsed.binaryBody) {
-    collectionRequest.body = transformBodyToCollection(parsed);
-  }
-
-  return collectionRequest;
-}
-
-/**
- * Converts URL string and params back to CollectionUrl format
- */
-function transformUrlToCollection(urlString: string, params: ParamRow[]): CollectionUrl {
+export function stringToCollectionUrl(urlString: string, params?: ParamRow[]): CollectionUrl {
   try {
     const url = new URL(urlString);
     
-    // Build query array from params (include disabled ones)
-    const query = params.map(p => ({
+    const query = params?.map(p => ({
       id: p.id,
       key: p.key,
       value: p.value,
-      disabled: p.disabled
+      disabled: p.disabled,
     }));
 
     return {
@@ -102,203 +120,276 @@ function transformUrlToCollection(urlString: string, params: ParamRow[]): Collec
       protocol: url.protocol.replace(':', ''),
       host: url.hostname.split('.'),
       path: url.pathname.split('/').filter(p => p),
-      query: query.length > 0 ? query : undefined
+      query: query && query.length > 0 ? query : undefined,
     };
   } catch {
-    // Fallback for invalid URLs
-    return {
-      raw: urlString
-    };
+    return { raw: urlString };
   }
 }
 
-/**
- * Converts body data back to CollectionBody format
- */
-function transformBodyToCollection(parsed: ParsedRequest): CollectionBody | undefined {
-  if (parsed.binaryBody) {
-    return {
-      mode: 'file',
-      binary: {
-        data: parsed.binaryBody.data,
-        fileName: parsed.binaryBody.fileName,
-        contentType: parsed.binaryBody.contentType
-      }
-    };
-  }
-
-  if (parsed.body) {
-    return {
-      mode: 'raw',
-      raw: parsed.body
-    };
-  }
-
-  return undefined;
-}
+// ============================================================================
+// Collection Traversal Utilities
+// ============================================================================
 
 /**
- * Recursively flattens nested folders into a single level with accumulated path names
+ * Recursively finds an item by ID in a collection
  */
-function flattenFolders(
-  items: CollectionItem[], 
-  collectionName: string,
-  fileName: string
-): { folders: ParsedFolder[], requests: ParsedRequest[] } {
-  const folders: ParsedFolder[] = [];
-  const requests: ParsedRequest[] = [];
-  
-  items.forEach(item => {
+export function findItemById(items: CollectionItem[], id: string): CollectionItem | null {
+  for (const item of items) {
+    if (item.id === id) {
+      return item;
+    }
     if (item.item) {
-      // This is a folder - flatten all nested content
-      const currentFolderName = item.name.replace(/\//g, ' ');
-      const folderPath = [currentFolderName];
-      
-      // Recursively get all requests from this folder and its subfolders
-      const allRequests = getAllRequestsFromFolder(item.item, folderPath, collectionName, fileName);
-      
-      if (allRequests.length > 0) {
-        folders.push({
-          name: currentFolderName,
-          requests: allRequests,
-          subfolders: [] // Always empty since we're flattening
-        });
+      const found = findItemById(item.item, id);
+      if (found) {
+        return found;
       }
-    } else if (item.request) {
-      // This is a top-level request
-      const url = urlToString(item.request.url);
-      const headers = item.request.header || [];
-      const params = extractUrlParams(item.request.url);
-      const body = item.request.body?.raw || '';
-      
-      requests.push({
-        id: generateUniqueId(item.name),
-        name: item.name,
-        method: item.request.method.toUpperCase(),
-        url,
-        headers,
-        params,
-        body,
-        sourceRef: {
-          collectionFilename: fileName,
-          collectionName,
-          itemPath: []
-        }
-      });
-    }
-  });
-  
-  return { folders, requests };
-}
-
-/**
- * Recursively extracts all requests from a folder and its subfolders
- */
-function getAllRequestsFromFolder(
-  items: CollectionItem[], 
-  folderPath: string[],
-  parentCollectionName: string = '',
-  collectionFilename: string = ''
-): ParsedRequest[] {
-  const requests: ParsedRequest[] = [];
-  
-  items.forEach(item => {
-    if (item.item) {
-      // This is a subfolder - recurse into it
-      const subRequests = getAllRequestsFromFolder(item.item, [...folderPath, item.name], parentCollectionName, collectionFilename);
-      requests.push(...subRequests);
-    } else if (item.request) {
-      // This is a request
-      const url = urlToString(item.request.url);
-      const headers = item.request.header || [];
-      const params = extractUrlParams(item.request.url);
-      const body = item.request.body?.raw || '';
-      
-      requests.push({
-        id: generateUniqueId(item.name),
-        name: item.name,
-        method: item.request.method.toUpperCase(),
-        url,
-        headers,
-        params,
-        body,
-        sourceRef: {
-          collectionFilename,
-          collectionName: parentCollectionName,
-          itemPath: [...folderPath]
-        }
-      });
-    }
-  });
-  
-  return requests;
-}
-
-/**
- * Parses a Postman collection JSON into a structured format
- */
-export function parseCollection(collectionJson: Collection, filename: string): ParsedCollection {
-  //const isDefault = filename.toLowerCase().includes('default') || filename.toLowerCase() === 'default.json';
-  const collectionName = collectionJson.info.name;
-  
-  const { folders, requests } = flattenFolders(collectionJson.item, collectionName, filename);
-  
-  return {
-    name: collectionName,
-    filename,
-    folders,
-    requests
-  };
-}
-
-/**
- * Recursively searches for a request by ID in folders
- */
-function findRequestInFolders(folders: ParsedFolder[], requestId: string): ParsedRequest | null {
-  for (const folder of folders) {
-    // Check requests in this folder
-    const request = folder.requests.find(req => req.id === requestId);
-    if (request) {
-      return request;
-    }
-    
-    // Check subfolders
-    const subfolderRequest = findRequestInFolders(folder.subfolders, requestId);
-    if (subfolderRequest) {
-      return subfolderRequest;
     }
   }
-  
   return null;
 }
 
 /**
- * Finds a request by ID in a parsed collection
+ * Finds an item by ID in a collection and returns it with its path
  */
-export function findRequestById(collection: ParsedCollection, requestId: string): ParsedRequest | null {
-  // Check top-level requests
-  const topLevelRequest = collection.requests.find(req => req.id === requestId);
-  if (topLevelRequest) {
-    return topLevelRequest;
+export function findItemWithPath(
+  items: CollectionItem[],
+  id: string,
+  currentPath: string[] = []
+): { item: CollectionItem; path: string[] } | null {
+  for (const item of items) {
+    if (item.id === id) {
+      return { item, path: currentPath };
+    }
+    if (item.item) {
+      const found = findItemWithPath(item.item, id, [...currentPath, item.name]);
+      if (found) {
+        return found;
+      }
+    }
   }
-  
-  // Check requests in folders
-  return findRequestInFolders(collection.folders, requestId);
+  return null;
 }
 
 /**
- * Gets all requests from a collection (flattened)
+ * Gets all request items from a collection (flattened)
  */
-export function getAllRequests(collection: ParsedCollection): ParsedRequest[] {
-  const allRequests: ParsedRequest[] = [...collection.requests];
+export function getAllRequestItems(items: CollectionItem[]): CollectionItem[] {
+  const requests: CollectionItem[] = [];
   
-  function extractFromFolders(folders: ParsedFolder[]) {
-    folders.forEach(folder => {
-      allRequests.push(...folder.requests);
-      extractFromFolders(folder.subfolders);
-    });
+  function traverse(items: CollectionItem[]) {
+    for (const item of items) {
+      if (isRequest(item)) {
+        requests.push(item);
+      }
+      if (item.item) {
+        traverse(item.item);
+      }
+    }
   }
   
-  extractFromFolders(collection.folders);
-  return allRequests;
+  traverse(items);
+  return requests;
+}
+
+/**
+ * Counts total requests in a collection (including nested)
+ */
+export function countRequests(items: CollectionItem[]): number {
+  let count = 0;
+  
+  function traverse(items: CollectionItem[]) {
+    for (const item of items) {
+      if (isRequest(item)) {
+        count++;
+      }
+      if (item.item) {
+        traverse(item.item);
+      }
+    }
+  }
+  
+  traverse(items);
+  return count;
+}
+
+/**
+ * Counts immediate children (folders + requests) at the current level
+ */
+export function countImmediateChildren(items: CollectionItem[]): number {
+  return items.length;
+}
+
+// ============================================================================
+// Folder Path Utilities
+// ============================================================================
+
+/**
+ * Generates all folder path options for a collection (for dropdown selection)
+ * Returns paths like: "Folder1", "Folder1 / Subfolder", "Folder1 / Subfolder / Deep"
+ */
+export function getFolderPathOptions(collection: Collection): FolderPathOption[] {
+  const options: FolderPathOption[] = [];
+  
+  // Add root option
+  options.push({
+    path: [],
+    displayPath: '(Root)',
+    depth: 0,
+  });
+  
+  function traverse(items: CollectionItem[], currentPath: string[], depth: number) {
+    for (const item of items) {
+      if (isFolder(item)) {
+        const newPath = [...currentPath, item.name];
+        options.push({
+          path: newPath,
+          displayPath: newPath.join(' / '),
+          depth,
+        });
+        
+        if (item.item) {
+          traverse(item.item, newPath, depth + 1);
+        }
+      }
+    }
+  }
+  
+  traverse(collection.item, [], 1);
+  return options;
+}
+
+/**
+ * Navigates to a folder by path and returns the items at that location
+ */
+export function getItemsAtPath(collection: Collection, folderPath: string[]): CollectionItem[] {
+  let items = collection.item;
+  
+  for (const folderName of folderPath) {
+    const folder = items.find(i => i.name === folderName && isFolder(i));
+    if (!folder || !folder.item) {
+      return [];
+    }
+    items = folder.item;
+  }
+  
+  return items;
+}
+
+// ============================================================================
+// Collection Modification Utilities
+// ============================================================================
+
+/**
+ * Ensures all items in a collection have IDs (mutates in place)
+ */
+export function ensureItemIds(items: CollectionItem[]): void {
+  for (const item of items) {
+    if (!item.id) {
+      item.id = generateUniqueId();
+    }
+    if (item.item) {
+      ensureItemIds(item.item);
+    }
+  }
+}
+
+/**
+ * Prepares a collection after loading (ensures IDs, adds filename)
+ */
+export function prepareCollection(collection: Collection, filename: string): Collection {
+  ensureItemIds(collection.item);
+  return {
+    ...collection,
+    filename,
+  };
+}
+
+// ============================================================================
+// Request Building Utilities (for UI -> Collection)
+// ============================================================================
+
+/**
+ * Converts UI request form data to CollectionRequest format
+ */
+export function formDataToCollectionRequest(formData: RequestFormData): CollectionRequest {
+  const collectionRequest: CollectionRequest = {
+    method: formData.method,
+    url: stringToCollectionUrl(formData.url, formData.params),
+    header: formData.headers,
+  };
+
+  // Add body if present
+  if (formData.binaryBody) {
+    collectionRequest.body = {
+      mode: 'file',
+      binary: {
+        data: formData.binaryBody.data,
+        fileName: formData.binaryBody.fileName,
+        contentType: formData.binaryBody.contentType,
+      },
+    };
+  } else if (formData.body) {
+    collectionRequest.body = {
+      mode: formData.bodyMode || 'raw',
+      raw: formData.body,
+      options: formData.bodyOptions,
+    };
+  }
+
+  return collectionRequest;
+}
+
+/**
+ * Converts a CollectionItem (request) to UI form data format
+ */
+export function collectionItemToFormData(
+  item: CollectionItem,
+  collectionFilename: string,
+  collectionName: string,
+  itemPath: string[]
+): RequestFormData {
+  const request = item.request;
+  
+  if (!request) {
+    throw new Error('Item is not a request');
+  }
+  
+  return {
+    id: item.id,
+    name: item.name,
+    method: request.method?.toUpperCase() || 'GET',
+    url: urlToString(request.url),
+    headers: request.header || [],
+    params: extractUrlParams(request.url),
+    body: request.body?.raw || null,
+    bodyMode: request.body?.mode,
+    bodyOptions: request.body?.options,
+    binaryBody: request.body?.binary,
+    sourceRef: {
+      collectionFilename,
+      collectionName,
+      itemPath,
+    },
+  };
+}
+
+// ============================================================================
+// Legacy Compatibility (deprecated, will be removed)
+// ============================================================================
+
+/**
+ * @deprecated Use prepareCollection instead
+ * Legacy function for backward compatibility during migration
+ */
+export function parseCollection(collectionJson: Collection & { filename?: string }, filename: string): Collection {
+  return prepareCollection(collectionJson, filename);
+}
+
+/**
+ * @deprecated Use formDataToCollectionRequest instead
+ * Legacy function for backward compatibility during migration
+ */
+export function transformToCollectionRequest(formData: RequestFormData): CollectionRequest {
+  return formDataToCollectionRequest(formData);
 }

@@ -1,5 +1,16 @@
-// Collection types based on Postman collection structure
+/**
+ * Internal Collection Types for Wave Client
+ * These types are used throughout the app for storing and manipulating collections.
+ * They support arbitrary nesting of folders.
+ */
 
+// ============================================================================
+// URL Types
+// ============================================================================
+
+/**
+ * Represents a URL with parsed components
+ */
 export interface CollectionUrl {
   raw: string;
   protocol?: string;
@@ -8,42 +19,166 @@ export interface CollectionUrl {
   query?: ParamRow[];
 }
 
+// ============================================================================
+// Request Body Types
+// ============================================================================
+
+/**
+ * Binary file data for request body
+ */
+export interface BinaryBodyData {
+  data: ArrayBuffer;
+  fileName: string;
+  contentType: string;
+}
+
+/**
+ * Request body with multiple modes
+ */
 export interface CollectionBody {
-  mode: string;
+  mode: 'none' | 'raw' | 'urlencoded' | 'formdata' | 'file';
   raw?: string;
-  binary?: {
-    data: ArrayBuffer;
-    fileName: string;
-    contentType: string;
+  urlencoded?: FormField[];
+  formdata?: MultiPartFormField[];
+  binary?: BinaryBodyData;
+  options?: {
+    raw?: {
+      language?: 'json' | 'xml' | 'html' | 'text' | 'csv';
+    };
   };
 }
 
+// ============================================================================
+// Request Types
+// ============================================================================
+
+/**
+ * HTTP Request definition
+ */
 export interface CollectionRequest {
   method: string;
-  header?: HeaderRow[];
   url: CollectionUrl | string;
+  header?: HeaderRow[];
   body?: CollectionBody;
+  description?: string;
 }
 
+// ============================================================================
+// Response Types
+// ============================================================================
+
+/**
+ * Saved response for a request
+ */
+export interface CollectionResponse {
+  id: string;
+  name: string;
+  originalRequest?: CollectionRequest;
+  status: string;
+  code: number;
+  header?: HeaderRow[];
+  body?: string;
+  responseTime?: number;
+}
+
+// ============================================================================
+// Collection Item Types
+// ============================================================================
+
+/**
+ * Reference to original location in collection structure
+ */
+export interface CollectionReference {
+  collectionFilename: string;
+  collectionName: string;
+  itemPath: string[]; // Path through folders to reach the item, e.g., ['Folder1', 'Subfolder']
+}
+
+/**
+ * A collection item - can be a request or a folder containing other items
+ * Supports arbitrary nesting depth
+ */
 export interface CollectionItem {
+  id: string; // Unique identifier for UI operations
   name: string;
+  description?: string;
   request?: CollectionRequest;
-  response?: any[];
-  item?: CollectionItem[]; // For folders containing other items
+  response?: CollectionResponse[];
+  item?: CollectionItem[]; // For folders containing other items (supports infinite nesting)
 }
 
+/**
+ * Collection metadata
+ */
 export interface CollectionInfo {
-  _postman_id?: string;
   name: string;
+  description?: string;
   schema?: string;
 }
 
+/**
+ * Main Collection type - used throughout the app
+ * Stored on disk and used directly in UI
+ */
 export interface Collection {
   info: CollectionInfo;
   item: CollectionItem[];
+  filename?: string; // Added when loaded from disk
 }
 
-// Environment types
+// ============================================================================
+// Helper Types
+// ============================================================================
+
+/**
+ * Type guard to check if an item is a folder (has nested items)
+ */
+export function isFolder(item: CollectionItem): boolean {
+  return Array.isArray(item.item) && !item.request;
+}
+
+/**
+ * Type guard to check if an item is a request
+ */
+export function isRequest(item: CollectionItem): boolean {
+  return item.request !== undefined;
+}
+
+/**
+ * Represents a flattened folder path option for UI dropdowns
+ */
+export interface FolderPathOption {
+  path: string[]; // Array of folder names from root to this folder
+  displayPath: string; // Human-readable path like "Folder1 / Subfolder / Deep"
+  depth: number; // Nesting depth (0 for root)
+}
+
+// ============================================================================
+// UI Request Types (for forms and tabs)
+// ============================================================================
+
+/**
+ * Request data format used in UI forms and tabs
+ * This is the "unpacked" version of a request for easy editing
+ */
+export interface ParsedRequest {
+  id: string;
+  name: string;
+  method: string;
+  url: string;
+  headers: HeaderRow[];
+  params: ParamRow[];
+  body: string | null;
+  bodyMode?: CollectionBody['mode'];
+  bodyOptions?: CollectionBody['options'];
+  binaryBody?: BinaryBodyData;
+  sourceRef: CollectionReference;
+}
+
+// ============================================================================
+// Environment Types
+// ============================================================================
+
 export interface EnvironmentVariable {
   key: string;
   value: string;
@@ -56,42 +191,6 @@ export interface Environment {
   id: string;
   name: string;
   values: EnvironmentVariable[];
-}
-
-export interface CollectionReference {
-  collectionFilename: string;
-  collectionName: string;
-  itemPath: string[]; // Path through folders to reach the item, e.g., ['Folder1', 'Subfolder']
-}
-
-// Parsed collection types for easier use in components
-export interface ParsedRequest {
-  id: string;
-  name: string;
-  method: string;
-  url: string;
-  headers: HeaderRow[];
-  params: ParamRow[];
-  body: string | null;
-  binaryBody?: {
-    data: ArrayBuffer;
-    fileName: string;
-    contentType: string;
-  };
-  sourceRef: CollectionReference; // Reference back to original collection structure
-}
-
-export interface ParsedFolder {
-  name: string;
-  requests: ParsedRequest[];
-  subfolders: ParsedFolder[];
-}
-
-export interface ParsedCollection {
-  name: string;
-  filename: string;
-  folders: ParsedFolder[];
-  requests: ParsedRequest[]; // Top-level requests not in folders
 }
 
 export interface HeaderRow {

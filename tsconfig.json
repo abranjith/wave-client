@@ -19,6 +19,7 @@
 		"test/**/*",
 		"node_modules",
 		"out",
-		"dist"
+		"dist",
+		"src/extension.old.ts"
 	]
 }

@@ -8,8 +8,8 @@ import ProxyStoreGrid from '../components/common/ProxyStoreGrid';
 import CertStoreGrid from '../components/common/CertStoreGrid';
 import SettingsWizard from '../components/common/SettingsWizard';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../components/ui/dialog';
-import { ParsedRequest, Collection, Environment, Cookie, Proxy, Cert } from '../types/collection';
-import { parseCollection, transformToCollectionRequest } from '../utils/collectionParser';
+import { Collection, Environment, Cookie, Proxy, Cert } from '../types/collection';
+import { RequestFormData, formDataToCollectionRequest, prepareCollection } from '../utils/collectionParser';
 import useAppStateStore from '../hooks/store/useAppStateStore';
 import { Auth } from '../hooks/store/createAuthSlice';
 import { AppSettings } from '../hooks/store/createSettingsSlice';
@@ -64,7 +64,7 @@ const App: React.FC = () => {
     }
   }, []);
 
-  const handleRequestSelect = (request: ParsedRequest) => {
+  const handleRequestSelect = (request: RequestFormData) => {
     loadRequestIntoTab(request);
     setSelectedEnvironment(null); // Clear environment selection when selecting a request
     setSelectedStore(null); // Clear store selection when selecting a request
@@ -101,15 +101,24 @@ const App: React.FC = () => {
     }
   };
 
-  const handleSaveRequest = (request: ParsedRequest, saveToCollectionName: string | undefined) => {
-    const collectionRequest = transformToCollectionRequest(request);
-    //if newCollectionName exists in collections, we are updating an existing collection s use filename & collection name from there
+  const handleSaveRequest = (request: RequestFormData, saveToCollectionName: string | undefined, folderPath: string[] = []) => {
+    const collectionRequest = formDataToCollectionRequest(request);
+    //if saveToCollectionName exists in collections, we are updating an existing collection - use filename & collection name from there
     const currentCollections = useAppStateStore.getState().collections;
-    const existingCollection =  saveToCollectionName && currentCollections.find((collection) => collection.name === saveToCollectionName);
+    const existingCollection = saveToCollectionName && currentCollections.find((collection) => collection.info.name === saveToCollectionName);
+    
     if (existingCollection) {
-      const duplicateRequest = existingCollection.requests.find((req) => req.name === request.name);
+      // Check for duplicate request name in the target folder
+      let items = existingCollection.item;
+      for (const folder of folderPath) {
+        const folderItem = items.find((item) => item.name === folder && item.item);
+        if (folderItem && folderItem.item) {
+          items = folderItem.item;
+        }
+      }
+      const duplicateRequest = items.find((item) => item.name === request.name && item.request);
       if (duplicateRequest) {
-        setErrorMessage(`Request with name "${request.name}" already exists in collection "${existingCollection.name}".`);
+        setErrorMessage(`Request with name "${request.name}" already exists in the selected location.`);
         return;
       }
     }
@@ -121,7 +130,7 @@ const App: React.FC = () => {
           requestContent: JSON.stringify(collectionRequest, null, 2),
           requestName: request.name,
           collectionFileName: existingCollection ? existingCollection.filename : request.sourceRef.collectionFilename,
-          folderPath: request.sourceRef.itemPath,
+          folderPath: folderPath.length > 0 ? folderPath : request.sourceRef.itemPath,
           newCollectionName: existingCollection ? undefined : saveToCollectionName,
         }
       });
@@ -203,11 +212,11 @@ const App: React.FC = () => {
 
   const handleExportCollection = (collectionName: string) => {
     const currentCollections = useAppStateStore.getState().collections;
-    const collection =  collectionName && currentCollections.find((collection) => collection.name === collectionName);
+    const collection = collectionName && currentCollections.find((c) => c.info.name === collectionName);
     if (vsCodeRef.current && collection) {
       vsCodeRef.current.postMessage({
         type: 'exportCollection',
-        data: { fileName : collection.filename }
+        data: { fileName: collection.filename }
       });
     }
   };
@@ -262,25 +271,25 @@ const App: React.FC = () => {
         }
       } else if (message.type === 'collectionsLoaded') {
         try {
-          const parsedCollections = message.collections.map((collection: Collection & { filename: string }) => 
-            parseCollection(collection, collection.filename)
+          const preparedCollections = message.collections.map((collection: Collection & { filename: string }) => 
+            prepareCollection(collection, collection.filename)
           );
-          setCollections(parsedCollections);
+          setCollections(preparedCollections);
         } catch (error: any) {
           setCollectionLoadError(`Error parsing collections: ${error.message}`);
         }
       } else if (message.type === 'collectionUpdated') {
         try {
-          const collection = parseCollection(message.collection, message.collection.filename);
+          const collection = prepareCollection(message.collection, message.collection.filename);
           //if collection does not exist, add it
           // Get current collections from the store to avoid stale closure
           const currentCollections = useAppStateStore.getState().collections;
-          const existingCollection = currentCollections.find((c) => c.name === collection.name);
+          const existingCollection = currentCollections.find((c) => c.info.name === collection.info.name);
           if (!existingCollection) {
             addCollection(collection);
             return;
           }
-          updateCollection(collection.name, collection);
+          updateCollection(collection.info.name, collection);
         } catch (error: any) {
           console.error('Error updating collection:', error);
         }

@@ -2,8 +2,8 @@
  * Test script to verify collection parsing functionality
  */
 
-import { parseCollection } from '../src/utils/collectionParser';
-import { Collection } from '../src/types/collection';
+import { prepareCollection, getAllFolderPaths } from '../src/utils/collectionParser';
+import { Collection, CollectionItem, isFolder, isRequest } from '../src/types/collection';
 import * as fs from 'fs';
 import * as path from 'path';
 
@@ -12,28 +12,65 @@ const sampleCollectionPath = path.join(__dirname, '..', '.github', 'samplecollec
 const comprehensiveCollectionPath = path.join(__dirname, '..', '.github', 'comprehensive-collection.json');
 const defaultCollectionPath = path.join(__dirname, '..', '.github', 'default-collection.json');
 
+/**
+ * Recursively counts folders and requests in a collection
+ */
+function countItems(items: CollectionItem[]): { folders: number; requests: number } {
+  let folders = 0;
+  let requests = 0;
+  for (const item of items) {
+    if (isFolder(item)) {
+      folders++;
+      const nested = countItems(item.item!);
+      folders += nested.folders;
+      requests += nested.requests;
+    } else if (isRequest(item)) {
+      requests++;
+    }
+  }
+  return { folders, requests };
+}
+
+/**
+ * Recursively prints the folder/request structure
+ */
+function printStructure(items: CollectionItem[], indent: string = '   '): void {
+  items.forEach((item, index) => {
+    if (isFolder(item)) {
+      const requestCount = countItems(item.item!).requests;
+      console.log(`${indent}📁 ${item.name} (${requestCount} requests)`);
+      if (item.item && item.item.length > 0) {
+        printStructure(item.item, indent + '   ');
+      }
+    } else if (isRequest(item)) {
+      console.log(`${indent}📄 ${item.request?.method || 'GET'} ${item.name}`);
+    }
+  });
+}
+
 function testCollectionParsing() {
-  console.log('Testing Collection Parsing with Flattened Structure...\n');
+  console.log('Testing Collection Parsing with Nested Structure...\n');
   
   // Test default collection
   try {
     const defaultData = fs.readFileSync(defaultCollectionPath, 'utf8');
     const defaultCollection: Collection = JSON.parse(defaultData);
-    const parsedDefault = parseCollection(defaultCollection, 'default.json');
+    const parsed = prepareCollection(defaultCollection, 'default.json');
+    const counts = countItems(parsed.item);
     
     console.log('✅ Default Collection Parsed Successfully');
-    console.log(`   - Name: ${parsedDefault.name}`);
-    console.log(`   - Folders: ${parsedDefault.folders.length}`);
-    console.log(`   - Top-level Requests: ${parsedDefault.requests.length}`);
+    console.log(`   - Name: ${parsed.info.name}`);
+    console.log(`   - Folders: ${counts.folders}`);
+    console.log(`   - Total Requests: ${counts.requests}`);
     
     // Show folder structure
-    console.log('📁 Default Collection Folder Structure:');
-    parsedDefault.folders.forEach((folder, index) => {
-      console.log(`   ${index + 1}. ${folder.name} (${folder.requests.length} requests)`);
-      folder.requests.forEach((req, reqIndex) => {
-        console.log(`      ${index + 1}.${reqIndex + 1}. ${req.method} ${req.name}`);
-      });
-    });
+    console.log('📁 Default Collection Structure:');
+    printStructure(parsed.item);
+    
+    // Show available folder paths
+    const folderPaths = getAllFolderPaths(parsed);
+    console.log('📂 Available Folder Paths:');
+    folderPaths.forEach(fp => console.log(`   - ${fp.label}`));
     console.log('');
     
   } catch (error) {
@@ -44,21 +81,22 @@ function testCollectionParsing() {
   try {
     const comprehensiveData = fs.readFileSync(comprehensiveCollectionPath, 'utf8');
     const comprehensiveCollection: Collection = JSON.parse(comprehensiveData);
-    const parsedComprehensive = parseCollection(comprehensiveCollection, 'Ecommerce_API.json');
+    const parsed = prepareCollection(comprehensiveCollection, 'Ecommerce_API.json');
+    const counts = countItems(parsed.item);
     
     console.log('✅ E-commerce API Collection Parsed Successfully');
-    console.log(`   - Name: ${parsedComprehensive.name}`);
-    console.log(`   - Folders: ${parsedComprehensive.folders.length}`);
-    console.log(`   - Top-level Requests: ${parsedComprehensive.requests.length}`);
+    console.log(`   - Name: ${parsed.info.name}`);
+    console.log(`   - Folders: ${counts.folders}`);
+    console.log(`   - Total Requests: ${counts.requests}`);
     
-    // Show folder structure with prefixes
-    console.log('📁 E-commerce API Collection Folder Structure (with prefixes):');
-    parsedComprehensive.folders.forEach((folder, index) => {
-      console.log(`   ${index + 1}. ${folder.name} (${folder.requests.length} requests)`);
-      folder.requests.forEach((req, reqIndex) => {
-        console.log(`      ${index + 1}.${reqIndex + 1}. ${req.method} ${req.name}`);
-      });
-    });
+    // Show folder structure
+    console.log('📁 E-commerce API Collection Structure:');
+    printStructure(parsed.item);
+    
+    // Show available folder paths
+    const folderPaths = getAllFolderPaths(parsed);
+    console.log('📂 Available Folder Paths:');
+    folderPaths.forEach(fp => console.log(`   - ${fp.label}`));
     console.log('');
     
   } catch (error) {
@@ -69,18 +107,22 @@ function testCollectionParsing() {
   try {
     const sampleData = fs.readFileSync(sampleCollectionPath, 'utf8');
     const sampleCollection: Collection = JSON.parse(sampleData);
-    const parsedSample = parseCollection(sampleCollection, 'Sample_Collection.json');
+    const parsed = prepareCollection(sampleCollection, 'Sample_Collection.json');
+    const counts = countItems(parsed.item);
     
     console.log('✅ Sample Collection Parsed Successfully');
-    console.log(`   - Name: ${parsedSample.name}`);
-    console.log(`   - Folders: ${parsedSample.folders.length}`);
-    console.log(`   - Top-level Requests: ${parsedSample.requests.length}`);
+    console.log(`   - Name: ${parsed.info.name}`);
+    console.log(`   - Folders: ${counts.folders}`);
+    console.log(`   - Total Requests: ${counts.requests}`);
     
     // Show folder structure
-    console.log('📁 Sample Collection Folder Structure (with prefixes):');
-    parsedSample.folders.forEach((folder, index) => {
-      console.log(`   ${index + 1}. ${folder.name} (${folder.requests.length} requests)`);
-    });
+    console.log('📁 Sample Collection Structure:');
+    printStructure(parsed.item);
+    
+    // Show available folder paths
+    const folderPaths = getAllFolderPaths(parsed);
+    console.log('📂 Available Folder Paths:');
+    folderPaths.forEach(fp => console.log(`   - ${fp.label}`));
     
   } catch (error) {
     console.error('❌ Error parsing sample collection:', error);

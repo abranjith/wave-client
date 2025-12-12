@@ -59,13 +59,14 @@ const REQUEST_TABS = ['Params', 'Headers', 'Body'] as const;
 
 interface RequestEditorProps {
     onSendRequest: (tabId: string) => void;
-    onSaveRequest: (request: ParsedRequest, newCollectionName: string | undefined) => void;
+    onSaveRequest: (request: ParsedRequest, newCollectionName: string | undefined, folderPath?: string[]) => void;
     onDownloadResponse: (data: string) => void;
 }
 
 interface CollectionToSaveInfo {
     collectionName: string;
     requestName: string;
+    folderPath: string[];
 }
 
 // ==================== Component ====================
@@ -146,7 +147,7 @@ const RequestEditor: React.FC<RequestEditorProps> = ({
         if (collectionInfoToSave) {
             const currentRequest = getParsedRequest();
             currentRequest.name = collectionInfoToSave.requestName || currentRequest.name;
-            onSaveRequest(currentRequest, collectionInfoToSave.collectionName);
+            onSaveRequest(currentRequest, collectionInfoToSave.collectionName, collectionInfoToSave.folderPath);
             setCollectionInfoToSave(undefined);
         }
     }, [collectionInfoToSave, getParsedRequest, onSaveRequest]);
@@ -458,8 +459,8 @@ const RequestEditor: React.FC<RequestEditorProps> = ({
                 <RequestSaveWizard
                     isOpen={isRequestSaveWizardOpen}
                     onClose={() => setIsRequestSaveWizardOpen(false)}
-                    onSave={(newCollectionName, requestName) => {
-                        setCollectionInfoToSave({ collectionName: newCollectionName, requestName });
+                    onSave={(newCollectionName, requestName, folderPath) => {
+                        setCollectionInfoToSave({ collectionName: newCollectionName, requestName, folderPath });
                         setIsRequestSaveWizardOpen(false);
                     }}
                 />

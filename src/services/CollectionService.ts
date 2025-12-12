@@ -1,7 +1,9 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { BaseStorageService } from './BaseStorageService';
-import { Collection, CollectionRequest } from '../types/collection';
+import { Collection, CollectionRequest, CollectionItem } from '../types/collection';
+import { transformCollection, postmanTransformer } from '../utils/transformers';
+import { ensureItemIds, generateUniqueId } from '../utils/collectionParser';
 
 /**
  * Service for managing collections (groups of API requests).
@@ -54,7 +56,14 @@ export class CollectionService extends BaseStorageService {
             return null;
         }
 
-        return await this.readJsonFileSecure<Collection | null>(filePath, null);
+        const collection = await this.readJsonFileSecure<Collection | null>(filePath, null);
+        
+        if (collection) {
+            // Ensure all items have IDs
+            ensureItemIds(collection.item);
+        }
+        
+        return collection;
     }
 
     /**
@@ -125,6 +134,7 @@ export class CollectionService extends BaseStorageService {
             if (!folder) {
                 // Create the folder if it doesn't exist
                 folder = {
+                    id: generateUniqueId(),
                     name: folderName,
                     item: []
                 };
@@ -141,6 +151,7 @@ export class CollectionService extends BaseStorageService {
         } else {
             // Add new request
             items.push({
+                id: generateUniqueId(),
                 name: requestName,
                 request: request
             });
@@ -154,19 +165,59 @@ export class CollectionService extends BaseStorageService {
 
     /**
      * Imports a collection from file content.
+     * Uses transformers to auto-detect and convert external formats.
      * @param fileName The filename to save as
      * @param fileContent The JSON content of the collection
+     * @param formatType Optional format type hint (e.g., 'postman')
      * @returns The imported collection with filename
      */
-    async import(fileName: string, fileContent: string): Promise<Collection & { filename: string }> {
+    async import(fileName: string, fileContent: string, formatType?: string): Promise<Collection & { filename: string }> {
         const collectionsDir = await this.getCollectionsDir();
         this.ensureDirectoryExists(collectionsDir);
 
+        // Parse the JSON content
+        const parsedContent = JSON.parse(fileContent);
+        
+        // Try to transform from external format to internal format
+        const result = transformCollection(parsedContent, fileName, formatType as any);
+        
+        if (!result.success || !result.data) {
+            // If transformation fails, try to use as-is (might already be internal format)
+            const collection = parsedContent as Collection;
+            ensureItemIds(collection.item);
+            
+            const filePath = path.join(collectionsDir, fileName);
+            await this.writeJsonFileSecure(filePath, collection);
+            
+            return { ...collection, filename: fileName };
+        }
+        
+        const collection = result.data;
+        ensureItemIds(collection.item);
+        
         const filePath = path.join(collectionsDir, fileName);
-        fs.writeFileSync(filePath, fileContent, 'utf8');
+        await this.writeJsonFileSecure(filePath, collection);
 
-        const collection = JSON.parse(fileContent) as Collection;
         return { ...collection, filename: fileName };
+    }
+
+    /**
+     * Exports a collection to a specific format.
+     * @param collection The collection to export
+     * @param formatType The format to export to (default: 'postman')
+     * @returns The exported content as a string
+     */
+    async export(collection: Collection, formatType: 'postman' = 'postman'): Promise<string> {
+        if (formatType === 'postman') {
+            const result = postmanTransformer.transformTo(collection);
+            if (!result.success || !result.data) {
+                throw new Error(result.error || 'Failed to export collection');
+            }
+            return JSON.stringify(result.data, null, 2);
+        }
+        
+        // Default: export as internal format
+        return JSON.stringify(collection, null, 2);
     }
 
     /**
