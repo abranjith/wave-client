@@ -274,7 +274,7 @@ const RequestEditor: React.FC<RequestEditorProps> = ({
                                 <TooltipTrigger asChild>
                                     <Button
                                         onClick={handleSaveRequest}
-                                        className="bg-white hover:bg-green-600 text-green-600 hover:text-white border hover:border-green-600 font-medium px-6 py-2 transition-colors dark:bg-slate-900 dark:hover:bg-green-600 dark:text-green-500 dark:hover:text-white dark:hover:border-green-600"
+                                        className="bg-white hover:bg-green-600 text-green-600 hover:text-white border hover:border-green-600 font-medium px-6 py-2 transition-colors dark:bg-slate-900 dark:hover:bg-green-600 dark:text-green-500 dark:hover:text-white dark:hover:border-green-600 disabled:bg-slate-100 disabled:text-slate-400 disabled:border-slate-300 disabled:hover:bg-slate-100 disabled:hover:text-slate-400 disabled:hover:border-slate-300 dark:disabled:bg-slate-800 dark:disabled:text-slate-600 dark:disabled:border-slate-700 dark:disabled:hover:bg-slate-800 dark:disabled:hover:text-slate-600 dark:disabled:hover:border-slate-700"
                                         disabled={isRequestProcessing || !Boolean(url?.trim())}
                                     >
                                         <SaveIcon size={16} />
@@ -337,7 +337,7 @@ const RequestEditor: React.FC<RequestEditorProps> = ({
                             <TooltipTrigger asChild>
                                 <Button
                                     onClick={() => onSendRequest(activeTabId)}
-                                    className="bg-white hover:bg-blue-600 text-blue-600 hover:text-white border hover:border-blue-600 font-medium px-6 py-2 transition-colors dark:bg-slate-900 dark:hover:bg-blue-600 dark:text-blue-500 dark:hover:text-white dark:hover:border-blue-600"
+                                    className="bg-white hover:bg-blue-600 text-blue-600 hover:text-white border hover:border-blue-600 font-medium px-6 py-2 transition-colors dark:bg-slate-900 dark:hover:bg-blue-600 dark:text-blue-500 dark:hover:text-white dark:hover:border-blue-600 disabled:bg-slate-100 disabled:text-slate-400 disabled:border-slate-300 disabled:hover:bg-slate-100 disabled:hover:text-slate-400 disabled:hover:border-slate-300 dark:disabled:bg-slate-800 dark:disabled:text-slate-600 dark:disabled:border-slate-700 dark:disabled:hover:bg-slate-800 dark:disabled:hover:text-slate-600 dark:disabled:hover:border-slate-700"
                                     disabled={isRequestProcessing || !Boolean(url?.trim())}
                                 >
                                     {isRequestProcessing 
