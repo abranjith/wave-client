@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { ChevronRightIcon, ChevronDownIcon, FolderIcon, LayoutGridIcon, ImportIcon, DownloadIcon } from 'lucide-react';
 import { Collection, CollectionItem } from '../../types/collection';
 import { collectionItemToFormData, countRequests } from '../../utils/collectionParser';
@@ -9,12 +9,98 @@ import CollectionsImportWizard from './CollectionsImportWizard';
 import CollectionExportWizard from './CollectionExportWizard';
 import CollectionTreeItem from './CollectionTreeItem';
 import { RequestFormData } from '../../utils/collectionParser';
+import { Input } from '../ui/input';
 
 interface CollectionsPaneProps {
   onRequestSelect: (request: RequestFormData) => void;
   onImportCollection: (fileName: string, fileContent: string, collectionType: string) => void;
   onExportCollection: (collectionName: string, exportFormat: string) => void;
 }
+
+// Extract domain + path (no query/fragment) from a collection URL
+const getUrlDomainPath = (url: any): string => {
+  if (!url) return '';
+
+  if (typeof url === 'string') {
+    const base = url.split(/[?#]/)[0];
+    return base.toLowerCase();
+  }
+
+  if (url.raw) {
+    const base = url.raw.split(/[?#]/)[0];
+    return base.toLowerCase();
+  }
+
+  const host = url.host?.join('.') || '';
+  const path = url.path?.join('/') || '';
+  const prefix = host ? `${host}` : '';
+  const suffix = path ? `/${path}` : '';
+  return `${prefix}${suffix}`.toLowerCase();
+};
+
+// Recursively filter collection items by name or URL domain/path
+// If a folder matches by name, include the full folder contents (unfiltered) to keep search expansive.
+const filterItems = (items: CollectionItem[], query: string): CollectionItem[] => {
+  return items
+    .map((item) => {
+      const nameMatch = item.name.toLowerCase().includes(query);
+
+      if (item.item) {
+        // Recurse into children first
+        const childItems = filterItems(item.item, query);
+        
+        // Include pruned children if any matched
+        if (childItems.length > 0) {
+          return { ...item, item: childItems };
+        }
+
+        // If folder name matches, include full original children (not pruned) to show all contents
+        if (nameMatch) {
+          return { ...item, item: item.item };
+        }
+
+
+        return null;
+      }
+
+      if (item.request) {
+        const urlText = getUrlDomainPath(item.request.url);
+        const urlMatch = urlText.includes(query);
+        if (nameMatch || urlMatch) {
+          return item;
+        }
+      }
+
+      return null;
+    })
+    .filter((item): item is CollectionItem => Boolean(item));
+};
+
+// Collect all folder keys for expansion during search
+const collectFolderKeys = (collection: Collection, collectionFilename: string): string[] => {
+  const keys: string[] = [];
+
+  const walk = (items: CollectionItem[], path: string[] = []) => {
+    for (const item of items) {
+      if (item.item) {
+        const key = `${collectionFilename}:${[...path, item.name].join('/')}`;
+        keys.push(key);
+        walk(item.item, [...path, item.name]);
+      }
+    }
+  };
+
+  walk(collection.item, []);
+  return keys;
+};
+
+const setsEqual = (a: Set<string>, b: Set<string>): boolean => {
+  if (a.size !== b.size) return false;
+  for (const v of a) {
+    if (!b.has(v)) return false;
+  }
+  return true;
+};
 
 interface CollectionsPaneHeaderProps {
   label: string;
@@ -68,13 +154,20 @@ const CollectionsPane: React.FC<CollectionsPaneProps> = ({
   const error = useAppStateStore((state) => state.collectionLoadError);
   const activeTab = useAppStateStore((state) => state.getActiveTab());
   const currentRequestId = activeTab?.id;
+  const searchText = useAppStateStore((state) => state.collectionSearchText);
+  const setCollectionSearchText = useAppStateStore((state) => state.setCollectionSearchText);
+  const savedExpandedCollections = useAppStateStore((state) => state.savedExpandedCollections);
+  const savedExpandedFolders = useAppStateStore((state) => state.savedExpandedFolders);
+  const setSavedExpandedState = useAppStateStore((state) => state.setSavedExpandedState);
+  const clearSavedExpandedState = useAppStateStore((state) => state.clearSavedExpandedState);
 
   const [expandedCollections, setExpandedCollections] = useState<Set<string>>(new Set());
   const [sortedCollections, setSortedCollections] = useState<Collection[]>([]);
-  
   const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set());
   const [isImportWizardOpen, setIsImportWizardOpen] = useState(false);
   const [isExportWizardOpen, setIsExportWizardOpen] = useState(false);
+  const [debouncedSearch, setDebouncedSearch] = useState(searchText.trim());
+  const wasSearchingRef = useRef(false);
 
   const toggleCollection = (filename: string) => {
     const newExpanded = new Set(expandedCollections);
@@ -120,6 +213,64 @@ const CollectionsPane: React.FC<CollectionsPaneProps> = ({
     });
     setSortedCollections(sorted);
   }, [collections]);
+
+  // Debounce search input to reduce render churn
+  useEffect(() => {
+    const handle = setTimeout(() => {
+      setDebouncedSearch(searchText.trim());
+    }, 500);
+
+    return () => clearTimeout(handle);
+  }, [searchText]);
+
+  const isSearching = debouncedSearch.length >= 3;
+
+  const filteredCollections = useMemo(() => {
+    if (!isSearching) {
+      return sortedCollections;
+    }
+
+    const q = debouncedSearch.toLowerCase();
+
+    return sortedCollections
+      .map((collection) => {
+        const nameMatch = collection.info.name.toLowerCase().includes(q);
+        const filteredItems = filterItems(collection.item, q);
+        if (nameMatch || filteredItems.length > 0) {
+          return { ...collection, item: filteredItems } as Collection;
+        }
+        return null;
+      })
+      .filter((c): c is Collection => Boolean(c));
+  }, [debouncedSearch, isSearching, sortedCollections]);
+
+  // Expand/collapse management tied to search state
+  useEffect(() => {
+    const hasQuery = isSearching;
+
+    if (hasQuery) {
+      if (!wasSearchingRef.current) {
+        setSavedExpandedState(Array.from(expandedCollections), Array.from(expandedFolders));
+      }
+
+      const desiredCollections = new Set(filteredCollections.map((c) => c.filename || ''));
+      const desiredFolders = new Set(
+        filteredCollections.flatMap((collection) => collectFolderKeys(collection, collection.filename || ''))
+      );
+
+      setExpandedCollections((prev) => (setsEqual(prev, desiredCollections) ? prev : desiredCollections));
+      setExpandedFolders((prev) => (setsEqual(prev, desiredFolders) ? prev : desiredFolders));
+    } else if (wasSearchingRef.current) {
+      const restoredCollections = savedExpandedCollections ? new Set(savedExpandedCollections) : new Set<string>();
+      const restoredFolders = savedExpandedFolders ? new Set(savedExpandedFolders) : new Set<string>();
+
+      setExpandedCollections((prev) => (setsEqual(prev, restoredCollections) ? prev : restoredCollections));
+      setExpandedFolders((prev) => (setsEqual(prev, restoredFolders) ? prev : restoredFolders));
+      clearSavedExpandedState();
+    }
+
+    wasSearchingRef.current = hasQuery;
+  }, [isSearching, filteredCollections, savedExpandedCollections, savedExpandedFolders, setSavedExpandedState, clearSavedExpandedState, expandedCollections, expandedFolders]);
 
   if (isLoading) {
     return (
@@ -215,6 +366,8 @@ const CollectionsPane: React.FC<CollectionsPaneProps> = ({
     );
   }
   
+  const collectionsToRender = isSearching ? filteredCollections : sortedCollections;
+
   return (
     <div className="h-full overflow-hidden bg-white dark:bg-slate-900">
       <div className="h-full overflow-auto p-4">
@@ -223,9 +376,23 @@ const CollectionsPane: React.FC<CollectionsPaneProps> = ({
           onImportClick={() => setIsImportWizardOpen(true)} 
           onExportClick={() => setIsExportWizardOpen(true)}
         />
+
+        <div className="mb-3">
+          <Input
+            value={searchText}
+            onChange={(e) => setCollectionSearchText(e.target.value)}
+            placeholder="Search collections (name or URL)"
+          />
+          {searchText.length > 0 && searchText.length < 3 && (
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Type at least 3 characters to filter</p>
+          )}
+        </div>
         
         <div className="space-y-2">
-          {sortedCollections.map(collection => {
+          {isSearching && collectionsToRender.length === 0 && (
+            <div className="text-sm text-slate-600 dark:text-slate-400 px-2">No matching results</div>
+          )}
+          {collectionsToRender.map(collection => {
             const totalRequests = countRequests(collection.item);
             const filename = collection.filename || '';
             

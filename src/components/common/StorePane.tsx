@@ -5,11 +5,11 @@ interface StorePaneProps {
   onStoreSelect: (storeType: 'cookie' | 'auth' | 'proxy' | 'cert') => void;
 }
 
-interface CredsPaneHeaderProps {
+interface StorePaneHeaderProps {
   label: string;
 }
 
-const CredsPaneHeader: React.FC<CredsPaneHeaderProps> = ({ label }) => {
+const StorePaneHeader: React.FC<StorePaneHeaderProps> = ({ label }) => {
   return (
     <div className="flex items-center justify-between mb-4">
       <h2 className="text-lg font-semibold text-slate-800 dark:text-slate-200">{label}</h2>
@@ -27,7 +27,7 @@ const StorePane: React.FC<StorePaneProps> = ({ onStoreSelect }) => {
   return (
     <div className="h-full overflow-hidden bg-white dark:bg-slate-900">
       <div className="h-full overflow-auto p-4">
-        <CredsPaneHeader label="Credential Store" />
+        <StorePaneHeader label="Wave Store" />
         
         <div className="space-y-2">
           {/* Cookie Store Option */}
