@@ -225,8 +225,8 @@ export class MessageHandler {
 
     private async handleImportCollection(message: any): Promise<void> {
         try {
-            const { fileName, fileContent } = message.data;
-            await collectionService.import(fileName, fileContent);
+            const { fileName, fileContent, collectionType } = message.data;
+            await collectionService.import(fileName, fileContent, collectionType);
 
             const collections = await collectionService.loadAll();
             this.postMessage({
@@ -240,23 +240,32 @@ export class MessageHandler {
 
     private async handleExportCollection(message: any): Promise<void> {
         try {
-            const { fileName } = message.data;
+            const { fileName, exportFormat = 'wave' } = message.data;
+            
+            const collection = await collectionService.loadOne(fileName);
+            if (!collection) {
+                throw new Error(`Collection not found: ${fileName}`);
+            }
+
+            // Export the collection to the specified format
+            const { content, suggestedFilename } = await collectionService.export(collection, exportFormat);
+
+            // Determine file filter based on format
+            const filterLabel = exportFormat === 'postman' ? 'Postman Collection' : 'JSON Files';
+            
             const uri = await vscode.window.showSaveDialog({
-                defaultUri: vscode.Uri.file(path.join(os.homedir(), 'Downloads', fileName)),
-                filters: { 'All Files': ['*'] }
+                defaultUri: vscode.Uri.file(path.join(os.homedir(), 'Downloads', suggestedFilename)),
+                filters: { [filterLabel]: ['json'], 'All Files': ['*'] }
             });
 
-            const collection = await collectionService.loadOne(fileName);
-
-            if (uri && collection) {
-                const jsonString = JSON.stringify(collection, null, 2);
-                const uint8Array = new TextEncoder().encode(jsonString);
+            if (uri) {
+                const uint8Array = new TextEncoder().encode(content);
                 await vscode.workspace.fs.writeFile(uri, uint8Array);
 
-                vscode.window.showInformationMessage(`Collection file saved: ${path.basename(uri.fsPath)}`);
+                vscode.window.showInformationMessage(`Collection exported: ${path.basename(uri.fsPath)}`);
             }
         } catch (error: any) {
-            vscode.window.showErrorMessage(`Failed to save collection file: ${error.message}`);
+            vscode.window.showErrorMessage(`Failed to export collection: ${error.message}`);
         }
     }
 

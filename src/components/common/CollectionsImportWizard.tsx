@@ -13,6 +13,7 @@ import {
 import Banner from '../ui/banner';
 import { FileInput } from '../ui/fileinput';
 import { FileWithPreview } from '../../hooks/useFileUpload';
+import { IMPORT_FORMAT_OPTIONS, ImportFormatType, detectFormatFromFilename } from '../../utils/transformers';
 
 interface CollectionsImportWizardProps {
   isOpen: boolean;
@@ -20,29 +21,22 @@ interface CollectionsImportWizardProps {
   onImportCollection: (fileName: string, fileContent: string, collectionType: string) => void;
 }
 
-type CollectionType = 'json' | 'http';
-
 const CollectionsImportWizard: React.FC<CollectionsImportWizardProps> = ({
   isOpen,
   onClose,
   onImportCollection,
 }) => {
   const [selectedFile, setSelectedFile] = useState<FileWithPreview | null>(null);
-  const [collectionType, setCollectionType] = useState<CollectionType>('json');
+  const [collectionType, setCollectionType] = useState<ImportFormatType>('wave');
   const [error, setError] = useState<string | null>(null);
   const [isImporting, setIsImporting] = useState(false);
 
   /**
    * Determines collection type from file extension
    */
-  const getCollectionTypeFromFile = (file: File): CollectionType => {
-    const extension = file.name.split('.').pop()?.toLowerCase();
-    if (extension === 'json') {
-      return 'json';
-    } else if (extension === 'http') {
-      return 'http';
-    }
-    return 'json'; // Default to json
+  const getCollectionTypeFromFile = (file: File): ImportFormatType => {
+    const detectedType = detectFormatFromFilename(file.name);
+    return detectedType || 'wave'; // Default to wave for .json files
   };
 
   /**
@@ -112,7 +106,7 @@ const CollectionsImportWizard: React.FC<CollectionsImportWizardProps> = ({
    */
   const handleClose = () => {
     setSelectedFile(null);
-    setCollectionType('json');
+    setCollectionType('wave');
     setError(null);
     setIsImporting(false);
     onClose();
@@ -145,17 +139,20 @@ const CollectionsImportWizard: React.FC<CollectionsImportWizardProps> = ({
               <Label htmlFor="collection-type" className="text-sm font-medium text-slate-700 dark:text-slate-300">
                 Collection Type
               </Label>
-              <Select value={collectionType} onValueChange={(value) => setCollectionType(value as CollectionType)}>
+              <Select value={collectionType} onValueChange={(value) => setCollectionType(value as ImportFormatType)}>
                 <SelectTrigger id="collection-type" className="w-full">
                   <SelectValue placeholder="Select collection type" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="json">JSON</SelectItem>
-                  <SelectItem value="http">HTTP</SelectItem>
+                  {IMPORT_FORMAT_OPTIONS.map((option) => (
+                    <SelectItem key={option.value} value={option.value}>
+                      {option.label}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
               <p className="text-xs text-slate-500 dark:text-slate-400">
-                Type is automatically detected based on file extension
+                Type is automatically detected based on file extension. Select manually if detection is incorrect.
               </p>
             </div>
           )}

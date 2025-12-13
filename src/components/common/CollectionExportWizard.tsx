@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { DownloadIcon } from 'lucide-react';
 import { Button } from '../ui/button';
 import { Label } from '../ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import {
   Dialog,
   DialogContent,
@@ -12,11 +13,12 @@ import {
 } from '../ui/dialog';
 import SearchableSelect from '../ui/searchable-select';
 import useAppStateStore from '../../hooks/store/useAppStateStore';
+import { EXPORT_FORMAT_OPTIONS, ExportFormatType } from '../../utils/transformers';
 
 interface CollectionExportWizardProps {
   isOpen: boolean;
   onClose: () => void;
-  onExportCollection: (collectionName: string) => void;
+  onExportCollection: (collectionName: string, exportFormat: ExportFormatType) => void;
 }
 
 const CollectionExportWizard: React.FC<CollectionExportWizardProps> = ({
@@ -25,6 +27,7 @@ const CollectionExportWizard: React.FC<CollectionExportWizardProps> = ({
   onExportCollection,
 }) => {
   const [selectedCollection, setSelectedCollection] = useState('');
+  const [exportFormat, setExportFormat] = useState<ExportFormatType>('wave');
   const [error, setError] = useState<string | null>(null);
   const [isExporting, setIsExporting] = useState(false);
   const collections = useAppStateStore((state) => state.collections);
@@ -42,8 +45,8 @@ const CollectionExportWizard: React.FC<CollectionExportWizardProps> = ({
     setError(null);
 
     try {
-      // Call the onExportCollection callback with the selected collection name
-      onExportCollection(selectedCollection);
+      // Call the onExportCollection callback with the selected collection name and format
+      onExportCollection(selectedCollection, exportFormat);
 
       // Close the dialog
       handleClose();
@@ -59,6 +62,7 @@ const CollectionExportWizard: React.FC<CollectionExportWizardProps> = ({
    */
   const handleClose = () => {
     setSelectedCollection('');
+    setExportFormat('wave');
     setError(null);
     setIsExporting(false);
     onClose();
@@ -72,7 +76,7 @@ const CollectionExportWizard: React.FC<CollectionExportWizardProps> = ({
             Export Collection
           </DialogTitle>
           <DialogDescription className="text-sm text-slate-600 dark:text-slate-400">
-            Select a collection to export as a JSON file
+            Select a collection and format to export
           </DialogDescription>
         </DialogHeader>
 
@@ -92,6 +96,30 @@ const CollectionExportWizard: React.FC<CollectionExportWizardProps> = ({
               setSelectedValue={setSelectedCollection}
               selectedValue={selectedCollection}
             />
+          </div>
+
+          {/* Export Format Selection */}
+          <div className="space-y-2">
+            <Label htmlFor="export-format" className="text-sm font-medium text-slate-700 dark:text-slate-300">
+              Export Format
+            </Label>
+            <Select value={exportFormat} onValueChange={(value) => setExportFormat(value as ExportFormatType)}>
+              <SelectTrigger id="export-format" className="w-full">
+                <SelectValue placeholder="Select export format" />
+              </SelectTrigger>
+              <SelectContent>
+                {EXPORT_FORMAT_OPTIONS.map((option) => (
+                  <SelectItem key={option.value} value={option.value}>
+                    {option.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-slate-500 dark:text-slate-400">
+              {exportFormat === 'wave' 
+                ? 'Wave JSON is the native format for this application'
+                : 'Postman JSON can be imported into Postman and other compatible tools'}
+            </p>
           </div>
 
           {/* Collection Info */}

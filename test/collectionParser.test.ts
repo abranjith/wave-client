@@ -2,8 +2,8 @@
  * Test script to verify collection parsing functionality
  */
 
-import { prepareCollection, getAllFolderPaths } from '../src/utils/collectionParser';
-import { Collection, CollectionItem, isFolder, isRequest } from '../src/types/collection';
+import { prepareCollection, getFolderPathOptions } from '../src/utils/collectionParser';
+import { Collection, CollectionItem, FolderPathOption, isFolder, isRequest } from '../src/types/collection';
 import * as fs from 'fs';
 import * as path from 'path';
 
@@ -68,9 +68,9 @@ function testCollectionParsing() {
     printStructure(parsed.item);
     
     // Show available folder paths
-    const folderPaths = getAllFolderPaths(parsed);
+    const folderPaths = getFolderPathOptions(parsed);
     console.log('📂 Available Folder Paths:');
-    folderPaths.forEach(fp => console.log(`   - ${fp.label}`));
+    folderPaths.forEach((fp: FolderPathOption) => console.log(`   - ${fp.displayPath}`));
     console.log('');
     
   } catch (error) {
@@ -94,9 +94,9 @@ function testCollectionParsing() {
     printStructure(parsed.item);
     
     // Show available folder paths
-    const folderPaths = getAllFolderPaths(parsed);
+    const folderPaths = getFolderPathOptions(parsed);
     console.log('📂 Available Folder Paths:');
-    folderPaths.forEach(fp => console.log(`   - ${fp.label}`));
+    folderPaths.forEach((fp: FolderPathOption) => console.log(`   - ${fp.displayPath}`));
     console.log('');
     
   } catch (error) {
@@ -120,9 +120,9 @@ function testCollectionParsing() {
     printStructure(parsed.item);
     
     // Show available folder paths
-    const folderPaths = getAllFolderPaths(parsed);
+    const folderPaths = getFolderPathOptions(parsed);
     console.log('📂 Available Folder Paths:');
-    folderPaths.forEach(fp => console.log(`   - ${fp.label}`));
+    folderPaths.forEach((fp: FolderPathOption) => console.log(`   - ${fp.displayPath}`));
     
   } catch (error) {
     console.error('❌ Error parsing sample collection:', error);

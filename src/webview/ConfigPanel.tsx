@@ -26,7 +26,7 @@ interface ConfigPanelProps {
   onStoreSelect: ((storeType: 'cookie' | 'auth' | 'proxy' | 'cert') => void)
   onSettingsSelect: () => void;
   onImportCollection: (fileName: string, fileContent: string, collectionType: string) => void;
-  onExportCollection: (collectionName: string) => void;
+  onExportCollection: (collectionName: string, exportFormat: string) => void;
   onImportEnvironments: (fileName: string, fileContent: string) => void;
   onExportEnvironments: () => void;
 }

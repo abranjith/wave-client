@@ -210,13 +210,13 @@ const App: React.FC = () => {
     }
   };
 
-  const handleExportCollection = (collectionName: string) => {
+  const handleExportCollection = (collectionName: string, exportFormat: string) => {
     const currentCollections = useAppStateStore.getState().collections;
     const collection = collectionName && currentCollections.find((c) => c.info.name === collectionName);
     if (vsCodeRef.current && collection) {
       vsCodeRef.current.postMessage({
         type: 'exportCollection',
-        data: { fileName: collection.filename }
+        data: { fileName: collection.filename, exportFormat }
       });
     }
   };

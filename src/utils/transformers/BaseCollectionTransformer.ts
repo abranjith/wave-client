@@ -5,20 +5,25 @@
  */
 
 import { Collection } from '../../types/collection';
+import { Result, ok, err } from '../result';
+
+// Re-export Result types for convenience
+export { Result, ok, err };
 
 /**
- * Result of a transformation operation
+ * Supported collection format types for import
  */
-export interface TransformResult<T> {
-    success: boolean;
-    data?: T;
-    error?: string;
-}
+export type ImportFormatType = 'wave' | 'postman' | 'http' | 'swagger';
 
 /**
- * Supported collection format types
+ * Supported collection format types for export
  */
-export type CollectionFormatType = 'postman' | 'insomnia' | 'openapi' | 'curl';
+export type ExportFormatType = 'wave' | 'postman';
+
+/**
+ * Combined collection format type (for transformer registry)
+ */
+export type CollectionFormatType = ImportFormatType;
 
 /**
  * Abstract base class for collection transformers.
@@ -44,16 +49,16 @@ export abstract class BaseCollectionTransformer<TExternal> {
      * Transforms an external collection format to the internal Collection type.
      * @param external The external collection data
      * @param filename Optional filename for the collection
-     * @returns TransformResult containing the internal Collection or an error
+     * @returns Result containing the internal Collection or an error
      */
-    abstract transformFrom(external: TExternal, filename?: string): TransformResult<Collection>;
+    abstract transformFrom(external: TExternal, filename?: string): Result<Collection, string>;
 
     /**
      * Transforms the internal Collection type to an external format.
      * @param collection The internal Collection to transform
-     * @returns TransformResult containing the external format or an error
+     * @returns Result containing the external format or an error
      */
-    abstract transformTo(collection: Collection): TransformResult<TExternal>;
+    abstract transformTo(collection: Collection): Result<TExternal, string>;
 
     /**
      * Validates if the given data is a valid external collection format.

@@ -13,7 +13,7 @@ import { RequestFormData } from '../../utils/collectionParser';
 interface CollectionsPaneProps {
   onRequestSelect: (request: RequestFormData) => void;
   onImportCollection: (fileName: string, fileContent: string, collectionType: string) => void;
-  onExportCollection: (collectionName: string) => void;
+  onExportCollection: (collectionName: string, exportFormat: string) => void;
 }
 
 interface CollectionsPaneHeaderProps {

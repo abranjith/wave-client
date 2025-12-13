@@ -29,8 +29,10 @@ import {
 
 import {
     BaseCollectionTransformer,
-    TransformResult,
     CollectionFormatType,
+    Result,
+    ok,
+    err,
 } from './BaseCollectionTransformer';
 
 /**
@@ -81,7 +83,7 @@ export class PostmanCollectionTransformer extends BaseCollectionTransformer<Post
     /**
      * Transforms a Postman collection to internal Collection format
      */
-    transformFrom(external: PostmanCollection, filename?: string): TransformResult<Collection> {
+    transformFrom(external: PostmanCollection, filename?: string): Result<Collection, string> {
         try {
             const collection: Collection = {
                 info: {
@@ -93,19 +95,16 @@ export class PostmanCollectionTransformer extends BaseCollectionTransformer<Post
                 filename,
             };
 
-            return { success: true, data: collection };
+            return ok(collection);
         } catch (error) {
-            return {
-                success: false,
-                error: `Failed to transform Postman collection: ${error instanceof Error ? error.message : 'Unknown error'}`,
-            };
+            return err(`Failed to transform Postman collection: ${error instanceof Error ? error.message : 'Unknown error'}`);
         }
     }
 
     /**
      * Transforms internal Collection to Postman collection format
      */
-    transformTo(collection: Collection): TransformResult<PostmanCollection> {
+    transformTo(collection: Collection): Result<PostmanCollection, string> {
         try {
             const postmanCollection: PostmanCollection = {
                 info: {
@@ -116,12 +115,9 @@ export class PostmanCollectionTransformer extends BaseCollectionTransformer<Post
                 item: this.transformItemsToPostman(collection.item),
             };
 
-            return { success: true, data: postmanCollection };
+            return ok(postmanCollection);
         } catch (error) {
-            return {
-                success: false,
-                error: `Failed to transform to Postman collection: ${error instanceof Error ? error.message : 'Unknown error'}`,
-            };
+            return err(`Failed to transform to Postman collection: ${error instanceof Error ? error.message : 'Unknown error'}`);
         }
     }
 

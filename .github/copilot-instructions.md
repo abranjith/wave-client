@@ -32,4 +32,5 @@ For icons use lucide-react https://lucide.dev/
 7. When any current file is being changed, be extra careful about not breaking existing functionality.
 8.  **Performance:** Ensure the webview is performant, avoiding unnecessary re-renders and optimizing API call handling.
 9.  Since this project uses webviews, for any I/O operations, use the VS Code API to communicate between the webview and the extension backend.
-10. Before deleting any files ask for user confirmation.
+10. There is an established 'Result' pattern for complex results, follow that pattern when returning complex results from functions.
+11. Before deleting any files ask for user confirmation.

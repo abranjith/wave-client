@@ -2,7 +2,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { BaseStorageService } from './BaseStorageService';
 import { Collection, CollectionRequest, CollectionItem } from '../types/collection';
-import { transformCollection, postmanTransformer } from '../utils/transformers';
+import { transformCollection, exportCollection, ExportFormatType, EXPORT_FORMAT_OPTIONS } from '../utils/transformers';
 import { ensureItemIds, generateUniqueId } from '../utils/collectionParser';
 
 /**
@@ -167,57 +167,76 @@ export class CollectionService extends BaseStorageService {
      * Imports a collection from file content.
      * Uses transformers to auto-detect and convert external formats.
      * @param fileName The filename to save as
-     * @param fileContent The JSON content of the collection
-     * @param formatType Optional format type hint (e.g., 'postman')
+     * @param fileContent The content of the collection (JSON string or HTTP file content)
+     * @param formatType Optional format type hint (e.g., 'postman', 'http', 'swagger')
      * @returns The imported collection with filename
      */
     async import(fileName: string, fileContent: string, formatType?: string): Promise<Collection & { filename: string }> {
         const collectionsDir = await this.getCollectionsDir();
         this.ensureDirectoryExists(collectionsDir);
 
-        // Parse the JSON content
-        const parsedContent = JSON.parse(fileContent);
+        let dataToTransform: unknown;
         
-        // Try to transform from external format to internal format
-        const result = transformCollection(parsedContent, fileName, formatType as any);
-        
-        if (!result.success || !result.data) {
-            // If transformation fails, try to use as-is (might already be internal format)
-            const collection = parsedContent as Collection;
-            ensureItemIds(collection.item);
-            
-            const filePath = path.join(collectionsDir, fileName);
-            await this.writeJsonFileSecure(filePath, collection);
-            
-            return { ...collection, filename: fileName };
+        // HTTP files are raw text, not JSON
+        if (formatType === 'http') {
+            dataToTransform = fileContent;
+        } else {
+            // Try to parse as JSON
+            try {
+                dataToTransform = JSON.parse(fileContent);
+            } catch (parseError) {
+                // If JSON parsing fails and no format specified, try HTTP file format
+                dataToTransform = fileContent;
+                if (!formatType) {
+                    formatType = 'http';
+                }
+            }
         }
         
-        const collection = result.data;
+        // Try to transform from external format to internal format
+        const result = transformCollection(dataToTransform, fileName, formatType as any);
+        
+        if (!result.isOk) {
+            throw new Error(result.error || 'Failed to import collection. Please check the file format.');
+        }
+        
+        const collection = result.value;
         ensureItemIds(collection.item);
         
-        const filePath = path.join(collectionsDir, fileName);
+        // Generate a JSON filename for saving (even if source was .http)
+        const jsonFileName = fileName.replace(/\.(http|rest|yaml|yml)$/i, '.json');
+        
+        const filePath = path.join(collectionsDir, jsonFileName);
         await this.writeJsonFileSecure(filePath, collection);
 
-        return { ...collection, filename: fileName };
+        return { ...collection, filename: jsonFileName };
     }
 
     /**
      * Exports a collection to a specific format.
      * @param collection The collection to export
-     * @param formatType The format to export to (default: 'postman')
-     * @returns The exported content as a string
+     * @param formatType The format to export to (default: 'wave')
+     * @returns Object containing the exported content as a string and suggested filename
      */
-    async export(collection: Collection, formatType: 'postman' = 'postman'): Promise<string> {
-        if (formatType === 'postman') {
-            const result = postmanTransformer.transformTo(collection);
-            if (!result.success || !result.data) {
-                throw new Error(result.error || 'Failed to export collection');
-            }
-            return JSON.stringify(result.data, null, 2);
+    async export(collection: Collection, formatType: ExportFormatType = 'wave'): Promise<{ content: string; suggestedFilename: string }> {
+        const result = exportCollection(collection, formatType);
+        
+        if (!result.isOk) {
+            throw new Error(result.error || 'Failed to export collection');
         }
         
-        // Default: export as internal format
-        return JSON.stringify(collection, null, 2);
+        // Determine file extension based on format
+        const formatOption = EXPORT_FORMAT_OPTIONS.find(opt => opt.value === formatType);
+        const extension = formatOption?.extension || '.json';
+        
+        // Generate suggested filename
+        const baseName = collection.info.name.replace(/[^a-z0-9]/gi, '_').toLowerCase();
+        const suggestedFilename = `${baseName}${extension}`;
+        
+        return {
+            content: JSON.stringify(result.value, null, 2),
+            suggestedFilename
+        };
     }
 
     /**

@@ -1,3 +1,51 @@
+
+
+/**
+ * Result type that represents either a successful value or an error.
+ * This implements the Result/Either pattern commonly used in functional programming.
+ * 
+ * @template T - The type of the value when the Result is Ok
+ * @template E - The type of the error when the Result is Err
+ * 
+ * @remarks
+ * The Result type is a discriminated union that forces explicit error handling.
+ * Instead of throwing exceptions or returning null, functions can return a Result
+ * that clearly indicates success or failure.
+ * 
+ * @example
+ * ```typescript
+ * // Function that returns a Result
+ * function divide(a: number, b: number): Result<number, string> {
+ *   if (b === 0) {
+ *     return err("Division by zero");
+ *   }
+ *   return ok(a / b);
+ * }
+ * 
+ * // Using the Result
+ * const result = divide(10, 2);
+ * if (result.isOk) {
+ *   console.log("Result:", result.value); // Result: 5
+ * } else {
+ *   console.log("Error:", result.error);
+ * }
+ * ```
+ * 
+ * @example
+ * ```typescript
+ * // Type-safe pattern matching
+ * function processResult(result: Result<number, string>): void {
+ *   switch (true) {
+ *     case result.isOk:
+ *       console.log("Success with value:", result.value);
+ *       break;
+ *     case result.isErr:
+ *       console.log("Failed with error:", result.error);
+ *       break;
+ *   }
+ * }
+ * ```
+ */
 /**
  * The base interface for all Result variants.
  * T is the type of the successful value.
