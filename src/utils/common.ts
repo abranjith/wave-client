@@ -1,7 +1,7 @@
 import {RequestBodyTextType, RequestBodyType} from "../types/collection";
 import { clsx, type ClassValue } from "clsx";
-import { text } from "stream/consumers";
 import { twMerge } from "tailwind-merge";
+import { ResponseContentType } from '../types/collection';
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -263,6 +263,55 @@ export function getExtensionFromContentType(contentType: string): string {
   };
   
   return extensionMap[mimeType] || '.bin';
+}
+
+
+/**
+ * Determines the content type from response headers
+ */
+export function getResponseContentType(headers: Record<string, string>): string {
+  return Object.entries(headers)
+    .find(([key]) => key.toLowerCase() === 'content-type')?.[1] || '';
+}
+
+/**
+ * Determines the language/format from response headers
+ */
+export function getResponseLanguage(headers: Record<string, string>): ResponseContentType {
+  const contentTypeHeader = getResponseContentType(headers).toLowerCase();
+
+  if (contentTypeHeader.includes('/json')) {
+    return 'json';
+  }
+  if (contentTypeHeader.includes('/xml')) {
+    return 'xml';
+  }
+  if (contentTypeHeader.includes('/html')) {
+    return 'html';
+  }
+  if (contentTypeHeader.includes('/csv')) {
+    return 'csv';
+  }
+  if (contentTypeHeader.includes('/text')) {
+    return 'text';
+  }
+
+  // Check for binary content types
+  if (
+    contentTypeHeader.includes('image/') ||
+    contentTypeHeader.includes('video/') ||
+    contentTypeHeader.includes('audio/') ||
+    contentTypeHeader.includes('application/pdf') ||
+    contentTypeHeader.includes('application/zip') ||
+    contentTypeHeader.includes('application/octet-stream') ||
+    contentTypeHeader.includes('application/x-') ||
+    contentTypeHeader.includes('font/')
+  ) {
+    return 'binary';
+  }
+
+  // Default to text for unknown types
+  return 'text';
 }
 
 /**

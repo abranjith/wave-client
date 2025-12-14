@@ -3,8 +3,9 @@ import { FileIcon, DownloadIcon, CopyIcon, CheckCheckIcon } from 'lucide-react';
 import { Button } from '../ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/tooltip';
 import { base64ToText, base64ToJson } from '../../utils/encoding';
-import {getExtensionFromContentType} from '../../utils/common';
+import {getExtensionFromContentType, getResponseLanguage} from '../../utils/common';
 import SyntaxHighlighter from '../ui/syntax-highlighter';
+import { ResponseContentType } from '../../types/collection';
 
 interface ResponseBodyProps {
   body: string;
@@ -13,45 +14,10 @@ interface ResponseBodyProps {
   onDownloadResponse: (data: any) => void;
 }
 
-type ContentType = 'json' | 'xml' | 'html' | 'text' | 'csv' | 'binary';
-
-/**
- * Determines the content type from response headers
- */
-function getContentType(headers: Record<string, string>): ContentType {
-  const contentTypeHeader = Object.entries(headers)
-    .find(([key]) => key.toLowerCase() === 'content-type')?.[1]
-    ?.toLowerCase() || '';
-
-  if (contentTypeHeader.includes('/json')) return 'json';
-  if (contentTypeHeader.includes('/xml')) return 'xml';
-  if (contentTypeHeader.includes('/html')) return 'html';
-  if (contentTypeHeader.includes('/csv')) return 'csv';
-  if (contentTypeHeader.includes('/text')) return 'text';
-
-  // Check for binary content types
-  if (
-    contentTypeHeader.includes('image/') ||
-    contentTypeHeader.includes('video/') ||
-    contentTypeHeader.includes('audio/') ||
-    contentTypeHeader.includes('application/pdf') ||
-    contentTypeHeader.includes('application/zip') ||
-    contentTypeHeader.includes('application/octet-stream') ||
-    contentTypeHeader.includes('application/x-') ||
-    contentTypeHeader.includes('font/')
-  ) {
-    return 'binary';
-  }
-
-  // Default to text for unknown types
-  return 'text';
-}
-
 /**
  * Formats the response body based on content type
  */
-function formatBody(body: string, contentType: ContentType): string {
-  console.log('Formatting body as:', contentType, typeof body);
+function formatBody(body: string, contentType: ResponseContentType): string {
   if (contentType === 'json') {
     try {
       const parsed = base64ToJson(body);
@@ -92,7 +58,7 @@ function getFileExtension(headers: Record<string, string>): string {
 /**
  * Gets a suggested filename from response headers or generates one
  */
-function getFileName(headers: Record<string, string>, contentType: ContentType): string {
+function getFileName(headers: Record<string, string>, contentType: ResponseContentType): string {
   // Check for Content-Disposition header
   const contentDisposition = Object.entries(headers)
     .find(([key]) => key.toLowerCase() === 'content-disposition')?.[1];
@@ -114,7 +80,7 @@ const ResponseBody: React.FC<ResponseBodyProps> = ({ body, headers, statusCode, 
   const [copySuccess, setCopySuccess] = useState(false);
   const [downloadSuccess, setDownloadSuccess] = useState(false);
 
-  const contentType = useMemo(() => getContentType(headers), [headers]);
+  const contentType = useMemo(() => getResponseLanguage(headers), [headers]);
   const isTextBased = contentType !== 'binary';
   const formattedBody = useMemo(() => 
     isTextBased ? formatBody(body, contentType) : body,
@@ -184,60 +150,49 @@ const ResponseBody: React.FC<ResponseBodyProps> = ({ body, headers, statusCode, 
   // Text-based content - show formatted body with actions
   const formattedBodyString = formattedBody as string || '';
   return (
-    <div className="flex flex-col h-full min-h-0 bg-white dark:bg-slate-900">
-      {/* Action Bar */}
-      <div className="flex-shrink-0 flex items-center justify-between px-4 py-2 border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800">
-        <div className="flex items-center gap-2">
-          <span className="text-xs font-medium text-slate-600 dark:text-slate-400 uppercase">
-            {contentType}
-          </span>
-          <span className="text-xs text-slate-400 dark:text-slate-500">
-            {formattedBodyString.length.toLocaleString()} characters
-          </span>
-        </div>
-        
-        <div className="flex items-center gap-2">
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                onClick={handleCopy}
-                variant="outline"
-                size="sm"
-                className="h-9 w-9 p-0 flex items-center justify-center"
-              >
-                {copySuccess ? (
-                    <CheckCheckIcon size={16} color='green'/>
-                ) : (
-                    <CopyIcon size={16} />
-                )}
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent className="px-2 py-1 text-xs">Copy to clipboard</TooltipContent>
-          </Tooltip>
+    <div className="relative h-full min-h-0 overflow-auto bg-white dark:bg-slate-900">
+      {/* Action buttons in top-right corner */}
+      <div className="absolute right-2 top-2 z-10 flex items-center gap-2">
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              onClick={handleCopy}
+              variant="outline"
+              size="sm"
+              className="h-8 w-8 p-0 flex items-center justify-center"
+            >
+              {copySuccess ? (
+                <CheckCheckIcon size={16} className="text-green-600" />
+              ) : (
+                <CopyIcon size={16} />
+              )}
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent className="px-2 py-1 text-xs">Copy to clipboard</TooltipContent>
+        </Tooltip>
 
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                onClick={handleDownload}
-                variant="outline"
-                size="sm"
-                className="h-9 w-9 p-0 flex items-center justify-center"
-              >
-                {downloadSuccess ? (
-                  <CheckCheckIcon size={16} color='green' />
-                ) : (
-                  <DownloadIcon size={16} />
-                )}
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent className="px-2 py-1 text-xs">Download as file</TooltipContent>
-          </Tooltip>
-        </div>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              onClick={handleDownload}
+              variant="outline"
+              size="sm"
+              className="h-8 w-8 p-0 flex items-center justify-center"
+            >
+              {downloadSuccess ? (
+                <CheckCheckIcon size={16} className="text-green-600" />
+              ) : (
+                <DownloadIcon size={16} />
+              )}
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent className="px-2 py-1 text-xs">Download as file</TooltipContent>
+        </Tooltip>
       </div>
 
-      {/* Response Body Content */}
-      <div className="flex-1 min-h-0 overflow-auto">
-        <SyntaxHighlighter text={formattedBodyString}/>
+      {/* Response body content */}
+      <div className="pt-2">
+        <SyntaxHighlighter text={formattedBodyString} />
       </div>
     </div>
   );

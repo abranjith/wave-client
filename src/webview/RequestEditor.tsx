@@ -38,8 +38,9 @@ import {
 import useAppStateStore from '../hooks/store/useAppStateStore';
 import { renderParameterizedText } from '../utils/styling';
 import { ParsedRequest } from '../types/collection';
-import { TabData, TAB_CONSTANTS } from '../types/tab';
+import { TAB_CONSTANTS } from '../types/tab';
 import RequestSaveWizard from '../components/common/RequestSaveWizard';
+import { getResponseLanguage } from '../utils/common';
 
 // ==================== Helper Functions ====================
 
@@ -178,6 +179,8 @@ const RequestEditor: React.FC<RequestEditorProps> = ({
         activeRequestSection,
         activeResponseSection
     } = activeTab;
+
+    const contentLang = getResponseLanguage(responseData?.headers || {});
 
     return (
         <div className="w-full h-full flex flex-col overflow-hidden">
@@ -408,6 +411,10 @@ const RequestEditor: React.FC<RequestEditorProps> = ({
                                         <span className="font-bold">Size:</span>
                                         <span>{responseData.size >= 1024 ? `${(responseData.size / 1024).toFixed(1)} KB` : `${responseData.size} B`}</span>
                                     </div>
+                                    {contentLang && <div className="flex items-center gap-1 text-slate-600 dark:text-slate-400">
+                                        <span className="font-bold">Content:</span>
+                                        <span>{contentLang}</span>
+                                        </div>}
                                 </div>
 
                                 {/* Response Tabs */}

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import useAppStateStore from '../hooks/store/useAppStateStore';
 import ResponseBody from '../components/common/ResponseBody';
+import { getResponseLanguage } from '../utils/common';
 
 function getStatusColor(status: number) {
   if (status >= 200 && status < 300) return 'text-green-600';
@@ -35,6 +36,8 @@ const ResponsePanel: React.FC<ResponsePanelProps> = ({ onDownloadResponse }) => 
   const size = response.size;
   const body = response.body;
   const headers = response.headers;
+  const contentLang = getResponseLanguage(headers);
+  const TABS = ['body', 'headers'];
 
   return (
     <div className="w-full h-full bg-background flex flex-col border-b">
@@ -52,11 +55,15 @@ const ResponsePanel: React.FC<ResponsePanelProps> = ({ onDownloadResponse }) => 
           <span className="font-bold">Size:</span>
           <span>{size >= 1024 ? `${(size / 1024).toFixed(1)} KB` : `${size} B`}</span>
         </div>
+        {contentLang && <div className="flex items-center gap-1 text-slate-600 dark:text-slate-400">
+          <span className="font-bold">Content:</span>
+          <span>{contentLang}</span>
+        </div>}
       </div>
 
       {/* Horizontal Tabs */}
       <div className="border-b border-slate-200 dark:border-slate-700 flex gap-0 bg-slate-50 dark:bg-slate-900">
-        {['body', 'headers'].map(tab => (
+        {TABS.map(tab => (
           <button
             key={tab}
             className={`px-6 py-4 text-sm font-medium focus:outline-none transition-all relative ${

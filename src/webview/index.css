@@ -142,8 +142,8 @@
 /* Syntax Highlighter Styles - Outside @layer to ensure they're included */
 .syntax-highlighter-pre {
   @apply rounded-md overflow-auto p-4 mt-2 mb-2;
-  @apply bg-slate-50 border border-slate-200;
-  @apply dark:bg-slate-900 dark:border-slate-700;
+  @apply bg-gray-50 border border-gray-200;
+  @apply dark:bg-gray-900 dark:border-gray-700;
 }
 
 .syntax-highlighter-code {
@@ -151,95 +151,95 @@
   /* Removed base text color to allow hljs classes to take precedence */
 }
 
-/* Highlight.js base */
+/* Highlight.js base - Gray/Blue Theme with Variation */
 .hljs {
   @apply block overflow-x-auto p-0 bg-transparent;
-  @apply text-slate-900 dark:text-slate-200; /* Default text color for non-highlighted text */
+  @apply text-blue-600 dark:text-blue-400; /* Default/plain text color - blue */
 }
 
-/* Keywords (if, else, return, function, class, etc.) */
+/* Keywords (if, else, return, function, class, etc.) - Deep Indigo */
 .hljs-keyword,
 .hljs-selector-tag,
 .hljs-section,
 .hljs-link {
-  @apply text-blue-600 font-medium dark:text-blue-400 !important;
+  @apply text-indigo-700 font-medium dark:text-indigo-400 !important;
 }
 
-/* Strings - including JSON string values */
+/* Strings/Values - including JSON string values - Teal (contrasts with blue keys) */
 .hljs-string,
 .hljs-template-variable,
 .hljs-addition {
-  @apply text-orange-600 dark:text-orange-400 !important;
+  @apply text-teal-600 dark:text-teal-400 !important;
 }
 
-/* Numbers */
+/* Numbers - Slate Blue */
 .hljs-number {
-  @apply text-purple-600 dark:text-purple-400 !important;
+  @apply text-slate-600 dark:text-slate-400 !important;
 }
 
-/* Comments */
+/* Comments - Light Gray */
 .hljs-comment,
 .hljs-quote,
 .hljs-deletion,
 .hljs-meta {
-  @apply text-slate-500 italic dark:text-slate-500 !important;
+  @apply text-gray-400 italic dark:text-gray-500 !important;
 }
 
-/* Functions */
+/* Functions - Sky Blue */
 .hljs-function .hljs-title,
 .hljs-title.function_,
 .hljs-built_in {
-  @apply text-yellow-600 dark:text-yellow-400 !important;
+  @apply text-sky-600 dark:text-sky-400 !important;
 }
 
-/* Variables */
+/* Variables - Medium Slate */
 .hljs-variable,
 .hljs-name,
 .hljs-params {
-  @apply text-cyan-600 dark:text-cyan-400 !important;
+  @apply text-slate-700 dark:text-slate-300 !important;
 }
 
-/* Classes and types */
+/* Classes and types - Indigo */
 .hljs-class .hljs-title,
 .hljs-title.class_,
 .hljs-type {
-  @apply text-teal-600 dark:text-teal-400 !important;
+  @apply text-indigo-600 dark:text-indigo-400 !important;
 }
 
-/* Properties and attributes - JSON keys (CONSISTENT COLOR) */
+/* Properties and attributes - JSON keys - Blue (contrasts with teal values) */
 .hljs-attr,
 .hljs-property,
 .hljs-attribute {
-  @apply text-blue-600 dark:text-blue-400 !important;
+  @apply text-blue-700 dark:text-blue-400 !important;
 }
 
-/* Operators and punctuation - including JSON braces, brackets, colons */
+/* Operators and punctuation - including JSON braces, brackets, colons - Gray */
 .hljs-operator,
 .hljs-punctuation {
-  @apply text-slate-600 dark:text-slate-400 !important;
+  @apply text-gray-500 dark:text-gray-400 !important;
 }
 
-/* Tags (HTML/XML) */
+/* Tags (HTML/XML) - Dark Blue */
 .hljs-tag,
 .hljs-tag .hljs-name {
-  @apply text-blue-600 dark:text-blue-400 !important;
+  @apply text-blue-800 dark:text-blue-400 !important;
 }
 
-/* Tag attributes */
+/* Tag attributes - Cyan (variation for HTML/XML attrs) */
 .hljs-tag .hljs-attr {
   @apply text-cyan-600 dark:text-cyan-400 !important;
 }
 
-/* Regular expressions */
+/* Regular expressions - Slate */
 .hljs-regexp,
 .hljs-symbol {
-  @apply text-red-600 dark:text-red-400 !important;
+  @apply text-slate-600 dark:text-slate-400 !important;
 }
 
-/* Special keywords (this, self, super), booleans (true, false), null */
+/* Special keywords (this, self, super), booleans (true, false), null - Violet */
 .hljs-builtin-name,
 .hljs-literal {
-  @apply text-orange-600 font-medium dark:text-orange-400 !important;
+  @apply text-violet-600 font-medium dark:text-violet-400 !important;
 }
 
 /* Emphasis */
@@ -251,7 +251,7 @@
   @apply font-bold;
 }
 
-/* Constants */
+/* Constants - Indigo */
 .hljs-constant {
-  @apply text-orange-600 dark:text-orange-400;
+  @apply text-indigo-600 dark:text-indigo-400;
 }

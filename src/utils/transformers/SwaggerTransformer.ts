@@ -244,7 +244,9 @@ export class SwaggerTransformer extends BaseCollectionTransformer<OpenAPISpec> {
         for (const [path, pathItem] of Object.entries(spec.paths)) {
             for (const method of methods) {
                 const operation = pathItem[method];
-                if (!operation) continue;
+                if (!operation) {
+                    continue;
+                }
 
                 const tags = operation.tags?.length ? operation.tags : ['__untagged__'];
                 
@@ -442,10 +444,18 @@ export class SwaggerTransformer extends BaseCollectionTransformer<OpenAPISpec> {
                 return [];
 
             case 'string':
-                if (schema.format === 'date') return '2024-01-01';
-                if (schema.format === 'date-time') return '2024-01-01T00:00:00Z';
-                if (schema.format === 'email') return 'user@example.com';
-                if (schema.format === 'uuid') return '00000000-0000-0000-0000-000000000000';
+                if (schema.format === 'date') {
+                    return '2024-01-01';
+                }
+                if (schema.format === 'date-time') {
+                    return '2024-01-01T00:00:00Z';
+                }
+                if (schema.format === 'email') {
+                    return 'user@example.com';
+                }
+                if (schema.format === 'uuid') {
+                    return '00000000-0000-0000-0000-000000000000';
+                }
                 return 'string';
 
             case 'integer':
@@ -490,7 +500,9 @@ export class SwaggerTransformer extends BaseCollectionTransformer<OpenAPISpec> {
                     pathStr = urlObj.pathname || '/';
                 } catch {
                     const match = url.match(/(?:https?:\/\/[^\/]+)?(\/[^\?]*)/);
-                    if (match) pathStr = match[1];
+                    if (match) {
+                        pathStr = match[1];
+                    }
                 }
 
                 const method = (item.request.method || 'get').toLowerCase() as keyof PathItem;

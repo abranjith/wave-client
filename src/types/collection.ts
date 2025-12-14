@@ -236,6 +236,8 @@ export type RequestBodyTextType = 'none' | 'json' | 'xml' | 'html' | 'text' | 'c
 
 export type RequestBodyType = 'none' | 'text' | 'binary' | 'form' | 'multipart';
 
+export type ResponseContentType = 'none' | 'json' | 'xml' | 'html' | 'text' | 'csv' | 'binary';
+
 // Cookie types
 export interface Cookie {
   id: string;

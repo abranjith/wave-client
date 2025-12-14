@@ -47,38 +47,6 @@ const ConfigPanel: React.FC<ConfigPanelProps> = ({ onRequestSelect, onEnvSelect,
         className="w-full h-full flex flex-row overflow-hidden"
       >
         <div className="flex flex-col gap-2 bg-transparent py-4 px-2 w-16 flex-shrink-0 border-r border-slate-200 dark:border-slate-700">
-          <TooltipProvider delayDuration={500}>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant="ghost"
-                  onClick={() => {
-                    const request: RequestFormData = {
-                      id: '',
-                      method: 'GET',
-                      url: '',
-                      headers: [],
-                      body: '',
-                      name: '',
-                      params: [],
-                      sourceRef: {
-                        collectionFilename: '',
-                        collectionName: '',
-                        itemPath: []
-                      }
-                    };
-                    onRequestSelect(request);
-                  }}
-                  className="flex items-center justify-center w-full h-12 text-slate-600 hover:bg-slate-100 hover:text-blue-600 rounded-md transition-colors mb-2 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-blue-400"
-                >
-                  <PlusIcon size={20}/>
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent className="px-2 py-1 text-xs">
-                New Request
-              </TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
           <TabsList className="flex flex-col gap-2 bg-transparent py-0 px-0 w-full flex-shrink-0">
           {TABS.map(tab => (
             <TooltipProvider delayDuration={500} key={tab.key}>
