@@ -1,4 +1,3 @@
-import * as fs from 'fs';
 import * as path from 'path';
 import { BaseStorageService } from './BaseStorageService';
 import { Collection, CollectionRequest, CollectionItem } from '../types/collection';
@@ -10,6 +9,7 @@ import { ensureItemIds, generateUniqueId } from '../utils/collectionParser';
  */
 export class CollectionService extends BaseStorageService {
     private readonly subDir = 'collections';
+    private readonly waveVersion = '0.0.1';
 
     /**
      * Gets the collections directory path using current settings.
@@ -61,6 +61,12 @@ export class CollectionService extends BaseStorageService {
         if (collection) {
             // Ensure all items have IDs
             ensureItemIds(collection.item);
+            if (!collection.info.waveId) {
+                collection.info.waveId = generateUniqueId();
+            }
+            if (!collection.info.version) {
+                collection.info.version = this.waveVersion;
+            }
         }
         
         return collection;
@@ -204,7 +210,7 @@ export class CollectionService extends BaseStorageService {
         ensureItemIds(collection.item);
         
         // Generate a JSON filename for saving (even if source was .http)
-        const jsonFileName = fileName.replace(/\.(http|rest|yaml|yml)$/i, '.json');
+        const jsonFileName = fileName.replace(/\.[^.]*$/, '.json');
         
         const filePath = path.join(collectionsDir, jsonFileName);
         await this.writeJsonFileSecure(filePath, collection);
@@ -247,8 +253,9 @@ export class CollectionService extends BaseStorageService {
     private createNewCollection(name: string): Collection {
         return {
             info: {
-                name: name || 'New Collection',
-                schema: 'https://schema.getpostman.com/json/collection/v2.1.0/collection.json'
+                waveId: generateUniqueId(),
+                version: this.waveVersion,
+                name: name || 'New Collection'
             },
             item: []
         };

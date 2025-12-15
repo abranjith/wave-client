@@ -138,7 +138,7 @@ export class SwaggerTransformer extends BaseCollectionTransformer<OpenAPISpec> {
      */
     transformFrom(external: OpenAPISpec, filename?: string): Result<Collection, string> {
         try {
-            const collectionName = external.info.title || filename?.replace(/\.(json|yaml|yml)$/i, '') || 'Imported API';
+            const collectionName = external.info.title || filename?.replace(/\.(json|yaml|yml|txt)$/i, '') || 'Imported API';
             const baseUrl = this.getBaseUrl(external);
 
             // Group operations by tags
@@ -164,8 +164,10 @@ export class SwaggerTransformer extends BaseCollectionTransformer<OpenAPISpec> {
 
             const collection: Collection = {
                 info: {
+                    waveId: this.generateId(),
                     name: collectionName,
-                    description: external.info.description
+                    description: external.info.description,
+                    version: this.waveVersion,
                 },
                 item: items
             };
@@ -188,6 +190,9 @@ export class SwaggerTransformer extends BaseCollectionTransformer<OpenAPISpec> {
             // Convert items to paths
             this.convertItemsToPaths(collection.item, paths, tags);
 
+            // Extract server URL from first request item
+            const serverUrl = this.extractServerUrl(collection.item);
+
             const spec: OpenAPISpec = {
                 openapi: '3.0.3',
                 info: {
@@ -195,7 +200,7 @@ export class SwaggerTransformer extends BaseCollectionTransformer<OpenAPISpec> {
                     description: collection.info.description || '',
                     version: '1.0.0'
                 },
-                servers: [{ url: 'https://api.example.com' }],
+                servers: [{ url: serverUrl }],
                 paths,
                 tags: tags.length > 0 ? tags : undefined
             };
@@ -271,6 +276,43 @@ export class SwaggerTransformer extends BaseCollectionTransformer<OpenAPISpec> {
     }
 
     /**
+     * Extracts the server base URL from collection items
+     */
+    private extractServerUrl(items: CollectionItem[]): string {
+        for (const item of items) {
+            if (item.item) {
+                // Recursively search folders
+                const url = this.extractServerUrl(item.item);
+                if (url !== 'https://api.example.com') {
+                    return url;
+                }
+            } else if (item.request) {
+                const rawUrl = typeof item.request.url === 'string' 
+                    ? item.request.url 
+                    : item.request.url?.raw;
+                
+                if (rawUrl) {
+                    try {
+                        // Replace variables with placeholder to parse URL
+                        const urlToParse = rawUrl.replace(/\{\{[^}]+\}\}/g, 'placeholder');
+                        const urlObj = new URL(urlToParse);
+                        return `${urlObj.protocol}//${urlObj.host}`;
+                    } catch {
+                        // Try to extract base URL with regex
+                        const match = rawUrl.match(/^(https?:\/\/[^\/]+)/);
+                        if (match) {
+                            return match[1];
+                        }
+                    }
+                }
+            }
+        }
+        
+        // Default fallback
+        return 'https://api.example.com';
+    }
+
+    /**
      * Creates a collection item from an operation
      */
     private createRequestItem(
@@ -278,7 +320,9 @@ export class SwaggerTransformer extends BaseCollectionTransformer<OpenAPISpec> {
         baseUrl: string
     ): CollectionItem {
         const { method, path, operation } = op;
-        const fullUrl = `${baseUrl}${path}`;
+        // Convert OpenAPI path parameters {param} to app format {{param}}
+        const convertedPath = path.replace(/\{([^}]+)\}/g, '{{$1}}');
+        const fullUrl = `${baseUrl}${convertedPath}`;
 
         // Build headers from parameters
         const headers: HeaderRow[] = [];

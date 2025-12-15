@@ -152,7 +152,7 @@ const CollectionsImportWizard: React.FC<CollectionsImportWizardProps> = ({
                 </SelectContent>
               </Select>
               <p className="text-xs text-slate-500 dark:text-slate-400">
-                Type is automatically detected based on file extension. Select manually if detection is incorrect.
+                Type is automatically detected based on the file. Select manually if detection is incorrect.
               </p>
             </div>
           )}

@@ -80,7 +80,9 @@ export class WaveCollectionTransformer extends BaseCollectionTransformer<Collect
             // Ensure info is properly structured
             if (!collection.info) {
                 collection.info = {
-                    name: filename?.replace(/\.json$/i, '') || 'Imported Collection'
+                    waveId: this.generateId(),
+                    name: filename?.replace(/\.json$/i, '') || 'Imported Collection',
+                    version: this.waveVersion,
                 };
             }
 

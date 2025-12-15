@@ -7,9 +7,10 @@ import AuthStoreGrid from '../components/common/AuthStoreGrid';
 import ProxyStoreGrid from '../components/common/ProxyStoreGrid';
 import CertStoreGrid from '../components/common/CertStoreGrid';
 import SettingsWizard from '../components/common/SettingsWizard';
+import Banner from '../components/ui/banner';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../components/ui/dialog';
-import { Collection, Environment, Cookie, Proxy, Cert } from '../types/collection';
-import { RequestFormData, formDataToCollectionRequest, prepareCollection } from '../utils/collectionParser';
+import { Environment, Cookie, Proxy, Cert } from '../types/collection';
+import { RequestFormData, formDataToCollectionRequest } from '../utils/collectionParser';
 import useAppStateStore from '../hooks/store/useAppStateStore';
 import { Auth } from '../hooks/store/createAuthSlice';
 import { AppSettings } from '../hooks/store/createSettingsSlice';
@@ -45,6 +46,12 @@ const App: React.FC = () => {
   const setHistoryLoadError = useAppStateStore((state) => state.setHistoryLoadError);
   const environments = useAppStateStore((state) => state.environments);
   const auths = useAppStateStore((state) => state.auths);
+  const banner = useAppStateStore((state) => state.banner);
+  const clearBanner = useAppStateStore((state) => state.clearBanner);
+  const setBannerSuccess = useAppStateStore((state) => state.setBannerSuccess);
+  const setBannerError = useAppStateStore((state) => state.setBannerError);
+  const setBannerInfo = useAppStateStore((state) => state.setBannerInfo);
+  const setBannerWarning = useAppStateStore((state) => state.setBannerWarning);
   const vsCodeRef = useRef<any>(null);
 
   // Initialize Collections and Environments
@@ -270,17 +277,10 @@ const App: React.FC = () => {
           handleHttpResponse(activeTabId, message.response);
         }
       } else if (message.type === 'collectionsLoaded') {
-        try {
-          const preparedCollections = message.collections.map((collection: Collection & { filename: string }) => 
-            prepareCollection(collection, collection.filename)
-          );
-          setCollections(preparedCollections);
-        } catch (error: any) {
-          setCollectionLoadError(`Error parsing collections: ${error.message}`);
-        }
+          setCollections(message.collections);
       } else if (message.type === 'collectionUpdated') {
         try {
-          const collection = prepareCollection(message.collection, message.collection.filename);
+          const collection = message.collection;
           //if collection does not exist, add it
           // Get current collections from the store to avoid stale closure
           const currentCollections = useAppStateStore.getState().collections;
@@ -334,6 +334,14 @@ const App: React.FC = () => {
         setHistory(message.history);
       } else if (message.type === 'historyError') {
         setHistoryLoadError(message.error);
+      } else if (message.type === 'bannerSuccess') {
+        setBannerSuccess(message.message, message.link, message.timeoutSeconds);
+      } else if (message.type === 'bannerError') {
+        setBannerError(message.message, message.link, message.timeoutSeconds);
+      } else if (message.type === 'bannerInfo') {
+        setBannerInfo(message.message, message.link, message.timeoutSeconds);
+      } else if (message.type === 'bannerWarning') {
+        setBannerWarning(message.message, message.link, message.timeoutSeconds);
       }
     };
 
@@ -346,7 +354,7 @@ const App: React.FC = () => {
 
   return (
     <div
-      className="min-h-screen h-screen w-screen bg-slate-50 dark:bg-slate-900 grid"
+      className="min-h-screen h-screen w-screen bg-slate-50 dark:bg-slate-900 grid relative"
       style={{
         display: 'grid',
         gridTemplateColumns: '400px 1fr',
@@ -357,6 +365,18 @@ const App: React.FC = () => {
         height: '100vh',
       }}
     >
+      {/* Global Banner - Fixed at top, centered, overlayed */}
+      {banner.message && banner.messageType && (
+        <div className="fixed top-4 left-1/2 transform -translate-x-1/2 z-50 w-auto max-w-2xl min-w-96 shadow-2xl rounded-lg overflow-hidden bg-white dark:bg-slate-800">
+          <Banner
+            message={banner.message}
+            messageType={banner.messageType}
+            link={banner.link}
+            timeoutSeconds={banner.timeoutSeconds}
+            onClose={clearBanner}
+          />
+        </div>
+      )}
       {/* Left Sidebar with Tabs */}
       <div style={{ gridArea: 'config' }} className="overflow-hidden">
         <ConfigPanel 

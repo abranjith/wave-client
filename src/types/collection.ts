@@ -111,9 +111,11 @@ export interface CollectionItem {
  * Collection metadata
  */
 export interface CollectionInfo {
+  waveId: string;
   name: string;
   description?: string;
   schema?: string;
+  version?: string;
 }
 
 /**

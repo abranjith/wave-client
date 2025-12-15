@@ -76,8 +76,10 @@ export class HttpFileTransformer extends BaseCollectionTransformer<string> {
 
             const collection: Collection = {
                 info: {
+                    waveId: this.generateId(),
                     name: collectionName,
-                    description: `Imported from ${filename || 'HTTP file'}`
+                    description: `Imported from ${filename || 'HTTP file'}`,
+                    version: this.waveVersion
                 },
                 item: requests.map((req) => this.createCollectionItem(req))
             };

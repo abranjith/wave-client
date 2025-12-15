@@ -41,7 +41,7 @@ const getUrlDomainPath = (url: any): string => {
 // Recursively filter collection items by name or URL domain/path
 // If a folder matches by name, include the full folder contents (unfiltered) to keep search expansive.
 const filterItems = (items: CollectionItem[], query: string, inLoop: Boolean = false): CollectionItem[] => {
-  let result = items
+  return items
     .map((item) => {
       const nameMatch = item.name.toLowerCase().includes(query);
 
@@ -56,7 +56,7 @@ const filterItems = (items: CollectionItem[], query: string, inLoop: Boolean = f
 
         // If folder name matches but no children matched, include all requests
         if (nameMatch && childItems.length === 0) {
-          return { ...item, item: item.item.filter((child) => child.request) };
+          return { ...item, item: item.item.filter((child) => Boolean(child.request)) };
         }
 
         return null;
@@ -73,11 +73,6 @@ const filterItems = (items: CollectionItem[], query: string, inLoop: Boolean = f
       return null;
     })
     .filter((item): item is CollectionItem => Boolean(item));
-
-    if(!inLoop && result.length === 0){
-      result = items;
-    }
-    return result;
 };
 
 // Collect all folder keys for expansion during search

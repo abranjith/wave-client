@@ -1,6 +1,12 @@
 import React, { useState } from 'react';
 import { ChevronRightIcon, ChevronDownIcon, FolderIcon } from 'lucide-react';
 import { CollectionItem, isFolder, isRequest } from '../../types/collection';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '../ui/tooltip';
 import { getHttpMethodColor } from '../../utils/common';
 import { urlToString } from '../../utils/collectionParser';
 
@@ -91,26 +97,37 @@ const CollectionTreeItem: React.FC<CollectionTreeItemProps> = ({
   if (isRequest(item) && item.request) {
     const isActive = item.id === currentRequestId;
     const method = item.request.method?.toUpperCase() || 'GET';
+    const requestUrl = item.request.url ? urlToString(item.request.url) : '';
     
     return (
-      <div
-        className={`flex items-center py-2 px-2 cursor-pointer rounded-md group transition-colors ${
-          isActive 
-            ? 'bg-blue-100 dark:bg-blue-900/40 border-l-2 border-blue-500' 
-            : 'hover:bg-blue-50 dark:hover:bg-blue-900/20'
-        }`}
-        style={{ paddingLeft: `${paddingLeft + 8}px` }}
-        onClick={() => onRequestSelect(item, collectionFilename, collectionName, itemPath)}
-      >
-        <div className="flex items-center flex-1 min-w-0">
-          <span className={`text-xs font-medium mr-2 px-2 py-1 rounded-full flex-shrink-0 ${getHttpMethodColor(method)}`}>
-            {method}
-          </span>
-          <span className="text-sm text-slate-600 dark:text-slate-300 truncate">
-            {item.name}
-          </span>
-        </div>
-      </div>
+      <TooltipProvider delayDuration={500}>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <div
+              className={`flex items-center py-2 px-2 cursor-pointer rounded-md group transition-colors ${
+                isActive 
+                  ? 'bg-blue-100 dark:bg-blue-900/40 border-l-2 border-blue-500' 
+                  : 'hover:bg-blue-50 dark:hover:bg-blue-900/20'
+              }`}
+              style={{ paddingLeft: `${paddingLeft + 8}px` }}
+              onClick={() => onRequestSelect(item, collectionFilename, collectionName, itemPath)}
+            >
+              <div className="flex items-center flex-1 min-w-0">
+                <span className={`text-xs font-medium mr-2 px-2 py-1 rounded-full flex-shrink-0 ${getHttpMethodColor(method)}`}>
+                  {method}
+                </span>
+                <span className="text-sm text-slate-600 dark:text-slate-300 truncate">
+                  {item.name}
+                </span>
+              </div>
+            </div>
+          </TooltipTrigger>
+          <TooltipContent className="px-2 py-1 text-xs max-w-xs">
+            <div className="font-medium">{item.name}</div>
+            {requestUrl && <div className="text-slate-400 dark:text-slate-500 truncate">{requestUrl}</div>}
+          </TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
     );
   }
 

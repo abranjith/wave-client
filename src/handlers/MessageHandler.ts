@@ -183,7 +183,8 @@ export class MessageHandler {
             const collections = await collectionService.loadAll();
             this.postMessage({
                 type: 'collectionsLoaded',
-                collections
+                collections,
+                isImport: false
             });
         } catch (error: any) {
             this.postMessage({
@@ -213,6 +214,11 @@ export class MessageHandler {
                         filename: savedCollectionFileName
                     }
                 });
+                
+                this.postMessage({
+                    type: 'bannerSuccess',
+                    message: `Request "${requestName}" saved successfully`
+                });
             }
         } catch (error: any) {
             console.error('Error saving request to collection:', error);
@@ -231,10 +237,19 @@ export class MessageHandler {
             const collections = await collectionService.loadAll();
             this.postMessage({
                 type: 'collectionsLoaded',
-                collections
+                collections,
+                isImport: true
+            });
+            
+            this.postMessage({
+                type: 'bannerSuccess',
+                message: `Collection imported successfully: ${fileName}`
             });
         } catch (error: any) {
-            vscode.window.showErrorMessage(`Failed to import collection: ${error.message}`);
+            this.postMessage({
+                type: 'bannerError',
+                message: `Failed to import collection: ${error.message}`
+            });
         }
     }
 
@@ -262,10 +277,16 @@ export class MessageHandler {
                 const uint8Array = new TextEncoder().encode(content);
                 await vscode.workspace.fs.writeFile(uri, uint8Array);
 
-                vscode.window.showInformationMessage(`Collection exported: ${path.basename(uri.fsPath)}`);
+                this.postMessage({
+                    type: 'bannerSuccess',
+                    message: `Collection exported: ${path.basename(uri.fsPath)}`
+                });
             }
         } catch (error: any) {
-            vscode.window.showErrorMessage(`Failed to export collection: ${error.message}`);
+            this.postMessage({
+                type: 'bannerError',
+                message: `Failed to export collection: ${error.message}`
+            });
         }
     }
 
@@ -276,7 +297,8 @@ export class MessageHandler {
             const environments = await environmentService.loadAll();
             this.postMessage({
                 type: 'environmentsLoaded',
-                environments
+                environments,
+                isImport: false
             });
         } catch (error: any) {
             this.postMessage({
@@ -295,6 +317,11 @@ export class MessageHandler {
                 type: 'environmentUpdated',
                 environment: envToUpdate
             });
+            
+            this.postMessage({
+                type: 'bannerSuccess',
+                message: `Environment "${envToUpdate.name}" saved successfully`
+            });
         } catch (error: any) {
             console.error('Error saving environment:', error);
             this.postMessage({
@@ -312,10 +339,19 @@ export class MessageHandler {
             const environments = await environmentService.loadAll();
             this.postMessage({
                 type: 'environmentsLoaded',
-                environments
+                environments,
+                isImport: true
+            });
+            
+            this.postMessage({
+                type: 'bannerSuccess',
+                message: 'Environments imported successfully'
             });
         } catch (error: any) {
-            vscode.window.showErrorMessage(`Failed to import environments: ${error.message}`);
+            this.postMessage({
+                type: 'bannerError',
+                message: `Failed to import environments: ${error.message}`
+            });
         }
     }
 
@@ -333,10 +369,16 @@ export class MessageHandler {
                 const uint8Array = new TextEncoder().encode(jsonString);
                 await vscode.workspace.fs.writeFile(uri, uint8Array);
 
-                vscode.window.showInformationMessage(`Environments file saved: ${path.basename(uri.fsPath)}`);
+                this.postMessage({
+                    type: 'bannerSuccess',
+                    message: `Environments file saved: ${path.basename(uri.fsPath)}`
+                });
             }
         } catch (error: any) {
-            vscode.window.showErrorMessage(`Failed to save Environments file: ${error.message}`);
+            this.postMessage({
+                type: 'bannerError',
+                message: `Failed to save Environments file: ${error.message}`
+            });
         }
     }
 
@@ -391,11 +433,16 @@ export class MessageHandler {
 
             if (uri) {
                 await vscode.workspace.fs.writeFile(uri, bodyBuffer);
-
-                vscode.window.showInformationMessage(`Response file saved: ${path.basename(uri.fsPath)}`);
+                this.postMessage({
+                    type: 'bannerSuccess',
+                    message: `Response file saved: ${path.basename(uri.fsPath)}`
+                });
             }
         } catch (error: any) {
-            vscode.window.showErrorMessage(`Failed to save response file: ${error.message}`);
+            this.postMessage({
+                type: 'bannerError',
+                message: `Failed to save response file: ${error.message}`
+            });
         }
     }
 
@@ -422,6 +469,11 @@ export class MessageHandler {
             await cookieService.saveAll(cookies);
             this.postMessage({
                 type: 'cookiesSaved'
+            });
+            
+            this.postMessage({
+                type: 'bannerSuccess',
+                message: 'Cookies saved successfully'
             });
         } catch (error: any) {
             console.error('Error saving cookies:', error);
@@ -456,6 +508,11 @@ export class MessageHandler {
             this.postMessage({
                 type: 'authsSaved'
             });
+            
+            this.postMessage({
+                type: 'bannerSuccess',
+                message: 'Authentication profiles saved successfully'
+            });
         } catch (error: any) {
             console.error('Error saving auths:', error);
             this.postMessage({
@@ -488,6 +545,11 @@ export class MessageHandler {
             await storeService.saveProxies(proxies);
             this.postMessage({
                 type: 'proxiesSaved'
+            });
+            
+            this.postMessage({
+                type: 'bannerSuccess',
+                message: 'Proxy configurations saved successfully'
             });
         } catch (error: any) {
             console.error('Error saving proxies:', error);
@@ -522,6 +584,11 @@ export class MessageHandler {
             this.postMessage({
                 type: 'certsSaved'
             });
+            
+            this.postMessage({
+                type: 'bannerSuccess',
+                message: 'Certificates saved successfully'
+            });
         } catch (error: any) {
             console.error('Error saving certs:', error);
             this.postMessage({
@@ -555,6 +622,11 @@ export class MessageHandler {
             this.postMessage({
                 type: 'settingsSaved',
                 settings: savedSettings
+            });
+            
+            this.postMessage({
+                type: 'bannerSuccess',
+                message: 'Settings saved successfully'
             });
         } catch (error: any) {
             console.error('Error saving settings:', error);

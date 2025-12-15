@@ -1,5 +1,5 @@
 import React, { useState } from "react"
-import { Info, ThumbsUp, TriangleAlert, Flame, XIcon } from "lucide-react"
+import { InfoIcon, ThumbsUpIcon, TriangleAlertIcon, ShieldAlertIcon, XIcon } from "lucide-react"
 
 import { Button } from "./button"
 
@@ -11,7 +11,8 @@ interface BannerProps {
   link?: {
     text: string
     href: string
-  }
+  },
+  timeoutSeconds?: number
   onClose?: () => void
 }
 
@@ -23,34 +24,45 @@ const messageStyles: Record<MessageType, {
   info: {
     containerClass: "bg-blue-500/10 border-blue-500/20",
     textClass: "text-blue-700 dark:text-blue-400",
-    Icon: Info,
+    Icon: InfoIcon,
   },
   success: {
     containerClass: "bg-green-500/10 border-green-500/20",
     textClass: "text-green-700 dark:text-green-400",
-    Icon: ThumbsUp,
+    Icon: ThumbsUpIcon,
   },
   warn: {
     containerClass: "bg-orange-500/10 border-orange-500/20",
     textClass: "text-orange-700 dark:text-orange-400",
-    Icon: TriangleAlert,
+    Icon: ShieldAlertIcon,
   },
   error: {
     containerClass: "bg-red-500/10 border-red-500/20",
     textClass: "text-red-700 dark:text-red-400",
-    Icon: Flame,
+    Icon: TriangleAlertIcon,
   },
 }
 
-export default function Banner({ message, messageType, link, onClose }: BannerProps): React.ReactElement | null {
+export default function Banner({ message, messageType, link, timeoutSeconds = 10, onClose }: BannerProps): React.ReactElement | null {
   const [isVisible, setIsVisible] = useState<boolean>(true)
 
   const handleClose = (): void => {
-    setIsVisible(false)
     if (onClose) {
       onClose()
     }
+    setIsVisible(false)
   }
+
+  React.useEffect(() => {
+    // Auto-close for info and success messages
+    if (messageType !== 'error' && messageType !== 'warn') {
+      const timer = setTimeout(() => {
+        handleClose()
+      }, timeoutSeconds * 1000)
+
+      return () => clearTimeout(timer)
+    }
+  }, [messageType, timeoutSeconds])
 
   if (!isVisible) return null
 

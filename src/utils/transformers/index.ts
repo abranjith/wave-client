@@ -153,12 +153,12 @@ export function detectFormatFromFilename(filename: string): ImportFormatType | u
     }
     
     // Check for postman collection naming convention
-    if (lowerFilename.includes('.postman_collection.json')) {
+    if (lowerFilename.includes('postman')) {
         return 'postman';
     }
     
     // YAML files are likely OpenAPI/Swagger
-    if (lowerFilename.endsWith('.yaml') || lowerFilename.endsWith('.yml')) {
+    if (lowerFilename.includes('swagger') || lowerFilename.endsWith('.yaml') || lowerFilename.endsWith('.yml')) {
         return 'swagger';
     }
     

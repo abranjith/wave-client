@@ -87,9 +87,10 @@ export class PostmanCollectionTransformer extends BaseCollectionTransformer<Post
         try {
             const collection: Collection = {
                 info: {
+                    waveId: this.generateId(),
                     name: external.info.name,
                     description: this.extractString(external.info.description),
-                    schema: external.info.schema,
+                    version: this.waveVersion,
                 },
                 item: this.transformItems(external.item),
                 filename,
