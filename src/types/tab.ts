@@ -13,6 +13,7 @@ import {
     MultiPartFormField,
     CollectionReference
 } from './collection';
+import { RequestValidation, ValidationRuleRef } from './validation';
 import { FileWithPreview } from '../hooks/useFileUpload';
 
 // ==================== Request Body Types ====================
@@ -45,8 +46,8 @@ export interface RequestBody {
 
 // ==================== Tab UI State ====================
 
-export type RequestSectionTab = 'Params' | 'Headers' | 'Body';
-export type ResponseSectionTab = 'Body' | 'Headers';
+export type RequestSectionTab = 'Params' | 'Headers' | 'Body' | 'Validation';
+export type ResponseSectionTab = 'Body' | 'Headers' | 'Validation';
 
 // ==================== Tab Data ====================
 
@@ -80,6 +81,9 @@ export interface TabData {
     // Per-tab environment and auth selection
     environmentId: string | null;
     authId: string | null;
+    
+    // Validation configuration
+    validation: RequestValidation;
     
     // Response state
     responseData: ResponseData | null;
@@ -127,6 +131,7 @@ export function createEmptyTab(): TabData {
         collectionRef: null,
         environmentId: null,
         authId: null,
+        validation: createEmptyValidation(),
         responseData: null,
         isRequestProcessing: false,
         requestError: null,
@@ -198,6 +203,23 @@ export function createEmptyRequestBody(): RequestBody {
         multiPartFormData: { data: [createEmptyMultiPartFormField()] },
         currentBodyType: 'none',
     };
+}
+
+/**
+ * Creates an empty validation configuration
+ */
+export function createEmptyValidation(): RequestValidation {
+    return {
+        enabled: false,
+        rules: [],
+    };
+}
+
+/**
+ * Creates an empty validation rule reference
+ */
+export function createEmptyValidationRuleRef(): ValidationRuleRef {
+    return {};
 }
 
 /**

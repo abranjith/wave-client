@@ -23,7 +23,7 @@ import { RequestFormData } from '../utils/collectionParser';
 interface ConfigPanelProps {
   onRequestSelect: ((request: RequestFormData) => void)
   onEnvSelect: ((environment: Environment) => void)
-  onStoreSelect: ((storeType: 'cookie' | 'auth' | 'proxy' | 'cert') => void)
+  onStoreSelect: ((storeType: 'cookie' | 'auth' | 'proxy' | 'cert' | 'validation') => void)
   onSettingsSelect: () => void;
   onImportCollection: (fileName: string, fileContent: string, collectionType: string) => void;
   onExportCollection: (collectionName: string, exportFormat: string) => void;

@@ -11,7 +11,9 @@ import StyledInput from '../components/ui/styled-input';
 import RequestParams from '../components/common/RequestParams';
 import RequestHeaders from '../components/common/RequestHeaders';
 import RequestBody from '../components/common/RequestBody';
+import RequestValidation from '../components/common/RequestValidation';
 import ResponseBody from '../components/common/ResponseBody';
+import ResponseValidation from '../components/common/ResponseValidation';
 import Banner from '../components/ui/banner';
 import TabsBar from '../components/common/TabsBar';
 import {
@@ -54,7 +56,8 @@ function getStatusColor(status: number) {
 // ==================== Constants ====================
 
 const HTTP_METHODS = ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'HEAD', 'OPTIONS'];
-const REQUEST_TABS = ['Params', 'Headers', 'Body'] as const;
+const REQUEST_TABS = ['Params', 'Headers', 'Body', 'Validation'] as const;
+const RESPONSE_TABS = ['Body', 'Headers', 'Validation'] as const;
 
 // ==================== Props ====================
 
@@ -383,6 +386,7 @@ const RequestEditor: React.FC<RequestEditorProps> = ({
                             {activeRequestSection === 'Params' && <RequestParams />}
                             {activeRequestSection === 'Headers' && <RequestHeaders />}
                             {activeRequestSection === 'Body' && <RequestBody />}
+                            {activeRequestSection === 'Validation' && <RequestValidation />}
                         </div>
                     </div>
 
@@ -419,7 +423,7 @@ const RequestEditor: React.FC<RequestEditorProps> = ({
 
                                 {/* Response Tabs */}
                                 <div className="border-b border-slate-200 dark:border-slate-700 flex gap-0 bg-slate-50 dark:bg-slate-900 flex-shrink-0">
-                                    {(['Body', 'Headers'] as const).map(tab => (
+                                    {RESPONSE_TABS.map(tab => (
                                         <button
                                             key={tab}
                                             className={`px-6 py-3 text-sm font-medium focus:outline-none transition-all relative ${
@@ -453,6 +457,9 @@ const RequestEditor: React.FC<RequestEditorProps> = ({
                                                 </div>
                                             ))}
                                         </div>
+                                    )}
+                                    {activeResponseSection === 'Validation' && (
+                                        <ResponseValidation validationResult={responseData.validationResult} />
                                     )}
                                 </div>
                             </>

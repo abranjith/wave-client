@@ -11,6 +11,8 @@ import {
     settingsService,
     securityService
 } from '../services';
+import { executeValidation, createGlobalRulesMap, createEnvVarsMap } from '../utils/validationEngine';
+import { RequestValidation } from '../types/validation';
 
 /**
  * Converts a base64 string to a Uint8Array.
@@ -124,6 +126,13 @@ export class MessageHandler {
             case 'recoverWithKeyFile':
                 await this.handleRecoverWithKeyFile(message);
                 break;
+            // Validation handlers
+            case 'loadValidationRules':
+                await this.handleLoadValidationRules();
+                break;
+            case 'saveValidationRules':
+                await this.handleSaveValidationRules(message);
+                break;
         }
     }
 
@@ -139,16 +148,30 @@ export class MessageHandler {
             ...message.request,
             id: requestId
         };
+
+        // Extract validation configuration if present
+        const validation: RequestValidation | undefined = message.validation;
+        const envVars = message.request?.envVars;
         
         try {
             const { response, newCookies } = await httpService.execute(requestWithId);
+            
+            // Execute validation if configured
+            let validationResult = undefined;
+            if (validation && validation.enabled) {
+                const globalRules = await storeService.loadValidationRules();
+                const globalRulesMap = createGlobalRulesMap(globalRules);
+                const envVarsMap = createEnvVarsMap(envVars);
+                validationResult = executeValidation(validation, response, globalRulesMap, envVarsMap);
+            }
             
             // Always include the request ID in the response for tab correlation
             this.postMessage({
                 type: 'httpResponse',
                 response: {
                     ...response,
-                    id: requestId  // Ensure ID is always present for concurrency handling
+                    id: requestId,  // Ensure ID is always present for concurrency handling
+                    validationResult
                 }
             });
 
@@ -792,6 +815,47 @@ export class MessageHandler {
             console.error('Error recovering with key file:', error);
             this.postMessage({
                 type: 'encryptionError',
+                error: error.message
+            });
+        }
+    }
+
+    // ==================== Validation Rules Handlers ====================
+
+    /**
+     * Loads all global validation rules from storage.
+     */
+    private async handleLoadValidationRules(): Promise<void> {
+        try {
+            const rules = await storeService.loadValidationRules();
+            this.postMessage({
+                type: 'validationRulesLoaded',
+                rules
+            });
+        } catch (error: any) {
+            console.error('Error loading validation rules:', error);
+            this.postMessage({
+                type: 'validationRulesError',
+                error: error.message
+            });
+        }
+    }
+
+    /**
+     * Saves global validation rules to storage.
+     */
+    private async handleSaveValidationRules(message: any): Promise<void> {
+        try {
+            const rules = message.data?.rules || [];
+            await storeService.saveValidationRules(rules);
+            this.postMessage({
+                type: 'validationRulesSaved',
+                rules
+            });
+        } catch (error: any) {
+            console.error('Error saving validation rules:', error);
+            this.postMessage({
+                type: 'validationRulesError',
                 error: error.message
             });
         }

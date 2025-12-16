@@ -6,10 +6,12 @@ import CookieStoreGrid from '../components/common/CookieStoreGrid';
 import AuthStoreGrid from '../components/common/AuthStoreGrid';
 import ProxyStoreGrid from '../components/common/ProxyStoreGrid';
 import CertStoreGrid from '../components/common/CertStoreGrid';
+import ValidationStoreGrid from '../components/common/ValidationStoreGrid';
 import SettingsWizard from '../components/common/SettingsWizard';
 import Banner from '../components/ui/banner';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../components/ui/dialog';
 import { Environment, Cookie, Proxy, Cert } from '../types/collection';
+import { GlobalValidationRule } from '../types/validation';
 import { RequestFormData, formDataToCollectionRequest } from '../utils/collectionParser';
 import useAppStateStore from '../hooks/store/useAppStateStore';
 import { Auth } from '../hooks/store/createAuthSlice';
@@ -17,7 +19,7 @@ import { AppSettings } from '../hooks/store/createSettingsSlice';
 
 const App: React.FC = () => {
   const [selectedEnvironment, setSelectedEnvironment] = useState<Environment | null>(null);
-  const [selectedStore, setSelectedStore] = useState<'cookie' | 'auth' | 'proxy' | 'cert' | null>(null);
+  const [selectedStore, setSelectedStore] = useState<'cookie' | 'auth' | 'proxy' | 'cert' | 'validation' | null>(null);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
 
   const refreshCollections = useAppStateStore((state) => state.refreshCollections);
@@ -37,6 +39,7 @@ const App: React.FC = () => {
   const setAuths = useAppStateStore((state) => state.setAuths);
   const setProxies = useAppStateStore((state) => state.setProxies);
   const setCerts = useAppStateStore((state) => state.setCerts);
+  const setValidationRules = useAppStateStore((state) => state.setValidationRules);
   const settings = useAppStateStore((state) => state.settings);
   const setSettings = useAppStateStore((state) => state.setSettings);
   const getParsedRequest = useAppStateStore((state) => state.getParsedRequest);
@@ -66,6 +69,7 @@ const App: React.FC = () => {
         vsCodeRef.current.postMessage({ type: 'loadAuths' });
         vsCodeRef.current.postMessage({ type: 'loadProxies' });
         vsCodeRef.current.postMessage({ type: 'loadCerts' });
+        vsCodeRef.current.postMessage({ type: 'loadValidationRules' });
         vsCodeRef.current.postMessage({ type: 'loadSettings' });
       }
     }
@@ -82,7 +86,7 @@ const App: React.FC = () => {
     setSelectedStore(null); // Clear store selection when selecting an environment
   };
 
-  const handleStoreSelect = (storeType: 'cookie' | 'auth' | 'proxy' | 'cert') => {
+  const handleStoreSelect = (storeType: 'cookie' | 'auth' | 'proxy' | 'cert' | 'validation') => {
     setSelectedStore(storeType);
     setSelectedEnvironment(null); // Clear environment selection when selecting a store
   };
@@ -194,6 +198,17 @@ const App: React.FC = () => {
         type: 'saveCerts',
         data: {
           certs: JSON.stringify(certs, null, 2)
+        }
+      });
+    }
+  };
+
+  const handleSaveValidationRules = (rules: GlobalValidationRule[]) => {
+    if (vsCodeRef.current) {
+      vsCodeRef.current.postMessage({
+        type: 'saveValidationRules',
+        data: {
+          rules
         }
       });
     }
@@ -321,6 +336,12 @@ const App: React.FC = () => {
         setCerts(message.certs);
       } else if (message.type === 'certsError') {
         console.error('Certs error:', message.error);
+      } else if (message.type === 'validationRulesLoaded') {
+        setValidationRules(message.rules);
+      } else if (message.type === 'validationRulesSaved') {
+        setValidationRules(message.rules);
+      } else if (message.type === 'validationRulesError') {
+        console.error('Validation rules error:', message.error);
       } else if (message.type === 'settingsLoaded') {
         setSettings(message.settings);
       } else if (message.type === 'settingsSaved') {
@@ -409,6 +430,8 @@ const App: React.FC = () => {
             <AuthStoreGrid onBack={handleBackFromStore} onSaveAuths={handleSaveAuths} />
           ) : selectedStore === 'proxy' ? (
             <ProxyStoreGrid onBack={handleBackFromStore} onSaveProxies={handleSaveProxies} />
+          ) : selectedStore === 'validation' ? (
+            <ValidationStoreGrid onBack={handleBackFromStore} onSaveValidationRules={handleSaveValidationRules} />
           ) : (
             <CertStoreGrid onBack={handleBackFromStore} onSaveCerts={handleSaveCerts} />
           )}

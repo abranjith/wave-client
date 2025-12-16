@@ -1,8 +1,8 @@
 import React from 'react';
-import { CookieIcon, KeyRoundIcon, NetworkIcon, ShieldCheckIcon } from 'lucide-react';
+import { CookieIcon, KeyRoundIcon, NetworkIcon, ShieldCheckIcon, ClipboardCheckIcon } from 'lucide-react';
 
 interface StorePaneProps {
-  onStoreSelect: (storeType: 'cookie' | 'auth' | 'proxy' | 'cert') => void;
+  onStoreSelect: (storeType: 'cookie' | 'auth' | 'proxy' | 'cert' | 'validation') => void;
 }
 
 interface StorePaneHeaderProps {
@@ -18,7 +18,7 @@ const StorePaneHeader: React.FC<StorePaneHeaderProps> = ({ label }) => {
 };
 
 const StorePane: React.FC<StorePaneProps> = ({ onStoreSelect }) => {
-  const handleStoreClick = (storeType: 'cookie' | 'auth' | 'proxy' | 'cert') => {
+  const handleStoreClick = (storeType: 'cookie' | 'auth' | 'proxy' | 'cert' | 'validation') => {
     if (onStoreSelect) {
       onStoreSelect(storeType);
     }
@@ -85,6 +85,21 @@ const StorePane: React.FC<StorePaneProps> = ({ onStoreSelect }) => {
                 <ShieldCheckIcon className="h-4 w-4 text-green-600 mr-2 flex-shrink-0" />
                 <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-200 break-words">
                   Certificate Store
+                </h3>
+              </div>
+            </div>
+          </div>
+
+          {/* Validation Rules Store Option */}
+          <div 
+            className="border border-slate-200 dark:border-slate-700 rounded-lg hover:shadow-sm transition-shadow cursor-pointer"
+            onClick={() => handleStoreClick('validation')}
+          >
+            <div className="flex items-center p-3 bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg group transition-colors">
+              <div className="flex items-center flex-1">
+                <ClipboardCheckIcon className="h-4 w-4 text-teal-600 mr-2 flex-shrink-0" />
+                <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-200 break-words">
+                  Validation Rules Store
                 </h3>
               </div>
             </div>

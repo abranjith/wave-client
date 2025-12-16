@@ -9,6 +9,7 @@ import createProxySlice from "./createProxySlice"
 import createCertSlice from "./createCertSlice"
 import createSettingsSlice from "./createSettingsSlice"
 import createBannerSlice from "./createBannerSlice"
+import createValidationRulesSlice from "./createValidationRulesSlice"
 
 // Combined store type that includes all slices
 type AppStateStore = 
@@ -21,7 +22,8 @@ type AppStateStore =
     ReturnType<typeof createProxySlice> & 
     ReturnType<typeof createCertSlice> &
     ReturnType<typeof createSettingsSlice> &
-    ReturnType<typeof createBannerSlice>
+    ReturnType<typeof createBannerSlice> &
+    ReturnType<typeof createValidationRulesSlice>
 
 // Global App state management store
 const useAppStateStore = create<AppStateStore>()((...args) => ({
@@ -35,6 +37,7 @@ const useAppStateStore = create<AppStateStore>()((...args) => ({
     ...createCertSlice(...args),
     ...createSettingsSlice(...args),
     ...createBannerSlice(...args),
+    ...createValidationRulesSlice(...args),
 }))
 
 // Force update

@@ -2,6 +2,7 @@ import * as path from 'path';
 import https from 'https';
 import { BaseStorageService } from './BaseStorageService';
 import { Proxy, Cert, CertType } from '../types/collection';
+import { GlobalValidationRule } from '../types/validation';
 import { isUrlInDomains } from '../utils/common';
 
 /**
@@ -36,6 +37,7 @@ export class StoreService extends BaseStorageService {
     private readonly authFileName = 'auth.json';
     private readonly proxiesFileName = 'proxies.json';
     private readonly certsFileName = 'certs.json';
+    private readonly validationRulesFileName = 'validation-rules.json';
 
     /**
      * Gets the store directory path using current settings.
@@ -232,6 +234,48 @@ export class StoreService extends BaseStorageService {
             console.error('Error getting HTTPS agent for URL:', error);
             return null;
         }
+    }
+
+    // ==================== Validation Rules Methods ====================
+
+    /**
+     * Loads all global validation rules from storage.
+     * @returns Array of global validation rules
+     */
+    async loadValidationRules(): Promise<GlobalValidationRule[]> {
+        const storeDir = await this.getStoreDirectory();
+        const validationFile = path.join(storeDir, this.validationRulesFileName);
+        return await this.readJsonFileSecure<GlobalValidationRule[]>(validationFile, []);
+    }
+
+    /**
+     * Saves global validation rules to storage.
+     * @param rules The validation rules to save
+     */
+    async saveValidationRules(rules: GlobalValidationRule[]): Promise<void> {
+        const storeDir = await this.getStoreDirectory();
+        const validationFile = path.join(storeDir, this.validationRulesFileName);
+        await this.writeJsonFileSecure(validationFile, rules);
+    }
+
+    /**
+     * Gets a global validation rule by its ID.
+     * @param ruleId The ID of the rule to find
+     * @returns The validation rule or null if not found
+     */
+    async getValidationRuleById(ruleId: string): Promise<GlobalValidationRule | null> {
+        const rules = await this.loadValidationRules();
+        return rules.find(rule => rule.id === ruleId) || null;
+    }
+
+    /**
+     * Gets multiple global validation rules by their IDs.
+     * @param ruleIds Array of rule IDs to find
+     * @returns Array of found validation rules (missing rules are omitted)
+     */
+    async getValidationRulesByIds(ruleIds: string[]): Promise<GlobalValidationRule[]> {
+        const rules = await this.loadValidationRules();
+        return rules.filter(rule => ruleIds.includes(rule.id));
     }
 }
 

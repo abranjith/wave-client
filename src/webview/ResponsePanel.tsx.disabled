@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import useAppStateStore from '../hooks/store/useAppStateStore';
 import ResponseBody from '../components/common/ResponseBody';
+import ResponseValidation from '../components/common/ResponseValidation';
 import { getResponseLanguage } from '../utils/common';
 
 function getStatusColor(status: number) {
@@ -15,7 +16,7 @@ interface ResponsePanelProps {
 }
 
 const ResponsePanel: React.FC<ResponsePanelProps> = ({ onDownloadResponse }) => {
-  const [activeTab, setActiveTab] = useState<'body' | 'headers'>('body');
+  const [activeTab, setActiveTab] = useState<'body' | 'headers' | 'validation'>('body');
   const activeTabData = useAppStateStore((state) => state.getActiveTab());
   const response = activeTabData?.responseData;
 
@@ -37,7 +38,8 @@ const ResponsePanel: React.FC<ResponsePanelProps> = ({ onDownloadResponse }) => 
   const body = response.body;
   const headers = response.headers;
   const contentLang = getResponseLanguage(headers);
-  const TABS = ['body', 'headers'];
+  const validationResult = response.validationResult;
+  const TABS = ['body', 'headers', 'validation'];
 
   return (
     <div className="w-full h-full bg-background flex flex-col border-b">
@@ -99,6 +101,9 @@ const ResponsePanel: React.FC<ResponsePanelProps> = ({ onDownloadResponse }) => 
               ))}
             </div>
           </div>
+        )}
+        {activeTab === 'validation' && (
+          <ResponseValidation validationResult={validationResult} />
         )}
       </div>
     </div>

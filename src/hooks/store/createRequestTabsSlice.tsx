@@ -28,9 +28,11 @@ import {
     createEmptyFormField,
     createEmptyMultiPartFormField,
     createEmptyRequestBody,
+    createEmptyValidation,
     RequestSectionTab,
     ResponseSectionTab
 } from '../../types/tab';
+import { ValidationRuleRef, RequestValidation } from '../../types/validation';
 import { parseUrlQueryParams, getContentTypeFromBody, resolveParameterizedValue, isUrlInDomains } from '../../utils/common';
 import { FileWithPreview } from '../useFileUpload';
 import { Auth } from './createAuthSlice';
@@ -117,6 +119,13 @@ export interface RequestTabsSlice {
     // Dirty tracking
     markTabDirty: (tabId?: string) => void;
     markTabClean: (tabId?: string) => void;
+    
+    // Request validation management
+    setRequestValidationEnabled: (enabled: boolean, tabId?: string) => void;
+    addRequestValidationRule: (rule: ValidationRuleRef, tabId?: string) => void;
+    removeRequestValidationRule: (index: number, tabId?: string) => void;
+    updateRequestValidationRule: (index: number, rule: ValidationRuleRef, tabId?: string) => void;
+    setRequestValidation: (validation: RequestValidation, tabId?: string) => void;
     
     // Send request handler
     handleSendRequest: (
@@ -1063,6 +1072,71 @@ const createRequestTabsSlice: StateCreator<RequestTabsSlice> = (set, get) => {
             updateTab(id, { isDirty: false });
         },
         
+        // ==================== Request Validation Management ====================
+        
+        setRequestValidationEnabled: (enabled: boolean, tabId?: string) => {
+            const state = get();
+            const id = tabId || state.activeTabId;
+            const tab = state.tabs.find(t => t.id === id);
+            if (!tab) return;
+            
+            updateTab(id, { 
+                validation: { ...tab.validation, enabled },
+                isDirty: true 
+            });
+        },
+        
+        addRequestValidationRule: (rule: ValidationRuleRef, tabId?: string) => {
+            const state = get();
+            const id = tabId || state.activeTabId;
+            const tab = state.tabs.find(t => t.id === id);
+            if (!tab) return;
+            
+            updateTab(id, { 
+                validation: { 
+                    ...tab.validation, 
+                    rules: [...tab.validation.rules, rule] 
+                },
+                isDirty: true 
+            });
+        },
+        
+        removeRequestValidationRule: (index: number, tabId?: string) => {
+            const state = get();
+            const id = tabId || state.activeTabId;
+            const tab = state.tabs.find(t => t.id === id);
+            if (!tab) return;
+            
+            const newRules = [...tab.validation.rules];
+            newRules.splice(index, 1);
+            
+            updateTab(id, { 
+                validation: { ...tab.validation, rules: newRules },
+                isDirty: true 
+            });
+        },
+        
+        updateRequestValidationRule: (index: number, rule: ValidationRuleRef, tabId?: string) => {
+            const state = get();
+            const id = tabId || state.activeTabId;
+            const tab = state.tabs.find(t => t.id === id);
+            if (!tab) return;
+            
+            const newRules = [...tab.validation.rules];
+            newRules[index] = rule;
+            
+            updateTab(id, { 
+                validation: { ...tab.validation, rules: newRules },
+                isDirty: true 
+            });
+        },
+        
+        setRequestValidation: (validation: RequestValidation, tabId?: string) => {
+            const state = get();
+            const id = tabId || state.activeTabId;
+            updateTab(id, { validation, isDirty: true });
+        },
+        
         // ==================== Send Request ====================
         
         handleSendRequest: async (vsCodeApi, environments, auths, tabId?) => {
@@ -1182,8 +1256,13 @@ const createRequestTabsSlice: StateCreator<RequestTabsSlice> = (set, get) => {
                 envVars: Object.fromEntries(envVarsMap)
             };
             
-            // Send request with tab ID for correlation
-            vsCodeApi.postMessage({ type: 'httpRequest', request, id: tab.id });
+            // Send request with tab ID and validation configuration for correlation
+            vsCodeApi.postMessage({ 
+                type: 'httpRequest', 
+                request, 
+                id: tab.id,
+                validation: tab.validation.enabled ? tab.validation : undefined
+            });
         }
     };
 };

@@ -1,3 +1,5 @@
+import { RequestValidation, ValidationResult } from './validation';
+
 /**
  * Internal Collection Types for Wave Client
  * These types are used throughout the app for storing and manipulating collections.
@@ -61,6 +63,7 @@ export interface CollectionRequest {
   header?: HeaderRow[];
   body?: CollectionBody;
   description?: string;
+  validation?: RequestValidation;
 }
 
 // ============================================================================
@@ -232,6 +235,7 @@ export interface ResponseData {
   size: number;
   body: string;
   headers: Record<string, string>;
+  validationResult?: ValidationResult;
 }
 
 export type RequestBodyTextType = 'none' | 'json' | 'xml' | 'html' | 'text' | 'csv' | 'unknown';

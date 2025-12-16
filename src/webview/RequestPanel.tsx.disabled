@@ -5,6 +5,7 @@ import StyledInput from "../components/ui/styled-input"
 import RequestParams from "../components/common/RequestParams"
 import RequestHeaders from "../components/common/RequestHeaders"
 import RequestBody from "../components/common/RequestBody"
+import RequestValidation from "../components/common/RequestValidation"
 import Banner from "../components/ui/banner"
 import {
    Select,
@@ -51,7 +52,7 @@ const PROTOCOLS = [
 ];
 
 const TABS = [
-  'Params', 'Headers', 'Body'
+  'Params', 'Headers', 'Body', 'Validation'
 ];
 
 const RequestPanel: React.FC<RequestPanelProps> = ({ onSendRequest, onSaveRequest })  => {
@@ -77,7 +78,7 @@ const RequestPanel: React.FC<RequestPanelProps> = ({ onSendRequest, onSaveReques
   const [isRequestSaveWizardOpen, setIsRequestSaveWizardOpen] = useState(false);
   const [collectionInfoToSave, setCollectionInfoToSave] = useState<CollectionToSaveInfo | undefined>(undefined);
 
-  const [activeTab, setActiveTab] = useState<'Params' | 'Headers' | 'Body'>('Params');
+  const [activeTab, setActiveTab] = useState<'Params' | 'Headers' | 'Body' | 'Validation'>('Params');
   const urlInputId = useId();
   const httpMethodSelectId = useId();
   const environmentSelectId = useId();
@@ -371,6 +372,9 @@ const RequestPanel: React.FC<RequestPanelProps> = ({ onSendRequest, onSaveReques
         )}
         {activeTab === 'Body' && (
           <RequestBody/>
+        )}
+        {activeTab === 'Validation' && (
+          <RequestValidation/>
         )}
       </div>
 
