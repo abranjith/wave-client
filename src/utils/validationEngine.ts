@@ -157,6 +157,28 @@ function evaluateNumericOperator(
 }
 
 /**
+ * Evaluates status code specific operations (includes numeric + status-specific)
+ */
+function evaluateStatusOperator(
+    actual: number,
+    operator: string,
+    value: number,
+    value2?: number,
+    values?: number[]
+): boolean {
+    // Handle status-specific operators
+    switch (operator) {
+        case 'is_success':
+            return actual >= 200 && actual < 300;
+        case 'is_not_success':
+            return actual < 200 || actual >= 300;
+        default:
+            // Delegate to numeric operator for standard comparisons
+            return evaluateNumericOperator(actual, operator, value, value2, values);
+    }
+}
+
+/**
  * Evaluates string comparison operations
  */
 function evaluateStringOperator(
@@ -216,7 +238,7 @@ function evaluateStatusRule(
     const expectedValue2 = rule.value2 !== undefined ? resolveNumericValue(rule.value2, envVars) : undefined;
     const expectedValues = rule.values?.map(v => resolveNumericValue(v, envVars));
 
-    const passed = evaluateNumericOperator(
+    const passed = evaluateStatusOperator(
         actualStatus,
         rule.operator,
         expectedValue,
@@ -232,6 +254,12 @@ function evaluateStatusRule(
         case 'in':
         case 'not_in':
             expectedStr = `[${expectedValues?.join(', ')}]`;
+            break;
+        case 'is_success':
+            expectedStr = '2xx (200-299)';
+            break;
+        case 'is_not_success':
+            expectedStr = 'not 2xx';
             break;
         default:
             expectedStr = String(expectedValue);
@@ -317,6 +345,7 @@ function evaluateHeaderRule(
 /**
  * Evaluates JSON path expression against response body
  */
+//TODO use something like jsonpath-plus for more robust JSON path support
 function evaluateJsonPath(body: string, jsonPath: string): { value: any; found: boolean; error?: string } {
     try {
         const json = JSON.parse(body);
@@ -345,6 +374,7 @@ function evaluateJsonPath(body: string, jsonPath: string): { value: any; found: 
 /**
  * Validates JSON against a JSON schema (basic implementation)
  */
+//TODO need a full JSON Schema validator like Ajv for complete support. Also what input should we support?
 function validateJsonSchema(body: string, schema: string): { valid: boolean; error?: string } {
     try {
         JSON.parse(body); // Validate body is JSON

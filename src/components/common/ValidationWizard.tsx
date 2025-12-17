@@ -13,6 +13,7 @@ import {
     BodyValidationRule,
     TimeValidationRule,
     NumericOperator,
+    StatusOperator,
     StringOperator,
     BodyOperator,
     ExistenceOperator
@@ -26,6 +27,20 @@ interface ValidationWizardProps {
 }
 
 // Operator options for different rule types
+const STATUS_OPERATORS: { value: StatusOperator; label: string }[] = [
+    { value: 'equals', label: 'Equals' },
+    { value: 'not_equals', label: 'Not Equals' },
+    { value: 'greater_than', label: 'Greater Than' },
+    { value: 'greater_than_or_equal', label: 'Greater Than or Equal' },
+    { value: 'less_than', label: 'Less Than' },
+    { value: 'less_than_or_equal', label: 'Less Than or Equal' },
+    { value: 'between', label: 'Between' },
+    { value: 'in', label: 'In' },
+    { value: 'not_in', label: 'Not In' },
+    { value: 'is_success', label: 'Is Success (2xx)' },
+    { value: 'is_not_success', label: 'Is Not Success' },
+];
+
 const NUMERIC_OPERATORS: { value: NumericOperator; label: string }[] = [
     { value: 'equals', label: 'Equals' },
     { value: 'not_equals', label: 'Not Equals' },
@@ -90,7 +105,7 @@ const ValidationWizard: React.FC<ValidationWizardProps> = ({
     const [category, setCategory] = useState<ValidationRuleCategory>(rule?.category || 'status');
 
     // Status rule fields
-    const [statusOperator, setStatusOperator] = useState<NumericOperator>('equals');
+    const [statusOperator, setStatusOperator] = useState<StatusOperator>('equals');
     const [statusValue, setStatusValue] = useState<number>(200);
     const [statusValue2, setStatusValue2] = useState<number>(299);
     const [statusValues, setStatusValues] = useState<string>('');
@@ -127,7 +142,7 @@ const ValidationWizard: React.FC<ValidationWizardProps> = ({
             // Use category to determine how to initialize fields
             switch (rule.category) {
                 case 'status':
-                    setStatusOperator(rule.operator as NumericOperator);
+                    setStatusOperator(rule.operator as StatusOperator);
                     setStatusValue(typeof rule.value === 'number' ? rule.value : 200);
                     if (rule.value2) setStatusValue2(rule.value2);
                     if (rule.values) setStatusValues((rule.values as number[]).join(', '));
@@ -311,12 +326,12 @@ const ValidationWizard: React.FC<ValidationWizardProps> = ({
                 <>
                     <div className="space-y-2">
                         <Label>Operator</Label>
-                        <Select value={statusOperator} onValueChange={(value) => setStatusOperator(value as NumericOperator)}>
+                        <Select value={statusOperator} onValueChange={(value) => setStatusOperator(value as StatusOperator)}>
                             <SelectTrigger>
                                 <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
-                                {NUMERIC_OPERATORS.map((op) => (
+                                {STATUS_OPERATORS.map((op) => (
                                     <SelectItem key={op.value} value={op.value}>
                                         {op.label}
                                     </SelectItem>

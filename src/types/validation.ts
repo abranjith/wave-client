@@ -31,6 +31,14 @@ export type NumericOperator =
     | 'not_in';
 
 /**
+ * Status code specific operators (includes numeric operators plus status-specific ones)
+ */
+export type StatusOperator = 
+    | NumericOperator
+    | 'is_success'
+    | 'is_not_success';
+
+/**
  * String comparison operators
  */
 export type StringOperator = 
@@ -86,7 +94,7 @@ export interface BaseValidationRule {
  */
 export interface StatusValidationRule extends BaseValidationRule {
     category: 'status';
-    operator: NumericOperator;
+    operator: StatusOperator;
     value: number;           // Primary value (for equals, greater_than, etc.)
     value2?: number;         // Secondary value (for 'between' operator)
     values?: number[];       // Multiple values (for 'in', 'not_in' operators)

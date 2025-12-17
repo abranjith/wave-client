@@ -35,6 +35,7 @@ import {
     ValidationRuleRef, 
     ValidationRuleCategory,
     NumericOperator,
+    StatusOperator,
     StringOperator,
     ExistenceOperator,
     BodyOperator,
@@ -58,6 +59,21 @@ const CATEGORY_LABELS: Record<ValidationRuleCategory, string> = {
     header: 'Header',
     body: 'Body',
     time: 'Response Time'
+};
+
+// Status operator labels (includes numeric + status-specific)
+const STATUS_OPERATOR_LABELS: Record<StatusOperator, string> = {
+    equals: 'Equals',
+    not_equals: 'Not Equals',
+    greater_than: 'Greater Than',
+    greater_than_or_equal: 'Greater Than or Equal',
+    less_than: 'Less Than',
+    less_than_or_equal: 'Less Than or Equal',
+    between: 'Between',
+    in: 'In',
+    not_in: 'Not In',
+    is_success: 'Is Success (2xx)',
+    is_not_success: 'Is Not Success'
 };
 
 // Numeric operator labels
@@ -108,6 +124,7 @@ const BODY_OPERATOR_LABELS: Record<BodyOperator, string> = {
 function getOperatorsForCategory(category: ValidationRuleCategory): { value: string; label: string }[] {
     switch (category) {
         case 'status':
+            return Object.entries(STATUS_OPERATOR_LABELS).map(([value, label]) => ({ value, label }));
         case 'time':
             return Object.entries(NUMERIC_OPERATOR_LABELS).map(([value, label]) => ({ value, label }));
         case 'header':
