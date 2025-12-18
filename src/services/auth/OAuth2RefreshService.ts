@@ -4,8 +4,10 @@
  */
 
 import axios from 'axios';
+import * as https from 'https';
 import { AuthServiceBase } from './AuthServiceBase';
 import { Auth, AuthResult, AuthRequestConfig, AuthType, OAuth2RefreshAuth, EnvVarsMap, authOk, authErr } from './types';
+import { AppSettings } from '../BaseStorageService';
 
 /**
  * Cached OAuth2 token data
@@ -84,7 +86,8 @@ export class OAuth2RefreshService extends AuthServiceBase {
                 clientIdResult.resolved,
                 clientSecretResult.resolved,
                 refreshTokenResult.resolved,
-                scopeResult.resolved
+                scopeResult.resolved,
+                config.appSettings
             );
 
             // Cache the new token
@@ -116,7 +119,8 @@ export class OAuth2RefreshService extends AuthServiceBase {
         clientId: string,
         clientSecret: string,
         refreshToken: string,
-        scope?: string
+        scope?: string,
+        appSettings?: AppSettings
     ): Promise<OAuth2TokenCache> {
         // Build token request body
         const params = new URLSearchParams();
@@ -133,11 +137,16 @@ export class OAuth2RefreshService extends AuthServiceBase {
         }
 
         try {
+            let httpsAgent: https.Agent | undefined = undefined;
+            if (appSettings?.ignoreCertificateValidation === true) {
+                    httpsAgent = new https.Agent({ rejectUnauthorized: false });
+            }
             const response = await axios.post(tokenUrl, params.toString(), {
                 headers: {
                     'Content-Type': 'application/x-www-form-urlencoded',
                 },
-                timeout: 30000, // 30 second timeout for token requests
+                timeout: 30000, // 30 second timeout for token requests,
+                httpsAgent: httpsAgent,
             });
 
             const data = response.data;
@@ -161,7 +170,7 @@ export class OAuth2RefreshService extends AuthServiceBase {
                 const errorMessage = errorData?.error_description 
                     || errorData?.error 
                     || `Token refresh failed with status ${error.response.status}`;
-                throw new Error(errorMessage);
+                throw new Error(`Error calling token endpoint: ${errorMessage}`);
             }
             throw error;
         }

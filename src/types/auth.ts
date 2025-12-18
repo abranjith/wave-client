@@ -4,6 +4,7 @@
  * the webview (React) and the extension backend (Node.js).
  */
 
+import { AppSettings } from '../services';
 import { Result, ok, err } from '../utils/result';
 
 // ==================== Auth Type Enum ====================
@@ -100,6 +101,7 @@ export interface AuthRequestConfig {
     headers: Record<string, string | string[]>;
     params?: string;
     body?: any;
+    appSettings: AppSettings;
 }
 
 /**

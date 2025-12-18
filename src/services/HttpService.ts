@@ -191,6 +191,7 @@ export class HttpService {
                         headers: headers,
                         params: paramsString,
                         body: request.body,
+                        appSettings: settings,
                     };
 
                     const authResult = await authService.applyAuth(
