@@ -4,7 +4,7 @@
  * Supports keyboard shortcuts (Ctrl+T for new tab, Ctrl+W for close tab).
  */
 
-import React, { useEffect, useCallback } from 'react';
+import React, { useEffect, useCallback, useState } from 'react';
 import { PlusIcon, XIcon, CircleIcon } from 'lucide-react';
 import { Button } from '../ui/button';
 import {
@@ -13,21 +13,32 @@ import {
     TooltipProvider,
     TooltipTrigger,
 } from '../ui/tooltip';
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+} from '../ui/dialog';
 import useAppStateStore from '../../hooks/store/useAppStateStore';
 import { getTabDisplayName, TAB_CONSTANTS } from '../../types/tab';
 import { cn } from '../../utils/common';
 
 interface TabsBarProps {
     className?: string;
+    onSave?: (tabId: string) => void;
 }
 
-const TabsBar: React.FC<TabsBarProps> = ({ className }) => {
+const TabsBar: React.FC<TabsBarProps> = ({ className, onSave }) => {
     const tabs = useAppStateStore((state) => state.tabs);
     const activeTabId = useAppStateStore((state) => state.activeTabId);
     const addTab = useAppStateStore((state) => state.addTab);
     const closeTab = useAppStateStore((state) => state.closeTab);
     const setActiveTab = useAppStateStore((state) => state.setActiveTab);
     const canAddTab = useAppStateStore((state) => state.canAddTab);
+
+    const [tabToClose, setTabToClose] = useState<string | null>(null);
 
     // Keyboard shortcuts handler
     const handleKeyDown = useCallback((e: KeyboardEvent) => {
@@ -42,9 +53,14 @@ const TabsBar: React.FC<TabsBarProps> = ({ className }) => {
         // Ctrl+W: Close current tab
         if (e.ctrlKey && e.key === 'w') {
             e.preventDefault();
-            closeTab(activeTabId);
+            const tab = tabs.find(t => t.id === activeTabId);
+            if (tab?.isDirty) {
+                setTabToClose(activeTabId);
+            } else {
+                closeTab(activeTabId);
+            }
         }
-    }, [activeTabId, addTab, closeTab, canAddTab]);
+    }, [activeTabId, addTab, closeTab, canAddTab, tabs]);
 
     // Register keyboard shortcuts
     useEffect(() => {
@@ -60,7 +76,12 @@ const TabsBar: React.FC<TabsBarProps> = ({ className }) => {
 
     const handleCloseClick = (e: React.MouseEvent, tabId: string) => {
         e.stopPropagation(); // Prevent tab activation when clicking close
-        closeTab(tabId);
+        const tab = tabs.find(t => t.id === tabId);
+        if (tab?.isDirty) {
+            setTabToClose(tabId);
+        } else {
+            closeTab(tabId);
+        }
     };
 
     const handleAddTab = () => {
@@ -90,6 +111,22 @@ const TabsBar: React.FC<TabsBarProps> = ({ className }) => {
                 return 'text-slate-600 dark:text-slate-400';
         }
     };
+
+    const handleConfirmClose = () => {
+        if (tabToClose) {
+            closeTab(tabToClose);
+            setTabToClose(null);
+        }
+    };
+
+    const handleSaveAndClose = () => {
+        if (tabToClose && onSave) {
+            onSave(tabToClose);
+            setTabToClose(null);
+        }
+    };
+
+    const tabToCloseObj = tabs.find(t => t.id === tabToClose);
 
     return (
         <div 
@@ -181,6 +218,30 @@ const TabsBar: React.FC<TabsBarProps> = ({ className }) => {
                     </TooltipProvider>
                 </div>
             )}
+
+            <Dialog open={!!tabToClose} onOpenChange={(open) => !open && setTabToClose(null)}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>Unsaved Changes</DialogTitle>
+                        <DialogDescription>
+                            Do you want to save the changes you made to "{tabToCloseObj ? getTabDisplayName(tabToCloseObj) : 'Request'}"?
+                            <br/>
+                            Your changes will be lost if you don't save them.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <DialogFooter>
+                        <Button variant="secondary" onClick={handleConfirmClose}>
+                            Don't Save
+                        </Button>
+                        <Button variant="ghost" onClick={() => setTabToClose(null)}>
+                            Cancel
+                        </Button>
+                        <Button onClick={handleSaveAndClose}>
+                            Save
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </div>
     );
 };

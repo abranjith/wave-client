@@ -3,11 +3,9 @@
  * Handles OAuth2 token refresh flow with caching.
  */
 
-import axios from 'axios';
-import * as https from 'https';
 import { AuthServiceBase } from './AuthServiceBase';
 import { Auth, AuthResult, AuthRequestConfig, AuthType, OAuth2RefreshAuth, EnvVarsMap, authOk, authErr } from './types';
-import { AppSettings } from '../BaseStorageService';
+import { httpService, SendConfig } from '../HttpService';
 
 /**
  * Cached OAuth2 token data
@@ -87,7 +85,6 @@ export class OAuth2RefreshService extends AuthServiceBase {
                 clientSecretResult.resolved,
                 refreshTokenResult.resolved,
                 scopeResult.resolved,
-                config.appSettings
             );
 
             // Cache the new token
@@ -120,7 +117,6 @@ export class OAuth2RefreshService extends AuthServiceBase {
         clientSecret: string,
         refreshToken: string,
         scope?: string,
-        appSettings?: AppSettings
     ): Promise<OAuth2TokenCache> {
         // Build token request body
         const params = new URLSearchParams();
@@ -137,19 +133,23 @@ export class OAuth2RefreshService extends AuthServiceBase {
         }
 
         try {
-            let httpsAgent: https.Agent | undefined = undefined;
-            if (appSettings?.ignoreCertificateValidation === true) {
-                    httpsAgent = new https.Agent({ rejectUnauthorized: false });
-            }
-            const response = await axios.post(tokenUrl, params.toString(), {
+            const sendConfig: SendConfig = {
+                method: 'POST',
+                url: tokenUrl,
                 headers: {
                     'Content-Type': 'application/x-www-form-urlencoded',
                 },
-                timeout: 30000, // 30 second timeout for token requests,
-                httpsAgent: httpsAgent,
-            });
+                body: params.toString(),
+                responseType: 'json',
+            };
 
-            const data = response.data;
+            const result = await httpService.send(sendConfig);
+
+            if (result.error) {
+                throw new Error(result.error);
+            }
+
+            const data = result.response.data;
 
             if (!data.access_token) {
                 throw new Error('No access_token in token response');

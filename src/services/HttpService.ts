@@ -18,6 +18,7 @@ export interface SendConfig {
     params?: string;
     body?: any;
     validateStatus?: boolean; // If true, don't throw on any status (default: false)
+    responseType?: 'arraybuffer' | 'text' | 'json';
 }
 
 /**
@@ -52,7 +53,8 @@ export interface HttpResponseResult {
     elapsedTime: number;
     size: number;
     headers: Record<string, string>;
-    body: string; // Base64 encoded
+    body: string;
+    is_encoded: boolean;
 }
 
 /**
@@ -104,7 +106,7 @@ export class HttpService {
                 url: requestUrl,
                 headers: config.headers,
                 data: config.body,
-                responseType: 'arraybuffer',
+                responseType: config.responseType || 'arraybuffer',
                 proxy: proxy || undefined,
                 httpsAgent: httpsAgent,
                 maxRedirects: settings.maxRedirects,
@@ -130,6 +132,7 @@ export class HttpService {
                         headers: error.response.headers as Record<string, any>,
                         data: error.response.data,
                     },
+                    error: `Request failed with status ${error.response.statusText}`
                 };
             }
 
@@ -139,7 +142,7 @@ export class HttpService {
                     status: 0,
                     statusText: error.message || 'Error',
                     headers: {},
-                    data: Buffer.from(error.message || 'Unknown error'),
+                    data: undefined,
                 },
                 error: error.message || 'Request failed',
             };
@@ -190,8 +193,7 @@ export class HttpService {
                         url: fullUrl,
                         headers: headers,
                         params: paramsString,
-                        body: request.body,
-                        appSettings: settings,
+                        body: request.body
                     };
 
                     const authResult = await authService.applyAuth(
@@ -234,6 +236,7 @@ export class HttpService {
                                 size: internalResponse.data ? internalResponse.data.byteLength : 0,
                                 headers: internalResponse.headers as Record<string, string>,
                                 body: bodyBase64,
+                                is_encoded: true,
                             },
                             newCookies,
                         };
@@ -328,6 +331,7 @@ export class HttpService {
                     size: response.data ? response.data.byteLength : 0,
                     headers: response.headers as Record<string, string>,
                     body: bodyBase64,
+                    is_encoded: true,
                 },
                 newCookies
             };
@@ -352,6 +356,7 @@ export class HttpService {
                     size: errorSize,
                     headers: error?.response?.headers || {},
                     body: errorBodyBase64,
+                    is_encoded: true,
                 },
                 newCookies: []
             };

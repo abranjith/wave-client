@@ -101,7 +101,6 @@ export interface AuthRequestConfig {
     headers: Record<string, string | string[]>;
     params?: string;
     body?: any;
-    appSettings: AppSettings;
 }
 
 /**
@@ -122,7 +121,7 @@ export interface InternalAuthResponse {
     status: number;
     statusText: string;
     headers: Record<string, any>;
-    data: Buffer | ArrayBuffer;
+    data: Buffer | ArrayBuffer | string | any;
 }
 
 /**

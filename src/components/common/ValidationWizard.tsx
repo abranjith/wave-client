@@ -350,26 +350,28 @@ const ValidationWizard: React.FC<ValidationWizardProps> = ({
                             />
                         </div>
                     ) : (
-                        <>
-                            <div className="space-y-2">
-                                <Label>Value</Label>
-                                <Input
-                                    type="number"
-                                    value={statusValue}
-                                    onChange={(e) => setStatusValue(parseInt(e.target.value, 10) || 0)}
-                                />
-                            </div>
-                            {needsSecondValue(statusOperator) && (
+                        !['is_success', 'is_not_success'].includes(statusOperator) && (
+                            <>
                                 <div className="space-y-2">
-                                    <Label>Upper Bound</Label>
+                                    <Label>Value</Label>
                                     <Input
                                         type="number"
-                                        value={statusValue2}
-                                        onChange={(e) => setStatusValue2(parseInt(e.target.value, 10) || 0)}
+                                        value={statusValue}
+                                        onChange={(e) => setStatusValue(parseInt(e.target.value, 10) || 0)}
                                     />
                                 </div>
-                            )}
-                        </>
+                                {needsSecondValue(statusOperator) && (
+                                    <div className="space-y-2">
+                                        <Label>Upper Bound</Label>
+                                        <Input
+                                            type="number"
+                                            value={statusValue2}
+                                            onChange={(e) => setStatusValue2(parseInt(e.target.value, 10) || 0)}
+                                        />
+                                    </div>
+                                )}
+                            </>
+                        )
                     )}
                 </>
             )}

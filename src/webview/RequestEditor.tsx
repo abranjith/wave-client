@@ -5,7 +5,7 @@
  */
 
 import React, { useState, useId, useEffect, useMemo, useCallback } from 'react';
-import { SendHorizonalIcon, SaveIcon, LoaderCircleIcon } from 'lucide-react';
+import { SendHorizonalIcon, SaveIcon, LoaderCircleIcon, CheckCircleIcon, XCircleIcon, CircleSlashIcon } from 'lucide-react';
 import { Button } from '../components/ui/button';
 import StyledInput from '../components/ui/styled-input';
 import RequestParams from '../components/common/RequestParams';
@@ -63,7 +63,7 @@ const RESPONSE_TABS = ['Body', 'Headers', 'Validation'] as const;
 
 interface RequestEditorProps {
     onSendRequest: (tabId: string) => void;
-    onSaveRequest: (request: ParsedRequest, newCollectionName: string | undefined, folderPath?: string[]) => void;
+    onSaveRequest: (request: ParsedRequest, newCollectionName: string | undefined, folderPath?: string[], tabId?: string) => void;
     onDownloadResponse: (data: string) => void;
 }
 
@@ -89,6 +89,7 @@ const RequestEditor: React.FC<RequestEditorProps> = ({
     // Tab update functions
     const updateMethod = useAppStateStore((state) => state.updateMethod);
     const updateUrl = useAppStateStore((state) => state.updateUrl);
+    const setActiveTab = useAppStateStore((state) => state.setActiveTab);
     const setActiveRequestSection = useAppStateStore((state) => state.setActiveRequestSection);
     const setActiveResponseSection = useAppStateStore((state) => state.setActiveResponseSection);
     const setTabEnvironment = useAppStateStore((state) => state.setTabEnvironment);
@@ -121,14 +122,19 @@ const RequestEditor: React.FC<RequestEditorProps> = ({
 
     // ==================== Event Handlers ====================
     
-    const handleSaveRequest = useCallback(() => {
+    const handleSaveRequest = useCallback((tabId?: string) => {
+        if (tabId && tabId !== activeTabId) {
+            setActiveTab(tabId);
+            return;
+        }
+
         if (!activeTab?.folderPath || activeTab.folderPath.length === 0) {
             setIsRequestSaveWizardOpen(true);
         } else {
             const currentRequest = getParsedRequest();
-            onSaveRequest(currentRequest, undefined);
+            onSaveRequest(currentRequest, undefined, undefined, activeTabId);
         }
-    }, [activeTab?.folderPath, getParsedRequest, onSaveRequest]);
+    }, [activeTab?.folderPath, activeTabId, getParsedRequest, onSaveRequest, setActiveTab]);
 
     const handleEnvironmentChange = useCallback((value: string) => {
         if (value === 'none') {
@@ -151,10 +157,10 @@ const RequestEditor: React.FC<RequestEditorProps> = ({
         if (collectionInfoToSave) {
             const currentRequest = getParsedRequest();
             currentRequest.name = collectionInfoToSave.requestName || currentRequest.name;
-            onSaveRequest(currentRequest, collectionInfoToSave.collectionName, collectionInfoToSave.folderPath);
+            onSaveRequest(currentRequest, collectionInfoToSave.collectionName, collectionInfoToSave.folderPath, activeTabId);
             setCollectionInfoToSave(undefined);
         }
-    }, [collectionInfoToSave, getParsedRequest, onSaveRequest]);
+    }, [collectionInfoToSave, getParsedRequest, onSaveRequest, activeTabId]);
 
     // ==================== Early Return ====================
     
@@ -188,7 +194,7 @@ const RequestEditor: React.FC<RequestEditorProps> = ({
     return (
         <div className="w-full h-full flex flex-col overflow-hidden">
             {/* Tabs Bar */}
-            <TabsBar />
+            <TabsBar onSave={handleSaveRequest} />
             
             {/* Request Panel */}
             <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
@@ -280,9 +286,9 @@ const RequestEditor: React.FC<RequestEditorProps> = ({
                             <Tooltip>
                                 <TooltipTrigger asChild>
                                     <Button
-                                        onClick={handleSaveRequest}
+                                        onClick={() => handleSaveRequest(activeTabId)}
                                         className="bg-white hover:bg-green-600 text-green-600 hover:text-white border hover:border-green-600 font-medium px-6 py-2 transition-colors dark:bg-slate-900 dark:hover:bg-green-600 dark:text-green-500 dark:hover:text-white dark:hover:border-green-600 disabled:bg-slate-100 disabled:text-slate-400 disabled:border-slate-300 disabled:hover:bg-slate-100 disabled:hover:text-slate-400 disabled:hover:border-slate-300 dark:disabled:bg-slate-800 dark:disabled:text-slate-600 dark:disabled:border-slate-700 dark:disabled:hover:bg-slate-800 dark:disabled:hover:text-slate-600 dark:disabled:hover:border-slate-700"
-                                        disabled={isRequestProcessing || !Boolean(url?.trim())}
+                                        disabled={isRequestProcessing || !Boolean(url?.trim()) || (!activeTab?.isDirty && !!activeTab?.folderPath)}
                                     >
                                         <SaveIcon size={16} />
                                     </Button>
@@ -426,7 +432,7 @@ const RequestEditor: React.FC<RequestEditorProps> = ({
                                     {RESPONSE_TABS.map(tab => (
                                         <button
                                             key={tab}
-                                            className={`px-6 py-3 text-sm font-medium focus:outline-none transition-all relative ${
+                                            className={`px-6 py-3 text-sm font-medium focus:outline-none transition-all relative flex items-center gap-2 ${
                                                 activeResponseSection === tab
                                                     ? 'border-b-2 border-blue-500 text-blue-600 bg-white dark:bg-slate-800 dark:text-blue-400 dark:border-blue-400'
                                                     : 'text-slate-600 bg-transparent hover:text-blue-600 hover:bg-white/50 dark:text-slate-400 dark:hover:text-blue-400 dark:hover:bg-slate-800/50'
@@ -434,6 +440,17 @@ const RequestEditor: React.FC<RequestEditorProps> = ({
                                             onClick={() => setActiveResponseSection(tab)}
                                         >
                                             {tab}
+                                            {tab === 'Validation' && (
+                                                <span className="flex items-center">
+                                                    {(!responseData.validationResult || !responseData.validationResult.enabled || responseData.validationResult.totalRules === 0) ? (
+                                                        <CircleSlashIcon className="w-4 h-4 text-slate-400" />
+                                                    ) : responseData.validationResult.allPassed ? (
+                                                        <CheckCircleIcon className="w-4 h-4 text-green-600" />
+                                                    ) : (
+                                                        <XCircleIcon className="w-4 h-4 text-red-600" />
+                                                    )}
+                                                </span>
+                                            )}
                                         </button>
                                     ))}
                                 </div>

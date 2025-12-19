@@ -63,6 +63,9 @@ export interface RequestTabsSlice {
     // Get parsed request for saving/history
     getParsedRequest: (tabId?: string) => ParsedRequest;
     
+    // Update tab metadata (name, folder path, collection ref) and mark clean
+    updateTabMetadata: (tabId: string, metadata: { name?: string, folderPath?: string[], collectionRef?: CollectionReference }) => void;
+
     // Individual field updaters (operate on active tab)
     updateMethod: (method: string) => void;
     updateProtocol: (protocol: string) => void;
@@ -686,6 +689,13 @@ const createRequestTabsSlice: StateCreator<RequestTabsSlice> = (set, get) => {
             };
         },
         
+        updateTabMetadata: (tabId: string, metadata: { name?: string, folderPath?: string[], collectionRef?: CollectionReference }) => {
+            updateTab(tabId, {
+                ...metadata,
+                isDirty: false
+            });
+        },
+
         // ==================== Field Updaters ====================
         
         updateMethod: (method: string) => {

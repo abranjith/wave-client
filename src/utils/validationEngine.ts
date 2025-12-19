@@ -397,7 +397,17 @@ function evaluateBodyRule(
     response: ResponseData,
     envVars: Map<string, string>
 ): ValidationRuleResult {
-    const body = response.body || '';
+    let body = response.body || '';
+
+    // Decode base64 body if needed
+    if (response.is_encoded && body) {
+        try {
+            body = Buffer.from(body, 'base64').toString('utf-8');
+        } catch (e) {
+            // Keep original body if decoding fails
+        }
+    }
+
     const expectedValue = rule.value ? resolveEnvVariables(rule.value, envVars) : '';
     const jsonPath = rule.jsonPath ? resolveEnvVariables(rule.jsonPath, envVars) : '';
     const caseSensitive = rule.caseSensitive ?? false;

@@ -55,7 +55,9 @@ const App: React.FC = () => {
   const setBannerError = useAppStateStore((state) => state.setBannerError);
   const setBannerInfo = useAppStateStore((state) => state.setBannerInfo);
   const setBannerWarning = useAppStateStore((state) => state.setBannerWarning);
+  const updateTabMetadata = useAppStateStore((state) => state.updateTabMetadata);
   const vsCodeRef = useRef<any>(null);
+  const pendingSaveInfo = useRef<{ tabId: string, collectionName: string | undefined, folderPath: string[], requestName: string } | null>(null);
 
   // Initialize Collections and Environments
   useEffect(() => {
@@ -112,7 +114,16 @@ const App: React.FC = () => {
     }
   };
 
-  const handleSaveRequest = (request: RequestFormData, saveToCollectionName: string | undefined, folderPath: string[] = []) => {
+  const handleSaveRequest = (request: RequestFormData, saveToCollectionName: string | undefined, folderPath: string[] = [], tabId?: string) => {
+    if (tabId) {
+      pendingSaveInfo.current = {
+        tabId,
+        collectionName: saveToCollectionName,
+        folderPath,
+        requestName: request.name
+      };
+    }
+
     const collectionRequest = formDataToCollectionRequest(request);
     //if saveToCollectionName exists in collections, we are updating an existing collection - use filename & collection name from there
     const currentCollections = useAppStateStore.getState().collections;
@@ -300,6 +311,34 @@ const App: React.FC = () => {
           // Get current collections from the store to avoid stale closure
           const currentCollections = useAppStateStore.getState().collections;
           const existingCollection = currentCollections.find((c) => c.info.name === collection.info.name);
+          
+          // Handle pending save tab update
+          if (pendingSaveInfo.current) {
+            const { tabId, collectionName, folderPath, requestName } = pendingSaveInfo.current;
+            // Check if this collection update corresponds to the pending save
+            // If collectionName was provided (Save As), it must match
+            // If not provided (Save), we assume it matches if the collection filename matches (but we don't have filename in pendingSave easily unless we looked it up)
+            // Simpler: if we have a pending save, and we get a collection update, we assume it's related if the collection name matches what we expect.
+            
+            const targetCollectionName = collectionName || (existingCollection?.info.name);
+            
+            if (targetCollectionName === collection.info.name) {
+                // Update the tab metadata and mark clean
+                updateTabMetadata(tabId, {
+                    name: requestName,
+                    folderPath: folderPath,
+                    collectionRef: {
+                        collectionFilename: collection.filename,
+                        collectionName: collection.info.name,
+                        itemPath: folderPath
+                    }
+                });
+                
+                // Clear pending save
+                pendingSaveInfo.current = null;
+            }
+          }
+
           if (!existingCollection) {
             addCollection(collection);
             return;
