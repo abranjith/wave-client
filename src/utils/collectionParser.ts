@@ -317,6 +317,8 @@ export function formDataToCollectionRequest(formData: RequestFormData): Collecti
     method: formData.method,
     url: stringToCollectionUrl(formData.url, formData.params),
     header: formData.headers,
+    validation: formData.validation,
+    authId: formData.authId,
   };
 
   // Add body if present
@@ -366,6 +368,8 @@ export function collectionItemToFormData(
     bodyMode: request.body?.mode,
     bodyOptions: request.body?.options,
     binaryBody: request.body?.binary,
+    validation: request.validation,
+    authId: request.authId,
     sourceRef: {
       collectionFilename,
       collectionName,

@@ -550,6 +550,8 @@ const createRequestTabsSlice: StateCreator<RequestTabsSlice> = (set, get) => {
                 } : createEmptyRequestBody(),
                 folderPath: getRequestFolderPath(request),
                 collectionRef: request.sourceRef || null,
+                validation: request.validation || createEmptyValidation(),
+                authId: request.authId || null,
                 responseData: null,
                 isRequestProcessing: false,
                 requestError: null,
@@ -619,6 +621,8 @@ const createRequestTabsSlice: StateCreator<RequestTabsSlice> = (set, get) => {
                 } : createEmptyRequestBody(),
                 folderPath: getRequestFolderPath(request),
                 collectionRef: request.sourceRef || null,
+                validation: request.validation || createEmptyValidation(),
+                authId: request.authId || null,
             };
             
             set({
@@ -666,7 +670,9 @@ const createRequestTabsSlice: StateCreator<RequestTabsSlice> = (set, get) => {
                     headers: [],
                     params: [],
                     body: null,
-                    sourceRef: { collectionFilename: '', collectionName: '', itemPath: [] }
+                    sourceRef: { collectionFilename: '', collectionName: '', itemPath: [] },
+                    validation: createEmptyValidation(),
+                    authId: undefined
                 };
             }
             
@@ -681,6 +687,8 @@ const createRequestTabsSlice: StateCreator<RequestTabsSlice> = (set, get) => {
                 headers: nonEmptyHeaders,
                 params: nonEmptyParams,
                 body: tab.body?.textData?.data || null,
+                validation: tab.validation,
+                authId: tab.authId || undefined,
                 sourceRef: tab.collectionRef || { 
                     collectionFilename: '', 
                     collectionName: '', 
@@ -1271,7 +1279,7 @@ const createRequestTabsSlice: StateCreator<RequestTabsSlice> = (set, get) => {
                 type: 'httpRequest', 
                 request, 
                 id: tab.id,
-                validation: tab.validation.enabled ? tab.validation : undefined
+                validation: tab.validation
             });
         }
     };

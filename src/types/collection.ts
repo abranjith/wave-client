@@ -64,6 +64,7 @@ export interface CollectionRequest {
   body?: CollectionBody;
   description?: string;
   validation?: RequestValidation;
+  authId?: string; // Reference to auth configuration
 }
 
 // ============================================================================
@@ -177,6 +178,8 @@ export interface ParsedRequest {
   bodyMode?: CollectionBody['mode'];
   bodyOptions?: CollectionBody['options'];
   binaryBody?: BinaryBodyData;
+  validation?: RequestValidation;
+  authId?: string;
   sourceRef: CollectionReference;
 }
 
