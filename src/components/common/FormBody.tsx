@@ -1,6 +1,8 @@
 import React, { useState, useEffect, JSX, useMemo } from 'react';
-import { Trash2Icon, CopyIcon, ClipboardPasteIcon, PlusIcon, CheckCircleIcon, XCircleIcon } from 'lucide-react';
+import { Trash2Icon, CopyIcon, ClipboardPasteIcon, PlusIcon } from 'lucide-react';
 import { Button } from '../ui/button';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
+import { Switch } from '../ui/switch';
 import StyledInput from "../ui/styled-input";
 import { Tooltip, TooltipTrigger, TooltipContent } from '../ui/tooltip';
 import useAppStateStore from '../../hooks/store/useAppStateStore';
@@ -238,26 +240,33 @@ const FormBody: React.FC<FormBodyProps> = ({ dropdownElement }) => {
 
       {/* Main Content Area - Table */}
       <div className="flex-1 overflow-x-auto overflow-y-auto border border-slate-200 dark:border-slate-700 rounded-lg">
-        <table className="w-full border-collapse">
-          <thead className="sticky top-0 bg-white dark:bg-slate-800 z-10">
-            <tr className="border-b border-slate-200 dark:border-slate-700">
-              <th className="text-left py-2 px-3 text-sm font-medium text-slate-700 dark:text-slate-300 w-5/12">Key</th>
-              <th className="text-left py-2 px-3 text-sm font-medium text-slate-700 dark:text-slate-300 w-5/12">Value</th>
-              <th className="text-left py-2 px-3 text-sm font-medium text-slate-700 dark:text-slate-300 w-2/12">Actions</th>
-            </tr>
-          </thead>
-          <tbody>
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead className="w-[8%]">Enabled</TableHead>
+              <TableHead className="w-[38%]">Key</TableHead>
+              <TableHead className="w-[38%]">Value</TableHead>
+              <TableHead className="w-[16%]">Actions</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
             {formFields.map((field: FormField, index: number) => {
               const isDisabled = field.disabled;
+              const hasContent = Boolean(field.key) || Boolean(field.value);
               
               return (
-                <tr 
-                  key={field.id} 
-                  className={`border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/50 ${
-                    isDisabled ? 'opacity-40' : ''
-                  }`}
+                <TableRow 
+                  key={field.id}
                 >
-                  <td className="py-2 px-3">
+                  <TableCell>
+                    {hasContent && (
+                      <Switch
+                        checked={!isDisabled}
+                        onCheckedChange={() => toggleFormFieldEnabled(field.id, field.disabled)}
+                      />
+                    )}
+                  </TableCell>
+                  <TableCell className={isDisabled ? 'opacity-40' : ''}>
                     <StyledInput
                       type="text"
                       placeholder="Field name (e.g., username)"
@@ -268,8 +277,8 @@ const FormBody: React.FC<FormBodyProps> = ({ dropdownElement }) => {
                       onKeyDown={e => handleKeyDown(e, field.id)}
                       className="bg-white border-slate-300 focus:border-blue-500 dark:bg-slate-800 dark:border-slate-600 dark:focus:border-blue-400"
                     />
-                  </td>
-                  <td className="py-2 px-3">
+                  </TableCell>
+                  <TableCell className={isDisabled ? 'opacity-40' : ''}>
                     <StyledInput
                       type="text"
                       placeholder="Field value (e.g., john_doe)"
@@ -280,28 +289,9 @@ const FormBody: React.FC<FormBodyProps> = ({ dropdownElement }) => {
                       onKeyDown={e => handleKeyDown(e, field.id)}
                       className="bg-white border-slate-300 focus:border-blue-500 dark:bg-slate-800 dark:border-slate-600 dark:focus:border-blue-400"
                     />
-                  </td>
-                  <td className="py-2 px-3">
+                  </TableCell>
+                  <TableCell>
                     <div className="flex items-center gap-2">
-                      {(Boolean(field.key) || Boolean(field.value)) && (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => toggleFormFieldEnabled(field.id, field.disabled)}
-                          className={`${
-                            !isDisabled
-                              ? 'text-green-600 hover:text-green-700 hover:border-green-300'
-                              : 'text-slate-400 hover:text-slate-600 hover:border-slate-300'
-                          }`}
-                          title={!isDisabled ? 'Disable field' : 'Enable field'}
-                        >
-                          {!isDisabled ? (
-                            <CheckCircleIcon className="h-4 w-4" />
-                          ) : (
-                            <XCircleIcon className="h-4 w-4" />
-                          )}
-                        </Button>
-                      )}
                       {formFields.length > 1 && (
                         <Button
                           variant="outline"
@@ -314,12 +304,12 @@ const FormBody: React.FC<FormBodyProps> = ({ dropdownElement }) => {
                         </Button>
                       )}
                     </div>
-                  </td>
-                </tr>
+                  </TableCell>
+                </TableRow>
               );
             })}
-          </tbody>
-        </table>
+          </TableBody>
+        </Table>
       </div>
 
       {/* Add Field Button */}

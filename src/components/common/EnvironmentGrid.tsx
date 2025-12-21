@@ -1,8 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { EyeIcon, EyeOffIcon, ArrowLeftIcon, CheckCircleIcon, XCircleIcon, PencilIcon, SaveIcon, XIcon, PlusIcon, Trash2Icon } from 'lucide-react';
+import { EyeIcon, EyeOffIcon, ArrowLeftIcon, PencilIcon, SaveIcon, XIcon, PlusIcon, Trash2Icon } from 'lucide-react';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Textarea } from '../ui/textarea';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
+import { Switch } from '../ui/switch';
 import { Environment, EnvironmentVariable } from '../../types/collection';
 import useAppStateStore from '../../hooks/store/useAppStateStore';
 
@@ -227,24 +229,17 @@ const EnvironmentGrid: React.FC<EnvironmentGridProps> = ({ environment, onBack, 
         )}
         {(allVariables.length > 0 || isAddingNew) && (
           <div className="overflow-x-auto">
-            <table className="w-full border-collapse">
-              <thead>
-                <tr className="border-b border-gray-200 dark:border-slate-700">
-                  <th className="text-left py-3 px-4 text-sm font-medium text-gray-700 dark:text-slate-300 w-2/12">
-                    Variable Name
-                  </th>
-                  <th className="text-left py-3 px-4 text-sm font-medium text-gray-700 dark:text-slate-300 w-3/12">
-                    Value
-                  </th>
-                  <th className="text-left py-3 px-4 text-sm font-medium text-gray-700 dark:text-slate-300 w-4/12">
-                    Notes
-                  </th>
-                  <th className="text-left py-3 px-4 text-sm font-medium text-gray-700 dark:text-slate-300 w-3/12">
-                    Actions
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="w-[8%]">Enabled</TableHead>
+                  <TableHead className="w-[20%]">Variable Name</TableHead>
+                  <TableHead className="w-[30%]">Value</TableHead>
+                  <TableHead className="w-[27%]">Notes</TableHead>
+                  <TableHead className="w-[15%]">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
                 {allVariables.map((variable, index) => {
                   const isSecret = variable.type === 'secret';
                   const isVisible = visibleSecrets.has(variable.key);
@@ -253,11 +248,12 @@ const EnvironmentGrid: React.FC<EnvironmentGridProps> = ({ environment, onBack, 
                   
                   if (isEditing && editingData) {
                     return (
-                      <tr 
+                      <TableRow 
                         key={`${variable.key}-${index}`} 
-                        className="border-b border-gray-100 dark:border-slate-800 bg-blue-50 dark:bg-blue-900/20"
+                        className="bg-blue-50 dark:bg-blue-900/20"
                       >
-                        <td className="py-3 px-4">
+                        <TableCell></TableCell>
+                        <TableCell>
                           <div className="space-y-1">
                             <Input
                               type="text"
@@ -275,8 +271,8 @@ const EnvironmentGrid: React.FC<EnvironmentGridProps> = ({ environment, onBack, 
                               <p className="text-xs text-red-600 dark:text-red-400">{keyError}</p>
                             )}
                           </div>
-                        </td>
-                        <td className="py-3 px-4">
+                        </TableCell>
+                        <TableCell>
                           <Input
                             type="text"
                             value={editingData.value}
@@ -284,8 +280,8 @@ const EnvironmentGrid: React.FC<EnvironmentGridProps> = ({ environment, onBack, 
                             className="font-mono text-sm text-slate-800 dark:text-slate-200"
                             placeholder="Value"
                           />
-                        </td>
-                        <td className="py-3 px-4">
+                        </TableCell>
+                        <TableCell>
                           <Textarea
                             value={editingData.notes}
                             onChange={(e) => setEditingData({ ...editingData, notes: e.target.value })}
@@ -293,8 +289,8 @@ const EnvironmentGrid: React.FC<EnvironmentGridProps> = ({ environment, onBack, 
                             placeholder="Notes (optional)"
                             rows={1}
                           />
-                        </td>
-                        <td className="py-3 px-4">
+                        </TableCell>
+                        <TableCell>
                           <div className="flex items-center gap-2">
                             <Button
                               variant="outline"
@@ -315,19 +311,23 @@ const EnvironmentGrid: React.FC<EnvironmentGridProps> = ({ environment, onBack, 
                               <XIcon className="h-4 w-4" />
                             </Button>
                           </div>
-                        </td>
-                      </tr>
+                        </TableCell>
+                      </TableRow>
                     );
                   }
                   
                   return (
-                    <tr 
-                      key={`${variable.key}-${index}`} 
-                      className={`border-b border-gray-100 dark:border-slate-800 hover:bg-gray-50 dark:hover:bg-slate-800/50 ${
-                        !isEnabled ? 'opacity-40' : ''
-                      }`}
+                    <TableRow 
+                      key={`${variable.key}-${index}`}
                     >
-                      <td className="py-3 px-4">
+                      <TableCell>
+                        <Switch
+                          checked={isEnabled}
+                          onCheckedChange={() => toggleVariableEnabled(variable.key, isEnabled)}
+                          disabled={editingRow !== null}
+                        />
+                      </TableCell>
+                      <TableCell className={!isEnabled ? 'opacity-40' : ''}>
                         <div className={`font-mono text-sm font-medium ${
                           isEnabled 
                             ? 'text-slate-700 dark:text-slate-300' 
@@ -335,8 +335,8 @@ const EnvironmentGrid: React.FC<EnvironmentGridProps> = ({ environment, onBack, 
                         }`}>
                           {variable.key}
                         </div>
-                      </td>
-                      <td className="py-3 px-4">
+                      </TableCell>
+                      <TableCell className={!isEnabled ? 'opacity-40' : ''}>
                         <div className={`font-mono text-sm bg-gray-50 dark:bg-slate-800 p-2 rounded border min-h-[2.5rem] flex items-center ${
                           !isEnabled ? 'border-gray-200 dark:border-slate-700' : ''
                         }`}>
@@ -348,8 +348,8 @@ const EnvironmentGrid: React.FC<EnvironmentGridProps> = ({ environment, onBack, 
                             {isSecret && !isVisible ? '••••••••••••••••' : variable.value}
                           </span>
                         </div>
-                      </td>
-                      <td className="py-3 px-4">
+                      </TableCell>
+                      <TableCell className={!isEnabled ? 'opacity-40' : ''}>
                         <div className={`text-sm ${
                           isEnabled 
                             ? 'text-slate-600 dark:text-slate-400' 
@@ -357,8 +357,8 @@ const EnvironmentGrid: React.FC<EnvironmentGridProps> = ({ environment, onBack, 
                         }`}>
                           {variable.notes || '—'}
                         </div>
-                      </td>
-                      <td className="py-3 px-4">
+                      </TableCell>
+                      <TableCell>
                         <div className="flex items-center gap-2">
                           <Button
                             variant="outline"
@@ -369,24 +369,6 @@ const EnvironmentGrid: React.FC<EnvironmentGridProps> = ({ environment, onBack, 
                             disabled={editingRow !== null}
                           >
                             <PencilIcon className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => toggleVariableEnabled(variable.key, isEnabled)}
-                            className={`${
-                              isEnabled
-                                ? 'text-green-600 hover:text-green-700 hover:border-green-300'
-                                : 'text-slate-400 hover:text-slate-600 hover:border-slate-300'
-                            }`}
-                            title={isEnabled ? 'Disable variable' : 'Enable variable'}
-                            disabled={editingRow !== null}
-                          >
-                            {isEnabled ? (
-                              <CheckCircleIcon className="h-4 w-4" />
-                            ) : (
-                              <XCircleIcon className="h-4 w-4" />
-                            )}
                           </Button>
                           <Button
                             variant="outline"
@@ -415,15 +397,16 @@ const EnvironmentGrid: React.FC<EnvironmentGridProps> = ({ environment, onBack, 
                             </Button>
                           )}
                         </div>
-                      </td>
-                    </tr>
+                      </TableCell>
+                    </TableRow>
                   );
                 })}
                 
                 {/* New Variable Row */}
                 {isAddingNew && editingData && (
-                  <tr className="border-b border-gray-100 dark:border-slate-800 bg-blue-50 dark:bg-blue-900/20">
-                    <td className="py-3 px-4">
+                  <TableRow className="bg-blue-50 dark:bg-blue-900/20">
+                    <TableCell></TableCell>
+                    <TableCell>
                       <div className="space-y-1">
                         <Input
                           type="text"
@@ -442,8 +425,8 @@ const EnvironmentGrid: React.FC<EnvironmentGridProps> = ({ environment, onBack, 
                           <p className="text-xs text-red-600 dark:text-red-400">{keyError}</p>
                         )}
                       </div>
-                    </td>
-                    <td className="py-3 px-4">
+                    </TableCell>
+                    <TableCell>
                       <Input
                         type="text"
                         value={editingData.value}
@@ -451,8 +434,8 @@ const EnvironmentGrid: React.FC<EnvironmentGridProps> = ({ environment, onBack, 
                         className="font-mono text-sm text-slate-800 dark:text-slate-200"
                         placeholder="Value"
                       />
-                    </td>
-                    <td className="py-3 px-4">
+                    </TableCell>
+                    <TableCell>
                       <Textarea
                         value={editingData.notes}
                         onChange={(e) => setEditingData({ ...editingData, notes: e.target.value })}
@@ -460,8 +443,8 @@ const EnvironmentGrid: React.FC<EnvironmentGridProps> = ({ environment, onBack, 
                         placeholder="Notes (optional)"
                         rows={1}
                       />
-                    </td>
-                    <td className="py-3 px-4">
+                    </TableCell>
+                    <TableCell>
                       <div className="flex items-center gap-2">
                         <Button
                           variant="outline"
@@ -482,11 +465,11 @@ const EnvironmentGrid: React.FC<EnvironmentGridProps> = ({ environment, onBack, 
                           <XIcon className="h-4 w-4" />
                         </Button>
                       </div>
-                    </td>
-                  </tr>
+                    </TableCell>
+                  </TableRow>
                 )}
-              </tbody>
-            </table>
+              </TableBody>
+            </Table>
           </div>
         )}
         

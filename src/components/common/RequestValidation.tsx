@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { Trash2Icon, PlusIcon, CheckIcon, XIcon, PencilIcon, LinkIcon, UnlinkIcon } from 'lucide-react';
+import { Trash2Icon, PlusIcon, PencilIcon, LinkIcon, UnlinkIcon } from 'lucide-react';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Label } from '../ui/label';
@@ -163,6 +163,9 @@ function getRuleDescription(rule: ValidationRule): string {
         if (rule.operator === 'in' || rule.operator === 'not_in') {
             return `Status code ${rule.operator.replace(/_/g, ' ')} (${rule.values?.join(', ') ?? '?'})`;
         }
+        if (['is_success', 'is_not_success'].includes(rule.operator)) {
+            return `Status code ${rule.operator.replace(/_/g, ' ')}`;
+        }
         return `Status code ${rule.operator.replace(/_/g, ' ')} ${rule.value}`;
     }
     
@@ -243,7 +246,7 @@ const RuleEditorDialog: React.FC<RuleEditorDialogProps> = ({ rule, isOpen, onClo
         <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
             <DialogContent className="sm:max-w-lg">
                 <DialogHeader>
-                    <DialogTitle>{title}</DialogTitle>
+                    <DialogTitle className="text-lg font-semibold text-slate-800 dark:text-slate-200">{title}</DialogTitle>
                     <DialogDescription>
                         Configure the validation rule settings.
                     </DialogDescription>
@@ -452,8 +455,10 @@ const GlobalRuleSelectorDialog: React.FC<GlobalRuleSelectorDialogProps> = ({
         <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
             <DialogContent className="sm:max-w-lg">
                 <DialogHeader>
-                    <DialogTitle>Link Global Rule</DialogTitle>
-                    <DialogDescription>
+                    <DialogTitle className="text-lg font-semibold text-slate-800 dark:text-slate-200">
+                        Link Global Rule
+                    </DialogTitle>
+                    <DialogDescription className="text-sm text-slate-600 dark:text-slate-400">
                         Select a rule from the global validation store to reference.
                     </DialogDescription>
                 </DialogHeader>
@@ -470,19 +475,19 @@ const GlobalRuleSelectorDialog: React.FC<GlobalRuleSelectorDialogProps> = ({
                                 return (
                                     <div 
                                         key={rule.id}
-                                        className="p-3 border rounded-md hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer transition-colors"
+                                        className="p-3 border border-slate-200 dark:border-slate-700 rounded-md hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer transition-colors"
                                         onClick={() => {
                                             onSelect(rule.id);
                                             onClose();
                                         }}
                                     >
                                         <div className="flex items-center justify-between">
-                                            <span className="font-medium">{rule.name}</span>
-                                            <span className="text-xs px-2 py-1 bg-slate-100 dark:bg-slate-700 rounded">
+                                            <span className="font-medium text-slate-800 dark:text-slate-200">{rule.name}</span>
+                                            <span className="text-xs px-2 py-1 bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 rounded">
                                                 {CATEGORY_LABELS[rule.category]}
                                             </span>
                                         </div>
-                                        <div className="text-sm text-slate-500 dark:text-slate-400 mt-1">
+                                        <div className="text-sm text-slate-600 dark:text-slate-400 mt-1">
                                             {getRuleDescription(validationRule)}
                                         </div>
                                     </div>
@@ -652,37 +657,70 @@ const RequestValidation: React.FC = () => {
                             No validation rules configured. Add rules to validate responses.
                         </div>
                     ) : (
+                        <div className="border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden">
                         <Table>
                             <TableHeader>
                                 <TableRow>
-                                    <TableHead className="w-8"></TableHead>
-                                    <TableHead>Name</TableHead>
-                                    <TableHead>Category</TableHead>
-                                    <TableHead>Description</TableHead>
-                                    <TableHead className="w-24">Type</TableHead>
-                                    <TableHead className="w-24 text-right">Actions</TableHead>
+                                    <TableHead className="w-[8%]">Enabled</TableHead>
+                                    <TableHead className="w-[18%]">Name</TableHead>
+                                    <TableHead className="w-[12%]">Category</TableHead>
+                                    <TableHead className="w-[32%]">Description</TableHead>
+                                    <TableHead className="w-[12%]">Type</TableHead>
+                                    <TableHead className="w-[18%]">Actions</TableHead>
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
-                                {resolvedRules.map(({ index, ruleRef, rule, isGlobal }) => (
+                                {resolvedRules.map(({ index, ruleRef, rule, isGlobal }) => {
+                                    const isEnabled = rule?.enabled ?? false;
+                                    
+                                    const handleToggleEnabled = () => {
+                                        if (rule && !isGlobal) {
+                                            // For inline rules, update the rule's enabled state directly
+                                            updateValidationRule(index, { 
+                                                rule: { ...rule, enabled: !isEnabled } 
+                                            });
+                                        }
+                                        // Global rules' enabled state is controlled from the global store
+                                    };
+                                    
+                                    return (
                                     <TableRow key={index}>
                                         <TableCell>
-                                            {rule?.enabled ? (
-                                                <CheckIcon size={16} className="text-green-500" />
-                                            ) : (
-                                                <XIcon size={16} className="text-slate-400" />
-                                            )}
+                                            <Switch
+                                                checked={isEnabled}
+                                                onCheckedChange={handleToggleEnabled}
+                                                disabled={!rule || isGlobal}
+                                                title={isGlobal ? 'Global rule enabled state is controlled from Validation Store' : undefined}
+                                            />
                                         </TableCell>
-                                        <TableCell className="font-medium">
-                                            {rule?.name || (isGlobal ? '(Missing Rule)' : 'Unknown')}
+                                        <TableCell className={!isEnabled ? 'opacity-40' : ''}>
+                                            <span className={`font-medium text-sm ${
+                                                isEnabled 
+                                                    ? 'text-slate-800 dark:text-slate-200' 
+                                                    : 'text-slate-500 dark:text-slate-400'
+                                            }`}>
+                                                {rule?.name || (isGlobal ? '(Missing Rule)' : 'Unknown')}
+                                            </span>
                                         </TableCell>
-                                        <TableCell>
-                                            {rule ? CATEGORY_LABELS[rule.category] : '-'}
+                                        <TableCell className={!isEnabled ? 'opacity-40' : ''}>
+                                            <span className={`text-sm ${
+                                                isEnabled 
+                                                    ? 'text-slate-700 dark:text-slate-300' 
+                                                    : 'text-slate-500 dark:text-slate-400'
+                                            }`}>
+                                                {rule ? CATEGORY_LABELS[rule.category] : '-'}
+                                            </span>
                                         </TableCell>
-                                        <TableCell className="text-slate-500 dark:text-slate-400">
-                                            {rule ? getRuleDescription(rule) : '-'}
+                                        <TableCell className={!isEnabled ? 'opacity-40' : ''}>
+                                            <span className={`text-sm ${
+                                                isEnabled 
+                                                    ? 'text-slate-700 dark:text-slate-300' 
+                                                    : 'text-slate-500 dark:text-slate-400'
+                                            }`}>
+                                                {rule ? getRuleDescription(rule) : '-'}
+                                            </span>
                                         </TableCell>
-                                        <TableCell>
+                                        <TableCell className={!isEnabled ? 'opacity-40' : ''}>
                                             {isGlobal ? (
                                                 <span className="inline-flex items-center text-xs px-2 py-1 bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300 rounded">
                                                     <LinkIcon size={12} className="mr-1" />
@@ -695,31 +733,36 @@ const RequestValidation: React.FC = () => {
                                                 </span>
                                             )}
                                         </TableCell>
-                                        <TableCell className="text-right">
-                                            <div className="flex justify-end gap-1">
+                                        <TableCell>
+                                            <div className="flex items-center gap-2">
                                                 {!isGlobal && rule && (
                                                     <Button
-                                                        variant="ghost"
+                                                        variant="outline"
                                                         size="sm"
                                                         onClick={() => handleEditRule(index, rule)}
+                                                        className="text-blue-600 hover:text-blue-700 hover:border-blue-300"
+                                                        title="Edit rule"
                                                     >
-                                                        <PencilIcon size={14} />
+                                                        <PencilIcon className="h-4 w-4" />
                                                     </Button>
                                                 )}
                                                 <Button
-                                                    variant="ghost"
+                                                    variant="outline"
                                                     size="sm"
                                                     onClick={() => handleRemoveRule(index)}
-                                                    className="text-red-500 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-900/20"
+                                                    className="text-red-600 hover:text-red-700 hover:border-red-300"
+                                                    title="Delete rule"
                                                 >
-                                                    <Trash2Icon size={14} />
+                                                    <Trash2Icon className="h-4 w-4" />
                                                 </Button>
                                             </div>
                                         </TableCell>
                                     </TableRow>
-                                ))}
+                                    );
+                                })}
                             </TableBody>
                         </Table>
+                        </div>
                     )}
                     
                     {/* Info about rule evaluation */}

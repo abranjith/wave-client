@@ -1,7 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { ArrowLeftIcon, PencilIcon, Trash2Icon, CheckCircleIcon, XCircleIcon, SaveIcon, XIcon, PlusIcon } from 'lucide-react';
+import { ArrowLeftIcon, PencilIcon, Trash2Icon, SaveIcon, XIcon, PlusIcon } from 'lucide-react';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
+import { Switch } from '../ui/switch';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '../ui/dialog';
 import { Cookie } from '../../types/collection';
 import useAppStateStore from '../../hooks/store/useAppStateStore';
@@ -213,47 +215,33 @@ const CookieStoreGrid: React.FC<CookieStoreGridProps> = ({ onBack, onSaveCookies
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full border-collapse">
-              <thead>
-                <tr className="border-b border-gray-200 dark:border-slate-700">
-                  <th className="text-left py-3 px-4 text-sm font-medium text-gray-700 dark:text-slate-300 w-[12%]">
-                    Domain
-                  </th>
-                  <th className="text-left py-3 px-4 text-sm font-medium text-gray-700 dark:text-slate-300 w-[8%]">
-                    Path
-                  </th>
-                  <th className="text-left py-3 px-4 text-sm font-medium text-gray-700 dark:text-slate-300 w-[12%]">
-                    Name
-                  </th>
-                  <th className="text-left py-3 px-4 text-sm font-medium text-gray-700 dark:text-slate-300 w-[15%]">
-                    Value
-                  </th>
-                  <th className="text-left py-3 px-4 text-sm font-medium text-gray-700 dark:text-slate-300 w-[12%]">
-                    Expires
-                  </th>
-                  <th className="text-left py-3 px-4 text-sm font-medium text-gray-700 dark:text-slate-300 w-[8%]">
-                    HttpOnly
-                  </th>
-                  <th className="text-left py-3 px-4 text-sm font-medium text-gray-700 dark:text-slate-300 w-[8%]">
-                    Secure
-                  </th>
-                  <th className="text-left py-3 px-4 text-sm font-medium text-gray-700 dark:text-slate-300 w-[15%]">
-                    Actions
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="w-[6%]">Enabled</TableHead>
+                  <TableHead className="w-[12%]">Domain</TableHead>
+                  <TableHead className="w-[8%]">Path</TableHead>
+                  <TableHead className="w-[12%]">Name</TableHead>
+                  <TableHead className="w-[15%]">Value</TableHead>
+                  <TableHead className="w-[12%]">Expires</TableHead>
+                  <TableHead className="w-[7%]">HttpOnly</TableHead>
+                  <TableHead className="w-[7%]">Secure</TableHead>
+                  <TableHead className="w-[12%]">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
                 {cookies.map((cookie, index) => {
                   const isEnabled = cookie.enabled;
                   const isEditing = editingRow === cookie.id;
 
                   if (isEditing && editingData) {
                     return (
-                      <tr
+                      <TableRow
                         key={`${cookie.id}-${index}`}
-                        className="border-b border-gray-100 dark:border-slate-800 bg-blue-50 dark:bg-blue-900/20"
+                        className="bg-blue-50 dark:bg-blue-900/20"
                       >
-                        <td className="py-3 px-4">
+                        <TableCell></TableCell>
+                        <TableCell>
                           <Input
                             type="text"
                             value={editingData.domain}
@@ -264,8 +252,8 @@ const CookieStoreGrid: React.FC<CookieStoreGridProps> = ({ onBack, onSaveCookies
                             className="font-mono text-sm text-slate-800 dark:text-slate-200"
                             placeholder="example.com"
                           />
-                        </td>
-                        <td className="py-3 px-4">
+                        </TableCell>
+                        <TableCell>
                           <Input
                             type="text"
                             value={editingData.path}
@@ -273,8 +261,8 @@ const CookieStoreGrid: React.FC<CookieStoreGridProps> = ({ onBack, onSaveCookies
                             className="font-mono text-sm text-slate-800 dark:text-slate-200"
                             placeholder="/"
                           />
-                        </td>
-                        <td className="py-3 px-4">
+                        </TableCell>
+                        <TableCell>
                           <Input
                             type="text"
                             value={editingData.name}
@@ -285,8 +273,8 @@ const CookieStoreGrid: React.FC<CookieStoreGridProps> = ({ onBack, onSaveCookies
                             className="font-mono text-sm text-slate-800 dark:text-slate-200"
                             placeholder="cookieName"
                           />
-                        </td>
-                        <td className="py-3 px-4">
+                        </TableCell>
+                        <TableCell>
                           <Input
                             type="text"
                             value={editingData.value}
@@ -294,8 +282,8 @@ const CookieStoreGrid: React.FC<CookieStoreGridProps> = ({ onBack, onSaveCookies
                             className="font-mono text-sm text-slate-800 dark:text-slate-200"
                             placeholder="cookieValue"
                           />
-                        </td>
-                        <td className="py-3 px-4">
+                        </TableCell>
+                        <TableCell>
                           <Input
                             type="text"
                             value={editingData.expires}
@@ -303,24 +291,20 @@ const CookieStoreGrid: React.FC<CookieStoreGridProps> = ({ onBack, onSaveCookies
                             className="text-sm text-slate-800 dark:text-slate-200"
                             placeholder="Session"
                           />
-                        </td>
-                        <td className="py-3 px-4">
-                          <input
-                            type="checkbox"
+                        </TableCell>
+                        <TableCell>
+                          <Switch
                             checked={editingData.httpOnly}
-                            onChange={(e) => setEditingData({ ...editingData, httpOnly: e.target.checked })}
-                            className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                            onCheckedChange={(checked) => setEditingData({ ...editingData, httpOnly: checked })}
                           />
-                        </td>
-                        <td className="py-3 px-4">
-                          <input
-                            type="checkbox"
+                        </TableCell>
+                        <TableCell>
+                          <Switch
                             checked={editingData.secure}
-                            onChange={(e) => setEditingData({ ...editingData, secure: e.target.checked })}
-                            className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                            onCheckedChange={(checked) => setEditingData({ ...editingData, secure: checked })}
                           />
-                        </td>
-                        <td className="py-3 px-4">
+                        </TableCell>
+                        <TableCell>
                           <div className="flex items-center gap-2">
                             <Button
                               variant="outline"
@@ -341,19 +325,23 @@ const CookieStoreGrid: React.FC<CookieStoreGridProps> = ({ onBack, onSaveCookies
                               <XIcon className="h-4 w-4" />
                             </Button>
                           </div>
-                        </td>
-                      </tr>
+                        </TableCell>
+                      </TableRow>
                     );
                   }
 
                   return (
-                    <tr
+                    <TableRow
                       key={`${cookie.id}-${index}`}
-                      className={`border-b border-gray-100 dark:border-slate-800 hover:bg-gray-50 dark:hover:bg-slate-800/50 ${
-                        !isEnabled ? 'opacity-40' : ''
-                      }`}
                     >
-                      <td className="py-3 px-4">
+                      <TableCell>
+                        <Switch
+                          checked={isEnabled}
+                          onCheckedChange={() => toggleCookieEnabled(cookie.id)}
+                          disabled={editingRow !== null}
+                        />
+                      </TableCell>
+                      <TableCell className={!isEnabled ? 'opacity-40' : ''}>
                         <div
                           className={`font-mono text-sm break-words ${
                             isEnabled ? 'text-slate-700 dark:text-slate-300' : 'text-slate-500 dark:text-slate-400'
@@ -361,8 +349,8 @@ const CookieStoreGrid: React.FC<CookieStoreGridProps> = ({ onBack, onSaveCookies
                         >
                           {cookie.domain}
                         </div>
-                      </td>
-                      <td className="py-3 px-4">
+                      </TableCell>
+                      <TableCell className={!isEnabled ? 'opacity-40' : ''}>
                         <div
                           className={`font-mono text-sm break-words ${
                             isEnabled ? 'text-slate-700 dark:text-slate-300' : 'text-slate-500 dark:text-slate-400'
@@ -370,8 +358,8 @@ const CookieStoreGrid: React.FC<CookieStoreGridProps> = ({ onBack, onSaveCookies
                         >
                           {cookie.path}
                         </div>
-                      </td>
-                      <td className="py-3 px-4">
+                      </TableCell>
+                      <TableCell className={!isEnabled ? 'opacity-40' : ''}>
                         <div
                           className={`font-mono text-sm font-medium break-words ${
                             isEnabled ? 'text-slate-700 dark:text-slate-300' : 'text-slate-500 dark:text-slate-400'
@@ -379,8 +367,8 @@ const CookieStoreGrid: React.FC<CookieStoreGridProps> = ({ onBack, onSaveCookies
                         >
                           {cookie.name}
                         </div>
-                      </td>
-                      <td className="py-3 px-4">
+                      </TableCell>
+                      <TableCell className={!isEnabled ? 'opacity-40' : ''}>
                         <div
                           className={`font-mono text-sm break-words ${
                             isEnabled ? 'text-slate-700 dark:text-slate-300' : 'text-slate-500 dark:text-slate-400'
@@ -388,8 +376,8 @@ const CookieStoreGrid: React.FC<CookieStoreGridProps> = ({ onBack, onSaveCookies
                         >
                           {cookie.value}
                         </div>
-                      </td>
-                      <td className="py-3 px-4">
+                      </TableCell>
+                      <TableCell className={!isEnabled ? 'opacity-40' : ''}>
                         <div
                           className={`text-sm break-words ${
                             isEnabled ? 'text-slate-700 dark:text-slate-300' : 'text-slate-500 dark:text-slate-400'
@@ -397,8 +385,8 @@ const CookieStoreGrid: React.FC<CookieStoreGridProps> = ({ onBack, onSaveCookies
                         >
                           {cookie.expires || 'Session'}
                         </div>
-                      </td>
-                      <td className="py-3 px-4">
+                      </TableCell>
+                      <TableCell className={!isEnabled ? 'opacity-40' : ''}>
                         <div
                           className={`text-sm ${
                             isEnabled ? 'text-slate-700 dark:text-slate-300' : 'text-slate-500 dark:text-slate-400'
@@ -406,8 +394,8 @@ const CookieStoreGrid: React.FC<CookieStoreGridProps> = ({ onBack, onSaveCookies
                         >
                           {cookie.httpOnly ? '✓' : '—'}
                         </div>
-                      </td>
-                      <td className="py-3 px-4">
+                      </TableCell>
+                      <TableCell className={!isEnabled ? 'opacity-40' : ''}>
                         <div
                           className={`text-sm ${
                             isEnabled ? 'text-slate-700 dark:text-slate-300' : 'text-slate-500 dark:text-slate-400'
@@ -415,8 +403,8 @@ const CookieStoreGrid: React.FC<CookieStoreGridProps> = ({ onBack, onSaveCookies
                         >
                           {cookie.secure ? '✓' : '—'}
                         </div>
-                      </td>
-                      <td className="py-3 px-4">
+                      </TableCell>
+                      <TableCell>
                         <div className="flex items-center gap-2">
                           <Button
                             variant="outline"
@@ -427,24 +415,6 @@ const CookieStoreGrid: React.FC<CookieStoreGridProps> = ({ onBack, onSaveCookies
                             disabled={editingRow !== null}
                           >
                             <PencilIcon className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => toggleCookieEnabled(cookie.id)}
-                            className={`${
-                              isEnabled
-                                ? 'text-green-600 hover:text-green-700 hover:border-green-300'
-                                : 'text-slate-400 hover:text-slate-600 hover:border-slate-300'
-                            }`}
-                            title={isEnabled ? 'Disable cookie' : 'Enable cookie'}
-                            disabled={editingRow !== null}
-                          >
-                            {isEnabled ? (
-                              <CheckCircleIcon className="h-4 w-4" />
-                            ) : (
-                              <XCircleIcon className="h-4 w-4" />
-                            )}
                           </Button>
                           <Button
                             variant="outline"
@@ -461,15 +431,16 @@ const CookieStoreGrid: React.FC<CookieStoreGridProps> = ({ onBack, onSaveCookies
                             <Trash2Icon className="h-4 w-4" />
                           </Button>
                         </div>
-                      </td>
-                    </tr>
+                      </TableCell>
+                    </TableRow>
                   );
                 })}
 
                 {/* New Cookie Row */}
                 {isAddingNew && editingData && (
-                  <tr className="border-b border-gray-100 dark:border-slate-800 bg-blue-50 dark:bg-blue-900/20">
-                    <td className="py-3 px-4">
+                  <TableRow className="bg-blue-50 dark:bg-blue-900/20">
+                    <TableCell></TableCell>
+                    <TableCell>
                       <div className="space-y-1">
                         <Input
                           type="text"
@@ -485,8 +456,8 @@ const CookieStoreGrid: React.FC<CookieStoreGridProps> = ({ onBack, onSaveCookies
                           autoFocus
                         />
                       </div>
-                    </td>
-                    <td className="py-3 px-4">
+                    </TableCell>
+                    <TableCell>
                       <Input
                         type="text"
                         value={editingData.path}
@@ -494,8 +465,8 @@ const CookieStoreGrid: React.FC<CookieStoreGridProps> = ({ onBack, onSaveCookies
                         className="font-mono text-sm text-slate-800 dark:text-slate-200"
                         placeholder="/"
                       />
-                    </td>
-                    <td className="py-3 px-4">
+                    </TableCell>
+                    <TableCell>
                       <Input
                         type="text"
                         value={editingData.name}
@@ -506,8 +477,8 @@ const CookieStoreGrid: React.FC<CookieStoreGridProps> = ({ onBack, onSaveCookies
                         className="font-mono text-sm text-slate-800 dark:text-slate-200"
                         placeholder="cookieName"
                       />
-                    </td>
-                    <td className="py-3 px-4">
+                    </TableCell>
+                    <TableCell>
                       <Input
                         type="text"
                         value={editingData.value}
@@ -515,8 +486,8 @@ const CookieStoreGrid: React.FC<CookieStoreGridProps> = ({ onBack, onSaveCookies
                         className="font-mono text-sm text-slate-800 dark:text-slate-200"
                         placeholder="cookieValue"
                       />
-                    </td>
-                    <td className="py-3 px-4">
+                    </TableCell>
+                    <TableCell>
                       <Input
                         type="text"
                         value={editingData.expires}
@@ -524,24 +495,20 @@ const CookieStoreGrid: React.FC<CookieStoreGridProps> = ({ onBack, onSaveCookies
                         className="text-sm text-slate-800 dark:text-slate-200"
                         placeholder="Session"
                       />
-                    </td>
-                    <td className="py-3 px-4">
-                      <input
-                        type="checkbox"
+                    </TableCell>
+                    <TableCell>
+                      <Switch
                         checked={editingData.httpOnly}
-                        onChange={(e) => setEditingData({ ...editingData, httpOnly: e.target.checked })}
-                        className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                        onCheckedChange={(checked) => setEditingData({ ...editingData, httpOnly: checked })}
                       />
-                    </td>
-                    <td className="py-3 px-4">
-                      <input
-                        type="checkbox"
+                    </TableCell>
+                    <TableCell>
+                      <Switch
                         checked={editingData.secure}
-                        onChange={(e) => setEditingData({ ...editingData, secure: e.target.checked })}
-                        className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                        onCheckedChange={(checked) => setEditingData({ ...editingData, secure: checked })}
                       />
-                    </td>
-                    <td className="py-3 px-4">
+                    </TableCell>
+                    <TableCell>
                       <div className="flex items-center gap-2">
                         <Button
                           variant="outline"
@@ -562,11 +529,11 @@ const CookieStoreGrid: React.FC<CookieStoreGridProps> = ({ onBack, onSaveCookies
                           <XIcon className="h-4 w-4" />
                         </Button>
                       </div>
-                    </td>
-                  </tr>
+                    </TableCell>
+                  </TableRow>
                 )}
-              </tbody>
-            </table>
+              </TableBody>
+            </Table>
 
             {fieldError && (
               <div className="mt-2 text-sm text-red-600 dark:text-red-400">{fieldError}</div>
@@ -615,7 +582,7 @@ const CookieStoreGrid: React.FC<CookieStoreGridProps> = ({ onBack, onSaveCookies
       <Dialog open={confirmDialog.isOpen} onOpenChange={(open) => setConfirmDialog((prev) => ({ ...prev, isOpen: open }))}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>{confirmDialog.title}</DialogTitle>
+            <DialogTitle className="text-lg font-semibold text-slate-800 dark:text-slate-200">{confirmDialog.title}</DialogTitle>
             <DialogDescription>{confirmDialog.message}</DialogDescription>
           </DialogHeader>
           <DialogFooter>

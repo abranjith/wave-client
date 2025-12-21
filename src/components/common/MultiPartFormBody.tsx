@@ -1,7 +1,9 @@
 import React, { useState, useEffect, JSX, useMemo } from 'react';
-import { Trash2Icon, PlusIcon, XIcon, CheckCircleIcon, XCircleIcon, PaperclipIcon } from 'lucide-react';
+import { Trash2Icon, PlusIcon, XIcon, PaperclipIcon } from 'lucide-react';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
+import { Switch } from '../ui/switch';
 import StyledInput from '../ui/styled-input';
 import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from '../ui/select';
 import {MultiPartFormField} from '../../types/collection';
@@ -304,27 +306,34 @@ const MultiPartFormBody: React.FC<MultiPartFormBodyProps> = ({ dropdownElement }
 
       {/* Main Content Area - Table */}
       <div className="flex-1 overflow-x-auto overflow-y-auto border border-slate-200 dark:border-slate-700 rounded-lg">
-        <table className="w-full border-collapse">
-          <thead className="sticky top-0 bg-white dark:bg-slate-800 z-10">
-            <tr className="border-b border-slate-200 dark:border-slate-700">
-              <th className="text-left py-2 px-3 text-sm font-medium text-slate-700 dark:text-slate-300 w-3/12">Key</th>
-              <th className="text-left py-2 px-3 text-sm font-medium text-slate-700 dark:text-slate-300 w-2/12">Field Type</th>
-              <th className="text-left py-2 px-3 text-sm font-medium text-slate-700 dark:text-slate-300 w-5/12">Value</th>
-              <th className="text-left py-2 px-3 text-sm font-medium text-slate-700 dark:text-slate-300 w-2/12">Actions</th>
-            </tr>
-          </thead>
-          <tbody>
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead className="w-[6%]">Enabled</TableHead>
+              <TableHead className="w-[22%]">Key</TableHead>
+              <TableHead className="w-[14%]">Field Type</TableHead>
+              <TableHead className="w-[42%]">Value</TableHead>
+              <TableHead className="w-[16%]">Actions</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
             {formFields.map((field: MultiPartFormField, index: number) => {
               const isDisabled = field.disabled;
+              const hasContent = Boolean(field.key) || Boolean(field.value);
               
               return (
-                <tr 
-                  key={field.id} 
-                  className={`border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/50 ${
-                    isDisabled ? 'opacity-40' : ''
-                  }`}
+                <TableRow 
+                  key={field.id}
                 >
-                  <td className="py-2 px-3">
+                  <TableCell>
+                    {hasContent && (
+                      <Switch
+                        checked={!isDisabled}
+                        onCheckedChange={() => toggleMultiPartFormFieldEnabled(field.id, field.disabled)}
+                      />
+                    )}
+                  </TableCell>
+                  <TableCell className={isDisabled ? 'opacity-40' : ''}>
                   <StyledInput
                     type="text"
                     placeholder="Field name (e.g., username)"
@@ -335,8 +344,8 @@ const MultiPartFormBody: React.FC<MultiPartFormBodyProps> = ({ dropdownElement }
                     onKeyDown={e => handleKeyDown(e, field.id)}
                     className="bg-white border-slate-300 focus:border-blue-500 dark:bg-slate-800 dark:border-slate-600 dark:focus:border-blue-400"
                   />
-                </td>
-                <td className="py-2 px-3">
+                </TableCell>
+                <TableCell className={isDisabled ? 'opacity-40' : ''}>
                   <Select 
                     value={getFieldTypeLabel(field.fieldType)} 
                     onValueChange={(value) => handleFieldTypeChange(field.id, value.toLowerCase() as FieldType)}
@@ -349,11 +358,11 @@ const MultiPartFormBody: React.FC<MultiPartFormBodyProps> = ({ dropdownElement }
                       <SelectItem value="File">File</SelectItem>
                     </SelectContent>
                   </Select>
-                </td>
-                <td className="py-2 px-3">
+                </TableCell>
+                <TableCell className={isDisabled ? 'opacity-40' : ''}>
                   {renderValueInput(field)}
-                </td>
-                <td className="py-2 px-3">
+                </TableCell>
+                <TableCell>
                   <div className="flex items-center gap-2">
                     {field.fieldType === 'file' && field.value instanceof File && (
                       <Button
@@ -364,25 +373,6 @@ const MultiPartFormBody: React.FC<MultiPartFormBodyProps> = ({ dropdownElement }
                         title="Clear file"
                       >
                         <XIcon className="h-4 w-4" />
-                      </Button>
-                    )}
-                    {(Boolean(field.key) || Boolean(field.value)) && (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => toggleMultiPartFormFieldEnabled(field.id, field.disabled)}
-                        className={`${
-                          !isDisabled
-                            ? 'text-green-600 hover:text-green-700 hover:border-green-300'
-                            : 'text-slate-400 hover:text-slate-600 hover:border-slate-300'
-                        }`}
-                        title={!isDisabled ? 'Disable field' : 'Enable field'}
-                      >
-                        {!isDisabled ? (
-                          <CheckCircleIcon className="h-4 w-4" />
-                        ) : (
-                          <XCircleIcon className="h-4 w-4" />
-                        )}
                       </Button>
                     )}
                     {formFields.length > 1 && (
@@ -397,12 +387,12 @@ const MultiPartFormBody: React.FC<MultiPartFormBodyProps> = ({ dropdownElement }
                       </Button>
                     )}
                   </div>
-                </td>
-              </tr>
+                </TableCell>
+              </TableRow>
               );
             })}
-          </tbody>
-        </table>
+          </TableBody>
+        </Table>
       </div>
 
       {/* Add Field Button */}

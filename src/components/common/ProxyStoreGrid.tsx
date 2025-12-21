@@ -1,7 +1,9 @@
 import React, { useState } from 'react';
-import { ArrowLeftIcon, PlusIcon, PencilIcon, Trash2Icon, CheckCircleIcon, XCircleIcon, NetworkIcon } from 'lucide-react';
+import { ArrowLeftIcon, PlusIcon, PencilIcon, Trash2Icon, NetworkIcon } from 'lucide-react';
 import { Button } from '../ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '../ui/dialog';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
+import { Switch } from '../ui/switch';
 import Banner from '../ui/banner';
 import useAppStateStore from '../../hooks/store/useAppStateStore';
 import { Proxy } from '../../types/collection';
@@ -156,43 +158,39 @@ const ProxyStoreGrid: React.FC<ProxyStoreGridProps> = ({ onBack, onSaveProxies }
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full border-collapse">
-              <thead>
-                <tr className="border-b border-gray-200 dark:border-slate-700">
-                  <th className="text-left py-3 px-4 text-sm font-medium text-gray-700 dark:text-slate-300 w-[20%]">
-                    Name
-                  </th>
-                  <th className="text-left py-3 px-4 text-sm font-medium text-gray-700 dark:text-slate-300 w-[30%]">
-                    Proxy URL
-                  </th>
-                  <th className="text-left py-3 px-4 text-sm font-medium text-gray-700 dark:text-slate-300 w-[30%]">
-                    Domain Filters
-                  </th>
-                  <th className="text-left py-3 px-4 text-sm font-medium text-gray-700 dark:text-slate-300 w-[20%]">
-                    Actions
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="w-[8%]">Enabled</TableHead>
+                  <TableHead className="w-[18%]">Name</TableHead>
+                  <TableHead className="w-[27%]">Proxy URL</TableHead>
+                  <TableHead className="w-[32%]">Domain Filters</TableHead>
+                  <TableHead className="w-[15%]">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
                 {proxies.map((proxy) => {
                   const isEnabled = proxy.enabled;
                   
                   return (
-                    <tr
+                    <TableRow
                       key={proxy.id}
-                      className={`border-b border-gray-100 dark:border-slate-800 hover:bg-gray-50 dark:hover:bg-slate-800/50 ${
-                        !isEnabled ? 'opacity-40' : ''
-                      }`}
                     >
-                      <td className="py-3 px-4">
+                      <TableCell>
+                        <Switch
+                          checked={isEnabled}
+                          onCheckedChange={() => handleToggle(proxy.id)}
+                        />
+                      </TableCell>
+                      <TableCell className={!isEnabled ? 'opacity-40' : ''}>
                         <div className={`flex items-center gap-2 text-sm font-medium ${
                           isEnabled ? 'text-slate-700 dark:text-slate-300' : 'text-slate-500 dark:text-slate-400'
                         }`}>
                           <NetworkIcon className="h-4 w-4" />
                           <span>{proxy.name}</span>
                         </div>
-                      </td>
-                      <td className="py-3 px-4">
+                      </TableCell>
+                      <TableCell className={!isEnabled ? 'opacity-40' : ''}>
                         <div className={`text-sm ${
                           isEnabled ? 'text-slate-700 dark:text-slate-300' : 'text-slate-500 dark:text-slate-400'
                         }`}>
@@ -203,8 +201,8 @@ const ProxyStoreGrid: React.FC<ProxyStoreGridProps> = ({ onBack, onSaveProxies }
                             </span>
                           )}
                         </div>
-                      </td>
-                      <td className="py-3 px-4">
+                      </TableCell>
+                      <TableCell className={!isEnabled ? 'opacity-40' : ''}>
                         <div className="text-xs">
                           {proxy.domainFilters.length > 0 ? (
                             <div className="flex flex-wrap gap-1">
@@ -242,8 +240,8 @@ const ProxyStoreGrid: React.FC<ProxyStoreGridProps> = ({ onBack, onSaveProxies }
                             </div>
                           )}
                         </div>
-                      </td>
-                      <td className="py-3 px-4">
+                      </TableCell>
+                      <TableCell>
                         <div className="flex items-center gap-2">
                           <Button
                             variant="outline"
@@ -257,23 +255,6 @@ const ProxyStoreGrid: React.FC<ProxyStoreGridProps> = ({ onBack, onSaveProxies }
                           <Button
                             variant="outline"
                             size="sm"
-                            onClick={() => handleToggle(proxy.id)}
-                            className={`${
-                              isEnabled
-                                ? 'text-green-600 hover:text-green-700 hover:border-green-300'
-                                : 'text-slate-400 hover:text-slate-600 hover:border-slate-300'
-                            }`}
-                            title={isEnabled ? 'Disable proxy' : 'Enable proxy'}
-                          >
-                            {isEnabled ? (
-                              <CheckCircleIcon className="h-4 w-4" />
-                            ) : (
-                              <XCircleIcon className="h-4 w-4" />
-                            )}
-                          </Button>
-                          <Button
-                            variant="outline"
-                            size="sm"
                             onClick={() => handleDelete(proxy.id)}
                             className="text-red-600 hover:text-red-700 hover:border-red-300"
                             title="Delete proxy"
@@ -281,12 +262,12 @@ const ProxyStoreGrid: React.FC<ProxyStoreGridProps> = ({ onBack, onSaveProxies }
                             <Trash2Icon className="h-4 w-4" />
                           </Button>
                         </div>
-                      </td>
-                    </tr>
+                      </TableCell>
+                    </TableRow>
                   );
                 })}
-              </tbody>
-            </table>
+              </TableBody>
+            </Table>
           </div>
         )}
 
@@ -310,7 +291,7 @@ const ProxyStoreGrid: React.FC<ProxyStoreGridProps> = ({ onBack, onSaveProxies }
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>
+            <DialogTitle className="text-lg font-semibold text-slate-800 dark:text-slate-200">
               {editingProxy ? 'Edit Proxy Configuration' : 'Add New Proxy Configuration'}
             </DialogTitle>
           </DialogHeader>
@@ -335,7 +316,7 @@ const ProxyStoreGrid: React.FC<ProxyStoreGridProps> = ({ onBack, onSaveProxies }
       <Dialog open={confirmDialog.isOpen} onOpenChange={(open) => setConfirmDialog((prev) => ({ ...prev, isOpen: open }))}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>{confirmDialog.title}</DialogTitle>
+            <DialogTitle className="text-lg font-semibold text-slate-800 dark:text-slate-200">{confirmDialog.title}</DialogTitle>
             <DialogDescription>{confirmDialog.message}</DialogDescription>
           </DialogHeader>
           <DialogFooter>

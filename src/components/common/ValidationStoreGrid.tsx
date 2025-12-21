@@ -1,7 +1,9 @@
 import React, { useState } from 'react';
-import { ArrowLeftIcon, PlusIcon, PencilIcon, Trash2Icon, CheckCircleIcon, XCircleIcon, ClipboardCheckIcon } from 'lucide-react';
+import { ArrowLeftIcon, PlusIcon, PencilIcon, Trash2Icon, ClipboardCheckIcon } from 'lucide-react';
 import { Button } from '../ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '../ui/dialog';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
+import { Switch } from '../ui/switch';
 import Banner from '../ui/banner';
 import useAppStateStore from '../../hooks/store/useAppStateStore';
 import { GlobalValidationRule, ValidationRule } from '../../types/validation';
@@ -218,34 +220,31 @@ const ValidationStoreGrid: React.FC<ValidationStoreGridProps> = ({ onBack, onSav
                     </div>
                 ) : (
                     <div className="overflow-x-auto">
-                        <table className="w-full border-collapse">
-                            <thead>
-                                <tr className="border-b border-gray-200 dark:border-slate-700">
-                                    <th className="text-left py-3 px-4 text-sm font-medium text-gray-700 dark:text-slate-300 w-[25%]">
-                                        Name
-                                    </th>
-                                    <th className="text-left py-3 px-4 text-sm font-medium text-gray-700 dark:text-slate-300 w-[15%]">
-                                        Category
-                                    </th>
-                                    <th className="text-left py-3 px-4 text-sm font-medium text-gray-700 dark:text-slate-300 w-[40%]">
-                                        Condition
-                                    </th>
-                                    <th className="text-left py-3 px-4 text-sm font-medium text-gray-700 dark:text-slate-300 w-[20%]">
-                                        Actions
-                                    </th>
-                                </tr>
-                            </thead>
-                            <tbody>
+                        <Table>
+                            <TableHeader>
+                                <TableRow>
+                                    <TableHead className="w-[8%]">Enabled</TableHead>
+                                    <TableHead className="w-[22%]">Name</TableHead>
+                                    <TableHead className="w-[15%]">Category</TableHead>
+                                    <TableHead className="w-[40%]">Condition</TableHead>
+                                    <TableHead className="w-[15%]">Actions</TableHead>
+                                </TableRow>
+                            </TableHeader>
+                            <TableBody>
                                 {validationRules.map((rule) => {
                                     const isEnabled = rule.enabled;
 
                                     return (
-                                        <tr
+                                        <TableRow
                                             key={rule.id}
-                                            className={`border-b border-gray-100 dark:border-slate-800 hover:bg-gray-50 dark:hover:bg-slate-800/50 ${!isEnabled ? 'opacity-40' : ''
-                                                }`}
                                         >
-                                            <td className="py-3 px-4">
+                                            <TableCell>
+                                                <Switch
+                                                    checked={isEnabled}
+                                                    onCheckedChange={() => handleToggle(rule.id)}
+                                                />
+                                            </TableCell>
+                                            <TableCell className={!isEnabled ? 'opacity-40' : ''}>
                                                 <div className={`flex flex-col gap-1 ${isEnabled ? 'text-slate-700 dark:text-slate-300' : 'text-slate-500 dark:text-slate-400'
                                                     }`}>
                                                     <span className="text-sm font-medium">{rule.name}</span>
@@ -253,19 +252,19 @@ const ValidationStoreGrid: React.FC<ValidationStoreGridProps> = ({ onBack, onSav
                                                         <span className="text-xs text-slate-500 dark:text-slate-400">{rule.description}</span>
                                                     )}
                                                 </div>
-                                            </td>
-                                            <td className="py-3 px-4">
+                                            </TableCell>
+                                            <TableCell className={!isEnabled ? 'opacity-40' : ''}>
                                                 <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${getCategoryColor(rule.category)}`}>
                                                     {getCategoryLabel(rule.category)}
                                                 </span>
-                                            </td>
-                                            <td className="py-3 px-4">
+                                            </TableCell>
+                                            <TableCell className={!isEnabled ? 'opacity-40' : ''}>
                                                 <span className={`text-sm font-mono ${isEnabled ? 'text-slate-700 dark:text-slate-300' : 'text-slate-500 dark:text-slate-400'
                                                     }`}>
                                                     {getRuleSummary(rule)}
                                                 </span>
-                                            </td>
-                                            <td className="py-3 px-4">
+                                            </TableCell>
+                                            <TableCell>
                                                 <div className="flex items-center gap-2">
                                                     <Button
                                                         variant="outline"
@@ -279,22 +278,6 @@ const ValidationStoreGrid: React.FC<ValidationStoreGridProps> = ({ onBack, onSav
                                                     <Button
                                                         variant="outline"
                                                         size="sm"
-                                                        onClick={() => handleToggle(rule.id)}
-                                                        className={`${isEnabled
-                                                            ? 'text-green-600 hover:text-green-700 hover:border-green-300'
-                                                            : 'text-slate-400 hover:text-slate-600 hover:border-slate-300'
-                                                            }`}
-                                                        title={isEnabled ? 'Disable rule' : 'Enable rule'}
-                                                    >
-                                                        {isEnabled ? (
-                                                            <CheckCircleIcon className="h-4 w-4" />
-                                                        ) : (
-                                                            <XCircleIcon className="h-4 w-4" />
-                                                        )}
-                                                    </Button>
-                                                    <Button
-                                                        variant="outline"
-                                                        size="sm"
                                                         onClick={() => handleDelete(rule.id)}
                                                         className="text-red-600 hover:text-red-700 hover:border-red-300"
                                                         title="Delete rule"
@@ -302,12 +285,12 @@ const ValidationStoreGrid: React.FC<ValidationStoreGridProps> = ({ onBack, onSav
                                                         <Trash2Icon className="h-4 w-4" />
                                                     </Button>
                                                 </div>
-                                            </td>
-                                        </tr>
+                                            </TableCell>
+                                        </TableRow>
                                     );
                                 })}
-                            </tbody>
-                        </table>
+                            </TableBody>
+                        </Table>
                     </div>
                 )}
 
@@ -331,7 +314,7 @@ const ValidationStoreGrid: React.FC<ValidationStoreGridProps> = ({ onBack, onSav
             <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
                 <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
                     <DialogHeader>
-                        <DialogTitle>
+                        <DialogTitle className="text-lg font-semibold text-slate-800 dark:text-slate-200">
                             {editingRule ? 'Edit Validation Rule' : 'Add New Validation Rule'}
                         </DialogTitle>
                     </DialogHeader>
@@ -355,7 +338,7 @@ const ValidationStoreGrid: React.FC<ValidationStoreGridProps> = ({ onBack, onSav
             <Dialog open={confirmDialog.isOpen} onOpenChange={(open) => setConfirmDialog((prev) => ({ ...prev, isOpen: open }))}>
                 <DialogContent>
                     <DialogHeader>
-                        <DialogTitle>{confirmDialog.title}</DialogTitle>
+                        <DialogTitle className="text-lg font-semibold text-slate-800 dark:text-slate-200">{confirmDialog.title}</DialogTitle>
                         <DialogDescription>{confirmDialog.message}</DialogDescription>
                     </DialogHeader>
                     <DialogFooter>

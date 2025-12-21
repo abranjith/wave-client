@@ -281,7 +281,7 @@ const ValidationWizard: React.FC<ValidationWizardProps> = ({
         <div className="space-y-4">
             {/* Common Fields */}
             <div className="space-y-2">
-                <Label htmlFor="rule-name">Name *</Label>
+                <Label htmlFor="rule-name" className="text-slate-700 dark:text-slate-300">Name *</Label>
                 <Input
                     id="rule-name"
                     value={name}
@@ -296,7 +296,7 @@ const ValidationWizard: React.FC<ValidationWizardProps> = ({
             </div>
 
             <div className="space-y-2">
-                <Label htmlFor="rule-description">Description</Label>
+                <Label htmlFor="rule-description" className="text-slate-700 dark:text-slate-300">Description</Label>
                 <Input
                     id="rule-description"
                     value={description}
@@ -306,7 +306,7 @@ const ValidationWizard: React.FC<ValidationWizardProps> = ({
             </div>
 
             <div className="space-y-2">
-                <Label htmlFor="rule-category">Category</Label>
+                <Label htmlFor="rule-category" className="text-slate-700 dark:text-slate-300">Category</Label>
                 <Select value={category} onValueChange={(value) => setCategory(value as ValidationRuleCategory)}>
                     <SelectTrigger>
                         <SelectValue placeholder="Select category" />
@@ -325,7 +325,7 @@ const ValidationWizard: React.FC<ValidationWizardProps> = ({
             {category === 'status' && (
                 <>
                     <div className="space-y-2">
-                        <Label>Operator</Label>
+                        <Label className="text-slate-700 dark:text-slate-300">Operator</Label>
                         <Select value={statusOperator} onValueChange={(value) => setStatusOperator(value as StatusOperator)}>
                             <SelectTrigger>
                                 <SelectValue />
@@ -342,7 +342,7 @@ const ValidationWizard: React.FC<ValidationWizardProps> = ({
 
                     {needsMultipleValues(statusOperator) ? (
                         <div className="space-y-2">
-                            <Label>Values (comma-separated)</Label>
+                            <Label className="text-slate-700 dark:text-slate-300">Values (comma-separated)</Label>
                             <Input
                                 value={statusValues}
                                 onChange={(e) => setStatusValues(e.target.value)}
@@ -353,7 +353,7 @@ const ValidationWizard: React.FC<ValidationWizardProps> = ({
                         !['is_success', 'is_not_success'].includes(statusOperator) && (
                             <>
                                 <div className="space-y-2">
-                                    <Label>Value</Label>
+                                    <Label className="text-slate-700 dark:text-slate-300">Value</Label>
                                     <Input
                                         type="number"
                                         value={statusValue}
@@ -362,7 +362,7 @@ const ValidationWizard: React.FC<ValidationWizardProps> = ({
                                 </div>
                                 {needsSecondValue(statusOperator) && (
                                     <div className="space-y-2">
-                                        <Label>Upper Bound</Label>
+                                        <Label className="text-slate-700 dark:text-slate-300">Upper Bound</Label>
                                         <Input
                                             type="number"
                                             value={statusValue2}
@@ -380,7 +380,7 @@ const ValidationWizard: React.FC<ValidationWizardProps> = ({
             {category === 'header' && (
                 <>
                     <div className="space-y-2">
-                        <Label>Header Name</Label>
+                        <Label className="text-slate-700 dark:text-slate-300">Header Name</Label>
                         <Input
                             value={headerName}
                             onChange={(e) => setHeaderName(e.target.value)}
@@ -389,7 +389,7 @@ const ValidationWizard: React.FC<ValidationWizardProps> = ({
                     </div>
 
                     <div className="space-y-2">
-                        <Label>Operator</Label>
+                        <Label className="text-slate-700 dark:text-slate-300">Operator</Label>
                         <Select value={headerOperator} onValueChange={(value) => setHeaderOperator(value as StringOperator | ExistenceOperator)}>
                             <SelectTrigger>
                                 <SelectValue />
@@ -407,7 +407,7 @@ const ValidationWizard: React.FC<ValidationWizardProps> = ({
                     {needsValue(headerOperator) && (
                         needsMultipleValues(headerOperator) ? (
                             <div className="space-y-2">
-                                <Label>Values (comma-separated)</Label>
+                                <Label className="text-slate-700 dark:text-slate-300">Values (comma-separated)</Label>
                                 <Input
                                     value={headerValues}
                                     onChange={(e) => setHeaderValues(e.target.value)}
@@ -416,7 +416,7 @@ const ValidationWizard: React.FC<ValidationWizardProps> = ({
                             </div>
                         ) : (
                             <div className="space-y-2">
-                                <Label>Expected Value</Label>
+                                <Label className="text-slate-700 dark:text-slate-300">Expected Value</Label>
                                 <Input
                                     value={headerValue}
                                     onChange={(e) => setHeaderValue(e.target.value)}
@@ -433,7 +433,7 @@ const ValidationWizard: React.FC<ValidationWizardProps> = ({
                                 checked={headerCaseSensitive}
                                 onCheckedChange={(checked: boolean) => setHeaderCaseSensitive(checked)}
                             />
-                            <Label htmlFor="header-case-sensitive" className="text-sm font-normal">
+                            <Label htmlFor="header-case-sensitive" className="text-sm font-normal text-slate-700 dark:text-slate-300">
                                 Case-sensitive comparison
                             </Label>
                         </div>
@@ -445,7 +445,7 @@ const ValidationWizard: React.FC<ValidationWizardProps> = ({
             {category === 'body' && (
                 <>
                     <div className="space-y-2">
-                        <Label>Operator</Label>
+                        <Label className="text-slate-700 dark:text-slate-300">Operator</Label>
                         <Select value={bodyOperator} onValueChange={(value) => setBodyOperator(value as BodyOperator)}>
                             <SelectTrigger>
                                 <SelectValue />
@@ -462,7 +462,7 @@ const ValidationWizard: React.FC<ValidationWizardProps> = ({
 
                     {needsJsonPath(bodyOperator) && (
                         <div className="space-y-2">
-                            <Label>JSON Path</Label>
+                            <Label className="text-slate-700 dark:text-slate-300">JSON Path</Label>
                             <Input
                                 value={jsonPath}
                                 onChange={(e) => setJsonPath(e.target.value)}
@@ -473,7 +473,7 @@ const ValidationWizard: React.FC<ValidationWizardProps> = ({
 
                     {needsValue(bodyOperator) && (
                         <div className="space-y-2">
-                            <Label>
+                            <Label className="text-slate-700 dark:text-slate-300">
                                 {bodyOperator === 'json_schema_matches' ? 'JSON Schema' : 'Expected Value'}
                             </Label>
                             <textarea
@@ -495,7 +495,7 @@ const ValidationWizard: React.FC<ValidationWizardProps> = ({
                                 checked={bodyCaseSensitive}
                                 onCheckedChange={(checked: boolean) => setBodyCaseSensitive(checked)}
                             />
-                            <Label htmlFor="body-case-sensitive" className="text-sm font-normal">
+                            <Label htmlFor="body-case-sensitive" className="text-sm font-normal text-slate-700 dark:text-slate-300">
                                 Case-sensitive comparison
                             </Label>
                         </div>
@@ -507,7 +507,7 @@ const ValidationWizard: React.FC<ValidationWizardProps> = ({
             {category === 'time' && (
                 <>
                     <div className="space-y-2">
-                        <Label>Operator</Label>
+                        <Label className="text-slate-700 dark:text-slate-300">Operator</Label>
                         <Select value={timeOperator} onValueChange={(value) => setTimeOperator(value as NumericOperator)}>
                             <SelectTrigger>
                                 <SelectValue />
@@ -523,7 +523,7 @@ const ValidationWizard: React.FC<ValidationWizardProps> = ({
                     </div>
 
                     <div className="space-y-2">
-                        <Label>Value (milliseconds)</Label>
+                        <Label className="text-slate-700 dark:text-slate-300">Value (milliseconds)</Label>
                         <Input
                             type="number"
                             value={timeValue}
@@ -533,7 +533,7 @@ const ValidationWizard: React.FC<ValidationWizardProps> = ({
 
                     {needsSecondValue(timeOperator) && (
                         <div className="space-y-2">
-                            <Label>Upper Bound (milliseconds)</Label>
+                            <Label className="text-slate-700 dark:text-slate-300">Upper Bound (milliseconds)</Label>
                             <Input
                                 type="number"
                                 value={timeValue2}
@@ -551,7 +551,7 @@ const ValidationWizard: React.FC<ValidationWizardProps> = ({
                     checked={enabled}
                     onCheckedChange={(checked: boolean) => setEnabled(checked)}
                 />
-                <Label htmlFor="rule-enabled" className="text-sm font-normal">
+                <Label htmlFor="rule-enabled" className="text-sm font-normal text-slate-700 dark:text-slate-300">
                     Rule enabled
                 </Label>
             </div>

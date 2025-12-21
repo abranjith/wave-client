@@ -490,7 +490,7 @@ const App: React.FC = () => {
       <Dialog open={isSettingsOpen} onOpenChange={setIsSettingsOpen}>
         <DialogContent className="sm:max-w-2xl">
           <DialogHeader>
-            <DialogTitle>Settings</DialogTitle>
+            <DialogTitle className="text-lg font-semibold text-slate-800 dark:text-slate-200">Settings</DialogTitle>
           </DialogHeader>
           <SettingsWizard
             settings={settings}

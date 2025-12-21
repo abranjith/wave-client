@@ -336,7 +336,7 @@ const CertStoreGrid: React.FC<CertStoreGridProps> = ({ onBack, onSaveCerts }) =>
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>
+            <DialogTitle className="text-lg font-semibold text-slate-800 dark:text-slate-200">
               {editingCert ? 'Edit Certificate Configuration' : 'Add New Certificate Configuration'}
             </DialogTitle>
           </DialogHeader>
@@ -360,7 +360,7 @@ const CertStoreGrid: React.FC<CertStoreGridProps> = ({ onBack, onSaveCerts }) =>
       <Dialog open={confirmDialog.isOpen} onOpenChange={(open) => setConfirmDialog((prev) => ({ ...prev, isOpen: open }))}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>{confirmDialog.title}</DialogTitle>
+            <DialogTitle className="text-lg font-semibold text-slate-800 dark:text-slate-200">{confirmDialog.title}</DialogTitle>
             <DialogDescription>{confirmDialog.message}</DialogDescription>
           </DialogHeader>
           <DialogFooter>

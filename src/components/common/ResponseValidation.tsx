@@ -1,5 +1,6 @@
 import React from 'react';
 import { CheckCircleIcon, XCircleIcon, AlertCircleIcon, CircleSlashIcon } from 'lucide-react';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
 import { ValidationResult, ValidationRuleResult, ValidationRuleCategory } from '../../types/validation';
 
 // Category labels for display
@@ -78,29 +79,29 @@ const ResponseValidation: React.FC<ResponseValidationProps> = ({ validationResul
 
             {/* Results Table */}
             <div className="border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden">
-                <table className="w-full text-sm">
-                    <thead>
-                        <tr className="bg-slate-50 dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700">
-                            <th className="px-4 py-3 text-left font-medium text-slate-600 dark:text-slate-400 w-8">
+                <Table>
+                    <TableHeader>
+                        <TableRow>
+                            <TableHead className="w-8">
                                 
-                            </th>
-                            <th className="px-4 py-3 text-left font-medium text-slate-600 dark:text-slate-400">
+                            </TableHead>
+                            <TableHead>
                                 Rule
-                            </th>
-                            <th className="px-4 py-3 text-left font-medium text-slate-600 dark:text-slate-400">
+                            </TableHead>
+                            <TableHead>
                                 Category
-                            </th>
-                            <th className="px-4 py-3 text-left font-medium text-slate-600 dark:text-slate-400">
+                            </TableHead>
+                            <TableHead>
                                 Result
-                            </th>
-                        </tr>
-                    </thead>
-                    <tbody>
+                            </TableHead>
+                        </TableRow>
+                    </TableHeader>
+                    <TableBody>
                         {results.map((result, index) => (
                             <ValidationResultRow key={index} result={result} />
                         ))}
-                    </tbody>
-                </table>
+                    </TableBody>
+                </Table>
             </div>
 
             {/* Failed Rules Details */}
@@ -123,30 +124,30 @@ const ResponseValidation: React.FC<ResponseValidationProps> = ({ validationResul
  */
 const ValidationResultRow: React.FC<{ result: ValidationRuleResult }> = ({ result }) => {
     return (
-        <tr className="border-b border-slate-100 dark:border-slate-800 last:border-0 hover:bg-slate-50 dark:hover:bg-slate-800/50">
-            <td className="px-4 py-3">
+        <TableRow>
+            <TableCell>
                 {result.passed ? (
                     <CheckCircleIcon size={18} className="text-green-500" />
                 ) : (
                     <XCircleIcon size={18} className="text-red-500" />
                 )}
-            </td>
-            <td className="px-4 py-3 font-medium text-slate-900 dark:text-slate-100">
+            </TableCell>
+            <TableCell className="font-medium text-slate-900 dark:text-slate-100">
                 {result.ruleName}
-            </td>
-            <td className="px-4 py-3 text-slate-600 dark:text-slate-400">
+            </TableCell>
+            <TableCell className="text-slate-600 dark:text-slate-400">
                 <span className="px-2 py-1 bg-slate-100 dark:bg-slate-700 rounded text-xs">
                     {CATEGORY_LABELS[result.category]}
                 </span>
-            </td>
-            <td className="px-4 py-3 text-slate-600 dark:text-slate-400">
+            </TableCell>
+            <TableCell className="text-slate-600 dark:text-slate-400">
                 {result.passed ? (
                     <span className="text-green-600 dark:text-green-400">Passed</span>
                 ) : (
                     <span className="text-red-600 dark:text-red-400">{result.message}</span>
                 )}
-            </td>
-        </tr>
+            </TableCell>
+        </TableRow>
     );
 };
 

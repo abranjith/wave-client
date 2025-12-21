@@ -222,8 +222,8 @@ const TabsBar: React.FC<TabsBarProps> = ({ className, onSave }) => {
             <Dialog open={!!tabToClose} onOpenChange={(open) => !open && setTabToClose(null)}>
                 <DialogContent>
                     <DialogHeader>
-                        <DialogTitle>Unsaved Changes</DialogTitle>
-                        <DialogDescription>
+                        <DialogTitle className="text-lg font-semibold text-slate-800 dark:text-slate-200">Unsaved Changes</DialogTitle>
+                        <DialogDescription className="text-sm text-slate-600 dark:text-slate-400">
                             Do you want to save the changes you made to "{tabToCloseObj ? getTabDisplayName(tabToCloseObj) : 'Request'}"?
                             <br/>
                             Your changes will be lost if you don't save them.

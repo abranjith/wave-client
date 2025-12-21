@@ -348,7 +348,7 @@ const AuthStoreGrid: React.FC<AuthStoreGridProps> = ({ onBack, onSaveAuths }) =>
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>
+            <DialogTitle className="text-lg font-semibold text-slate-800 dark:text-slate-200">
               {editingAuth ? 'Edit Auth Configuration' : 'Add New Auth Configuration'}
             </DialogTitle>
           </DialogHeader>
@@ -372,7 +372,7 @@ const AuthStoreGrid: React.FC<AuthStoreGridProps> = ({ onBack, onSaveAuths }) =>
       <Dialog open={confirmDialog.isOpen} onOpenChange={(open) => setConfirmDialog((prev) => ({ ...prev, isOpen: open }))}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>{confirmDialog.title}</DialogTitle>
+            <DialogTitle className="text-lg font-semibold text-slate-800 dark:text-slate-200">{confirmDialog.title}</DialogTitle>
             <DialogDescription>{confirmDialog.message}</DialogDescription>
           </DialogHeader>
           <DialogFooter>
