@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
-import { Button } from '../ui/button';
+import { XIcon, ImportIcon } from 'lucide-react';
+import { PrimaryButton } from '../ui/PrimaryButton';
+import { SecondaryButton } from '../ui/SecondaryButton';
 import { Label } from '../ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import {
@@ -167,19 +169,20 @@ const CollectionsImportWizard: React.FC<CollectionsImportWizardProps> = ({
         </div>
 
         <DialogFooter>
-          <Button
-            variant="outline"
+          <SecondaryButton
             onClick={handleClose}
             disabled={isImporting}
-          >
-            Cancel
-          </Button>
-          <Button
+            colorTheme="warning"
+            icon={<XIcon />}
+            text="Cancel"
+          />
+          <PrimaryButton
             onClick={handleImport}
             disabled={!selectedFile || isImporting}
-          >
-            {isImporting ? 'Importing...' : 'Import'}
-          </Button>
+            colorTheme="main"
+            icon={<ImportIcon />}
+            text={isImporting ? 'Importing...' : 'Import'}
+          />
         </DialogFooter>
       </DialogContent>
     </Dialog>

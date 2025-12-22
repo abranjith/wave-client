@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
-import { Button } from '../ui/button';
+import { XIcon, SaveIcon } from 'lucide-react';
+import { PrimaryButton } from '../ui/PrimaryButton';
+import { SecondaryButton } from '../ui/SecondaryButton';
 import {
   Dialog,
   DialogContent,
@@ -150,19 +152,20 @@ const EnvAddWizard: React.FC<EnvAddWizardProps> = ({
         </div>
 
         <DialogFooter>
-          <Button
-            variant="outline"
+          <SecondaryButton
             onClick={handleClose}
             disabled={isSaving}
-          >
-            Cancel
-          </Button>
-          <Button
+            colorTheme="warning"
+            icon={<XIcon />}
+            text="Cancel"
+          />
+          <PrimaryButton
             onClick={handleSave}
             disabled={!environmentName.trim() || isSaving}
-          >
-            {isSaving ? 'Saving...' : 'Save'}
-          </Button>
+            colorTheme="main"
+            icon={<SaveIcon />}
+            text={isSaving ? 'Saving...' : 'Save'}
+          />
         </DialogFooter>
       </DialogContent>
     </Dialog>

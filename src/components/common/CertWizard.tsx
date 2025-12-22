@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { SaveIcon, XIcon, EyeIcon, EyeOffIcon } from 'lucide-react';
-import { Button } from '../ui/button';
+import { PrimaryButton } from '../ui/PrimaryButton';
+import { SecondaryButton } from '../ui/SecondaryButton';
 import { Input } from '../ui/input';
 import { Label } from '../ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
@@ -351,24 +352,22 @@ const CertWizard: React.FC<CertWizardProps> = ({ cert, onSave, onCancel, existin
 
       {/* Action Buttons */}
       <div className="flex justify-end gap-2 pt-4 border-t">
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={handleSave}
-          className="text-green-600 hover:text-green-700 hover:border-green-300"
-          title={isEditing ? "Update certificate" : "Save certificate"}
-        >
-          Save <SaveIcon className="h-4 w-4" />
-        </Button>
-        <Button
-          variant="outline"
+        <SecondaryButton
           size="sm"
           onClick={onCancel}
-          className="text-red-600 hover:text-red-700 hover:border-red-300"
-          title="Cancel"
-        >
-          Cancel <XIcon className="h-4 w-4" />
-        </Button>
+          colorTheme="warning"
+          text="Cancel"
+          icon={<XIcon />}
+          tooltip="Cancel"
+        />
+        <PrimaryButton
+          size="sm"
+          onClick={handleSave}
+          colorTheme="success"
+          text="Save"
+          icon={<SaveIcon />}
+          tooltip={isEditing ? "Update certificate" : "Save certificate"}
+        />
       </div>
     </div>
   );

@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
+import { XIcon, PlusIcon, RefreshCwIcon } from 'lucide-react';
 import { Label } from '../ui/label';
 import { Input } from '../ui/input';
-import { Button } from '../ui/button';
+import { PrimaryButton } from '../ui/PrimaryButton';
+import { SecondaryButton } from '../ui/SecondaryButton';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { Switch } from '../ui/switch';
 import {
@@ -558,12 +560,18 @@ const ValidationWizard: React.FC<ValidationWizardProps> = ({
 
             {/* Actions */}
             <div className="flex justify-end space-x-2 pt-4 border-t border-gray-200 dark:border-slate-700">
-                <Button variant="outline" onClick={onCancel}>
-                    Cancel
-                </Button>
-                <Button onClick={handleSave}>
-                    {rule ? 'Update Rule' : 'Add Rule'}
-                </Button>
+                <SecondaryButton
+                    onClick={onCancel}
+                    colorTheme="warning"
+                    icon={<XIcon />}
+                    text="Cancel"
+                />
+                <PrimaryButton
+                    onClick={handleSave}
+                    colorTheme="main"
+                    icon={<PlusIcon />}
+                    text={rule ? 'Update Rule' : 'Add Rule'}
+                />
             </div>
         </div>
     );

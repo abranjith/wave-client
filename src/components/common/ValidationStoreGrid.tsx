@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
-import { ArrowLeftIcon, PlusIcon, PencilIcon, Trash2Icon, ClipboardCheckIcon } from 'lucide-react';
+import { ArrowLeftIcon, PlusIcon, PencilIcon, Trash2Icon, ClipboardCheckIcon, XIcon, CheckIcon } from 'lucide-react';
 import { Button } from '../ui/button';
+import { PrimaryButton } from '../ui/PrimaryButton';
+import { SecondaryButton } from '../ui/SecondaryButton';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '../ui/dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
 import { Switch } from '../ui/switch';
@@ -207,15 +209,13 @@ const ValidationStoreGrid: React.FC<ValidationStoreGridProps> = ({ onBack, onSav
                             <p className="text-sm text-slate-500 dark:text-slate-400 mb-4">
                                 Add reusable validation rules to assert HTTP responses against expected values.
                             </p>
-                            <Button
-                                variant="outline"
+                            <SecondaryButton
                                 size="sm"
                                 onClick={handleAddNew}
-                                className="text-blue-600 hover:text-blue-700 hover:border-blue-300"
-                            >
-                                <PlusIcon className="h-4 w-4 mr-2" />
-                                Add New Rule
-                            </Button>
+                                colorTheme="main"
+                                icon={<PlusIcon />}
+                                text="Add New Rule"
+                            />
                         </div>
                     </div>
                 ) : (
@@ -266,24 +266,20 @@ const ValidationStoreGrid: React.FC<ValidationStoreGridProps> = ({ onBack, onSav
                                             </TableCell>
                                             <TableCell>
                                                 <div className="flex items-center gap-2">
-                                                    <Button
-                                                        variant="outline"
+                                                    <SecondaryButton
                                                         size="sm"
                                                         onClick={() => handleEdit(rule)}
-                                                        className="text-blue-600 hover:text-blue-700 hover:border-blue-300"
-                                                        title="Edit rule"
-                                                    >
-                                                        <PencilIcon className="h-4 w-4" />
-                                                    </Button>
-                                                    <Button
-                                                        variant="outline"
+                                                        colorTheme="main"
+                                                        icon={<PencilIcon />}
+                                                        tooltip="Edit rule"
+                                                    />
+                                                    <SecondaryButton
                                                         size="sm"
                                                         onClick={() => handleDelete(rule.id)}
-                                                        className="text-red-600 hover:text-red-700 hover:border-red-300"
-                                                        title="Delete rule"
-                                                    >
-                                                        <Trash2Icon className="h-4 w-4" />
-                                                    </Button>
+                                                        colorTheme="error"
+                                                        icon={<Trash2Icon />}
+                                                        tooltip="Delete rule"
+                                                    />
                                                 </div>
                                             </TableCell>
                                         </TableRow>
@@ -297,15 +293,13 @@ const ValidationStoreGrid: React.FC<ValidationStoreGridProps> = ({ onBack, onSav
                 {/* Action Buttons - Beneath the data grid */}
                 {validationRules.length > 0 && (
                     <div className="flex justify-start gap-2 pt-3">
-                        <Button
-                            variant="outline"
+                        <SecondaryButton
                             size="sm"
                             onClick={handleAddNew}
-                            className="text-blue-600 hover:text-blue-700 hover:border-blue-300"
-                        >
-                            <PlusIcon className="h-4 w-4 mr-2" />
-                            Add New Rule
-                        </Button>
+                            colorTheme="main"
+                            icon={<PlusIcon />}
+                            text="Add New Rule"
+                        />
                     </div>
                 )}
             </div>
@@ -342,18 +336,18 @@ const ValidationStoreGrid: React.FC<ValidationStoreGridProps> = ({ onBack, onSav
                         <DialogDescription>{confirmDialog.message}</DialogDescription>
                     </DialogHeader>
                     <DialogFooter>
-                        <Button
-                            variant="outline"
+                        <SecondaryButton
                             onClick={() => setConfirmDialog((prev) => ({ ...prev, isOpen: false }))}
-                        >
-                            Cancel
-                        </Button>
-                        <Button
-                            variant="destructive"
+                            colorTheme="warning"
+                            icon={<XIcon />}
+                            text="Cancel"
+                        />
+                        <PrimaryButton
                             onClick={confirmDialog.onConfirm}
-                        >
-                            Confirm
-                        </Button>
+                            colorTheme="error"
+                            icon={<CheckIcon />}
+                            text="Confirm"
+                        />
                     </DialogFooter>
                 </DialogContent>
             </Dialog>

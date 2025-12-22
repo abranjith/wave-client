@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { ArrowLeftIcon, PencilIcon, Trash2Icon, CheckCircleIcon, XCircleIcon, PlusIcon, ShieldCheckIcon, FileKeyIcon, AlertTriangleIcon } from 'lucide-react';
+import { ArrowLeftIcon, PencilIcon, Trash2Icon, CheckCircleIcon, XCircleIcon, PlusIcon, ShieldCheckIcon, FileKeyIcon, AlertTriangleIcon, XIcon, CheckIcon } from 'lucide-react';
 import { Button } from '../ui/button';
+import { SecondaryButton } from '../ui/SecondaryButton';
+import { PrimaryButton } from '../ui/PrimaryButton';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '../ui/dialog';
 import Banner from '../ui/banner';
 import useAppStateStore from '../../hooks/store/useAppStateStore';
@@ -172,15 +174,13 @@ const CertStoreGrid: React.FC<CertStoreGridProps> = ({ onBack, onSaveCerts }) =>
               <p className="text-sm text-slate-500 dark:text-slate-400 mb-4">
                 Add certificate configurations to manage SSL/TLS certificates for your requests.
               </p>
-              <Button
-                variant="outline"
+              <SecondaryButton
                 size="sm"
                 onClick={handleAddNew}
-                className="text-blue-600 hover:text-blue-700 hover:border-blue-300"
-              >
-                <PlusIcon className="h-4 w-4 mr-2" />
-                Add New Certificate
-              </Button>
+                colorTheme="main"
+                icon={<PlusIcon />}
+                text="Add New Certificate"
+              />
             </div>
           </div>
         ) : (
@@ -271,41 +271,27 @@ const CertStoreGrid: React.FC<CertStoreGridProps> = ({ onBack, onSaveCerts }) =>
                       </td>
                       <td className="py-3 px-4">
                         <div className="flex items-center gap-2">
-                          <Button
-                            variant="outline"
+                          <SecondaryButton
                             size="sm"
                             onClick={() => handleEdit(cert)}
-                            className="text-blue-600 hover:text-blue-700 hover:border-blue-300"
-                            title="Edit certificate"
-                          >
-                            <PencilIcon className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            variant="outline"
+                            colorTheme="main"
+                            icon={<PencilIcon />}
+                            tooltip="Edit certificate"
+                          />
+                          <SecondaryButton
                             size="sm"
                             onClick={() => handleToggle(cert.id)}
-                            className={`${
-                              isEnabled
-                                ? 'text-green-600 hover:text-green-700 hover:border-green-300'
-                                : 'text-slate-400 hover:text-slate-600 hover:border-slate-300'
-                            }`}
-                            title={isEnabled ? 'Disable certificate' : 'Enable certificate'}
-                          >
-                            {isEnabled ? (
-                              <CheckCircleIcon className="h-4 w-4" />
-                            ) : (
-                              <XCircleIcon className="h-4 w-4" />
-                            )}
-                          </Button>
-                          <Button
-                            variant="outline"
+                            colorTheme={isEnabled ? 'success' : 'main'}
+                            icon={isEnabled ? <CheckCircleIcon /> : <XCircleIcon />}
+                            tooltip={isEnabled ? 'Disable certificate' : 'Enable certificate'}
+                          />
+                          <SecondaryButton
                             size="sm"
                             onClick={() => handleDelete(cert.id)}
-                            className="text-red-600 hover:text-red-700 hover:border-red-300"
-                            title="Delete certificate"
-                          >
-                            <Trash2Icon className="h-4 w-4" />
-                          </Button>
+                            colorTheme="error"
+                            icon={<Trash2Icon />}
+                            tooltip="Delete certificate"
+                          />
                         </div>
                       </td>
                     </tr>
@@ -319,15 +305,13 @@ const CertStoreGrid: React.FC<CertStoreGridProps> = ({ onBack, onSaveCerts }) =>
         {/* Action Buttons - Beneath the data grid */}
         {certs.length > 0 && (
           <div className="flex justify-start gap-2 pt-3">
-            <Button
-              variant="outline"
+            <SecondaryButton
               size="sm"
               onClick={handleAddNew}
-              className="text-blue-600 hover:text-blue-700 hover:border-blue-300"
-            >
-              <PlusIcon className="h-4 w-4 mr-2" />
-              Add New Certificate
-            </Button>
+              colorTheme="main"
+              icon={<PlusIcon />}
+              text="Add New Certificate"
+            />
           </div>
         )}
       </div>
@@ -364,18 +348,18 @@ const CertStoreGrid: React.FC<CertStoreGridProps> = ({ onBack, onSaveCerts }) =>
             <DialogDescription>{confirmDialog.message}</DialogDescription>
           </DialogHeader>
           <DialogFooter>
-            <Button
-              variant="outline"
+            <SecondaryButton
               onClick={() => setConfirmDialog((prev) => ({ ...prev, isOpen: false }))}
-            >
-              Cancel
-            </Button>
-            <Button
-              variant="destructive"
+              colorTheme="warning"
+              icon={<XIcon />}
+              text="Cancel"
+            />
+            <PrimaryButton
               onClick={confirmDialog.onConfirm}
-            >
-              Confirm
-            </Button>
+              colorTheme="error"
+              icon={<CheckIcon />}
+              text="Confirm"
+            />
           </DialogFooter>
         </DialogContent>
       </Dialog>

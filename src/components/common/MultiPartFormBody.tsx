@@ -1,6 +1,7 @@
 import React, { useState, useEffect, JSX, useMemo } from 'react';
 import { Trash2Icon, PlusIcon, XIcon, PaperclipIcon } from 'lucide-react';
 import { Button } from '../ui/button';
+import { SecondaryButton } from '../ui/SecondaryButton';
 import { Input } from '../ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
 import { Switch } from '../ui/switch';
@@ -292,14 +293,12 @@ const MultiPartFormBody: React.FC<MultiPartFormBodyProps> = ({ dropdownElement }
         <div className="flex items-center gap-2">
           {/* Clear Button */}
           {hasData && (
-            <Button
-              variant="outline"
+            <SecondaryButton
               size="sm"
               onClick={clearAll}
-              className="text-red-600 hover:text-red-700 hover:bg-red-50 dark:text-red-400 dark:hover:text-red-300 dark:hover:bg-red-900/20"
-            >
-              Clear All
-            </Button>
+              colorTheme="error"
+              text="Clear All"
+            />
           )}
         </div>
       </div>
@@ -365,26 +364,22 @@ const MultiPartFormBody: React.FC<MultiPartFormBodyProps> = ({ dropdownElement }
                 <TableCell>
                   <div className="flex items-center gap-2">
                     {field.fieldType === 'file' && field.value instanceof File && (
-                      <Button
-                        variant="outline"
+                      <SecondaryButton
                         size="sm"
                         onClick={() => clearFile(field.id)}
-                        className="text-orange-600 hover:text-orange-700 hover:border-orange-300 dark:text-orange-400 dark:hover:text-orange-300"
-                        title="Clear file"
-                      >
-                        <XIcon className="h-4 w-4" />
-                      </Button>
+                        colorTheme="warning"
+                        icon={<XIcon />}
+                        tooltip="Clear file"
+                      />
                     )}
                     {formFields.length > 1 && (
-                      <Button
-                        variant="outline"
+                      <SecondaryButton
                         size="sm"
                         onClick={() => removeField(field.id)}
-                        className="text-red-600 hover:text-red-700 hover:border-red-300 dark:text-red-400 dark:hover:text-red-300"
-                        title="Delete field"
-                      >
-                        <Trash2Icon className="h-4 w-4" />
-                      </Button>
+                        colorTheme="error"
+                        icon={<Trash2Icon />}
+                        tooltip="Delete field"
+                      />
                     )}
                   </div>
                 </TableCell>
@@ -397,14 +392,13 @@ const MultiPartFormBody: React.FC<MultiPartFormBodyProps> = ({ dropdownElement }
 
       {/* Add Field Button */}
       <div className="flex-shrink-0 flex justify-start mt-4">
-        <Button
-          variant="outline"
+        <SecondaryButton
           size="sm"
           onClick={addEmptyField}
-          className="text-blue-600 hover:text-blue-700 hover:border-blue-300 dark:text-blue-400 dark:hover:text-blue-300"
-        >
-          <PlusIcon className="h-2 w-2 mr-0.2" />Add Field
-        </Button>
+          colorTheme="main"
+          icon={<PlusIcon />}
+          text="Add Field"
+        />
       </div>
     </div>
   );

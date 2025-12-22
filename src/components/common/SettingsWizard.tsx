@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { SaveIcon, XIcon, FolderOpenIcon, RotateCcwIcon, InfoIcon, AlertTriangleIcon, ShieldAlertIcon, CheckCircleIcon, XCircleIcon } from 'lucide-react';
 import { Button } from '../ui/button';
+import { PrimaryButton } from '../ui/PrimaryButton';
+import { SecondaryButton } from '../ui/SecondaryButton';
 import { Input } from '../ui/input';
 import { Label } from '../ui/label';
 import { AppSettings, DEFAULT_SETTINGS } from '../../hooks/store/createSettingsSlice';
@@ -309,35 +311,32 @@ const SettingsWizard: React.FC<SettingsWizardProps> = ({
 
       {/* Action Buttons */}
       <div className="flex justify-between pt-4 border-t sticky bottom-0 bg-white dark:bg-slate-900 pb-2">
-        <Button
-          variant="outline"
+        <SecondaryButton
           size="sm"
           onClick={handleReset}
-          className="text-slate-600 hover:text-slate-700"
-          title="Reset to defaults"
-        >
-          <RotateCcwIcon className="h-4 w-4 mr-1" /> Reset
-        </Button>
+          colorTheme="main"
+          icon={<RotateCcwIcon />}
+          text="Reset"
+          tooltip="Reset to defaults"
+        />
         
         <div className="flex gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleSave}
-            className="text-green-600 hover:text-green-700 hover:border-green-300"
-            title="Save settings"
-          >
-            Save <SaveIcon className="h-4 w-4 ml-1" />
-          </Button>
-          <Button
-            variant="outline"
+          <SecondaryButton
             size="sm"
             onClick={onCancel}
-            className="text-red-600 hover:text-red-700 hover:border-red-300"
-            title="Cancel"
-          >
-            Cancel <XIcon className="h-4 w-4 ml-1" />
-          </Button>
+            colorTheme="warning"
+            icon={<XIcon />}
+            text="Cancel"
+            tooltip="Cancel"
+          />
+          <PrimaryButton
+            size="sm"
+            onClick={handleSave}
+            colorTheme="success"
+            icon={<SaveIcon />}
+            text="Save"
+            tooltip="Save settings"
+          />
         </div>
       </div>
     </div>

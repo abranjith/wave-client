@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { SaveIcon, XIcon, EyeIcon, EyeOffIcon } from 'lucide-react';
-import { Button } from '../ui/button';
+import { PrimaryButton } from '../ui/PrimaryButton';
+import { SecondaryButton } from '../ui/SecondaryButton';
 import { Input } from '../ui/input';
 import { Label } from '../ui/label';
 import { Proxy } from '../../types/collection';
@@ -176,24 +177,22 @@ const ProxyWizard: React.FC<ProxyWizardProps> = ({ proxy, onSave, onCancel, exis
 
       {/* Action Buttons */}
       <div className="flex justify-end gap-2 pt-4 border-t">
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={handleSave}
-          className="text-green-600 hover:text-green-700 hover:border-green-300"
-          title={isEditing ? "Update proxy" : "Save proxy"}
-        >
-          Save <SaveIcon className="h-4 w-4" />
-        </Button>
-        <Button
-          variant="outline"
+        <SecondaryButton
           size="sm"
           onClick={onCancel}
-          className="text-red-600 hover:text-red-700 hover:border-red-300"
-          title="Cancel"
-        >
-          Cancel <XIcon className="h-4 w-4" />
-        </Button>
+          colorTheme="warning"
+          icon={<XIcon />}
+          text="Cancel"
+          tooltip="Cancel"
+        />
+        <PrimaryButton
+          size="sm"
+          onClick={handleSave}
+          colorTheme="success"
+          icon={<SaveIcon />}
+          text="Save"
+          tooltip={isEditing ? "Update proxy" : "Save proxy"}
+        />
       </div>
     </div>
   );

@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo, JSX } from 'react';
 import { Trash2Icon, PlusIcon } from 'lucide-react';
 import { Button } from '../ui/button';
+import { SecondaryButton } from '../ui/SecondaryButton';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
 import { Switch } from '../ui/switch';
 import StyledInput from "../ui/styled-input";
@@ -164,15 +165,13 @@ const RequestHeaders: React.FC = () => {
                   <TableCell>
                     <div className="flex items-center gap-2">
                       {headers.length > 1 && (
-                        <Button
-                          variant="outline"
+                        <SecondaryButton
                           size="sm"
                           onClick={() => removeHeader(header.id)}
-                          className="text-red-600 hover:text-red-700 hover:border-red-300"
-                          title="Delete header"
-                        >
-                          <Trash2Icon className="h-4 w-4" />
-                        </Button>
+                          colorTheme="error"
+                          icon={<Trash2Icon />}
+                          tooltip="Delete header"
+                        />
                       )}
                     </div>
                   </TableCell>
@@ -184,14 +183,13 @@ const RequestHeaders: React.FC = () => {
       </div>
       
       <div className="flex justify-start border border-t-0 border-slate-200 dark:border-slate-700 rounded-b-lg p-3 bg-slate-50 dark:bg-slate-800">
-        <Button
-          variant="outline"
+        <SecondaryButton
           size="sm"
           onClick={addEmptyHeader}
-          className="text-blue-600 hover:text-blue-700 hover:border-blue-300"
-        >
-          <PlusIcon className="h-2 w-2 mr-0.2" />Add Header
-        </Button>
+          colorTheme="main"
+          icon={<PlusIcon />}
+          text="Add Header"
+        />
       </div>
     </div>
   );

@@ -1,6 +1,8 @@
 import React, { useState, useMemo } from 'react';
-import { Trash2Icon, PlusIcon, PencilIcon, LinkIcon, UnlinkIcon } from 'lucide-react';
+import { Trash2Icon, PlusIcon, PencilIcon, LinkIcon, UnlinkIcon, XIcon, SaveIcon } from 'lucide-react';
 import { Button } from '../ui/button';
+import { PrimaryButton } from '../ui/PrimaryButton';
+import { SecondaryButton } from '../ui/SecondaryButton';
 import { Input } from '../ui/input';
 import { Label } from '../ui/label';
 import { Switch } from '../ui/switch';
@@ -421,9 +423,18 @@ const RuleEditorDialog: React.FC<RuleEditorDialogProps> = ({ rule, isOpen, onClo
                 
                 <DialogFooter>
                     <DialogClose asChild>
-                        <Button variant="outline">Cancel</Button>
+                        <SecondaryButton
+                            colorTheme="warning"
+                            icon={<XIcon />}
+                            text="Cancel"
+                        />
                     </DialogClose>
-                    <Button onClick={handleSave}>Save Rule</Button>
+                    <PrimaryButton
+                        onClick={handleSave}
+                        colorTheme="main"
+                        icon={<SaveIcon />}
+                        text="Save Rule"
+                    />
                 </DialogFooter>
             </DialogContent>
         </Dialog>
@@ -499,7 +510,11 @@ const GlobalRuleSelectorDialog: React.FC<GlobalRuleSelectorDialogProps> = ({
                 
                 <DialogFooter>
                     <DialogClose asChild>
-                        <Button variant="outline">Cancel</Button>
+                        <SecondaryButton
+                            colorTheme="warning"
+                            icon={<XIcon />}
+                            text="Cancel"
+                        />
                     </DialogClose>
                 </DialogFooter>
             </DialogContent>
@@ -633,22 +648,20 @@ const RequestValidation: React.FC = () => {
                             Validation Rules
                         </h4>
                         <div className="flex gap-2">
-                            <Button 
-                                variant="outline" 
+                            <SecondaryButton 
                                 size="sm"
                                 onClick={() => setIsGlobalSelectorOpen(true)}
-                            >
-                                <LinkIcon size={16} className="mr-1" />
-                                Link Global Rule
-                            </Button>
-                            <Button 
-                                variant="default" 
+                                colorTheme="main"
+                                icon={<LinkIcon />}
+                                text="Link Global Rule"
+                            />
+                            <SecondaryButton 
                                 size="sm"
                                 onClick={handleCreateNewRule}
-                            >
-                                <PlusIcon size={16} className="mr-1" />
-                                Add Inline Rule
-                            </Button>
+                                colorTheme="success"
+                                icon={<PlusIcon />}
+                                text="Add Inline Rule"
+                            />
                         </div>
                     </div>
                     
@@ -736,25 +749,21 @@ const RequestValidation: React.FC = () => {
                                         <TableCell>
                                             <div className="flex items-center gap-2">
                                                 {!isGlobal && rule && (
-                                                    <Button
-                                                        variant="outline"
+                                                    <SecondaryButton
                                                         size="sm"
                                                         onClick={() => handleEditRule(index, rule)}
-                                                        className="text-blue-600 hover:text-blue-700 hover:border-blue-300"
-                                                        title="Edit rule"
-                                                    >
-                                                        <PencilIcon className="h-4 w-4" />
-                                                    </Button>
+                                                        colorTheme="main"
+                                                        icon={<PencilIcon />}
+                                                        tooltip="Edit rule"
+                                                    />
                                                 )}
-                                                <Button
-                                                    variant="outline"
+                                                <SecondaryButton
                                                     size="sm"
                                                     onClick={() => handleRemoveRule(index)}
-                                                    className="text-red-600 hover:text-red-700 hover:border-red-300"
-                                                    title="Delete rule"
-                                                >
-                                                    <Trash2Icon className="h-4 w-4" />
-                                                </Button>
+                                                    colorTheme="error"
+                                                    icon={<Trash2Icon />}
+                                                    tooltip="Delete rule"
+                                                />
                                             </div>
                                         </TableCell>
                                     </TableRow>

@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { EyeIcon, EyeOffIcon, ArrowLeftIcon, PencilIcon, SaveIcon, XIcon, PlusIcon, Trash2Icon } from 'lucide-react';
 import { Button } from '../ui/button';
+import { SecondaryButton } from '../ui/SecondaryButton';
 import { Input } from '../ui/input';
 import { Textarea } from '../ui/textarea';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
@@ -215,15 +216,13 @@ const EnvironmentGrid: React.FC<EnvironmentGridProps> = ({ environment, onBack, 
               <p className="text-sm text-slate-500 dark:text-slate-400 mb-4">
                 This environment has no variables to display.
               </p>
-              <Button
-                variant="outline"
+              <SecondaryButton
                 size="sm"
                 onClick={startAddingNew}
-                className="text-blue-600 hover:text-blue-700 hover:border-blue-300"
-              >
-                <PlusIcon className="h-4 w-4 mr-2" />
-                Add Variable
-              </Button>
+                colorTheme="main"
+                icon={<PlusIcon />}
+                text="Add Variable"
+              />
             </div>
           </div>
         )}
@@ -292,24 +291,20 @@ const EnvironmentGrid: React.FC<EnvironmentGridProps> = ({ environment, onBack, 
                         </TableCell>
                         <TableCell>
                           <div className="flex items-center gap-2">
-                            <Button
-                              variant="outline"
+                            <SecondaryButton
                               size="sm"
                               onClick={saveEditing}
-                              className="text-green-600 hover:text-green-700 hover:border-green-300"
-                              title="Save changes"
-                            >
-                              <SaveIcon className="h-4 w-4" />
-                            </Button>
-                            <Button
-                              variant="outline"
+                              colorTheme="success"
+                              icon={<SaveIcon />}
+                              tooltip="Save changes"
+                            />
+                            <SecondaryButton
                               size="sm"
                               onClick={cancelEditing}
-                              className="text-red-600 hover:text-red-700 hover:border-red-300"
-                              title="Cancel editing"
-                            >
-                              <XIcon className="h-4 w-4" />
-                            </Button>
+                              colorTheme="error"
+                              icon={<XIcon />}
+                              tooltip="Cancel editing"
+                            />
                           </div>
                         </TableCell>
                       </TableRow>
@@ -360,26 +355,22 @@ const EnvironmentGrid: React.FC<EnvironmentGridProps> = ({ environment, onBack, 
                       </TableCell>
                       <TableCell>
                         <div className="flex items-center gap-2">
-                          <Button
-                            variant="outline"
+                          <SecondaryButton
                             size="sm"
                             onClick={() => startEditing(variable)}
-                            className="text-blue-600 hover:text-blue-700 hover:border-blue-300"
-                            title="Edit variable"
+                            colorTheme="main"
+                            icon={<PencilIcon />}
+                            tooltip="Edit variable"
                             disabled={editingRow !== null}
-                          >
-                            <PencilIcon className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            variant="outline"
+                          />
+                          <SecondaryButton
                             size="sm"
                             onClick={() => deleteVariable(variable.key)}
-                            className="text-red-600 hover:text-red-700 hover:border-red-300"
-                            title="Delete variable"
+                            colorTheme="error"
+                            icon={<Trash2Icon />}
+                            tooltip="Delete variable"
                             disabled={editingRow !== null}
-                          >
-                            <Trash2Icon className="h-4 w-4" />
-                          </Button>
+                          />
                           {isSecret && (
                             <Button
                               variant="outline"
@@ -446,24 +437,20 @@ const EnvironmentGrid: React.FC<EnvironmentGridProps> = ({ environment, onBack, 
                     </TableCell>
                     <TableCell>
                       <div className="flex items-center gap-2">
-                        <Button
-                          variant="outline"
+                        <SecondaryButton
                           size="sm"
                           onClick={saveEditing}
-                          className="text-green-600 hover:text-green-700 hover:border-green-300"
-                          title="Save changes"
-                        >
-                          <SaveIcon className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          variant="outline"
+                          colorTheme="success"
+                          icon={<SaveIcon />}
+                          tooltip="Save changes"
+                        />
+                        <SecondaryButton
                           size="sm"
                           onClick={cancelEditing}
-                          className="text-red-600 hover:text-red-700 hover:border-red-300"
-                          title="Cancel editing"
-                        >
-                          <XIcon className="h-4 w-4" />
-                        </Button>
+                          colorTheme="error"
+                          icon={<XIcon />}
+                          tooltip="Cancel editing"
+                        />
                       </div>
                     </TableCell>
                   </TableRow>
@@ -476,16 +463,14 @@ const EnvironmentGrid: React.FC<EnvironmentGridProps> = ({ environment, onBack, 
         {/* Add Variable Button - Only shown when there are existing variables */}
         {allVariables.length > 0 && (
           <div className="flex justify-start pt-3">
-            <Button
-              variant="outline"
+            <SecondaryButton
               size="sm"
               onClick={startAddingNew}
               disabled={editingRow !== null}
-              className="text-blue-600 hover:text-blue-700 hover:border-blue-300 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              <PlusIcon className="h-4 w-4 mr-2" />
-              Add Variable
-            </Button>
+              colorTheme="main"
+              icon={<PlusIcon />}
+              text="Add Variable"
+            />
           </div>
         )}
       </div>

@@ -5,8 +5,10 @@
  */
 
 import React, { useEffect, useCallback, useState } from 'react';
-import { PlusIcon, XIcon, CircleIcon } from 'lucide-react';
+import { PlusIcon, XIcon, CircleIcon, SaveIcon, BanIcon } from 'lucide-react';
 import { Button } from '../ui/button';
+import { PrimaryButton } from '../ui/PrimaryButton';
+import { SecondaryButton } from '../ui/SecondaryButton';
 import {
     Tooltip,
     TooltipContent,
@@ -230,15 +232,24 @@ const TabsBar: React.FC<TabsBarProps> = ({ className, onSave }) => {
                         </DialogDescription>
                     </DialogHeader>
                     <DialogFooter>
-                        <Button variant="secondary" onClick={handleConfirmClose}>
-                            Don't Save
-                        </Button>
-                        <Button variant="ghost" onClick={() => setTabToClose(null)}>
-                            Cancel
-                        </Button>
-                        <Button onClick={handleSaveAndClose}>
-                            Save
-                        </Button>
+                        <SecondaryButton
+                            onClick={handleConfirmClose}
+                            colorTheme="error"
+                            icon={<BanIcon />}
+                            text="Don't Save"
+                        />
+                        <SecondaryButton
+                            onClick={() => setTabToClose(null)}
+                            colorTheme="warning"
+                            icon={<XIcon />}
+                            text="Cancel"
+                        />
+                        <PrimaryButton
+                            onClick={handleSaveAndClose}
+                            colorTheme="main"
+                            icon={<SaveIcon />}
+                            text="Save"
+                        />
                     </DialogFooter>
                 </DialogContent>
             </Dialog>

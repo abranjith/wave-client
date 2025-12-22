@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
-import { Button } from '../ui/button';
+import { XIcon, ImportIcon } from 'lucide-react';
+import { PrimaryButton } from '../ui/PrimaryButton';
+import { SecondaryButton } from '../ui/SecondaryButton';
 import {
   Dialog,
   DialogContent,
@@ -153,19 +155,20 @@ const EnvImportWizard: React.FC<EnvImportWizardProps> = ({
         </div>
 
         <DialogFooter>
-          <Button
-            variant="outline"
+          <SecondaryButton
             onClick={handleClose}
             disabled={isImporting}
-          >
-            Cancel
-          </Button>
-          <Button
+            colorTheme="warning"
+            icon={<XIcon />}
+            text="Cancel"
+          />
+          <PrimaryButton
             onClick={handleImport}
             disabled={!selectedFile || isImporting}
-          >
-            {isImporting ? 'Importing...' : 'Import'}
-          </Button>
+            colorTheme="main"
+            icon={<ImportIcon />}
+            text={isImporting ? 'Importing...' : 'Import'}
+          />
         </DialogFooter>
       </DialogContent>
     </Dialog>

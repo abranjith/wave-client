@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { ArrowLeftIcon, PencilIcon, Trash2Icon, SaveIcon, XIcon, PlusIcon } from 'lucide-react';
+import { ArrowLeftIcon, PencilIcon, Trash2Icon, SaveIcon, XIcon, PlusIcon, CheckIcon } from 'lucide-react';
 import { Button } from '../ui/button';
+import { SecondaryButton } from '../ui/SecondaryButton';
+import { PrimaryButton } from '../ui/PrimaryButton';
 import { Input } from '../ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
 import { Switch } from '../ui/switch';
@@ -202,15 +204,13 @@ const CookieStoreGrid: React.FC<CookieStoreGridProps> = ({ onBack, onSaveCookies
               <p className="text-sm text-slate-500 dark:text-slate-400 mb-4">
                 Add cookies to manage them for your requests.
               </p>
-              <Button
-                variant="outline"
+              <SecondaryButton
                 size="sm"
                 onClick={startAddingNew}
-                className="text-blue-600 hover:text-blue-700 hover:border-blue-300"
-              >
-                <PlusIcon className="h-4 w-4 mr-2" />
-                Add Cookie
-              </Button>
+                colorTheme="main"
+                icon={<PlusIcon />}
+                text="Add Cookie"
+              />
             </div>
           </div>
         ) : (
@@ -306,24 +306,20 @@ const CookieStoreGrid: React.FC<CookieStoreGridProps> = ({ onBack, onSaveCookies
                         </TableCell>
                         <TableCell>
                           <div className="flex items-center gap-2">
-                            <Button
-                              variant="outline"
+                            <SecondaryButton
                               size="sm"
                               onClick={saveEditing}
-                              className="text-green-600 hover:text-green-700 hover:border-green-300"
-                              title="Save changes"
-                            >
-                              <SaveIcon className="h-4 w-4" />
-                            </Button>
-                            <Button
-                              variant="outline"
+                              colorTheme="success"
+                              icon={<SaveIcon />}
+                              tooltip="Save changes"
+                            />
+                            <SecondaryButton
                               size="sm"
                               onClick={cancelEditing}
-                              className="text-red-600 hover:text-red-700 hover:border-red-300"
-                              title="Cancel editing"
-                            >
-                              <XIcon className="h-4 w-4" />
-                            </Button>
+                              colorTheme="error"
+                              icon={<XIcon />}
+                              tooltip="Cancel editing"
+                            />
                           </div>
                         </TableCell>
                       </TableRow>
@@ -406,30 +402,26 @@ const CookieStoreGrid: React.FC<CookieStoreGridProps> = ({ onBack, onSaveCookies
                       </TableCell>
                       <TableCell>
                         <div className="flex items-center gap-2">
-                          <Button
-                            variant="outline"
+                          <SecondaryButton
                             size="sm"
                             onClick={() => startEditing(cookie)}
-                            className="text-blue-600 hover:text-blue-700 hover:border-blue-300"
-                            title="Edit cookie"
+                            colorTheme="main"
+                            icon={<PencilIcon />}
+                            tooltip="Edit cookie"
                             disabled={editingRow !== null}
-                          >
-                            <PencilIcon className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            variant="outline"
+                          />
+                          <SecondaryButton
                             size="sm"
                             onClick={() => {
                               if (confirm(`Are you sure you want to delete the cookie "${cookie.name}"?`)) {
                                 removeCookie(cookie.id);
                               }
                             }}
-                            className="text-red-600 hover:text-red-700 hover:border-red-300"
-                            title="Delete cookie"
+                            colorTheme="error"
+                            icon={<Trash2Icon />}
+                            tooltip="Delete cookie"
                             disabled={editingRow !== null}
-                          >
-                            <Trash2Icon className="h-4 w-4" />
-                          </Button>
+                          />
                         </div>
                       </TableCell>
                     </TableRow>
@@ -510,24 +502,20 @@ const CookieStoreGrid: React.FC<CookieStoreGridProps> = ({ onBack, onSaveCookies
                     </TableCell>
                     <TableCell>
                       <div className="flex items-center gap-2">
-                        <Button
-                          variant="outline"
+                        <SecondaryButton
                           size="sm"
                           onClick={saveEditing}
-                          className="text-green-600 hover:text-green-700 hover:border-green-300"
-                          title="Save cookie"
-                        >
-                          <SaveIcon className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          variant="outline"
+                          colorTheme="success"
+                          icon={<SaveIcon />}
+                          tooltip="Save cookie"
+                        />
+                        <SecondaryButton
                           size="sm"
                           onClick={cancelEditing}
-                          className="text-red-600 hover:text-red-700 hover:border-red-300"
-                          title="Cancel"
-                        >
-                          <XIcon className="h-4 w-4" />
-                        </Button>
+                          colorTheme="error"
+                          icon={<XIcon />}
+                          tooltip="Cancel"
+                        />
                       </div>
                     </TableCell>
                   </TableRow>
@@ -544,26 +532,22 @@ const CookieStoreGrid: React.FC<CookieStoreGridProps> = ({ onBack, onSaveCookies
         {/* Action Buttons - Beneath the data grid */}
         {cookies.length > 0 && (
           <div className="flex justify-start gap-2 pt-3">
-            <Button
-              variant="outline"
+            <SecondaryButton
               size="sm"
               onClick={startAddingNew}
               disabled={editingRow !== null}
-              className="text-blue-600 hover:text-blue-700 hover:border-blue-300 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              <PlusIcon className="h-4 w-4 mr-2" />
-              Add Cookie
-            </Button>
-            <Button
-              variant="outline"
+              colorTheme="main"
+              icon={<PlusIcon />}
+              text="Add Cookie"
+            />
+            <SecondaryButton
               size="sm"
               onClick={handleClearAll}
               disabled={editingRow !== null || cookies.length === 0}
-              className="text-red-600 hover:text-red-700 hover:border-red-300 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              <Trash2Icon className="h-4 w-4 mr-2" />
-              Clear All Cookies
-            </Button>
+              colorTheme="error"
+              icon={<Trash2Icon />}
+              text="Clear All Cookies"
+            />
           </div>
         )}
       </div>
@@ -586,18 +570,18 @@ const CookieStoreGrid: React.FC<CookieStoreGridProps> = ({ onBack, onSaveCookies
             <DialogDescription>{confirmDialog.message}</DialogDescription>
           </DialogHeader>
           <DialogFooter>
-            <Button
-              variant="outline"
+            <SecondaryButton
               onClick={() => setConfirmDialog((prev) => ({ ...prev, isOpen: false }))}
-            >
-              Cancel
-            </Button>
-            <Button
-              variant="destructive"
+              colorTheme="warning"
+              icon={<XIcon />}
+              text="Cancel"
+            />
+            <PrimaryButton
               onClick={confirmDialog.onConfirm}
-            >
-              Confirm
-            </Button>
+              colorTheme="error"
+              icon={<CheckIcon />}
+              text="Confirm"
+            />
           </DialogFooter>
         </DialogContent>
       </Dialog>

@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Button } from '../ui/button';
+import { SecondaryButton } from '../ui/SecondaryButton';
 import { Textarea } from '../ui/textarea';
 import { Tooltip, TooltipTrigger, TooltipContent } from '../ui/tooltip';
 import { CopyIcon, ClipboardPasteIcon, InfoIcon, FileTextIcon } from 'lucide-react';
@@ -340,18 +341,16 @@ const TextBody: React.FC<TextBodyProps> = ({ dropdownElement }) => {
             </Button>
           )}
           {bodyContent && (
-            <Button
-              variant="outline"
+            <SecondaryButton
               size="sm"
               onClick={() => {
                 setBodyContent('');
                 setBodyTypeInfo(getTypeInfo('unknown'));
                 updateBody('', 'unknown');
               }}
-              className="text-red-600 hover:text-red-700 hover:bg-red-50 dark:text-red-400 dark:hover:text-red-300 dark:hover:bg-red-900/20"
-            >
-              Clear
-            </Button>
+              colorTheme="error"
+              text="Clear"
+            />
           )}
         </div>
       </div>

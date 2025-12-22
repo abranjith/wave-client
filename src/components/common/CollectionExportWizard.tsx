@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { DownloadIcon } from 'lucide-react';
-import { Button } from '../ui/button';
+import { DownloadIcon, XIcon } from 'lucide-react';
+import { PrimaryButton } from '../ui/PrimaryButton';
+import { SecondaryButton } from '../ui/SecondaryButton';
 import { Label } from '../ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import {
@@ -176,20 +177,20 @@ const CollectionExportWizard: React.FC<CollectionExportWizardProps> = ({
         </div>
 
         <DialogFooter>
-          <Button
-            variant="outline"
+          <SecondaryButton
             onClick={handleClose}
             disabled={isExporting}
-          >
-            Cancel
-          </Button>
-          <Button
+            colorTheme="warning"
+            icon={<XIcon />}
+            text="Cancel"
+          />
+          <PrimaryButton
             onClick={handleExport}
             disabled={!selectedCollection || isExporting || collections.length === 0}
-          >
-            <DownloadIcon className="h-4 w-4 mr-2" />
-            {isExporting ? 'Exporting...' : 'Export'}
-          </Button>
+            colorTheme="main"
+            icon={<DownloadIcon />}
+            text={isExporting ? 'Exporting...' : 'Export'}
+          />
         </DialogFooter>
       </DialogContent>
     </Dialog>
