@@ -17,6 +17,7 @@ import {
   TooltipTrigger,
 } from "../components/ui/tooltip"
 import { Button } from "../components/ui/button"
+import { SecondaryButton } from '../components/ui/SecondaryButton';
 import { Environment } from '../types/collection';
 import { RequestFormData } from '../utils/collectionParser';
 
@@ -70,22 +71,13 @@ const ConfigPanel: React.FC<ConfigPanelProps> = ({ onRequestSelect, onEnvSelect,
           </TabsList>
           {/* Settings Button at the bottom */}
           <div className="mt-auto pt-2 border-t border-slate-200 dark:border-slate-700">
-            <TooltipProvider delayDuration={500}>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    onClick={onSettingsSelect}
-                    className="flex items-center justify-center w-full h-12 text-slate-600 hover:bg-slate-100 hover:text-blue-600 rounded-md transition-colors dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-blue-400"
-                  >
-                    <SettingsIcon size={20}/>
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent className="px-2 py-1 text-xs">
-                  Settings
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
+            <SecondaryButton
+              variant="ghost"
+              onClick={onSettingsSelect}
+              icon={<SettingsIcon size={20}/>}
+              tooltip="Settings"
+              className="flex items-center justify-center w-full h-12 text-slate-600 hover:bg-slate-100 hover:text-blue-600 rounded-md transition-colors dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-blue-400"
+            />
           </div>
         </div>
         <div className="flex-1 overflow-hidden">

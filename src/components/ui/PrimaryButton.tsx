@@ -90,8 +90,7 @@ const PrimaryButton = React.forwardRef<HTMLButtonElement, PrimaryButtonProps>(
 
     // Build icon sizing classes
     const iconClasses = cn(
-      iconOnly ? "h-5 w-5" : "h-4 w-4",
-      hasText && "mr-2"
+      iconOnly ? "h-5 w-5" : "h-4 w-4"
     );
 
     const buttonContent = (
@@ -102,6 +101,7 @@ const PrimaryButton = React.forwardRef<HTMLButtonElement, PrimaryButtonProps>(
         disabled={disabled}
         className={cn(
           colorThemeClasses[colorTheme],
+          hasIcon && hasText && "gap-1",
           className
         )}
         {...props}

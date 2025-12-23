@@ -203,15 +203,15 @@ const TabsBar: React.FC<TabsBarProps> = ({ className, onSave }) => {
                     <TooltipProvider delayDuration={300}>
                         <Tooltip>
                             <TooltipTrigger asChild>
-                                <Button
+                                <SecondaryButton
                                     variant="ghost"
                                     onClick={handleAddTab}
-                                    className="h-[38px] w-[120px] px-4 py-2 flex items-center justify-center gap-2 text-slate-500 hover:bg-slate-200 hover:text-blue-600 rounded-none transition-colors dark:text-slate-400 dark:hover:bg-slate-700 dark:hover:text-blue-400"
+                                    icon={<PlusIcon size={20} />}
+                                    text="New Tab"
+                                    colorTheme="main"
+                                    className="h-[38px] w-[120px] px-4 py-2 rounded-none"
                                     aria-label="New tab"
-                                >
-                                    <PlusIcon size={20} />
-                                    <span className="text-sm">New Tab</span>
-                                </Button>
+                                />
                             </TooltipTrigger>
                             <TooltipContent className="px-2 py-1 text-xs">
                                 New Tab (Ctrl+T) • {tabs.length}/{TAB_CONSTANTS.MAX_TABS}

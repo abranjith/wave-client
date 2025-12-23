@@ -655,10 +655,10 @@ const RequestValidation: React.FC = () => {
                                 icon={<LinkIcon />}
                                 text="Link Global Rule"
                             />
-                            <SecondaryButton 
+                            <SecondaryButton
                                 size="sm"
                                 onClick={handleCreateNewRule}
-                                colorTheme="success"
+                                colorTheme="main"
                                 icon={<PlusIcon />}
                                 text="Add Inline Rule"
                             />
