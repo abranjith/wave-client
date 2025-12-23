@@ -1,9 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { ArrowLeftIcon, PencilIcon, Trash2Icon, CheckCircleIcon, XCircleIcon, PlusIcon, KeyIcon, UserIcon, ShieldIcon, AlertTriangleIcon, RefreshCwIcon, XIcon, CheckIcon } from 'lucide-react';
+import { ArrowLeftIcon, PencilIcon, Trash2Icon, PlusIcon, KeyIcon, UserIcon, ShieldIcon, AlertTriangleIcon, RefreshCwIcon, XIcon, CheckIcon } from 'lucide-react';
 import { Button } from '../ui/button';
 import { SecondaryButton } from '../ui/SecondaryButton';
 import { PrimaryButton } from '../ui/PrimaryButton';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '../ui/dialog';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
+import { Switch } from '../ui/switch';
 import Banner from '../ui/banner';
 import useAppStateStore from '../../hooks/store/useAppStateStore';
 import AuthWizard from './AuthWizard';
@@ -193,47 +195,41 @@ const AuthStoreGrid: React.FC<AuthStoreGridProps> = ({ onBack, onSaveAuths }) =>
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full border-collapse">
-              <thead>
-                <tr className="border-b border-gray-200 dark:border-slate-700">
-                  <th className="text-left py-3 px-4 text-sm font-medium text-gray-700 dark:text-slate-300 w-[10%]">
-                    Type
-                  </th>
-                  <th className="text-left py-3 px-4 text-sm font-medium text-gray-700 dark:text-slate-300 w-[20%]">
-                    Name
-                  </th>
-                  <th className="text-left py-3 px-4 text-sm font-medium text-gray-700 dark:text-slate-300 w-[15%]">
-                    Expires
-                  </th>
-                  <th className="text-left py-3 px-4 text-sm font-medium text-gray-700 dark:text-slate-300 w-[35%]">
-                    Domain Filters
-                  </th>
-                  <th className="text-left py-3 px-4 text-sm font-medium text-gray-700 dark:text-slate-300 w-[20%]">
-                    Actions
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="w-[8%]">Enabled</TableHead>
+                  <TableHead className="w-[12%]">Type</TableHead>
+                  <TableHead className="w-[20%]">Name</TableHead>
+                  <TableHead className="w-[15%]">Expires</TableHead>
+                  <TableHead className="w-[30%]">Domain Filters</TableHead>
+                  <TableHead className="w-[15%]">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
                 {auths.map((auth) => {
                   const isEnabled = auth.enabled;
                   const isExpired = isAuthExpired(auth);
                   
                   return (
-                    <tr
+                    <TableRow
                       key={auth.id}
-                      className={`border-b border-gray-100 dark:border-slate-800 hover:bg-gray-50 dark:hover:bg-slate-800/50 ${
-                        !isEnabled ? 'opacity-40' : ''
-                      }`}
                     >
-                      <td className="py-3 px-4">
+                      <TableCell>
+                        <Switch
+                          checked={isEnabled}
+                          onCheckedChange={() => handleToggle(auth.id)}
+                        />
+                      </TableCell>
+                      <TableCell className={!isEnabled ? 'opacity-40' : ''}>
                         <div className={`flex items-center gap-2 text-sm ${
                           isEnabled ? 'text-slate-700 dark:text-slate-300' : 'text-slate-500 dark:text-slate-400'
                         }`}>
                           {getAuthIcon(auth.type)}
                           <span>{getAuthTypeLabel(auth.type)}</span>
                         </div>
-                      </td>
-                      <td className="py-3 px-4">
+                      </TableCell>
+                      <TableCell className={!isEnabled ? 'opacity-40' : ''}>
                         <div className={`text-sm font-medium ${
                           isEnabled ? 'text-slate-700 dark:text-slate-300' : 'text-slate-500 dark:text-slate-400'
                         }`}>
@@ -245,8 +241,8 @@ const AuthStoreGrid: React.FC<AuthStoreGridProps> = ({ onBack, onSaveAuths }) =>
                             </span>
                           )}
                         </div>
-                      </td>
-                      <td className="py-3 px-4">
+                      </TableCell>
+                      <TableCell className={!isEnabled ? 'opacity-40' : ''}>
                         <div className={`text-sm ${
                           isEnabled ? 'text-slate-700 dark:text-slate-300' : 'text-slate-500 dark:text-slate-400'
                         }`}>
@@ -258,8 +254,8 @@ const AuthStoreGrid: React.FC<AuthStoreGridProps> = ({ onBack, onSaveAuths }) =>
                             <span className="text-slate-400 dark:text-slate-500 italic">Never expires</span>
                           )}
                         </div>
-                      </td>
-                      <td className="py-3 px-4">
+                      </TableCell>
+                      <TableCell className={!isEnabled ? 'opacity-40' : ''}>
                         <div className="text-xs">
                           {auth.domainFilters.length > 0 ? (
                             <div className="flex flex-wrap gap-1">
@@ -280,8 +276,8 @@ const AuthStoreGrid: React.FC<AuthStoreGridProps> = ({ onBack, onSaveAuths }) =>
                             <span className="text-slate-400 dark:text-slate-500 italic">All domains</span>
                           )}
                         </div>
-                      </td>
-                      <td className="py-3 px-4">
+                      </TableCell>
+                      <TableCell>
                         <div className="flex items-center gap-2">
                           <SecondaryButton
                             size="sm"
@@ -292,25 +288,18 @@ const AuthStoreGrid: React.FC<AuthStoreGridProps> = ({ onBack, onSaveAuths }) =>
                           />
                           <SecondaryButton
                             size="sm"
-                            onClick={() => handleToggle(auth.id)}
-                            colorTheme={isEnabled ? 'success' : 'main'}
-                            icon={isEnabled ? <CheckCircleIcon /> : <XCircleIcon />}
-                            tooltip={isEnabled ? 'Disable auth' : 'Enable auth'}
-                          />
-                          <SecondaryButton
-                            size="sm"
                             onClick={() => handleDelete(auth.id)}
                             colorTheme="error"
                             icon={<Trash2Icon />}
                             tooltip="Delete auth"
                           />
                         </div>
-                      </td>
-                    </tr>
+                      </TableCell>
+                    </TableRow>
                   );
                 })}
-              </tbody>
-            </table>
+              </TableBody>
+            </Table>
           </div>
         )}
 
