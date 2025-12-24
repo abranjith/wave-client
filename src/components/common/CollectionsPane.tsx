@@ -1,10 +1,16 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { ChevronRightIcon, ChevronDownIcon, FolderIcon, LayoutGridIcon, ImportIcon, DownloadIcon } from 'lucide-react';
+import { ChevronRightIcon, ChevronDownIcon, FolderIcon, LayoutGridIcon, ImportIcon, DownloadIcon, MoreVertical } from 'lucide-react';
 import { Collection, CollectionItem } from '../../types/collection';
 import { collectionItemToFormData, countRequests } from '../../utils/collectionParser';
 import useAppStateStore from '../../hooks/store/useAppStateStore';
 import { Button } from '../ui/button';
 import { Tooltip, TooltipTrigger, TooltipContent } from '../ui/tooltip';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '../ui/dropdown-menu';
 import CollectionsImportWizard from './CollectionsImportWizard';
 import CollectionExportWizard from './CollectionExportWizard';
 import CollectionTreeItem from './CollectionTreeItem';
@@ -166,6 +172,7 @@ const CollectionsPane: React.FC<CollectionsPaneProps> = ({
   const [isImportWizardOpen, setIsImportWizardOpen] = useState(false);
   const [isExportWizardOpen, setIsExportWizardOpen] = useState(false);
   const [debouncedSearch, setDebouncedSearch] = useState(searchText.trim());
+  const [openMenuFilename, setOpenMenuFilename] = useState<string | null>(null);
   const wasSearchingRef = useRef(false);
 
   const toggleCollection = (filename: string) => {
@@ -399,7 +406,9 @@ const CollectionsPane: React.FC<CollectionsPaneProps> = ({
             <div key={filename} className="border border-slate-200 dark:border-slate-700 rounded-lg">
                 {/* Collection Header */}
                 <div 
-                    className="flex items-center p-3 bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 cursor-pointer rounded-t-lg group transition-colors"
+                    className={`flex items-center p-3 bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 cursor-pointer rounded-t-lg group transition-colors ${
+                      openMenuFilename === filename ? 'bg-slate-100 dark:bg-slate-700' : ''
+                    }`}
                     onClick={() => toggleCollection(filename)}
                 >
                 <div className="flex items-center flex-1 mb-1">
@@ -413,9 +422,24 @@ const CollectionsPane: React.FC<CollectionsPaneProps> = ({
                         {collection.info.name}
                         </h3>
                 </div>
-                <span className="text-xs text-slate-400 bg-slate-200 dark:bg-slate-600 px-2 py-1 rounded-full ml-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                <span className={`text-xs text-slate-400 bg-slate-200 dark:bg-slate-600 px-2 py-1 rounded-full ml-2 transition-opacity ${
+                  openMenuFilename === filename ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
+                }`}>
                         {totalRequests}
                 </span>
+                <div className={`ml-1 transition-opacity ${openMenuFilename === filename ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`} onClick={(e) => e.stopPropagation()}>
+                  <DropdownMenu onOpenChange={(open) => setOpenMenuFilename(open ? filename : null)}>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="ghost" className="h-6 w-6 p-0 hover:bg-slate-300 dark:hover:bg-slate-600">
+                        <MoreVertical className="h-4 w-4" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="min-w-24">
+                      <DropdownMenuItem onClick={() => {}}>Run</DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => {}}>Delete</DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </div>
                 </div>
                 
                 {/* Collection Content - Recursive Tree Rendering */}

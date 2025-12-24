@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ChevronRightIcon, ChevronDownIcon, FolderIcon } from 'lucide-react';
+import { ChevronRightIcon, ChevronDownIcon, FolderIcon, MoreVertical } from 'lucide-react';
 import { CollectionItem, isFolder, isRequest } from '../../types/collection';
 import {
   Tooltip,
@@ -7,6 +7,13 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '../ui/tooltip';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '../ui/dropdown-menu';
+import { Button } from '../ui/button';
 import { getHttpMethodColor } from '../../utils/common';
 import { urlToString } from '../../utils/collectionParser';
 
@@ -44,6 +51,9 @@ const CollectionTreeItem: React.FC<CollectionTreeItemProps> = ({
   // Calculate indentation based on depth
   const paddingLeft = depth * 16; // 16px per level
 
+  const [isFolderMenuOpen, setIsFolderMenuOpen] = useState(false);
+  const [isRequestMenuOpen, setIsRequestMenuOpen] = useState(false);
+
   if (isFolder(item)) {
     const childCount = item.item?.length || 0;
     
@@ -51,7 +61,9 @@ const CollectionTreeItem: React.FC<CollectionTreeItemProps> = ({
       <div className="space-y-1">
         {/* Folder Header */}
         <div 
-          className="flex items-center py-2 px-2 hover:bg-slate-100 dark:hover:bg-slate-700 cursor-pointer rounded-md group transition-colors"
+          className={`flex items-center py-2 px-2 hover:bg-slate-100 dark:hover:bg-slate-700 cursor-pointer rounded-md group transition-colors ${
+            isFolderMenuOpen ? 'bg-slate-100 dark:bg-slate-700' : ''
+          }`}
           style={{ paddingLeft: `${paddingLeft + 8}px` }}
           onClick={() => onToggleFolder(folderKey)}
         >
@@ -66,9 +78,24 @@ const CollectionTreeItem: React.FC<CollectionTreeItemProps> = ({
               {item.name}
             </span>
           </div>
-          <span className="text-xs text-slate-400 bg-slate-200 dark:bg-slate-600 px-2 py-1 rounded-full ml-2 opacity-0 group-hover:opacity-100 transition-opacity">
+          <span className={`text-xs text-slate-400 bg-slate-200 dark:bg-slate-600 px-2 py-1 rounded-full ml-2 transition-opacity ${
+            isFolderMenuOpen ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
+          }`}>
             {childCount}
           </span>
+          <div className={`ml-1 transition-opacity ${isFolderMenuOpen ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`} onClick={(e) => e.stopPropagation()}>
+            <DropdownMenu onOpenChange={setIsFolderMenuOpen}>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" className="h-6 w-6 p-0 hover:bg-slate-300 dark:hover:bg-slate-600">
+                  <MoreVertical className="h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="min-w-24">
+                <DropdownMenuItem onClick={() => {}}>Run</DropdownMenuItem>
+                <DropdownMenuItem onClick={() => {}}>Delete</DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
         </div>
         
         {/* Folder Children - recursive rendering */}
@@ -107,7 +134,9 @@ const CollectionTreeItem: React.FC<CollectionTreeItemProps> = ({
               className={`flex items-center py-2 px-2 cursor-pointer rounded-md group transition-colors ${
                 isActive 
                   ? 'bg-blue-100 dark:bg-blue-900/40 border-l-2 border-blue-500' 
-                  : 'hover:bg-blue-50 dark:hover:bg-blue-900/20'
+                  : isRequestMenuOpen
+                    ? 'bg-blue-50 dark:bg-blue-900/20'
+                    : 'hover:bg-blue-50 dark:hover:bg-blue-900/20'
               }`}
               style={{ paddingLeft: `${paddingLeft + 8}px` }}
               onClick={() => onRequestSelect(item, collectionFilename, collectionName, itemPath)}
@@ -119,6 +148,18 @@ const CollectionTreeItem: React.FC<CollectionTreeItemProps> = ({
                 <span className="text-sm text-slate-600 dark:text-slate-300 truncate">
                   {item.name}
                 </span>
+              </div>
+              <div className={`ml-1 transition-opacity ${isRequestMenuOpen ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`} onClick={(e) => e.stopPropagation()}>
+                <DropdownMenu onOpenChange={setIsRequestMenuOpen}>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="ghost" className="h-6 w-6 p-0 hover:bg-slate-300 dark:hover:bg-slate-600">
+                      <MoreVertical className="h-4 w-4" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="min-w-24">
+                    <DropdownMenuItem onClick={() => {}}>Delete</DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
               </div>
             </div>
           </TooltipTrigger>
