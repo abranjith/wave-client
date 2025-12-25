@@ -14,6 +14,7 @@ import {
 import CollectionsImportWizard from './CollectionsImportWizard';
 import CollectionExportWizard from './CollectionExportWizard';
 import CollectionTreeItem from './CollectionTreeItem';
+import RunCollectionModal from './RunCollectionModal';
 import { RequestFormData } from '../../utils/collectionParser';
 import { Input } from '../ui/input';
 
@@ -173,6 +174,12 @@ const CollectionsPane: React.FC<CollectionsPaneProps> = ({
   const [isExportWizardOpen, setIsExportWizardOpen] = useState(false);
   const [debouncedSearch, setDebouncedSearch] = useState(searchText.trim());
   const [openMenuFilename, setOpenMenuFilename] = useState<string | null>(null);
+  const [runModalData, setRunModalData] = useState<{
+    isOpen: boolean;
+    collectionName: string;
+    items: CollectionItem[];
+    itemPath: string[];
+  }>({ isOpen: false, collectionName: '', items: [], itemPath: [] });
   const wasSearchingRef = useRef(false);
 
   const toggleCollection = (filename: string) => {
@@ -206,6 +213,23 @@ const CollectionsPane: React.FC<CollectionsPaneProps> = ({
     const formData = collectionItemToFormData(item, collectionFilename, collectionName, itemPath);
     onRequestSelect(formData);
   }, [onRequestSelect]);
+
+  const handleRunCollection = useCallback((
+    collectionName: string,
+    items: CollectionItem[],
+    itemPath: string[] = []
+  ) => {
+    setRunModalData({
+      isOpen: true,
+      collectionName,
+      items,
+      itemPath,
+    });
+  }, []);
+
+  const handleCloseRunModal = useCallback(() => {
+    setRunModalData(prev => ({ ...prev, isOpen: false }));
+  }, []);
 
   //TODO this default logic is flaky and needs a better approach
   // Sort collections to show default collection first
@@ -435,7 +459,7 @@ const CollectionsPane: React.FC<CollectionsPaneProps> = ({
                       </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end" className="min-w-24">
-                      <DropdownMenuItem onClick={() => {}}>Run</DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => handleRunCollection(collection.info.name, collection.item, [])}>Run</DropdownMenuItem>
                       <DropdownMenuItem onClick={() => {}}>Delete</DropdownMenuItem>
                     </DropdownMenuContent>
                   </DropdownMenu>
@@ -457,6 +481,7 @@ const CollectionsPane: React.FC<CollectionsPaneProps> = ({
                                 expandedFolders={expandedFolders}
                                 onToggleFolder={toggleFolder}
                                 onRequestSelect={handleRequestSelect}
+                                onRunFolder={(items, folderPath) => handleRunCollection(collection.info.name, items, folderPath)}
                             />
                         ))}
                     </div>
@@ -475,6 +500,13 @@ const CollectionsPane: React.FC<CollectionsPaneProps> = ({
         isOpen={isExportWizardOpen}
         onClose={() => setIsExportWizardOpen(false)}
         onExportCollection={onExportCollection}
+      />
+      <RunCollectionModal
+        isOpen={runModalData.isOpen}
+        onClose={handleCloseRunModal}
+        collectionName={runModalData.collectionName}
+        items={runModalData.items}
+        itemPath={runModalData.itemPath}
       />
     </div>
   );

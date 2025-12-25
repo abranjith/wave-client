@@ -27,6 +27,7 @@ interface CollectionTreeItemProps {
   expandedFolders: Set<string>;
   onToggleFolder: (folderKey: string) => void;
   onRequestSelect: (item: CollectionItem, collectionFilename: string, collectionName: string, itemPath: string[]) => void;
+  onRunFolder?: (items: CollectionItem[], folderPath: string[]) => void;
 }
 
 /**
@@ -43,6 +44,7 @@ const CollectionTreeItem: React.FC<CollectionTreeItemProps> = ({
   expandedFolders,
   onToggleFolder,
   onRequestSelect,
+  onRunFolder,
 }) => {
   // Generate unique key for this folder
   const folderKey = `${collectionFilename}:${[...itemPath, item.name].join('/')}`;
@@ -91,7 +93,7 @@ const CollectionTreeItem: React.FC<CollectionTreeItemProps> = ({
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="min-w-24">
-                <DropdownMenuItem onClick={() => {}}>Run</DropdownMenuItem>
+                <DropdownMenuItem onClick={() => onRunFolder?.(item.item || [], [...itemPath, item.name])}>Run</DropdownMenuItem>
                 <DropdownMenuItem onClick={() => {}}>Delete</DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
@@ -113,6 +115,7 @@ const CollectionTreeItem: React.FC<CollectionTreeItemProps> = ({
                 expandedFolders={expandedFolders}
                 onToggleFolder={onToggleFolder}
                 onRequestSelect={onRequestSelect}
+                onRunFolder={onRunFolder}
               />
             ))}
           </div>

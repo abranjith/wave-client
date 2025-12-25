@@ -15,7 +15,6 @@ import {
     FormField, 
     MultiPartFormField, 
     CollectionReference, 
-    EnvironmentVariable,
     Environment
 } from '../../types/collection';
 import { 
