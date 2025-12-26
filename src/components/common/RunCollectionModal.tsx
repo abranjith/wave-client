@@ -1,5 +1,5 @@
-import React, { useState, useMemo, useCallback, useId } from 'react';
-import { PlayIcon, ChevronDownIcon, ChevronRightIcon, SearchIcon } from 'lucide-react';
+import React, { useState, useMemo, useCallback, useId, useRef, useEffect } from 'react';
+import { PlayIcon, StopCircleIcon, ChevronDownIcon, ChevronRightIcon, SearchIcon } from 'lucide-react';
 import { CollectionItem, isRequest } from '../../types/collection';
 import { urlToString } from '../../utils/collectionParser';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../ui/dialog';
@@ -8,8 +8,10 @@ import { SecondaryButton } from '../ui/SecondaryButton';
 import { Input } from '../ui/input';
 import { Label } from '../ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
-import RunRequestCard, { RunRequestData, RunStatus, ValidationStatus } from './RunRequestCard';
+import RunRequestCard, { RunRequestData } from './RunRequestCard';
 import useAppStateStore from '../../hooks/store/useAppStateStore';
+import { useCollectionRunner, RunRequestItem, RunStatus, ValidationStatus } from '../../hooks/useCollectionRunner';
+import { RequestValidation, StatusValidationRule } from '../../types/validation';
 
 // ==================== Types ====================
 
@@ -19,6 +21,9 @@ interface RunCollectionModalProps {
   collectionName: string;
   items: CollectionItem[];
   itemPath?: string[];
+  vsCodeApi: {
+    postMessage: (message: unknown) => void;
+  };
 }
 
 interface RunSettings {
@@ -36,16 +41,42 @@ interface RunMetrics {
 // ==================== Helper Functions ====================
 
 /**
+ * Default validation rule: HTTP status is success (2xx)
+ */
+const DEFAULT_STATUS_SUCCESS_RULE: StatusValidationRule = {
+  id: 'default-status-success',
+  name: 'Status is Success',
+  description: 'Validates that HTTP response status is 2xx',
+  enabled: true,
+  category: 'status',
+  operator: 'is_success',
+  value: 200, // Not used for is_success, but required by type
+};
+
+/**
+ * Default validation configuration using status success rule
+ */
+const DEFAULT_VALIDATION: RequestValidation = {
+  enabled: true,
+  rules: [{ rule: DEFAULT_STATUS_SUCCESS_RULE }],
+};
+
+/**
  * Recursively flattens all requests from collection items
  */
 function flattenRequests(
   items: CollectionItem[],
   parentPath: string[] = []
-): RunRequestData[] {
-  const requests: RunRequestData[] = [];
+): RunRequestItem[] {
+  const requests: RunRequestItem[] = [];
 
   for (const item of items) {
     if (isRequest(item) && item.request) {
+      // Use request validation if defined and enabled, otherwise use default
+      const validation = item.request.validation?.enabled 
+        ? item.request.validation 
+        : DEFAULT_VALIDATION;
+
       requests.push({
         id: item.id,
         name: item.name,
@@ -53,8 +84,7 @@ function flattenRequests(
         url: urlToString(item.request.url),
         request: item.request,
         folderPath: parentPath,
-        runStatus: 'idle',
-        validationStatus: 'idle',
+        validation,
       });
     }
 
@@ -64,6 +94,32 @@ function flattenRequests(
   }
 
   return requests;
+}
+
+/**
+ * Converts RunRequestItem to RunRequestData for display
+ */
+function toRunRequestData(
+  item: RunRequestItem,
+  runStatus: RunStatus = 'idle',
+  validationStatus: ValidationStatus = 'idle',
+  responseStatus?: number,
+  responseTime?: number,
+  error?: string
+): RunRequestData {
+  return {
+    id: item.id,
+    name: item.name,
+    method: item.method,
+    url: item.url,
+    request: item.request!,
+    folderPath: item.folderPath,
+    runStatus,
+    validationStatus,
+    responseStatus,
+    responseTime,
+    error,
+  };
 }
 
 // ==================== Sub Components ====================
@@ -179,10 +235,18 @@ const RunCollectionModal: React.FC<RunCollectionModalProps> = ({
   collectionName,
   items,
   itemPath = [],
+  vsCodeApi,
 }) => {
   // Global store
   const environments = useAppStateStore((state) => state.environments);
   const auths = useAppStateStore((state) => state.auths);
+
+  // Collection runner hook
+  const runner = useCollectionRunner({
+    vsCodeApi,
+    environments,
+    auths,
+  });
 
   // Local state
   const [selectedEnvironmentId, setSelectedEnvironmentId] = useState<string | null>(null);
@@ -205,16 +269,21 @@ const RunCollectionModal: React.FC<RunCollectionModalProps> = ({
     return flattenRequests(items);
   }, [items]);
 
-  // Initialize selection when modal opens
+  // Initialize selection and reset runner when modal opens
   React.useEffect(() => {
     if (isOpen && !isInitialized) {
       setSelectedRequestIds(new Set(allRequests.map(r => r.id)));
+      runner.resetResults();
       setIsInitialized(true);
     }
     if (!isOpen) {
       setIsInitialized(false);
+      // Cancel any in-progress run when modal closes
+      if (runner.isRunning) {
+        runner.cancelRun();
+      }
     }
-  }, [isOpen, allRequests, isInitialized]);
+  }, [isOpen, allRequests, isInitialized, runner]);
 
   // Filter requests by search query
   const filteredRequests = useMemo(() => {
@@ -231,16 +300,37 @@ const RunCollectionModal: React.FC<RunCollectionModalProps> = ({
     );
   }, [allRequests, searchQuery]);
 
-  // Calculate metrics (placeholder - will be updated when run state is implemented)
+  // Convert filtered requests to RunRequestData with runner results
+  const displayRequests = useMemo<RunRequestData[]>(() => {
+    return filteredRequests.map((req) => {
+      const result = runner.getResult(req.id);
+      if (result) {
+        return toRunRequestData(
+          req,
+          result.status,
+          result.validationStatus,
+          result.response?.status,
+          result.elapsedTime,
+          result.error
+        );
+      }
+      return toRunRequestData(req);
+    });
+  }, [filteredRequests, runner]);
+
+  // Calculate metrics from runner progress
   const metrics = useMemo<RunMetrics>(() => {
-    const selected = allRequests.filter(r => selectedRequestIds.has(r.id));
+    const selectedCount = selectedRequestIds.size;
+    const { completed, failed } = runner.progress;
+    const passed = completed - failed;
+    
     return {
-      totalRequests: selected.length,
-      passed: selected.filter(r => r.runStatus === 'success' && r.validationStatus === 'pass').length,
-      failed: selected.filter(r => r.runStatus === 'error' || r.validationStatus === 'fail').length,
-      averageTime: 0, // Will be calculated from actual response times
+      totalRequests: selectedCount,
+      passed,
+      failed,
+      averageTime: Math.round(runner.averageTime),
     };
-  }, [allRequests, selectedRequestIds]);
+  }, [selectedRequestIds.size, runner.progress, runner.averageTime]);
 
   // Handlers
   const handleEnvironmentChange = useCallback((value: string) => {
@@ -272,14 +362,23 @@ const RunCollectionModal: React.FC<RunCollectionModalProps> = ({
   }, []);
 
   const handleRun = useCallback(() => {
-    // Placeholder - will implement actual run logic later
-    console.log('Run collection', {
-      selectedRequests: Array.from(selectedRequestIds),
-      environmentId: selectedEnvironmentId,
-      authId: selectedAuthId,
-      settings,
-    });
-  }, [selectedRequestIds, selectedEnvironmentId, selectedAuthId, settings]);
+    // Get selected requests as RunRequestItems
+    const selectedRequests = allRequests.filter(r => selectedRequestIds.has(r.id));
+    
+    runner.runCollection(
+      selectedRequests,
+      {
+        concurrentCalls: settings.concurrentCalls,
+        delayBetweenCalls: settings.delayBetweenCalls,
+      },
+      selectedEnvironmentId,
+      selectedAuthId
+    );
+  }, [allRequests, selectedRequestIds, selectedEnvironmentId, selectedAuthId, settings, runner]);
+
+  const handleStop = useCallback(() => {
+    runner.cancelRun();
+  }, [runner]);
 
   // Derive display name
   const displayName = itemPath.length > 0 
@@ -351,16 +450,26 @@ const RunCollectionModal: React.FC<RunCollectionModalProps> = ({
               </Select>
             </div>
 
-            {/* Run Button */}
-            <div className="ml-auto">
-              <PrimaryButton
-                onClick={handleRun}
-                disabled={selectedRequestIds.size === 0}
-                colorTheme="main"
-              >
-                <PlayIcon className="h-4 w-4 mr-2" />
-                Run ({selectedRequestIds.size})
-              </PrimaryButton>
+            {/* Run/Stop Button */}
+            <div className="ml-auto flex items-center gap-2">
+              {runner.isRunning ? (
+                <PrimaryButton
+                  onClick={handleStop}
+                  colorTheme="error"
+                >
+                  <StopCircleIcon className="h-4 w-4 mr-2" />
+                  Stop
+                </PrimaryButton>
+              ) : (
+                <PrimaryButton
+                  onClick={handleRun}
+                  disabled={selectedRequestIds.size === 0}
+                  colorTheme="main"
+                >
+                  <PlayIcon className="h-4 w-4 mr-2" />
+                  Run ({selectedRequestIds.size})
+                </PrimaryButton>
+              )}
             </div>
           </div>
 
@@ -408,7 +517,7 @@ const RunCollectionModal: React.FC<RunCollectionModalProps> = ({
 
           {/* Request Cards */}
           <div className="space-y-2">
-            {filteredRequests.length === 0 ? (
+            {displayRequests.length === 0 ? (
               <div className="text-center py-12">
                 <div className="text-slate-500 dark:text-slate-400 text-lg font-medium mb-2">
                   {allRequests.length === 0 ? 'No requests found' : 'No matching requests'}
@@ -420,7 +529,7 @@ const RunCollectionModal: React.FC<RunCollectionModalProps> = ({
                 </div>
               </div>
             ) : (
-              filteredRequests.map((request) => (
+              displayRequests.map((request) => (
                 <RunRequestCard
                   key={request.id}
                   data={request}

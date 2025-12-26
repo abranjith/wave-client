@@ -22,6 +22,7 @@ interface CollectionsPaneProps {
   onRequestSelect: (request: RequestFormData) => void;
   onImportCollection: (fileName: string, fileContent: string, collectionType: string) => void;
   onExportCollection: (collectionName: string, exportFormat: string) => void;
+  vsCodeApi?: { postMessage: (message: unknown) => void };
 }
 
 // Extract domain + path (no query/fragment) from a collection URL
@@ -153,7 +154,8 @@ const CollectionsPaneHeader: React.FC<CollectionsPaneHeaderProps> = ({ label, on
 const CollectionsPane: React.FC<CollectionsPaneProps> = ({ 
   onRequestSelect,
   onImportCollection,
-  onExportCollection
+  onExportCollection,
+  vsCodeApi,
 }) => {
   const collections = useAppStateStore((state) => state.collections);
   const isLoading = useAppStateStore((state) => state.isCollectionsLoading);
@@ -507,6 +509,7 @@ const CollectionsPane: React.FC<CollectionsPaneProps> = ({
         collectionName={runModalData.collectionName}
         items={runModalData.items}
         itemPath={runModalData.itemPath}
+        vsCodeApi={vsCodeApi!}
       />
     </div>
   );

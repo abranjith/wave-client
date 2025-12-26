@@ -448,6 +448,7 @@ const App: React.FC = () => {
           onExportCollection={handleExportCollection}
           onImportEnvironments={handleImportEnvironments}
           onExportEnvironments={handleExportEnvironments}
+          vsCodeApi={vsCodeRef.current}
         />
       </div>
 

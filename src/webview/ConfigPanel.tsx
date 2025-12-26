@@ -30,6 +30,7 @@ interface ConfigPanelProps {
   onExportCollection: (collectionName: string, exportFormat: string) => void;
   onImportEnvironments: (fileName: string, fileContent: string) => void;
   onExportEnvironments: () => void;
+  vsCodeApi?: { postMessage: (message: unknown) => void };
 }
 
 const TABS = [
@@ -39,7 +40,7 @@ const TABS = [
   { key: 'store', label: 'Wave Store', icon: <ShieldCheckIcon size={20} /> },
 ];
 
-const ConfigPanel: React.FC<ConfigPanelProps> = ({ onRequestSelect, onEnvSelect, onStoreSelect, onSettingsSelect, onImportCollection, onExportCollection, onImportEnvironments, onExportEnvironments }) => {
+const ConfigPanel: React.FC<ConfigPanelProps> = ({ onRequestSelect, onEnvSelect, onStoreSelect, onSettingsSelect, onImportCollection, onExportCollection, onImportEnvironments, onExportEnvironments, vsCodeApi }) => {
   return (
     <div className="flex h-full w-full overflow-hidden">
       <Tabs
@@ -86,6 +87,7 @@ const ConfigPanel: React.FC<ConfigPanelProps> = ({ onRequestSelect, onEnvSelect,
                 onRequestSelect={onRequestSelect}
                 onImportCollection={onImportCollection}
                 onExportCollection={onExportCollection}
+                vsCodeApi={vsCodeApi}
               />
           </TabsContent>
           <TabsContent value="history" className="h-full overflow-hidden">

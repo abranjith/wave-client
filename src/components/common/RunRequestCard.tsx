@@ -7,8 +7,8 @@ import { Checkbox } from '../ui/checkbox';
 
 // ==================== Types ====================
 
-export type RunStatus = 'idle' | 'running' | 'success' | 'error';
-export type ValidationStatus = 'idle' | 'pass' | 'fail';
+export type RunStatus = 'idle' | 'pending' | 'running' | 'success' | 'error';
+export type ValidationStatus = 'idle' | 'pending' | 'pass' | 'fail';
 
 export interface RunRequestData {
   id: string;
@@ -17,14 +17,16 @@ export interface RunRequestData {
   url: string;
   request: CollectionRequest;
   folderPath: string[];
-  // Run state (to be implemented later)
+  // Run state
   runStatus: RunStatus;
   responseStatus?: number;
   responseTime?: number;
   validationStatus: ValidationStatus;
-  // Response data (to be implemented later)
+  // Response data
   responseHeaders?: Record<string, string>;
   responseBody?: string;
+  // Error info
+  error?: string;
 }
 
 interface RunRequestCardProps {
@@ -42,6 +44,10 @@ const StatusIndicator: React.FC<{ status: RunStatus; responseStatus?: number; re
 }) => {
   if (status === 'idle') {
     return <Circle className="h-4 w-4 text-slate-400" />;
+  }
+
+  if (status === 'pending') {
+    return <Circle className="h-4 w-4 text-blue-400" />;
   }
 
   if (status === 'running') {
@@ -79,6 +85,10 @@ const ValidationIndicator: React.FC<{ status: ValidationStatus }> = ({ status })
     return null;
   }
 
+  if (status === 'pending') {
+    return <LoaderCircle className="h-4 w-4 text-blue-400 animate-spin" />;
+  }
+
   if (status === 'pass') {
     return <CheckCircle2 className="h-4 w-4 text-green-500" />;
   }
@@ -92,8 +102,18 @@ const ValidationIndicator: React.FC<{ status: ValidationStatus }> = ({ status })
 
 // ==================== Request Tabs Content ====================
 
-const REQUEST_CARD_TABS = ['Request Headers', 'Request Body', 'Response Headers', 'Response Body', 'Validation'] as const;
-type RequestCardTab = typeof REQUEST_CARD_TABS[number];
+const BASE_TABS = ['Request Headers', 'Request Body', 'Response Headers', 'Response Body', 'Validation'] as const;
+type RequestCardTab = 'Error' | typeof BASE_TABS[number];
+
+/**
+ * Returns the list of tabs, with Error tab first if there's an error
+ */
+function getTabsForRequest(hasError: boolean): RequestCardTab[] {
+  if (hasError) {
+    return ['Error', ...BASE_TABS];
+  }
+  return [...BASE_TABS];
+}
 
 interface CardTabContentProps {
   activeTab: RequestCardTab;
@@ -119,6 +139,16 @@ const CardTabContent: React.FC<CardTabContentProps> = ({ activeTab, data }) => {
   };
 
   switch (activeTab) {
+    case 'Error':
+      return (
+        <div className="flex items-start gap-3 p-3 bg-red-50 dark:bg-red-900/20 rounded-lg border border-red-200 dark:border-red-800">
+          <XCircle className="h-5 w-5 text-red-500 flex-shrink-0 mt-0.5" />
+          <div className="text-sm text-red-700 dark:text-red-300 break-all">
+            {data.error || 'An unknown error occurred'}
+          </div>
+        </div>
+      );
+
     case 'Request Headers': {
       const headers = data.request.header?.reduce((acc, h) => {
         if (!h.disabled) {
@@ -218,6 +248,15 @@ const RunRequestCard: React.FC<RunRequestCardProps> = ({
   const [activeTab, setActiveTab] = useState<RequestCardTab>('Request Headers');
 
   const method = data.method.toUpperCase();
+  const hasError = !!data.error;
+  const tabs = getTabsForRequest(hasError);
+
+  // Auto-switch to Error tab when error appears
+  React.useEffect(() => {
+    if (hasError && activeTab !== 'Error') {
+      setActiveTab('Error');
+    }
+  }, [hasError]);
 
   return (
     <div className={`border rounded-lg transition-colors ${
@@ -286,13 +325,17 @@ const RunRequestCard: React.FC<RunRequestCardProps> = ({
         <div className="border-t border-slate-200 dark:border-slate-700">
           {/* Tabs */}
           <div className="flex gap-0 bg-slate-100 dark:bg-slate-900 border-b border-slate-200 dark:border-slate-700 overflow-x-auto">
-            {REQUEST_CARD_TABS.map((tab) => (
+            {tabs.map((tab) => (
               <button
                 key={tab}
                 className={`px-4 py-2 text-xs font-medium whitespace-nowrap transition-colors ${
                   activeTab === tab
-                    ? 'bg-white dark:bg-slate-800 text-blue-600 dark:text-blue-400 border-b-2 border-blue-500'
-                    : 'text-slate-600 dark:text-slate-400 hover:text-blue-600 dark:hover:text-blue-400'
+                    ? tab === 'Error'
+                      ? 'bg-red-50 dark:bg-red-900/30 text-red-600 dark:text-red-400 border-b-2 border-red-500'
+                      : 'bg-white dark:bg-slate-800 text-blue-600 dark:text-blue-400 border-b-2 border-blue-500'
+                    : tab === 'Error'
+                      ? 'text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20'
+                      : 'text-slate-600 dark:text-slate-400 hover:text-blue-600 dark:hover:text-blue-400'
                 }`}
                 onClick={() => setActiveTab(tab)}
               >
