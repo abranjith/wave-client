@@ -76,6 +76,11 @@ export function useCollectionRunner({ vsCodeApi, environments, auths }: UseColle
     const defaultAuthIdRef = useRef<string | null>(null);
     const isCancelledRef = useRef(false);
     const activeCountRef = useRef(0);
+    
+    // Track current iteration/batch of requests
+    const currentIterationIds = useRef<Set<string>>(new Set());
+    // Track if we're waiting for delay before next batch
+    const delayTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
     // Response handler - listens for httpResponse messages
     useEffect(() => {
@@ -89,6 +94,9 @@ export function useCollectionRunner({ vsCodeApi, environments, auths }: UseColle
                 if (activeRequestIds.current.has(responseId)) {
                     activeRequestIds.current.delete(responseId);
                     activeCountRef.current = Math.max(0, activeCountRef.current - 1);
+                    
+                    // Remove from current iteration tracking
+                    currentIterationIds.current.delete(responseId);
 
                     const response = message.response as ResponseData;
                     const isSuccess = response.status >= 200 && response.status < 400;
@@ -137,9 +145,6 @@ export function useCollectionRunner({ vsCodeApi, environments, auths }: UseColle
                             isRunning
                         };
                     });
-
-                    // Process next item from queue
-                    processQueue();
                 }
             }
         };
@@ -148,37 +153,88 @@ export function useCollectionRunner({ vsCodeApi, environments, auths }: UseColle
         return () => window.removeEventListener('message', handleMessage);
     }, []);
 
+    // Effect to detect when current iteration is complete and trigger next batch
+    useEffect(() => {
+        // Only proceed if:
+        // 1. Current iteration is complete (no pending requests in batch)
+        // 2. Run is still active
+        // 3. There are more items in the queue
+        // 4. Not cancelled
+        if (
+            currentIterationIds.current.size === 0 &&
+            state.isRunning &&
+            pendingQueue.current.length > 0 &&
+            !isCancelledRef.current
+        ) {
+            const delay = runSettingsRef.current.delayBetweenCalls;
+            
+            // Clear any existing timer
+            if (delayTimerRef.current) {
+                clearTimeout(delayTimerRef.current);
+                delayTimerRef.current = null;
+            }
+            
+            if (delay > 0) {
+                // Apply delay before next batch
+                delayTimerRef.current = setTimeout(() => {
+                    delayTimerRef.current = null;
+                    if (!isCancelledRef.current) {
+                        processQueue();
+                    }
+                }, delay);
+            } else {
+                // No delay, process immediately
+                processQueue();
+            }
+        }
+        
+        // Cleanup timer on unmount or when dependencies change
+        return () => {
+            if (delayTimerRef.current) {
+                clearTimeout(delayTimerRef.current);
+                delayTimerRef.current = null;
+            }
+        };
+    }, [state.results, state.isRunning]);
+
     // Process queue with concurrency control
-    const processQueue = useCallback(async () => {
+    const processQueue = useCallback(() => {
         if (isCancelledRef.current) {
+            return;
+        }
+        
+        // Don't start a new batch if current iteration still has pending requests
+        if (currentIterationIds.current.size > 0) {
             return;
         }
 
         const settings = runSettingsRef.current;
+        const batchSize = Math.min(settings.concurrentCalls, pendingQueue.current.length);
         
-        while (
-            pendingQueue.current.length > 0 && 
-            activeCountRef.current < settings.concurrentCalls &&
-            !isCancelledRef.current
-        ) {
+        // Send batch of requests
+        for (let i = 0; i < batchSize; i++) {
             const item = pendingQueue.current.shift();
             if (!item) break;
-
-            // Apply delay if configured and not the first request
-            if (settings.delayBetweenCalls > 0 && activeCountRef.current > 0) {
-                await new Promise(resolve => setTimeout(resolve, settings.delayBetweenCalls));
+            
+            if (isCancelledRef.current) {
+                // Put item back if cancelled during batch creation
+                pendingQueue.current.unshift(item);
+                break;
             }
-
-            if (isCancelledRef.current) break;
-
-            // Build and send request
-            await sendRequest(item);
+            
+            // Add to current iteration tracking before sending
+            currentIterationIds.current.add(item.id);
+            
+            // Fire and forget - sendRequest handles its own errors
+            sendRequest(item);
         }
     }, []);
 
     // Send a single request
     const sendRequest = useCallback(async (item: RunRequestItem) => {
         if (!vsCodeApi || isCancelledRef.current) {
+            // Remove from iteration tracking if we can't send
+            currentIterationIds.current.delete(item.id);
             return;
         }
 
@@ -222,6 +278,9 @@ export function useCollectionRunner({ vsCodeApi, environments, auths }: UseColle
             // Build error - mark as failed
             activeRequestIds.current.delete(item.id);
             activeCountRef.current = Math.max(0, activeCountRef.current - 1);
+            
+            // Remove from current iteration tracking
+            currentIterationIds.current.delete(item.id);
 
             setState(prev => {
                 const newResults = new Map(prev.results);
@@ -244,8 +303,6 @@ export function useCollectionRunner({ vsCodeApi, environments, auths }: UseColle
                 };
             });
 
-            // Process next
-            processQueue();
             return;
         }
 
@@ -256,7 +313,7 @@ export function useCollectionRunner({ vsCodeApi, environments, auths }: UseColle
             id: item.id,
             validation: item.validation
         });
-    }, [vsCodeApi, environments, auths, processQueue]);
+    }, [vsCodeApi, environments, auths]);
 
     // Start collection run
     const runCollection = useCallback(async (
@@ -273,9 +330,16 @@ export function useCollectionRunner({ vsCodeApi, environments, auths }: UseColle
         isCancelledRef.current = false;
         activeRequestIds.current.clear();
         activeCountRef.current = 0;
+        currentIterationIds.current.clear();
         runSettingsRef.current = settings;
         environmentIdRef.current = environmentId;
         defaultAuthIdRef.current = defaultAuthId;
+        
+        // Clear any pending delay timer from previous run
+        if (delayTimerRef.current) {
+            clearTimeout(delayTimerRef.current);
+            delayTimerRef.current = null;
+        }
 
         // Initialize results with pending status
         const initialResults = new Map<string, RunResult>();
@@ -302,7 +366,7 @@ export function useCollectionRunner({ vsCodeApi, environments, auths }: UseColle
             averageTime: 0
         });
 
-        // Start processing
+        // Start processing first batch
         processQueue();
     }, [vsCodeApi, processQueue]);
 
@@ -310,6 +374,13 @@ export function useCollectionRunner({ vsCodeApi, environments, auths }: UseColle
     const cancelRun = useCallback(() => {
         isCancelledRef.current = true;
         pendingQueue.current = [];
+        currentIterationIds.current.clear();
+        
+        // Clear any pending delay timer
+        if (delayTimerRef.current) {
+            clearTimeout(delayTimerRef.current);
+            delayTimerRef.current = null;
+        }
         
         setState(prev => ({
             ...prev,
@@ -323,6 +394,13 @@ export function useCollectionRunner({ vsCodeApi, environments, auths }: UseColle
         activeRequestIds.current.clear();
         activeCountRef.current = 0;
         pendingQueue.current = [];
+        currentIterationIds.current.clear();
+        
+        // Clear any pending delay timer
+        if (delayTimerRef.current) {
+            clearTimeout(delayTimerRef.current);
+            delayTimerRef.current = null;
+        }
 
         setState({
             isRunning: false,
