@@ -2,27 +2,17 @@
 
 'use strict';
 
-/**
- * Root webpack config - delegates to packages/vscode
- * 
- * The actual build happens via Turborepo (pnpm turbo build).
- * This config is kept for VS Code extension tooling compatibility.
- * 
- * Build commands:
- *   pnpm build          - Build all packages via Turborepo
- *   pnpm compile        - Build vscode package and copy dist to root
- *   pnpm build:vscode   - Build just the vscode package
- */
-
 const path = require('path');
 
+//@ts-check
 /** @typedef {import('webpack').Configuration} WebpackConfig **/
 
 /** @type WebpackConfig */
 const extensionConfig = {
   target: 'node',
   mode: 'none',
-  entry: './packages/vscode/src/extension.ts',
+
+  entry: './src/extension.ts',
   output: {
     path: path.resolve(__dirname, 'dist'),
     filename: 'extension.js',
@@ -38,12 +28,18 @@ const extensionConfig = {
     rules: [
       {
         test: /\.ts$/,
-        exclude: /node_modules/,
+        // Exclude webview files - they are built separately with esbuild-loader
+        exclude: (modulePath) => {
+          // Normalize path separators for cross-platform compatibility
+          const normalized = modulePath.replace(/\\/g, '/');
+          return normalized.includes('/node_modules/') || normalized.includes('/src/webview/');
+        },
         use: [
           {
             loader: 'ts-loader',
             options: {
-              configFile: path.resolve(__dirname, 'packages/vscode/tsconfig.extension.json')
+              // Use separate tsconfig that excludes webview files
+              configFile: path.resolve(__dirname, 'tsconfig.extension.json')
             }
           }
         ]

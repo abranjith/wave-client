@@ -7,20 +7,23 @@
 			"DOM"
 		],
 		"sourceMap": true,
+		"rootDir": "src",
+		"outDir": "dist",
 		"jsx": "react-jsx",
 		"strict": true,
-		"skipLibCheck": true,
 		"esModuleInterop": true,
+		"skipLibCheck": true,
+		"forceConsistentCasingInFileNames": true,
 		"resolveJsonModule": true,
 		"declaration": true,
 		"declarationMap": true
 	},
 	"exclude": [
 		"node_modules",
-		"out",
 		"dist",
-		"**/node_modules",
-		"**/dist",
-		"packages"
+		"src/webview"
+	],
+	"include": [
+		"src/**/*"
 	]
 }

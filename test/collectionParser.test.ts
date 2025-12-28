@@ -2,8 +2,8 @@
  * Test script to verify collection parsing functionality
  */
 
-import { prepareCollection, getFolderPathOptions } from '../src/utils/collectionParser';
-import { Collection, CollectionItem, FolderPathOption, isFolder, isRequest } from '../src/types/collection';
+import { prepareCollection, getFolderPathOptions } from '@wave-client/core';
+import { Collection, CollectionItem, FolderPathOption, isFolder, isRequest } from '@wave-client/core';
 import * as fs from 'fs';
 import * as path from 'path';
 

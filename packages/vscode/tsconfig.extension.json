@@ -1,0 +1,17 @@
+{
+	"extends": "./tsconfig.json",
+	"compilerOptions": {
+		// Extension host doesn't need DOM types, it runs in Node.js
+		"lib": [
+			"ES2022"
+		]
+	},
+	"exclude": [
+		"node_modules",
+		"dist",
+		"src/webview/**/*"
+	],
+	"include": [
+		"src/**/*"
+	]
+}
