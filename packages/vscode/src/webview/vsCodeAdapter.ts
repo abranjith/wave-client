@@ -113,10 +113,7 @@ function createVSCodeStorageAdapter(
     return {
         // Collections
         async loadCollections(): Promise<Result<Collection[], string>> {
-            vsCodeApi.postMessage({ type: 'loadCollections' });
-            // This is handled via the existing message listener pattern
-            // For now, return a placeholder - actual data comes via events
-            return ok([]);
+            return sendAndWait<Collection[]>('loadCollections', undefined, 'collectionsLoaded');
         },
 
         async saveCollection(collection): Promise<Result<Collection, string>> {
@@ -136,17 +133,18 @@ function createVSCodeStorageAdapter(
         },
 
         async saveRequestToCollection(collectionFilename, itemPath, item): Promise<Result<Collection, string>> {
-            vsCodeApi.postMessage({
-                type: 'saveRequestToCollection',
-                data: {
-                    requestContent: JSON.stringify(item.request, null, 2),
-                    requestName: item.name,
-                    collectionFileName: collectionFilename,
-                    folderPath: itemPath,
-                }
-            });
-            // Response comes via collectionUpdated message
-            return ok({} as Collection);
+            return sendAndWait<Collection>(
+                'saveRequestToCollection',
+                {
+                    data: {
+                        requestContent: JSON.stringify(item.request, null, 2),
+                        requestName: item.name,
+                        collectionFileName: collectionFilename,
+                        folderPath: itemPath,
+                    }
+                },
+                'collectionUpdated'
+            );
         },
 
         async deleteRequestFromCollection(collectionFilename, itemPath, itemId): Promise<Result<Collection, string>> {
@@ -159,16 +157,15 @@ function createVSCodeStorageAdapter(
 
         // Environments
         async loadEnvironments(): Promise<Result<Environment[], string>> {
-            vsCodeApi.postMessage({ type: 'loadEnvironments' });
-            return ok([]);
+            return sendAndWait<Environment[]>('loadEnvironments', undefined, 'environmentsLoaded');
         },
 
         async saveEnvironment(environment): Promise<Result<void, string>> {
-            vsCodeApi.postMessage({
-                type: 'saveEnvironment',
-                data: { environment: JSON.stringify(environment, null, 2) }
-            });
-            return ok(undefined);
+            return sendAndWait<void>(
+                'saveEnvironment',
+                { data: { environment: JSON.stringify(environment, null, 2) } },
+                'environmentUpdated'
+            );
         },
 
         async saveEnvironments(environments): Promise<Result<void, string>> {
@@ -189,8 +186,7 @@ function createVSCodeStorageAdapter(
 
         // History
         async loadHistory(): Promise<Result<ParsedRequest[], string>> {
-            vsCodeApi.postMessage({ type: 'loadHistory' });
-            return ok([]);
+            return sendAndWait<ParsedRequest[]>('loadHistory', undefined, 'historyLoaded');
         },
 
         async saveRequestToHistory(request): Promise<Result<void, string>> {
@@ -208,11 +204,12 @@ function createVSCodeStorageAdapter(
 
         // Cookies
         async loadCookies(): Promise<Result<Cookie[], string>> {
-            vsCodeApi.postMessage({ type: 'loadCookies' });
-            return ok([]);
+            return sendAndWait<Cookie[]>('loadCookies', undefined, 'cookiesLoaded');
         },
 
         async saveCookies(cookies): Promise<Result<void, string>> {
+            // Note: Extension may not send a response for this, using fire-and-forget for now
+            // TODO: Update extension to send cookiesSaved response
             vsCodeApi.postMessage({
                 type: 'saveCookies',
                 data: { cookies: JSON.stringify(cookies, null, 2) }
@@ -222,8 +219,7 @@ function createVSCodeStorageAdapter(
 
         // Auth Store
         async loadAuths(): Promise<Result<Auth[], string>> {
-            vsCodeApi.postMessage({ type: 'loadAuths' });
-            return ok([]);
+            return sendAndWait<Auth[]>('loadAuths', undefined, 'authsLoaded');
         },
 
         async saveAuths(auths): Promise<Result<void, string>> {
@@ -236,8 +232,7 @@ function createVSCodeStorageAdapter(
 
         // Proxy Store
         async loadProxies(): Promise<Result<Proxy[], string>> {
-            vsCodeApi.postMessage({ type: 'loadProxies' });
-            return ok([]);
+            return sendAndWait<Proxy[]>('loadProxies', undefined, 'proxiesLoaded');
         },
 
         async saveProxies(proxies): Promise<Result<void, string>> {
@@ -250,8 +245,7 @@ function createVSCodeStorageAdapter(
 
         // Certificate Store
         async loadCerts(): Promise<Result<Cert[], string>> {
-            vsCodeApi.postMessage({ type: 'loadCerts' });
-            return ok([]);
+            return sendAndWait<Cert[]>('loadCerts', undefined, 'certsLoaded');
         },
 
         async saveCerts(certs): Promise<Result<void, string>> {
@@ -264,8 +258,7 @@ function createVSCodeStorageAdapter(
 
         // Validation Rules Store
         async loadValidationRules(): Promise<Result<ValidationRule[], string>> {
-            vsCodeApi.postMessage({ type: 'loadValidationRules' });
-            return ok([]);
+            return sendAndWait<ValidationRule[]>('loadValidationRules', undefined, 'validationRulesLoaded');
         },
 
         async saveValidationRules(rules): Promise<Result<void, string>> {
@@ -278,16 +271,15 @@ function createVSCodeStorageAdapter(
 
         // Settings
         async loadSettings(): Promise<Result<AppSettings, string>> {
-            vsCodeApi.postMessage({ type: 'loadSettings' });
-            return ok({ encryptionEnabled: false });
+            return sendAndWait<AppSettings>('loadSettings', undefined, 'settingsLoaded');
         },
 
         async saveSettings(settings): Promise<Result<void, string>> {
-            vsCodeApi.postMessage({
-                type: 'saveSettings',
-                data: { settings: JSON.stringify(settings, null, 2) }
-            });
-            return ok(undefined);
+            return sendAndWait<void>(
+                'saveSettings',
+                { data: { settings: JSON.stringify(settings, null, 2) } },
+                'settingsSaved'
+            );
         },
     };
 }
@@ -551,7 +543,7 @@ export function createVSCodeAdapter(
             options.onHttpResponse?.(message.response);
         }
 
-        // Handle request responses with requestId
+        // Handle request responses with requestId (new pattern)
         if (message.requestId) {
             const pending = pendingRequests.get(message.requestId);
             if (pending) {
@@ -562,6 +554,78 @@ export function createVSCodeAdapter(
                     pending.resolve(err(message.error));
                 } else {
                     pending.resolve(ok(message.data));
+                }
+            }
+        }
+
+        // Handle legacy response messages (without requestId)
+        // Map message type to data field
+        const responseMap: Record<string, string> = {
+            'collectionsLoaded': 'collections',
+            'collectionsError': 'error',
+            'collectionUpdated': 'collection',
+            'environmentsLoaded': 'environments',
+            'environmentsError': 'error',
+            'environmentUpdated': 'environment',
+            'historyLoaded': 'history',
+            'historyError': 'error',
+            'cookiesLoaded': 'cookies',
+            'cookiesError': 'error',
+            'cookiesSaved': 'cookies',  // If extension starts sending this
+            'authsLoaded': 'auths',
+            'authsError': 'error',
+            'authsSaved': 'auths',  // If extension starts sending this
+            'proxiesLoaded': 'proxies',
+            'proxiesError': 'error',
+            'proxiesSaved': 'proxies',  // If extension starts sending this
+            'certsLoaded': 'certs',
+            'certsError': 'error',
+            'certsSaved': 'certs',  // If extension starts sending this
+            'validationRulesLoaded': 'rules',
+            'validationRulesSaved': 'rules',
+            'validationRulesError': 'error',
+            'settingsLoaded': 'settings',
+            'settingsSaved': 'settings',
+            'settingsError': 'error',
+        };
+
+        if (message.type && responseMap[message.type]) {
+            // Find pending request by matching message type
+            // Since we don't have requestId in legacy messages, we need to match all pending requests
+            // and resolve the oldest one of the matching type
+            const dataField = responseMap[message.type];
+            const isError = message.type.endsWith('Error');
+            
+            // For error responses
+            if (isError) {
+                // Resolve the first pending request (FIFO)
+                const firstPending = pendingRequests.values().next();
+                if (!firstPending.done) {
+                    const pending = firstPending.value;
+                    clearTimeout(pending.timeout);
+                    // Get the key to delete
+                    for (const [key, value] of pendingRequests.entries()) {
+                        if (value === pending) {
+                            pendingRequests.delete(key);
+                            pending.resolve(err(message[dataField] || 'Unknown error'));
+                            break;
+                        }
+                    }
+                }
+            } else {
+                // For success responses
+                const firstPending = pendingRequests.values().next();
+                if (!firstPending.done) {
+                    const pending = firstPending.value;
+                    clearTimeout(pending.timeout);
+                    // Get the key to delete
+                    for (const [key, value] of pendingRequests.entries()) {
+                        if (value === pending) {
+                            pendingRequests.delete(key);
+                            pending.resolve(ok(message[dataField]));
+                            break;
+                        }
+                    }
                 }
             }
         }
@@ -592,16 +656,10 @@ export function createVSCodeAdapter(
         notification,
 
         initialize: async () => {
-            // Trigger initial data loading
-            vsCodeApi.postMessage({ type: 'loadCollections' });
-            vsCodeApi.postMessage({ type: 'loadEnvironments' });
-            vsCodeApi.postMessage({ type: 'loadHistory' });
-            vsCodeApi.postMessage({ type: 'loadCookies' });
-            vsCodeApi.postMessage({ type: 'loadAuths' });
-            vsCodeApi.postMessage({ type: 'loadProxies' });
-            vsCodeApi.postMessage({ type: 'loadCerts' });
-            vsCodeApi.postMessage({ type: 'loadValidationRules' });
-            vsCodeApi.postMessage({ type: 'loadSettings' });
+            // NOTE: Initialization is handled by components calling adapter methods
+            // (e.g., storage.loadCollections(), storage.loadEnvironments(), etc.)
+            // This prevents duplicate initialization
+            // Each component/hook loads the data it needs when it mounts
         },
 
         dispose: cleanup,

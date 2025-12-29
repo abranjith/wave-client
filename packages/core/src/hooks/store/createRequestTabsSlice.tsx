@@ -129,13 +129,15 @@ export interface RequestTabsSlice {
     updateRequestValidationRule: (index: number, rule: ValidationRuleRef, tabId?: string) => void;
     setRequestValidation: (validation: RequestValidation, tabId?: string) => void;
     
-    // Send request handler
-    handleSendRequest: (
-        vsCodeApi: any, 
+    // Build HTTP request from tab data (returns request config or error)
+    buildHttpRequest: (
         environments: Environment[],
         auths: Auth[],
         tabId?: string
-    ) => void;
+    ) => Promise<{ success: true; tabId: string; request: any; validation?: RequestValidation } | { success: false; error: string }>;
+    
+    // Set processing state for a tab
+    setTabProcessingState: (tabId: string, isProcessing: boolean) => void;
 }
 
 // ==================== Helper Functions ====================
@@ -1154,26 +1156,21 @@ const createRequestTabsSlice: StateCreator<RequestTabsSlice> = (set, get) => {
             updateTab(id, { validation, isDirty: true });
         },
         
-        // ==================== Send Request ====================
+        // ==================== Build HTTP Request ====================
         
-        handleSendRequest: async (vsCodeApi, environments, auths, tabId?) => {
+        buildHttpRequest: async (environments, auths, tabId?) => {
             const state = get();
             const tab = tabId 
                 ? state.tabs.find(t => t.id === tabId) 
                 : getActiveTabInternal();
             
             if (!tab) {
-                console.error('No tab found to send request');
-                return;
+                return { success: false, error: 'No tab found to send request' };
             }
             
             if (!tab.method || !tab.url) {
                 updateTab(tab.id, { requestError: 'Method and URL are required' });
-                return;
-            }
-            
-            if (typeof vsCodeApi === 'undefined') {
-                return;
+                return { success: false, error: 'Method and URL are required' };
             }
 
             // Build environment variables map from tab's selected environment
@@ -1181,14 +1178,6 @@ const createRequestTabsSlice: StateCreator<RequestTabsSlice> = (set, get) => {
 
             // Track all unresolved placeholders
             const allUnresolved: Set<string> = new Set();
-
-            // Set processing state
-            updateTab(tab.id, { 
-                isRequestProcessing: true, 
-                isCancelled: false, 
-                requestError: null, 
-                errorMessage: '' 
-            });
             
             // Resolve URL
             const urlResult = resolveParameterizedValue(tab.url, envVarsMap);
@@ -1242,10 +1231,9 @@ const createRequestTabsSlice: StateCreator<RequestTabsSlice> = (set, get) => {
                     (allUnresolved.size > 3 ? '...' : '');
                 const errorMsg = `Request has unresolved placeholders: ${unresolvedList}. Please resolve them and try again.`;
                 updateTab(tab.id, { 
-                    errorMessage: errorMsg,
-                    isRequestProcessing: false
+                    errorMessage: errorMsg
                 });
-                return;
+                return { success: false, error: errorMsg };
             }
             
             // Serialize FormData
@@ -1273,12 +1261,22 @@ const createRequestTabsSlice: StateCreator<RequestTabsSlice> = (set, get) => {
                 envVars: Object.fromEntries(envVarsMap)
             };
             
-            // Send request with tab ID and validation configuration for correlation
-            vsCodeApi.postMessage({ 
-                type: 'httpRequest', 
+            return { 
+                success: true, 
+                tabId: tab.id, 
                 request, 
-                id: tab.id,
-                validation: tab.validation
+                validation: tab.validation 
+            };
+        },
+        
+        setTabProcessingState: (tabId: string, isProcessing: boolean) => {
+            updateTab(tabId, { 
+                isRequestProcessing: isProcessing,
+                ...(isProcessing && { 
+                    isCancelled: false, 
+                    requestError: null, 
+                    errorMessage: '' 
+                })
             });
         }
     };

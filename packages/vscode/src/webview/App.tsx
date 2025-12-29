@@ -16,33 +16,44 @@ import {
   DialogTitle,
   useAppStateStore,
   formDataToCollectionRequest,
+  useStorageAdapter,
+  useHttpAdapter,
+  useFileAdapter,
+  useNotificationAdapter,
   type Environment,
   type Cookie,
   type Proxy,
   type Cert,
   type Auth,
   type GlobalValidationRule,
-  type AppSettings,
+  type HttpRequestConfig,
 } from '@wave-client/core';
 import type { RequestFormData } from '@wave-client/core';
-import { getVSCodeApi } from './AppWithAdapter';
 
 const App: React.FC = () => {
   const [selectedEnvironment, setSelectedEnvironment] = useState<Environment | null>(null);
   const [selectedStore, setSelectedStore] = useState<'cookie' | 'auth' | 'proxy' | 'cert' | 'validation' | null>(null);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
 
-  const refreshCollections = useAppStateStore((state) => state.refreshCollections);
+  // Adapter hooks
+  const storage = useStorageAdapter();
+  const http = useHttpAdapter();
+  const file = useFileAdapter();
+  const notification = useNotificationAdapter();
+
+  // Store selectors
+  const setIsCollectionsLoading = useAppStateStore((state) => state.setIsCollectionsLoading);
   const setCollections = useAppStateStore((state) => state.setCollections);
   const updateCollection = useAppStateStore((state) => state.updateCollection);
   const addCollection = useAppStateStore((state) => state.addCollection);
   const setCollectionLoadError = useAppStateStore((state) => state.setCollectionLoadError);
-  const refreshEnvironments = useAppStateStore((state) => state.refreshEnvironments);
+  const setIsEnvironmentsLoading = useAppStateStore((state) => state.setIsEnvironmentsLoading);
   const setEnvironments = useAppStateStore((state) => state.setEnvironments);
   const setEnvironmentLoadError = useAppStateStore((state) => state.setEnvironmentLoadError);
   const loadRequestIntoTab = useAppStateStore((state) => state.loadRequestIntoTab);
   const handleHttpResponse = useAppStateStore((state) => state.handleHttpResponse);
-  const handleSendRequestAction = useAppStateStore((state) => state.handleSendRequest);
+  const buildHttpRequest = useAppStateStore((state) => (state as any).buildHttpRequest);
+  const setTabProcessingState = useAppStateStore((state) => (state as any).setTabProcessingState);
   const updateEnvironment = useAppStateStore((state) => state.updateEnvironment);
   const setErrorMessage = useAppStateStore((state) => state.setErrorMessage);
   const setCookies = useAppStateStore((state) => state.setCookies);
@@ -53,40 +64,43 @@ const App: React.FC = () => {
   const settings = useAppStateStore((state) => state.settings);
   const setSettings = useAppStateStore((state) => state.setSettings);
   const getParsedRequest = useAppStateStore((state) => state.getParsedRequest);
-  const addHistory = useAppStateStore((state) => state.addHistory);
-  const refreshHistory = useAppStateStore((state) => state.refreshHistory);
+  const setIsHistoryLoading = useAppStateStore((state) => state.setIsHistoryLoading);
   const setHistory = useAppStateStore((state) => state.setHistory);
   const setHistoryLoadError = useAppStateStore((state) => state.setHistoryLoadError);
   const environments = useAppStateStore((state) => state.environments);
   const auths = useAppStateStore((state) => state.auths);
   const banner = useAppStateStore((state) => state.banner);
   const clearBanner = useAppStateStore((state) => state.clearBanner);
-  const setBannerSuccess = useAppStateStore((state) => state.setBannerSuccess);
-  const setBannerError = useAppStateStore((state) => state.setBannerError);
-  const setBannerInfo = useAppStateStore((state) => state.setBannerInfo);
-  const setBannerWarning = useAppStateStore((state) => state.setBannerWarning);
   const updateTabMetadata = useAppStateStore((state) => state.updateTabMetadata);
-  const vsCodeRef = useRef<any>(null);
+
   const pendingSaveInfo = useRef<{ tabId: string, collectionName: string | undefined, folderPath: string[], requestName: string } | null>(null);
 
-  // Initialize Collections and Environments
+  // Initialize data on mount
+  // Note: This used to be in adapter.initialize(), but to avoid issues with the
+  // transitional vsCodeAdapter implementation (which returns empty arrays immediately
+  // and relies on message events), we handle initialization here in the component
   useEffect(() => {
-    // Use the shared VS Code API singleton (acquired in AppWithAdapter)
-    if (!vsCodeRef.current) {
-      vsCodeRef.current = getVSCodeApi();
+    async function initializeData() {
+      // Set loading states
+      setIsCollectionsLoading(true);
+      setIsEnvironmentsLoading(true);
+      setIsHistoryLoading(true);
+      
+      // Load all data - these trigger postMessages that will be handled by message listeners
+      // in the vsCodeAdapter, which will eventually update the state via message events
+      storage.loadCollections();
+      storage.loadEnvironments();
+      storage.loadHistory();
+      storage.loadCookies();
+      storage.loadAuths();
+      storage.loadProxies();
+      storage.loadCerts();
+      storage.loadValidationRules();
+      storage.loadSettings();
     }
-    if (vsCodeRef.current) {
-      refreshEnvironments(vsCodeRef.current);
-      refreshCollections(vsCodeRef.current);
-      refreshHistory(vsCodeRef.current);
-      vsCodeRef.current.postMessage({ type: 'loadCookies' });
-      vsCodeRef.current.postMessage({ type: 'loadAuths' });
-      vsCodeRef.current.postMessage({ type: 'loadProxies' });
-      vsCodeRef.current.postMessage({ type: 'loadCerts' });
-      vsCodeRef.current.postMessage({ type: 'loadValidationRules' });
-      vsCodeRef.current.postMessage({ type: 'loadSettings' });
-    }
-  }, []);
+
+    initializeData();
+  }, [storage]);
 
   const handleRequestSelect = (request: RequestFormData) => {
     loadRequestIntoTab(request);
@@ -113,19 +127,49 @@ const App: React.FC = () => {
   };
 
   // Handle sending request for a specific tab
-  const handleSendRequest = (tabId: string) => {
-    if (vsCodeRef.current) {
-      // Add to history using the tab's parsed request
-      addHistory(getParsedRequest(tabId), vsCodeRef.current);
-      // Set the tab's processing state and send the request
-      // handleSendRequest in the store handles setting isProcessing and resolving env/auth
-      handleSendRequestAction(vsCodeRef.current, environments, auths, tabId);
+  const handleSendRequest = async (tabId: string) => {
+    const parsedRequest = getParsedRequest(tabId);
+    
+    // Save to history
+    await storage.saveRequestToHistory(parsedRequest);
+
+    // Build HTTP request using core slice helper
+    setTabProcessingState(tabId, true);
+    const buildResult = await buildHttpRequest(environments, auths, tabId);
+
+    if (!buildResult.success) {
+      setErrorMessage(buildResult.error, tabId);
+      setTabProcessingState(tabId, false);
+      return;
+    }
+
+    // Execute request via HTTP adapter
+    const httpConfig: HttpRequestConfig = {
+      id: buildResult.tabId,
+      method: buildResult.request.method,
+      url: buildResult.request.url,
+      headers: buildResult.request.headers,
+      params: buildResult.request.params || [],
+      body: buildResult.request.body,
+      auth: buildResult.request.auth,
+      envVars: buildResult.request.envVars || {},
+      proxy: buildResult.request.proxy,
+      cert: buildResult.request.cert,
+      timeout: buildResult.request.timeout,
+      validation: buildResult.validation,
+    };
+
+    const response = await http.executeRequest(httpConfig);
+
+    if (response.isOk) {
+      handleHttpResponse(tabId, response.value);
     } else {
-      console.error('VS Code API is not available.');
+      setErrorMessage(response.error, tabId);
+      setTabProcessingState(tabId, false);
     }
   };
 
-  const handleSaveRequest = (request: RequestFormData, saveToCollectionName: string | undefined, folderPath: string[] = [], tabId?: string) => {
+  const handleSaveRequest = async (request: RequestFormData, saveToCollectionName: string | undefined, folderPath: string[] = [], tabId?: string) => {
     if (tabId) {
       pendingSaveInfo.current = {
         tabId,
@@ -156,272 +200,170 @@ const App: React.FC = () => {
       }
     }
 
-    if (vsCodeRef.current) {
-      vsCodeRef.current.postMessage({
-        type: 'saveRequestToCollection',
-        data: {
-          requestContent: JSON.stringify(collectionRequest, null, 2),
-          requestName: request.name,
-          collectionFileName: existingCollection ? existingCollection.filename : request.sourceRef.collectionFilename,
-          folderPath: folderPath.length > 0 ? folderPath : request.sourceRef.itemPath,
-          newCollectionName: existingCollection ? undefined : saveToCollectionName,
-        }
-      });
+    const collectionFileName = existingCollection ? existingCollection.filename : request.sourceRef.collectionFilename;
+    const itemPath = folderPath.length > 0 ? folderPath : request.sourceRef.itemPath;
+
+    if (!collectionFileName) {
+      notification.showNotification('error', 'Invalid collection filename');
+      return;
+    }
+
+    // Wrap the collection request as a CollectionItem
+    const collectionItem: any = {
+      id: request.id || crypto.randomUUID(),
+      name: request.name,
+      request: collectionRequest
+    };
+
+    const result = await storage.saveRequestToCollection(collectionFileName, itemPath, collectionItem);
+    
+    if (result.isOk) {
+      const collection = result.value;
+      const existingColl = currentCollections.find((c) => c.info.name === collection.info.name);
+      
+      if (tabId) {
+        updateTabMetadata(tabId, {
+          name: request.name,
+          folderPath: itemPath,
+          collectionRef: {
+            collectionFilename: collection.filename || '',
+            collectionName: collection.info.name,
+            itemPath
+          }
+        });
+        pendingSaveInfo.current = null;
+      }
+      
+      if (!existingColl) {
+        addCollection(collection);
+      } else {
+        updateCollection(collection.info.name, collection);
+      }
+      notification.showNotification('success', 'Request saved successfully');
+    } else {
+      notification.showNotification('error', result.error);
     }
   }
 
-  const handleSaveEnvironment = (environment: Environment) => {
-    if (vsCodeRef.current) {
-      vsCodeRef.current.postMessage({
-        type: 'saveEnvironment',
-        data: {
-          environment: JSON.stringify(environment, null, 2)
-        }
-      });
+  const handleSaveEnvironment = async (environment: Environment) => {
+    const result = await storage.saveEnvironment(environment);
+    
+    if (result.isOk) {
+      updateEnvironment(environment.id, environment);
+      notification.showNotification('success', 'Environment saved successfully');
+    } else {
+      notification.showNotification('error', result.error);
     }
   };
 
-  const handleSaveCookies = (cookies: Cookie[]) => {
-    if (vsCodeRef.current) {
-      vsCodeRef.current.postMessage({
-        type: 'saveCookies',
-        data: {
-          cookies: JSON.stringify(cookies, null, 2)
-        }
-      });
+  const handleSaveCookies = async (cookies: Cookie[]) => {
+    const result = await storage.saveCookies(cookies);
+    
+    if (result.isOk) {
+      setCookies(cookies);
+      notification.showNotification('success', 'Cookies saved successfully');
+    } else {
+      notification.showNotification('error', result.error);
     }
   };
 
-  const handleSaveAuths = (auths: Auth[]) => {
-    if (vsCodeRef.current) {
-      vsCodeRef.current.postMessage({
-        type: 'saveAuths',
-        data: {
-          auths: JSON.stringify(auths, null, 2)
-        }
-      });
+  const handleSaveAuths = async (auths: Auth[]) => {
+    const result = await storage.saveAuths(auths);
+    
+    if (result.isOk) {
+      setAuths(auths);
+      notification.showNotification('success', 'Auth configurations saved successfully');
+    } else {
+      notification.showNotification('error', result.error);
     }
   };
 
-  const handleSaveProxies = (proxies: Proxy[]) => {
-    if (vsCodeRef.current) {
-      vsCodeRef.current.postMessage({
-        type: 'saveProxies',
-        data: {
-          proxies: JSON.stringify(proxies, null, 2)
-        }
-      });
+  const handleSaveProxies = async (proxies: Proxy[]) => {
+    const result = await storage.saveProxies(proxies);
+    
+    if (result.isOk) {
+      setProxies(proxies);
+      notification.showNotification('success', 'Proxies saved successfully');
+    } else {
+      notification.showNotification('error', result.error);
     }
   };
 
-  const handleSaveCerts = (certs: Cert[]) => {
-    if (vsCodeRef.current) {
-      vsCodeRef.current.postMessage({
-        type: 'saveCerts',
-        data: {
-          certs: JSON.stringify(certs, null, 2)
-        }
-      });
+  const handleSaveCerts = async (certs: Cert[]) => {
+    const result = await storage.saveCerts(certs);
+    
+    if (result.isOk) {
+      setCerts(certs);
+      notification.showNotification('success', 'Certificates saved successfully');
+    } else {
+      notification.showNotification('error', result.error);
     }
   };
 
-  const handleSaveValidationRules = (rules: GlobalValidationRule[]) => {
-    if (vsCodeRef.current) {
-      vsCodeRef.current.postMessage({
-        type: 'saveValidationRules',
-        data: {
-          rules
-        }
-      });
+  const handleSaveValidationRules = async (rules: GlobalValidationRule[]) => {
+    const result = await storage.saveValidationRules(rules as any);
+    
+    if (result.isOk) {
+      setValidationRules(rules);
+      notification.showNotification('success', 'Validation rules saved successfully');
+    } else {
+      notification.showNotification('error', result.error);
     }
   };
 
-  const handleDownloadResponse = (data: string) => {
-    if (vsCodeRef.current) {
-      vsCodeRef.current.postMessage({
-          type: 'downloadResponse',
-          data: data
-        });
+  const handleDownloadResponse = async (data: string) => {
+    // Convert base64 or string data to Uint8Array
+    const uint8Array = new TextEncoder().encode(data);
+    const result = await file.downloadResponse(uint8Array, 'response.json', 'application/json');
+    
+    if (result.isErr) {
+      notification.showNotification('error', result.error);
     }
   };
 
-  const handleImportCollection = (fileName: string, fileContent: string, collectionType: string) => {
-    if (vsCodeRef.current) {
-      vsCodeRef.current.postMessage({
-        type: 'importCollection',
-        data: { fileName, fileContent, collectionType }
-      });
-    }
+  const handleImportCollection = async (fileName: string, fileContent: string, collectionType: string) => {
+    // TODO: Implement collection parsing and saving via adapter
+    // For now, this functionality needs to be moved to a separate service
+    notification.showNotification('info', 'Collection import will be implemented via adapter');
   };
 
-  const handleExportCollection = (collectionName: string, exportFormat: string) => {
-    const currentCollections = useAppStateStore.getState().collections;
-    const collection = collectionName && currentCollections.find((c) => c.info.name === collectionName);
-    if (vsCodeRef.current && collection) {
-      vsCodeRef.current.postMessage({
-        type: 'exportCollection',
-        data: { fileName: collection.filename, exportFormat }
-      });
-    }
+  const handleExportCollection = async (collectionName: string, exportFormat: string) => {
+    // TODO: Implement collection export via adapter
+    // For now, this functionality needs to be moved to a separate service
+    notification.showNotification('info', 'Collection export will be implemented via adapter');
   };
 
-  const handleImportEnvironments = (fileName: string, fileContent: string) => {
-    if (vsCodeRef.current) {
-      vsCodeRef.current.postMessage({
-        type: 'importEnvironments',
-        data: { fileName, fileContent }
-      });
-    }
+  const handleImportEnvironments = async (fileName: string, fileContent: string) => {
+    // TODO: Implement environment import via adapter
+    // For now, this functionality needs to be moved to a separate service  
+    notification.showNotification('info', 'Environment import will be implemented via adapter');
   };
 
-  const handleExportEnvironments = () => {
-    if (vsCodeRef.current) {
-      vsCodeRef.current.postMessage({
-        type: 'exportEnvironments'
-      });
-    }
+  const handleExportEnvironments = async () => {
+    // TODO: Implement environment export via adapter
+    // For now, this functionality needs to be moved to a separate service
+    notification.showNotification('info', 'Environment export will be implemented via adapter');
   };
 
   const handleSettingsSelect = () => {
     setIsSettingsOpen(true);
   };
 
-  const handleSaveSettings = (updatedSettings: AppSettings) => {
-    setSettings(updatedSettings);
-    if (vsCodeRef.current) {
-      vsCodeRef.current.postMessage({
-        type: 'saveSettings',
-        data: {
-          settings: JSON.stringify(updatedSettings, null, 2)
-        }
-      });
+  const handleSaveSettings = async (updatedSettings: Parameters<typeof setSettings>[0]) => {
+    const result = await storage.saveSettings(updatedSettings as any);
+    
+    if (result.isOk) {
+      setSettings(updatedSettings);
+      notification.showNotification('success', 'Settings saved successfully');
+      setIsSettingsOpen(false);
+    } else {
+      notification.showNotification('error', result.error);
     }
-    setIsSettingsOpen(false);
   };
 
-  useEffect(() => {
-    // Listen for messages from the VS Code extension
-    const messageHandler = (event: MessageEvent) => {
-      const message = event.data;
-      if (message.type === 'httpResponse') {
-        // Use the response's id field to route to the correct tab
-        const tabId = message.response?.id;
-        if (tabId) {
-          handleHttpResponse(tabId, message.response);
-        } else {
-          // Fallback: route to active tab if no id present
-          const activeTabId = useAppStateStore.getState().activeTabId;
-          handleHttpResponse(activeTabId, message.response);
-        }
-      } else if (message.type === 'collectionsLoaded') {
-          setCollections(message.collections);
-      } else if (message.type === 'collectionUpdated') {
-        try {
-          const collection = message.collection;
-          //if collection does not exist, add it
-          // Get current collections from the store to avoid stale closure
-          const currentCollections = useAppStateStore.getState().collections;
-          const existingCollection = currentCollections.find((c) => c.info.name === collection.info.name);
-          
-          // Handle pending save tab update
-          if (pendingSaveInfo.current) {
-            const { tabId, collectionName, folderPath, requestName } = pendingSaveInfo.current;
-            // Check if this collection update corresponds to the pending save
-            // If collectionName was provided (Save As), it must match
-            // If not provided (Save), we assume it matches if the collection filename matches (but we don't have filename in pendingSave easily unless we looked it up)
-            // Simpler: if we have a pending save, and we get a collection update, we assume it's related if the collection name matches what we expect.
-            
-            const targetCollectionName = collectionName || (existingCollection?.info.name);
-            
-            if (targetCollectionName === collection.info.name) {
-                // Update the tab metadata and mark clean
-                updateTabMetadata(tabId, {
-                    name: requestName,
-                    folderPath: folderPath,
-                    collectionRef: {
-                        collectionFilename: collection.filename,
-                        collectionName: collection.info.name,
-                        itemPath: folderPath
-                    }
-                });
-                
-                // Clear pending save
-                pendingSaveInfo.current = null;
-            }
-          }
-
-          if (!existingCollection) {
-            addCollection(collection);
-            return;
-          }
-          updateCollection(collection.info.name, collection);
-        } catch (error: any) {
-          console.error('Error updating collection:', error);
-        }
-      } else if (message.type === 'collectionsError') {
-        setCollectionLoadError(message.error);
-      } else if (message.type === 'environmentsLoaded') {
-        setEnvironments(message.environments);
-      } else if (message.type === 'environmentsError') {
-        setEnvironmentLoadError(message.error);
-      } else if (message.type === 'environmentUpdated') {
-        try {
-          updateEnvironment(message.environment.id, message.environment);
-        } catch (error: any) {
-          console.error('Error updating environment:', error);
-        }
-      } else if (message.type === 'cookiesLoaded') {
-        setCookies(message.cookies);
-      } else if (message.type === 'cookiesError') {
-        console.error('Cookies error:', message.error);
-      } else if (message.type === 'authsLoaded') {
-        setAuths(message.auths);
-      } else if (message.type === 'authsError') {
-        console.error('Auths error:', message.error);
-      } else if (message.type === 'proxiesLoaded') {
-        setProxies(message.proxies);
-      } else if (message.type === 'proxiesError') {
-        console.error('Proxies error:', message.error);
-      } else if (message.type === 'certsLoaded') {
-        setCerts(message.certs);
-      } else if (message.type === 'certsError') {
-        console.error('Certs error:', message.error);
-      } else if (message.type === 'validationRulesLoaded') {
-        setValidationRules(message.rules);
-      } else if (message.type === 'validationRulesSaved') {
-        setValidationRules(message.rules);
-      } else if (message.type === 'validationRulesError') {
-        console.error('Validation rules error:', message.error);
-      } else if (message.type === 'settingsLoaded') {
-        setSettings(message.settings);
-      } else if (message.type === 'settingsSaved') {
-        // Update settings with the new validation status from the backend
-        if (message.settings) {
-          setSettings(message.settings);
-        }
-      } else if (message.type === 'settingsError') {
-        console.error('Settings error:', message.error);
-      } else if (message.type === 'historyLoaded') {
-        setHistory(message.history);
-      } else if (message.type === 'historyError') {
-        setHistoryLoadError(message.error);
-      } else if (message.type === 'bannerSuccess') {
-        setBannerSuccess(message.message, message.link, message.timeoutSeconds);
-      } else if (message.type === 'bannerError') {
-        setBannerError(message.message, message.link, message.timeoutSeconds);
-      } else if (message.type === 'bannerInfo') {
-        setBannerInfo(message.message, message.link, message.timeoutSeconds);
-      } else if (message.type === 'bannerWarning') {
-        setBannerWarning(message.message, message.link, message.timeoutSeconds);
-      }
-    };
-
-    window.addEventListener('message', messageHandler);
-
-    return () => {
-      window.removeEventListener('message', messageHandler);
-    };
-  }, []);
+  // Note: Message handling is now done by the adapter layer
+  // The adapter (vsCodeAdapter.ts) handles all postMessage communication
+  // and resolves promises directly, eliminating the need for this message listener
 
   return (
     <div
@@ -459,7 +401,6 @@ const App: React.FC = () => {
           onExportCollection={handleExportCollection}
           onImportEnvironments={handleImportEnvironments}
           onExportEnvironments={handleExportEnvironments}
-          vsCodeApi={vsCodeRef.current}
         />
       </div>
 

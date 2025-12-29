@@ -12,7 +12,6 @@ interface CollectionsSlice {
     addCollection: (collection: Collection) => void;
     removeCollection: (name: string) => void;
     updateCollection: (name: string, updates: Partial<Collection>) => void;
-    refreshCollections: (vsCodeApi: any) => void;
     setIsCollectionsLoading: (isLoading: boolean) => void;
     setCollectionLoadError: (error: string | null) => void;
     setCollectionSearchText: (text: string) => void;
@@ -37,14 +36,10 @@ const createCollectionsSlice: StateCreator<CollectionsSlice> = (set) => ({
     updateCollection: (name, updates) => set((state) => ({
         collections: state.collections.map((c) => c.info.name === name ? { ...c, ...updates } : c)
     })),
-    refreshCollections: (vsCodeApi) => {
-        if (vsCodeApi === 'undefined') {
-            return;
-        }
-        set({ isCollectionsLoading: true, collectionLoadError: null });
-        vsCodeApi.postMessage({ type: 'loadCollections' });
-    },
-    setIsCollectionsLoading: (isLoading) => set({ isCollectionsLoading: isLoading }),
+    setIsCollectionsLoading: (isLoading) => set({
+        isCollectionsLoading: isLoading,
+        ...(isLoading ? { collectionLoadError: null } : {})
+    }),
     setCollectionLoadError: (error) => set({ collectionLoadError: error, isCollectionsLoading: false }),
     setCollectionSearchText: (text) => set({ collectionSearchText: text }),
     setSavedExpandedState: (collections, folders) => set({
