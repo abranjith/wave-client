@@ -76,27 +76,73 @@ const App: React.FC = () => {
   const pendingSaveInfo = useRef<{ tabId: string, collectionName: string | undefined, folderPath: string[], requestName: string } | null>(null);
 
   // Initialize data on mount
-  // Note: This used to be in adapter.initialize(), but to avoid issues with the
-  // transitional vsCodeAdapter implementation (which returns empty arrays immediately
-  // and relies on message events), we handle initialization here in the component
   useEffect(() => {
     async function initializeData() {
-      // Set loading states
+      // Load collections
       setIsCollectionsLoading(true);
+      const collectionsResult = await storage.loadCollections();
+      if (collectionsResult.isOk) {
+        setCollections(collectionsResult.value);
+      } else {
+        setCollectionLoadError(collectionsResult.error);
+      }
+      setIsCollectionsLoading(false);
+
+      // Load environments
       setIsEnvironmentsLoading(true);
+      const environmentsResult = await storage.loadEnvironments();
+      if (environmentsResult.isOk) {
+        setEnvironments(environmentsResult.value);
+      } else {
+        setEnvironmentLoadError(environmentsResult.error);
+      }
+      setIsEnvironmentsLoading(false);
+
+      // Load history
       setIsHistoryLoading(true);
-      
-      // Load all data - these trigger postMessages that will be handled by message listeners
-      // in the vsCodeAdapter, which will eventually update the state via message events
-      storage.loadCollections();
-      storage.loadEnvironments();
-      storage.loadHistory();
-      storage.loadCookies();
-      storage.loadAuths();
-      storage.loadProxies();
-      storage.loadCerts();
-      storage.loadValidationRules();
-      storage.loadSettings();
+      const historyResult = await storage.loadHistory();
+      if (historyResult.isOk) {
+        setHistory(historyResult.value);
+      } else {
+        setHistoryLoadError(historyResult.error);
+      }
+      setIsHistoryLoading(false);
+
+      // Load cookies (no loading state for these)
+      const cookiesResult = await storage.loadCookies();
+      if (cookiesResult.isOk) {
+        setCookies(cookiesResult.value);
+      }
+
+      // Load auths
+      const authsResult = await storage.loadAuths();
+      if (authsResult.isOk) {
+        setAuths(authsResult.value);
+      }
+
+      // Load proxies
+      const proxiesResult = await storage.loadProxies();
+      if (proxiesResult.isOk) {
+        setProxies(proxiesResult.value);
+      }
+
+      // Load certs
+      const certsResult = await storage.loadCerts();
+      if (certsResult.isOk) {
+        setCerts(certsResult.value);
+      }
+
+      // Load validation rules
+      const validationRulesResult = await storage.loadValidationRules();
+      if (validationRulesResult.isOk) {
+        setValidationRules(validationRulesResult.value as any);
+      }
+
+      // Load settings
+      const settingsResult = await storage.loadSettings();
+      if (settingsResult.isOk) {
+        setSettings(settingsResult.value as any);
+      }
     }
 
     initializeData();
@@ -163,6 +209,14 @@ const App: React.FC = () => {
 
     if (response.isOk) {
       handleHttpResponse(tabId, response.value);
+      
+      // Update cookies if the response includes new cookies
+      if (response.value.cookies && response.value.cookies.length > 0) {
+        const cookiesResult = await storage.loadCookies();
+        if (cookiesResult.isOk) {
+          setCookies(cookiesResult.value);
+        }
+      }
     } else {
       setErrorMessage(response.error, tabId);
       setTabProcessingState(tabId, false);
@@ -322,27 +376,64 @@ const App: React.FC = () => {
   };
 
   const handleImportCollection = async (fileName: string, fileContent: string, collectionType: string) => {
-    // TODO: Implement collection parsing and saving via adapter
-    // For now, this functionality needs to be moved to a separate service
-    notification.showNotification('info', 'Collection import will be implemented via adapter');
+    setIsCollectionsLoading(true);
+    const result = await storage.importCollection(fileName, fileContent);
+    
+    if (result.isOk) {
+      setCollections(result.value);
+      notification.showNotification('success', `Collection imported successfully: ${fileName}`);
+    } else {
+      notification.showNotification('error', result.error);
+    }
+    setIsCollectionsLoading(false);
   };
 
   const handleExportCollection = async (collectionName: string, exportFormat: string) => {
-    // TODO: Implement collection export via adapter
-    // For now, this functionality needs to be moved to a separate service
-    notification.showNotification('info', 'Collection export will be implemented via adapter');
+    // Find the collection to get its filename
+    const currentCollections = useAppStateStore.getState().collections;
+    const collection = currentCollections.find((c) => c.info.name === collectionName);
+    
+    if (!collection || !collection.filename) {
+      notification.showNotification('error', 'Collection not found');
+      return;
+    }
+
+    const result = await storage.exportCollection(collection.filename);
+    
+    if (result.isOk) {
+      notification.showNotification('success', `Collection exported: ${result.value.fileName}`);
+    } else {
+      // Error notification already shown by MessageHandler if not user-cancelled
+      if (result.error !== 'Export cancelled by user') {
+        notification.showNotification('error', result.error);
+      }
+    }
   };
 
   const handleImportEnvironments = async (fileName: string, fileContent: string) => {
-    // TODO: Implement environment import via adapter
-    // For now, this functionality needs to be moved to a separate service  
-    notification.showNotification('info', 'Environment import will be implemented via adapter');
+    setIsEnvironmentsLoading(true);
+    const result = await storage.importEnvironments(fileContent);
+    
+    if (result.isOk) {
+      setEnvironments(result.value);
+      notification.showNotification('success', 'Environments imported successfully');
+    } else {
+      notification.showNotification('error', result.error);
+    }
+    setIsEnvironmentsLoading(false);
   };
 
   const handleExportEnvironments = async () => {
-    // TODO: Implement environment export via adapter
-    // For now, this functionality needs to be moved to a separate service
-    notification.showNotification('info', 'Environment export will be implemented via adapter');
+    const result = await storage.exportEnvironments();
+    
+    if (result.isOk) {
+      notification.showNotification('success', `Environments exported: ${result.value.fileName}`);
+    } else {
+      // Error notification already shown by MessageHandler if not user-cancelled
+      if (result.error !== 'Export cancelled by user') {
+        notification.showNotification('error', result.error);
+      }
+    }
   };
 
   const handleSettingsSelect = () => {

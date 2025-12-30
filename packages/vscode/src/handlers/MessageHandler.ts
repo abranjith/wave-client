@@ -45,7 +45,7 @@ export class MessageHandler {
                 await this.handleHttpRequest(message);
                 break;
             case 'loadCollections':
-                await this.handleLoadCollections();
+                await this.handleLoadCollections(message);
                 break;
             case 'saveRequestToCollection':
                 await this.handleSaveRequestToCollection(message);
@@ -57,7 +57,7 @@ export class MessageHandler {
                 await this.handleExportCollection(message);
                 break;
             case 'loadEnvironments':
-                await this.handleLoadEnvironments();
+                await this.handleLoadEnvironments(message);
                 break;
             case 'saveEnvironment':
                 await this.handleSaveEnvironment(message);
@@ -66,10 +66,10 @@ export class MessageHandler {
                 await this.handleImportEnvironments(message);
                 break;
             case 'exportEnvironments':
-                await this.handleExportEnvironments();
+                await this.handleExportEnvironments(message);
                 break;
             case 'loadHistory':
-                await this.handleLoadHistory();
+                await this.handleLoadHistory(message);
                 break;
             case 'saveRequestToHistory':
                 await this.handleSaveRequestToHistory(message);
@@ -78,31 +78,31 @@ export class MessageHandler {
                 await this.handleDownloadResponse(message);
                 break;
             case 'loadCookies':
-                await this.handleLoadCookies();
+                await this.handleLoadCookies(message);
                 break;
             case 'saveCookies':
                 await this.handleSaveCookies(message);
                 break;
             case 'loadAuths':
-                await this.handleLoadAuths();
+                await this.handleLoadAuths(message);
                 break;
             case 'saveAuths':
                 await this.handleSaveAuths(message);
                 break;
             case 'loadProxies':
-                await this.handleLoadProxies();
+                await this.handleLoadProxies(message);
                 break;
             case 'saveProxies':
                 await this.handleSaveProxies(message);
                 break;
             case 'loadCerts':
-                await this.handleLoadCerts();
+                await this.handleLoadCerts(message);
                 break;
             case 'saveCerts':
                 await this.handleSaveCerts(message);
                 break;
             case 'loadSettings':
-                await this.handleLoadSettings();
+                await this.handleLoadSettings(message);
                 break;
             case 'saveSettings':
                 await this.handleSaveSettings(message);
@@ -128,7 +128,7 @@ export class MessageHandler {
                 break;
             // Validation handlers
             case 'loadValidationRules':
-                await this.handleLoadValidationRules();
+                await this.handleLoadValidationRules(message);
                 break;
             case 'saveValidationRules':
                 await this.handleSaveValidationRules(message);
@@ -139,14 +139,17 @@ export class MessageHandler {
     // ==================== HTTP Request Handlers ====================
 
     private async handleHttpRequest(message: any): Promise<void> {
+        // Extract correlation ID for promise resolution
+        const correlationId = message.requestId;
+        
         // Extract the request ID (tab ID) from the message
         // The ID can come from message.id (new format) or message.request.id (legacy)
-        const requestId = message.id || message.request?.id || '';
+        const tabId = message.id || message.request?.id || '';
         
         // Ensure the request object has the ID for downstream processing
         const requestWithId = {
             ...message.request,
-            id: requestId
+            id: tabId
         };
 
         // Extract validation configuration if present
@@ -165,29 +168,25 @@ export class MessageHandler {
                 validationResult = executeValidation(validation, response, globalRulesMap, envVarsMap);
             }
             
-            // Always include the request ID in the response for tab correlation
+            // Send response with requestId for correlation
             this.postMessage({
                 type: 'httpResponse',
+                requestId: correlationId,
                 response: {
                     ...response,
-                    id: requestId,  // Ensure ID is always present for concurrency handling
-                    validationResult
+                    id: tabId,  // Tab ID for UI correlation
+                    validationResult,
+                    // Include cookies if any were received
+                    ...(newCookies.length > 0 ? { cookies: newCookies } : {})
                 }
             });
-
-            // Notify webview about updated cookies if any were received
-            if (newCookies.length > 0) {
-                const allCookies = await cookieService.loadAll();
-                this.postMessage({
-                    type: 'cookiesLoaded',
-                    cookies: allCookies
-                });
-            }
         } catch (error: any) {
             this.postMessage({
                 type: 'httpResponse',
+                requestId: correlationId,
+                error: error.message,
                 response: {
-                    id: requestId,  // Use extracted requestId for error responses
+                    id: tabId,  // Tab ID for UI correlation
                     status: 0,
                     statusText: 'Error',
                     elapsedTime: 0,
@@ -201,23 +200,27 @@ export class MessageHandler {
 
     // ==================== Collection Handlers ====================
 
-    private async handleLoadCollections(): Promise<void> {
+    private async handleLoadCollections(message: any): Promise<void> {
+        const requestId = message.requestId;
         try {
             const collections = await collectionService.loadAll();
             this.postMessage({
                 type: 'collectionsLoaded',
+                requestId,
                 collections,
                 isImport: false
             });
         } catch (error: any) {
             this.postMessage({
-                type: 'collectionsError',
+                type: 'collectionsLoaded',
+                requestId,
                 error: error.message
             });
         }
     }
 
     private async handleSaveRequestToCollection(message: any): Promise<void> {
+        const requestId = message.requestId;
         try {
             const { requestContent, requestName, collectionFileName, folderPath, newCollectionName } = message.data;
             const savedCollectionFileName = await collectionService.saveRequest(
@@ -232,6 +235,7 @@ export class MessageHandler {
             if (collection) {
                 this.postMessage({
                     type: 'collectionUpdated',
+                    requestId,
                     collection: {
                         ...collection,
                         filename: savedCollectionFileName
@@ -242,17 +246,25 @@ export class MessageHandler {
                     type: 'bannerSuccess',
                     message: `Request "${requestName}" saved successfully`
                 });
+            } else {
+                this.postMessage({
+                    type: 'collectionUpdated',
+                    requestId,
+                    error: 'Collection not found after save'
+                });
             }
         } catch (error: any) {
             console.error('Error saving request to collection:', error);
             this.postMessage({
-                type: 'collectionRequestSaveError',
+                type: 'collectionUpdated',
+                requestId,
                 error: error.message
             });
         }
     }
 
     private async handleImportCollection(message: any): Promise<void> {
+        const requestId = message.requestId;
         try {
             const { fileName, fileContent } = message.data;
             // Note: Collection format transformation (Postman, HTTP, Swagger) should be
@@ -262,9 +274,10 @@ export class MessageHandler {
 
             const collections = await collectionService.loadAll();
             this.postMessage({
-                type: 'collectionsLoaded',
+                type: 'collectionImported',
+                requestId,
                 collections,
-                isImport: true
+                fileName
             });
             
             this.postMessage({
@@ -273,6 +286,11 @@ export class MessageHandler {
             });
         } catch (error: any) {
             this.postMessage({
+                type: 'collectionImported',
+                requestId,
+                error: error.message
+            });
+            this.postMessage({
                 type: 'bannerError',
                 message: `Failed to import collection: ${error.message}`
             });
@@ -280,6 +298,7 @@ export class MessageHandler {
     }
 
     private async handleExportCollection(message: any): Promise<void> {
+        const requestId = message.requestId;
         try {
             const { fileName } = message.data;
             
@@ -306,11 +325,30 @@ export class MessageHandler {
                 await vscode.workspace.fs.writeFile(uri, uint8Array);
 
                 this.postMessage({
+                    type: 'collectionExported',
+                    requestId,
+                    filePath: uri.fsPath,
+                    fileName: path.basename(uri.fsPath)
+                });
+                
+                this.postMessage({
                     type: 'bannerSuccess',
                     message: `Collection exported: ${path.basename(uri.fsPath)}`
                 });
+            } else {
+                // User cancelled
+                this.postMessage({
+                    type: 'collectionExported',
+                    requestId,
+                    error: 'Export cancelled by user'
+                });
             }
         } catch (error: any) {
+            this.postMessage({
+                type: 'collectionExported',
+                requestId,
+                error: error.message
+            });
             this.postMessage({
                 type: 'bannerError',
                 message: `Failed to export collection: ${error.message}`
@@ -320,29 +358,34 @@ export class MessageHandler {
 
     // ==================== Environment Handlers ====================
 
-    private async handleLoadEnvironments(): Promise<void> {
+    private async handleLoadEnvironments(message: any): Promise<void> {
+        const requestId = message.requestId;
         try {
             const environments = await environmentService.loadAll();
             this.postMessage({
                 type: 'environmentsLoaded',
+                requestId,
                 environments,
                 isImport: false
             });
         } catch (error: any) {
             this.postMessage({
-                type: 'environmentsError',
+                type: 'environmentsLoaded',
+                requestId,
                 error: error.message
             });
         }
     }
 
     private async handleSaveEnvironment(message: any): Promise<void> {
+        const requestId = message.requestId;
         try {
             const envToUpdate = JSON.parse(message.data.environment);
             await environmentService.save(envToUpdate);
 
             this.postMessage({
                 type: 'environmentUpdated',
+                requestId,
                 environment: envToUpdate
             });
             
@@ -353,22 +396,24 @@ export class MessageHandler {
         } catch (error: any) {
             console.error('Error saving environment:', error);
             this.postMessage({
-                type: 'environmentsError',
+                type: 'environmentUpdated',
+                requestId,
                 error: error.message
             });
         }
     }
 
     private async handleImportEnvironments(message: any): Promise<void> {
+        const requestId = message.requestId;
         try {
             const { fileContent } = message.data;
             await environmentService.import(fileContent);
 
             const environments = await environmentService.loadAll();
             this.postMessage({
-                type: 'environmentsLoaded',
-                environments,
-                isImport: true
+                type: 'environmentsImported',
+                requestId,
+                environments
             });
             
             this.postMessage({
@@ -377,13 +422,19 @@ export class MessageHandler {
             });
         } catch (error: any) {
             this.postMessage({
+                type: 'environmentsImported',
+                requestId,
+                error: error.message
+            });
+            this.postMessage({
                 type: 'bannerError',
                 message: `Failed to import environments: ${error.message}`
             });
         }
     }
 
-    private async handleExportEnvironments(): Promise<void> {
+    private async handleExportEnvironments(message: any): Promise<void> {
+        const requestId = message.requestId;
         try {
             const uri = await vscode.window.showSaveDialog({
                 defaultUri: vscode.Uri.file(path.join(os.homedir(), 'Downloads', 'environments.json')),
@@ -398,11 +449,30 @@ export class MessageHandler {
                 await vscode.workspace.fs.writeFile(uri, uint8Array);
 
                 this.postMessage({
+                    type: 'environmentsExported',
+                    requestId,
+                    filePath: uri.fsPath,
+                    fileName: path.basename(uri.fsPath)
+                });
+                
+                this.postMessage({
                     type: 'bannerSuccess',
                     message: `Environments file saved: ${path.basename(uri.fsPath)}`
                 });
+            } else {
+                // User cancelled
+                this.postMessage({
+                    type: 'environmentsExported',
+                    requestId,
+                    error: 'Export cancelled by user'
+                });
             }
         } catch (error: any) {
+            this.postMessage({
+                type: 'environmentsExported',
+                requestId,
+                error: error.message
+            });
             this.postMessage({
                 type: 'bannerError',
                 message: `Failed to save Environments file: ${error.message}`
@@ -412,16 +482,19 @@ export class MessageHandler {
 
     // ==================== History Handlers ====================
 
-    private async handleLoadHistory(): Promise<void> {
+    private async handleLoadHistory(message: any): Promise<void> {
+        const requestId = message.requestId;
         try {
             const history = await historyService.loadAll();
             this.postMessage({
                 type: 'historyLoaded',
+                requestId,
                 history
             });
         } catch (error: any) {
             this.postMessage({
-                type: 'historyError',
+                type: 'historyLoaded',
+                requestId,
                 error: error.message
             });
         }
@@ -476,27 +549,32 @@ export class MessageHandler {
 
     // ==================== Cookie Handlers ====================
 
-    private async handleLoadCookies(): Promise<void> {
+    private async handleLoadCookies(message: any): Promise<void> {
+        const requestId = message.requestId;
         try {
             const cookies = await cookieService.loadAll();
             this.postMessage({
                 type: 'cookiesLoaded',
+                requestId,
                 cookies
             });
         } catch (error: any) {
             this.postMessage({
-                type: 'cookiesError',
+                type: 'cookiesLoaded',
+                requestId,
                 error: error.message
             });
         }
     }
 
     private async handleSaveCookies(message: any): Promise<void> {
+        const requestId = message.requestId;
         try {
             const cookies = JSON.parse(message.data.cookies);
             await cookieService.saveAll(cookies);
             this.postMessage({
-                type: 'cookiesSaved'
+                type: 'cookiesSaved',
+                requestId
             });
             
             this.postMessage({
@@ -506,7 +584,8 @@ export class MessageHandler {
         } catch (error: any) {
             console.error('Error saving cookies:', error);
             this.postMessage({
-                type: 'cookiesError',
+                type: 'cookiesSaved',
+                requestId,
                 error: error.message
             });
         }
@@ -514,27 +593,32 @@ export class MessageHandler {
 
     // ==================== Auth Handlers ====================
 
-    private async handleLoadAuths(): Promise<void> {
+    private async handleLoadAuths(message: any): Promise<void> {
+        const requestId = message.requestId;
         try {
             const auths = await storeService.loadAuths();
             this.postMessage({
                 type: 'authsLoaded',
+                requestId,
                 auths
             });
         } catch (error: any) {
             this.postMessage({
-                type: 'authsError',
+                type: 'authsLoaded',
+                requestId,
                 error: error.message
             });
         }
     }
 
     private async handleSaveAuths(message: any): Promise<void> {
+        const requestId = message.requestId;
         try {
             const auths = JSON.parse(message.data.auths);
             await storeService.saveAuths(auths);
             this.postMessage({
-                type: 'authsSaved'
+                type: 'authsSaved',
+                requestId
             });
             
             this.postMessage({
@@ -544,7 +628,8 @@ export class MessageHandler {
         } catch (error: any) {
             console.error('Error saving auths:', error);
             this.postMessage({
-                type: 'authsError',
+                type: 'authsSaved',
+                requestId,
                 error: error.message
             });
         }
@@ -552,27 +637,32 @@ export class MessageHandler {
 
     // ==================== Proxy Handlers ====================
 
-    private async handleLoadProxies(): Promise<void> {
+    private async handleLoadProxies(message: any): Promise<void> {
+        const requestId = message.requestId;
         try {
             const proxies = await storeService.loadProxies();
             this.postMessage({
                 type: 'proxiesLoaded',
+                requestId,
                 proxies
             });
         } catch (error: any) {
             this.postMessage({
-                type: 'proxiesError',
+                type: 'proxiesLoaded',
+                requestId,
                 error: error.message
             });
         }
     }
 
     private async handleSaveProxies(message: any): Promise<void> {
+        const requestId = message.requestId;
         try {
             const proxies = JSON.parse(message.data.proxies);
             await storeService.saveProxies(proxies);
             this.postMessage({
-                type: 'proxiesSaved'
+                type: 'proxiesSaved',
+                requestId
             });
             
             this.postMessage({
@@ -582,7 +672,8 @@ export class MessageHandler {
         } catch (error: any) {
             console.error('Error saving proxies:', error);
             this.postMessage({
-                type: 'proxiesError',
+                type: 'proxiesSaved',
+                requestId,
                 error: error.message
             });
         }
@@ -590,27 +681,32 @@ export class MessageHandler {
 
     // ==================== Cert Handlers ====================
 
-    private async handleLoadCerts(): Promise<void> {
+    private async handleLoadCerts(message: any): Promise<void> {
+        const requestId = message.requestId;
         try {
             const certs = await storeService.loadCerts();
             this.postMessage({
                 type: 'certsLoaded',
+                requestId,
                 certs
             });
         } catch (error: any) {
             this.postMessage({
-                type: 'certsError',
+                type: 'certsLoaded',
+                requestId,
                 error: error.message
             });
         }
     }
 
     private async handleSaveCerts(message: any): Promise<void> {
+        const requestId = message.requestId;
         try {
             const certs = JSON.parse(message.data.certs);
             await storeService.saveCerts(certs);
             this.postMessage({
-                type: 'certsSaved'
+                type: 'certsSaved',
+                requestId
             });
             
             this.postMessage({
@@ -620,7 +716,8 @@ export class MessageHandler {
         } catch (error: any) {
             console.error('Error saving certs:', error);
             this.postMessage({
-                type: 'certsError',
+                type: 'certsSaved',
+                requestId,
                 error: error.message
             });
         }
@@ -628,27 +725,32 @@ export class MessageHandler {
 
     // ==================== Settings Handlers ====================
 
-    private async handleLoadSettings(): Promise<void> {
+    private async handleLoadSettings(message: any): Promise<void> {
+        const requestId = message.requestId;
         try {
             const settings = await settingsService.load();
             this.postMessage({
                 type: 'settingsLoaded',
+                requestId,
                 settings
             });
         } catch (error: any) {
             this.postMessage({
-                type: 'settingsError',
+                type: 'settingsLoaded',
+                requestId,
                 error: error.message
             });
         }
     }
 
     private async handleSaveSettings(message: any): Promise<void> {
+        const requestId = message.requestId;
         try {
             const settings = JSON.parse(message.data.settings);
             const savedSettings = await settingsService.save(settings);
             this.postMessage({
                 type: 'settingsSaved',
+                requestId,
                 settings: savedSettings
             });
             
@@ -659,7 +761,8 @@ export class MessageHandler {
         } catch (error: any) {
             console.error('Error saving settings:', error);
             this.postMessage({
-                type: 'settingsError',
+                type: 'settingsSaved',
+                requestId,
                 error: error.message
             });
         }
@@ -830,17 +933,20 @@ export class MessageHandler {
     /**
      * Loads all global validation rules from storage.
      */
-    private async handleLoadValidationRules(): Promise<void> {
+    private async handleLoadValidationRules(message: any): Promise<void> {
+        const requestId = message.requestId;
         try {
             const rules = await storeService.loadValidationRules();
             this.postMessage({
                 type: 'validationRulesLoaded',
+                requestId,
                 rules
             });
         } catch (error: any) {
             console.error('Error loading validation rules:', error);
             this.postMessage({
-                type: 'validationRulesError',
+                type: 'validationRulesLoaded',
+                requestId,
                 error: error.message
             });
         }
@@ -850,17 +956,20 @@ export class MessageHandler {
      * Saves global validation rules to storage.
      */
     private async handleSaveValidationRules(message: any): Promise<void> {
+        const requestId = message.requestId;
         try {
             const rules = message.data?.rules || [];
             await storeService.saveValidationRules(rules);
             this.postMessage({
                 type: 'validationRulesSaved',
+                requestId,
                 rules
             });
         } catch (error: any) {
             console.error('Error saving validation rules:', error);
             this.postMessage({
-                type: 'validationRulesError',
+                type: 'validationRulesSaved',
+                requestId,
                 error: error.message
             });
         }

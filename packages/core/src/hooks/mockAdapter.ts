@@ -134,6 +134,26 @@ function createMockStorageAdapter(store: MockDataStore): IStorageAdapter {
             collection.item = collection.item.filter(i => i.id !== itemId);
             return ok(collection);
         },
+        async importCollection(fileName, fileContent) {
+            try {
+                const parsed = JSON.parse(fileContent);
+                const collections = Array.isArray(parsed) ? parsed : [parsed];
+                store.collections.push(...collections);
+                return ok(collections);
+            } catch (error) {
+                return err(`Failed to parse collection: ${error}`);
+            }
+        },
+        async exportCollection(collectionFileName) {
+            const collection = store.collections.find(c => c.filename === collectionFileName);
+            if (!collection) {
+                return err(`Collection not found: ${collectionFileName}`);
+            }
+            const filePath = `mock://exports/${collectionFileName}`;
+            const fileName = collectionFileName;
+            store.files.set(filePath, JSON.stringify(collection, null, 2));
+            return ok({ filePath, fileName });
+        },
 
         // Environments
         async loadEnvironments() {
@@ -155,6 +175,22 @@ function createMockStorageAdapter(store: MockDataStore): IStorageAdapter {
         async deleteEnvironment(environmentId) {
             store.environments = store.environments.filter(e => e.id !== environmentId);
             return ok(undefined);
+        },
+        async importEnvironments(fileContent) {
+            try {
+                const parsed = JSON.parse(fileContent);
+                const environments = Array.isArray(parsed) ? parsed : [parsed];
+                store.environments.push(...environments);
+                return ok(environments);
+            } catch (error) {
+                return err(`Failed to parse environments: ${error}`);
+            }
+        },
+        async exportEnvironments() {
+            const filePath = `mock://exports/environments.json`;
+            const fileName = 'environments.json';
+            store.files.set(filePath, JSON.stringify(store.environments, null, 2));
+            return ok({ filePath, fileName });
         },
 
         // History

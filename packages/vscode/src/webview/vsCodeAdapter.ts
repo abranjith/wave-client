@@ -83,10 +83,13 @@ function createVSCodeStorageAdapter(
     pendingRequests: Map<string, PendingRequest<unknown>>,
     defaultTimeout: number
 ): IStorageAdapter {
+    /**
+     * Sends a request and waits for the response using requestId correlation.
+     * Returns Result<T, string> where error comes from response.error field.
+     */
     function sendAndWait<T>(
         type: string,
-        data?: Record<string, unknown>,
-        responseType?: string
+        data?: Record<string, unknown>
     ): Promise<Result<T, string>> {
         return new Promise((resolve) => {
             const requestId = generateRequestId();
@@ -96,8 +99,44 @@ function createVSCodeStorageAdapter(
                 resolve(err(`Request timed out: ${type}`));
             }, defaultTimeout);
 
+            // Map message types to their response data field
+            const responseDataMap: Record<string, string> = {
+                'loadCollections': 'collections',
+                'saveRequestToCollection': 'collection',
+                'importCollection': 'collections',
+                'exportCollection': 'filePath',
+                'loadEnvironments': 'environments',
+                'saveEnvironment': 'environment',
+                'importEnvironments': 'environments',
+                'exportEnvironments': 'filePath',
+                'loadHistory': 'history',
+                'loadCookies': 'cookies',
+                'saveCookies': '',
+                'loadAuths': 'auths',
+                'saveAuths': '',
+                'loadProxies': 'proxies',
+                'saveProxies': '',
+                'loadCerts': 'certs',
+                'saveCerts': '',
+                'loadValidationRules': 'rules',
+                'saveValidationRules': '',
+                'loadSettings': 'settings',
+                'saveSettings': '',
+            };
+
             pendingRequests.set(requestId, {
-                resolve: (value) => resolve(value as Result<T, string>),
+                resolve: (value) => {
+                    const response = value as any;
+                    // Check if response contains error field
+                    if (response && response.error) {
+                        resolve(err(response.error));
+                    } else {
+                        // Extract data from the appropriate field
+                        const dataField = responseDataMap[type];
+                        const responseData = dataField ? response[dataField] : undefined;
+                        resolve(ok(responseData as T));
+                    }
+                },
                 reject: (error) => resolve(err(error.message)),
                 timeout,
             });
@@ -113,7 +152,7 @@ function createVSCodeStorageAdapter(
     return {
         // Collections
         async loadCollections(): Promise<Result<Collection[], string>> {
-            return sendAndWait<Collection[]>('loadCollections', undefined, 'collectionsLoaded');
+            return sendAndWait<Collection[]>('loadCollections');
         },
 
         async saveCollection(collection): Promise<Result<Collection, string>> {
@@ -133,18 +172,14 @@ function createVSCodeStorageAdapter(
         },
 
         async saveRequestToCollection(collectionFilename, itemPath, item): Promise<Result<Collection, string>> {
-            return sendAndWait<Collection>(
-                'saveRequestToCollection',
-                {
-                    data: {
-                        requestContent: JSON.stringify(item.request, null, 2),
-                        requestName: item.name,
-                        collectionFileName: collectionFilename,
-                        folderPath: itemPath,
-                    }
-                },
-                'collectionUpdated'
-            );
+            return sendAndWait<Collection>('saveRequestToCollection', {
+                data: {
+                    requestContent: JSON.stringify(item.request, null, 2),
+                    requestName: item.name,
+                    collectionFileName: collectionFilename,
+                    folderPath: itemPath,
+                }
+            });
         },
 
         async deleteRequestFromCollection(collectionFilename, itemPath, itemId): Promise<Result<Collection, string>> {
@@ -155,17 +190,75 @@ function createVSCodeStorageAdapter(
             return ok({} as Collection);
         },
 
+        async importCollection(fileName: string, fileContent: string): Promise<Result<Collection[], string>> {
+            return new Promise((resolve) => {
+                const requestId = generateRequestId();
+                
+                const timeout = setTimeout(() => {
+                    pendingRequests.delete(requestId);
+                    resolve(err(`Request timed out: importCollection`));
+                }, defaultTimeout);
+
+                pendingRequests.set(requestId, {
+                    resolve: (value) => {
+                        const response = value as any;
+                        if (response && response.error) {
+                            resolve(err(response.error));
+                        } else {
+                            resolve(ok(response.collections as Collection[]));
+                        }
+                    },
+                    reject: (error) => resolve(err(error.message)),
+                    timeout,
+                });
+
+                vsCodeApi.postMessage({
+                    type: 'importCollection',
+                    requestId,
+                    data: { fileName, fileContent }
+                });
+            });
+        },
+
+        async exportCollection(collectionFileName: string): Promise<Result<{ filePath: string; fileName: string }, string>> {
+            return new Promise((resolve) => {
+                const requestId = generateRequestId();
+                
+                const timeout = setTimeout(() => {
+                    pendingRequests.delete(requestId);
+                    resolve(err(`Request timed out: exportCollection`));
+                }, defaultTimeout);
+
+                pendingRequests.set(requestId, {
+                    resolve: (value) => {
+                        const response = value as any;
+                        if (response && response.error) {
+                            resolve(err(response.error));
+                        } else {
+                            resolve(ok({ filePath: response.filePath, fileName: response.fileName }));
+                        }
+                    },
+                    reject: (error) => resolve(err(error.message)),
+                    timeout,
+                });
+
+                vsCodeApi.postMessage({
+                    type: 'exportCollection',
+                    requestId,
+                    data: { fileName: collectionFileName }
+                });
+            });
+        },
+
         // Environments
         async loadEnvironments(): Promise<Result<Environment[], string>> {
-            return sendAndWait<Environment[]>('loadEnvironments', undefined, 'environmentsLoaded');
+            return sendAndWait<Environment[]>('loadEnvironments');
         },
 
         async saveEnvironment(environment): Promise<Result<void, string>> {
-            return sendAndWait<void>(
-                'saveEnvironment',
-                { data: { environment: JSON.stringify(environment, null, 2) } },
-                'environmentUpdated'
-            );
+            return sendAndWait<void>('saveEnvironment', {
+                data: { environment: JSON.stringify(environment, null, 2) }
+            });
         },
 
         async saveEnvironments(environments): Promise<Result<void, string>> {
@@ -184,9 +277,68 @@ function createVSCodeStorageAdapter(
             return ok(undefined);
         },
 
+        async importEnvironments(fileContent: string): Promise<Result<Environment[], string>> {
+            return new Promise((resolve) => {
+                const requestId = generateRequestId();
+                
+                const timeout = setTimeout(() => {
+                    pendingRequests.delete(requestId);
+                    resolve(err(`Request timed out: importEnvironments`));
+                }, defaultTimeout);
+
+                pendingRequests.set(requestId, {
+                    resolve: (value) => {
+                        const response = value as any;
+                        if (response && response.error) {
+                            resolve(err(response.error));
+                        } else {
+                            resolve(ok(response.environments as Environment[]));
+                        }
+                    },
+                    reject: (error) => resolve(err(error.message)),
+                    timeout,
+                });
+
+                vsCodeApi.postMessage({
+                    type: 'importEnvironments',
+                    requestId,
+                    data: { fileContent }
+                });
+            });
+        },
+
+        async exportEnvironments(): Promise<Result<{ filePath: string; fileName: string }, string>> {
+            return new Promise((resolve) => {
+                const requestId = generateRequestId();
+                
+                const timeout = setTimeout(() => {
+                    pendingRequests.delete(requestId);
+                    resolve(err(`Request timed out: exportEnvironments`));
+                }, defaultTimeout);
+
+                pendingRequests.set(requestId, {
+                    resolve: (value) => {
+                        const response = value as any;
+                        if (response && response.error) {
+                            resolve(err(response.error));
+                        } else {
+                            resolve(ok({ filePath: response.filePath, fileName: response.fileName }));
+                        }
+                    },
+                    reject: (error) => resolve(err(error.message)),
+                    timeout,
+                });
+
+                vsCodeApi.postMessage({
+                    type: 'exportEnvironments',
+                    requestId
+                });
+            });
+        },
+
         // History
         async loadHistory(): Promise<Result<ParsedRequest[], string>> {
-            return sendAndWait<ParsedRequest[]>('loadHistory', undefined, 'historyLoaded');
+            return sendAndWait<ParsedRequest[]>('loadHistory');
         },
 
         async saveRequestToHistory(request): Promise<Result<void, string>> {
@@ -204,61 +356,51 @@ function createVSCodeStorageAdapter(
 
         // Cookies
         async loadCookies(): Promise<Result<Cookie[], string>> {
-            return sendAndWait<Cookie[]>('loadCookies', undefined, 'cookiesLoaded');
+            return sendAndWait<Cookie[]>('loadCookies');
         },
 
         async saveCookies(cookies): Promise<Result<void, string>> {
-            // Note: Extension may not send a response for this, using fire-and-forget for now
-            // TODO: Update extension to send cookiesSaved response
-            vsCodeApi.postMessage({
-                type: 'saveCookies',
+            return sendAndWait<void>('saveCookies', {
                 data: { cookies: JSON.stringify(cookies, null, 2) }
             });
-            return ok(undefined);
         },
 
         // Auth Store
         async loadAuths(): Promise<Result<Auth[], string>> {
-            return sendAndWait<Auth[]>('loadAuths', undefined, 'authsLoaded');
+            return sendAndWait<Auth[]>('loadAuths');
         },
 
         async saveAuths(auths): Promise<Result<void, string>> {
-            vsCodeApi.postMessage({
-                type: 'saveAuths',
+            return sendAndWait<void>('saveAuths', {
                 data: { auths: JSON.stringify(auths, null, 2) }
             });
-            return ok(undefined);
         },
 
         // Proxy Store
         async loadProxies(): Promise<Result<Proxy[], string>> {
-            return sendAndWait<Proxy[]>('loadProxies', undefined, 'proxiesLoaded');
+            return sendAndWait<Proxy[]>('loadProxies');
         },
 
         async saveProxies(proxies): Promise<Result<void, string>> {
-            vsCodeApi.postMessage({
-                type: 'saveProxies',
+            return sendAndWait<void>('saveProxies', {
                 data: { proxies: JSON.stringify(proxies, null, 2) }
             });
-            return ok(undefined);
         },
 
         // Certificate Store
         async loadCerts(): Promise<Result<Cert[], string>> {
-            return sendAndWait<Cert[]>('loadCerts', undefined, 'certsLoaded');
+            return sendAndWait<Cert[]>('loadCerts');
         },
 
         async saveCerts(certs): Promise<Result<void, string>> {
-            vsCodeApi.postMessage({
-                type: 'saveCerts',
+            return sendAndWait<void>('saveCerts', {
                 data: { certs: JSON.stringify(certs, null, 2) }
             });
-            return ok(undefined);
         },
 
         // Validation Rules Store
         async loadValidationRules(): Promise<Result<ValidationRule[], string>> {
-            return sendAndWait<ValidationRule[]>('loadValidationRules', undefined, 'validationRulesLoaded');
+            return sendAndWait<ValidationRule[]>('loadValidationRules');
         },
 
         async saveValidationRules(rules): Promise<Result<void, string>> {
@@ -271,15 +413,13 @@ function createVSCodeStorageAdapter(
 
         // Settings
         async loadSettings(): Promise<Result<AppSettings, string>> {
-            return sendAndWait<AppSettings>('loadSettings', undefined, 'settingsLoaded');
+            return sendAndWait<AppSettings>('loadSettings');
         },
 
         async saveSettings(settings): Promise<Result<void, string>> {
-            return sendAndWait<void>(
-                'saveSettings',
-                { data: { settings: JSON.stringify(settings, null, 2) } },
-                'settingsSaved'
-            );
+            return sendAndWait<void>('saveSettings', {
+                data: { settings: JSON.stringify(settings, null, 2) }
+            });
         },
     };
 }
@@ -290,46 +430,59 @@ function createVSCodeStorageAdapter(
 
 function createVSCodeHttpAdapter(
     vsCodeApi: VSCodeAPI,
-    pendingHttpRequests: Map<string, PendingRequest<Result<HttpResponseResult, string>>>
+    pendingRequests: Map<string, PendingRequest<unknown>>,
+    defaultTimeout: number
 ): IHttpAdapter {
+    /**
+     * Sends an HTTP request and waits for the response using requestId correlation.
+     * Returns Result<HttpResponseResult, string> where error comes from response.error field.
+     */
+    function executeAndWait(config: HttpRequestConfig): Promise<Result<HttpResponseResult, string>> {
+        return new Promise((resolve) => {
+            const requestId = generateRequestId();
+            
+            const timeout = setTimeout(() => {
+                pendingRequests.delete(requestId);
+                resolve(err(`Request timed out for ${config.url}`));
+            }, config.timeout || defaultTimeout);
+
+            pendingRequests.set(requestId, {
+                resolve: (value) => {
+                    const message = value as any;
+                    if (message && message.error) {
+                        resolve(err(message.error));
+                    } else {
+                        resolve(ok(message.response as HttpResponseResult));
+                    }
+                },
+                reject: (error) => resolve(err(error.message)),
+                timeout,
+            });
+
+            vsCodeApi.postMessage({
+                type: 'httpRequest',
+                requestId,  // For promise correlation
+                id: config.id,  // Tab ID for UI correlation
+                request: {
+                    method: config.method,
+                    url: config.url,
+                    headers: config.headers,
+                    params: config.params,
+                    body: config.body,
+                    auth: config.auth,
+                    envVars: config.envVars,
+                },
+                validation: config.validation,
+            });
+        });
+    }
+
     return {
         async executeRequest(config): Promise<Result<HttpResponseResult, string>> {
-            return new Promise((resolve) => {
-                const timeout = setTimeout(() => {
-                    pendingHttpRequests.delete(config.id);
-                    resolve(err('Request timed out'));
-                }, config.timeout ?? 30000);
-
-                pendingHttpRequests.set(config.id, {
-                    resolve,
-                    reject: (error) => resolve(err(error.message)),
-                    timeout,
-                });
-
-                vsCodeApi.postMessage({
-                    type: 'httpRequest',
-                    id: config.id,
-                    request: {
-                        method: config.method,
-                        url: config.url,
-                        headers: config.headers,
-                        params: config.params,
-                        body: config.body,
-                        auth: config.auth,
-                        envVars: config.envVars,
-                    },
-                    validation: config.validation,
-                });
-            });
+            return executeAndWait(config);
         },
 
         cancelRequest(requestId) {
-            const pending = pendingHttpRequests.get(requestId);
-            if (pending) {
-                clearTimeout(pending.timeout);
-                pending.resolve(err('Request cancelled'));
-                pendingHttpRequests.delete(requestId);
-            }
             vsCodeApi.postMessage({
                 type: 'cancelRequest',
                 id: requestId,
@@ -515,118 +668,31 @@ export function createVSCodeAdapter(
     handleMessage: MessageListener;
     cleanup: () => void;
 } {
-    const defaultTimeout = options.defaultTimeout ?? 30000;
+    const defaultTimeout = options.defaultTimeout ?? 120000;
     const pendingRequests = new Map<string, PendingRequest<unknown>>();
-    const pendingHttpRequests = new Map<string, PendingRequest<Result<HttpResponseResult, string>>>();
 
     // Create adapters
     const storage = createVSCodeStorageAdapter(vsCodeApi, pendingRequests, defaultTimeout);
-    const http = createVSCodeHttpAdapter(vsCodeApi, pendingHttpRequests);
+    const http = createVSCodeHttpAdapter(vsCodeApi, pendingRequests, defaultTimeout);
     const file = createVSCodeFileAdapter(vsCodeApi);
     const secret = createVSCodeSecretAdapter(vsCodeApi);
     const security = createVSCodeSecurityAdapter(vsCodeApi);
     const notification = createVSCodeNotificationAdapter();
 
-    // Message handler for responses
+    // Message handler for responses - all responses now use requestId correlation
     const handleMessage: MessageListener = (event) => {
         const message = event.data;
 
-        // Handle HTTP responses
-        if (message.type === 'httpResponse' && message.response?.id) {
-            const pending = pendingHttpRequests.get(message.response.id);
-            if (pending) {
-                clearTimeout(pending.timeout);
-                pendingHttpRequests.delete(message.response.id);
-                pending.resolve(ok(message.response));
-            }
-            // Also call the legacy callback for backwards compatibility
-            options.onHttpResponse?.(message.response);
-        }
-
-        // Handle request responses with requestId (new pattern)
+        // Handle all responses using requestId correlation
         if (message.requestId) {
             const pending = pendingRequests.get(message.requestId);
             if (pending) {
                 clearTimeout(pending.timeout);
                 pendingRequests.delete(message.requestId);
                 
-                if (message.error) {
-                    pending.resolve(err(message.error));
-                } else {
-                    pending.resolve(ok(message.data));
-                }
-            }
-        }
-
-        // Handle legacy response messages (without requestId)
-        // Map message type to data field
-        const responseMap: Record<string, string> = {
-            'collectionsLoaded': 'collections',
-            'collectionsError': 'error',
-            'collectionUpdated': 'collection',
-            'environmentsLoaded': 'environments',
-            'environmentsError': 'error',
-            'environmentUpdated': 'environment',
-            'historyLoaded': 'history',
-            'historyError': 'error',
-            'cookiesLoaded': 'cookies',
-            'cookiesError': 'error',
-            'cookiesSaved': 'cookies',  // If extension starts sending this
-            'authsLoaded': 'auths',
-            'authsError': 'error',
-            'authsSaved': 'auths',  // If extension starts sending this
-            'proxiesLoaded': 'proxies',
-            'proxiesError': 'error',
-            'proxiesSaved': 'proxies',  // If extension starts sending this
-            'certsLoaded': 'certs',
-            'certsError': 'error',
-            'certsSaved': 'certs',  // If extension starts sending this
-            'validationRulesLoaded': 'rules',
-            'validationRulesSaved': 'rules',
-            'validationRulesError': 'error',
-            'settingsLoaded': 'settings',
-            'settingsSaved': 'settings',
-            'settingsError': 'error',
-        };
-
-        if (message.type && responseMap[message.type]) {
-            // Find pending request by matching message type
-            // Since we don't have requestId in legacy messages, we need to match all pending requests
-            // and resolve the oldest one of the matching type
-            const dataField = responseMap[message.type];
-            const isError = message.type.endsWith('Error');
-            
-            // For error responses
-            if (isError) {
-                // Resolve the first pending request (FIFO)
-                const firstPending = pendingRequests.values().next();
-                if (!firstPending.done) {
-                    const pending = firstPending.value;
-                    clearTimeout(pending.timeout);
-                    // Get the key to delete
-                    for (const [key, value] of pendingRequests.entries()) {
-                        if (value === pending) {
-                            pendingRequests.delete(key);
-                            pending.resolve(err(message[dataField] || 'Unknown error'));
-                            break;
-                        }
-                    }
-                }
-            } else {
-                // For success responses
-                const firstPending = pendingRequests.values().next();
-                if (!firstPending.done) {
-                    const pending = firstPending.value;
-                    clearTimeout(pending.timeout);
-                    // Get the key to delete
-                    for (const [key, value] of pendingRequests.entries()) {
-                        if (value === pending) {
-                            pendingRequests.delete(key);
-                            pending.resolve(ok(message[dataField]));
-                            break;
-                        }
-                    }
-                }
+                // Response includes error field if operation failed
+                // Pass the entire message object so resolve handlers can check for error field
+                pending.resolve(message);
             }
         }
     };
@@ -638,12 +704,6 @@ export function createVSCodeAdapter(
             pending.reject(new Error('Adapter disposed'));
         });
         pendingRequests.clear();
-
-        pendingHttpRequests.forEach((pending) => {
-            clearTimeout(pending.timeout);
-            pending.reject(new Error('Adapter disposed'));
-        });
-        pendingHttpRequests.clear();
     };
 
     const adapter: IPlatformAdapter = {

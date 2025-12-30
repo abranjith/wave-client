@@ -146,12 +146,16 @@ export interface IStorageAdapter {
         itemPath: string[],
         itemId: string
     ): Promise<Result<Collection, string>>;
+    importCollection(fileName: string, fileContent: string): Promise<Result<Collection[], string>>;
+    exportCollection(collectionFileName: string): Promise<Result<{ filePath: string; fileName: string }, string>>;
 
     // Environments
     loadEnvironments(): Promise<Result<Environment[], string>>;
     saveEnvironment(environment: Environment): Promise<Result<void, string>>;
     saveEnvironments(environments: Environment[]): Promise<Result<void, string>>;
     deleteEnvironment(environmentId: string): Promise<Result<void, string>>;
+    importEnvironments(fileContent: string): Promise<Result<Environment[], string>>;
+    exportEnvironments(): Promise<Result<{ filePath: string; fileName: string }, string>>;
 
     // History
     loadHistory(): Promise<Result<ParsedRequest[], string>>;
