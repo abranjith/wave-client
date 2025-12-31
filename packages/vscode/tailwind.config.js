@@ -3,7 +3,9 @@ module.exports = {
   content: [
     "./src/**/*.{js,ts,jsx,tsx}",
     "./src/webview/**/*.{js,ts,jsx,tsx}",
-    "./src/components/**/*.{js,ts,jsx,tsx}"
+    "./src/components/**/*.{js,ts,jsx,tsx}",
+    // Include core package components for Tailwind class scanning
+    "../core/src/**/*.{js,ts,jsx,tsx}",
   ],
   darkMode: 'class',
   theme: {

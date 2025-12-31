@@ -10,13 +10,23 @@
   "categories": [
     "Other"
   ],
-  "activationEvents": [],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
   "main": "dist/extension.js",
   "contributes": {
     "commands": [
       {
         "command": "waveclient.open",
-        "title": "Wave Client: Open Wave Client"
+        "title": "Wave Client: Open Wave Client",
+        "category": "Wave Client"
+      }
+    ],
+    "keybindings": [
+      {
+        "command": "waveclient.open",
+        "key": "ctrl+shift+w",
+        "mac": "cmd+shift+w"
       }
     ]
   },
