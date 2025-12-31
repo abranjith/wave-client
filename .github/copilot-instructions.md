@@ -1,36 +1,140 @@
 ## Project Overview: "Wave Client" - A VS Code REST Client Extension
 
-**Goal:** Create a Visual Studio Code extension that functions as a modern, intuitive web client for making HTTP requests, directly within the editor. The initial version (MVP) will focus on basic REST calls. This extension, codenamed "Wave Client," will be built using React and Tailwind CSS for the webview UI.
+**Goal:** Create a Visual Studio Code extension that functions as a modern, intuitive REST client for making HTTP requests, directly within the editor. The initial version (MVP) focuses on basic REST calls. "Wave Client" is built using React and Tailwind CSS for the webview UI, with a **monorepo architecture** that enables the same UI to run on multiple platforms (VS Code, web browsers, and future platforms).
 
-**Core Problem Solved:** Provides a lightweight, integrated alternative to standalone tools like Postman, improving developer workflow by keeping API testing inside the IDE.
+**Core Problem Solved:** Provides a lightweight, integrated alternative to standalone tools like Postman, improving developer workflow by keeping API testing inside the IDE while maintaining platform independence.
 
-**Key Differentiator:** A clean, minimalist UI that feels native to VS Code, with a focus on speed and ease of use.
+**Key Differentiator:** A clean, minimalist UI that feels native to VS Code, with a focus on speed and ease of use. Platform-agnostic architecture allows code reuse across different environments.
 
-## Tech Stack & Project Scaffolding
+## Tech Stack & Project Architecture
 
-1.  **Initialize Project:** Create a new Visual Studio Code extension project using the official `yo code` generator.
-2.  **Language:** Use **TypeScript** for both the extension's backend (the part that runs in VS Code's Node.js environment) and the frontend.
-3.  **Frontend Framework:** Set up a **React** application to render inside a VS Code webview panel.
-4.  **Styling:** Integrate **Tailwind CSS** into the React application for utility-first styling. Use the `@apply` directive for reusable component classes where necessary. Common components for the UI include buttons, input fields, and card layouts.
-For icons use lucide-react https://lucide.dev/
-    Use react component libraries such as Origin UI https://originui.com/ or https://github.com/origin-space/originui
-5.  **State Management:** Use React's built-in state management hooks (`useState`, `useReducer`, `useContext`) for the initial version.
+### Monorepo Structure
 
+The project is organized as a **monorepo using Turbo** with the following packages:
+
+1. **`packages/core/`** - Platform-agnostic core package
+   - Contains all UI components, hooks, business logic, and utilities
+   - **Zero platform-specific code** - no Node.js APIs, no `vsCodeApi`, no browser-specific code
+   - Exported as a reusable library for all platform implementations
+   - React components using Tailwind CSS
+   - Uses TypeScript for type safety
+
+2. **`packages/vscode/`** - VS Code extension implementation
+   - Extension backend (`extension.ts`) running in Node.js environment
+   - Webview frontend rendering core components
+   - Implements `vsCodeAdapter` bridging webview to extension backend
+   - Provides platform-specific services (file system, security, HTTP with proxies)
+   - Entry: `webview/AppWithAdapter.tsx` wraps core UI with adapter context
+
+3. **`packages/web/`** - Standalone web application
+   - Browser-based deployment of Wave Client
+   - Implements `webAdapter` using browser APIs (localStorage, fetch, Web Crypto)
+   - Entry: `main.tsx` wraps core UI with adapter context
+   - Useful for testing and alternative deployment scenarios
+
+### Technology Stack
+
+- **Language:** TypeScript (frontend and backend)
+- **Frontend Framework:** React with Tailwind CSS
+- **Icons:** Lucide React (https://lucide.dev/)
+- **Component Libraries:** Origin UI (https://originui.com/)
+- **Build Tool:** Vite (web), webpack (VS Code extension)
+- **State Management:** React hooks (`useState`, `useReducer`, `useContext`)
+- **HTTP Client:** axios (Node.js with proxy support), fetch API (web)
+- **Monorepo:** Turbo for build orchestration and task running
+- **Code Quality:** ESLint and Prettier
+- **Package Manager:** pnpm with workspaces
+
+
+## The Adapter Pattern
+
+Wave Client uses an **adapter pattern** to achieve platform independence. The same UI components work on VS Code, web, and future platforms without modification.
+
+**How it works:**
+- All platform-specific I/O (file system, HTTP, storage, security) is delegated to adapters
+- Components access adapters via the `useAdapter()` hook (and more specific hooks like `useStorageAdapter()`, `useHttpAdapter()`, etc.)
+- `packages/core` contains **zero platform-specific code** - only pure React components and business logic
+- Each platform (VS Code, web) implements its own adapter (`vsCodeAdapter`, `webAdapter`)
+
+**For detailed information on the adapter pattern, implementation examples, and migration guidelines, see:** [Adapter Refactoring Guide](../docs/adapter-refactoring-guide.md)
+
+### Quick Adapter Usage
+
+```tsx
+import { useStorageAdapter, useNotificationAdapter } from '@wave-client/core';
+
+function MyComponent() {
+  const storage = useStorageAdapter();
+  const notification = useNotificationAdapter();
+  
+  async function loadData() {
+    const result = await storage.loadCollections();
+    
+    if (result.isOk) {
+      console.log('Success:', result.value);
+    } else {
+      notification.showNotification('error', result.error);
+    }
+  }
+}
+```
+
+---
 
 ## Key Instructions
 
-1.  **Component Structure:** Organize components into a clear folder structure (e.g., `src/components`, `src/hooks`, `src/utils`).
-2.  **Code Quality:** Follow best practices for code quality, including:
-    - Use TypeScript for type safety.
-    - Use ESLint and Prettier for consistent code formatting.
-    - Follow idiomatic React, TypeScript patterns.
-    - Write clear, maintainable code with appropriate comments.
-3.  **Error Handling:** Implement robust error handling for API calls, including user-friendly error messages.
-4. Do not create/ update tests in the initial version, we can update this later.
-5. Do not create/ update documentation in the initial version, we can update this later.
-6. Follow consistent code patterns, styling, conventions throughout the project.
-7. When any current file is being changed, be extra careful about not breaking existing functionality.
-8.  **Performance:** Ensure the webview is performant, avoiding unnecessary re-renders and optimizing API call handling.
-9.  Since this project uses webviews, for any I/O operations, use the VS Code API to communicate between the webview and the extension backend.
-10. There is an established 'Result' pattern for complex results, follow that pattern when returning complex results from functions.
-11. Before deleting any files ask for user confirmation.
+### 1. Code Organization & Platform Independence
+
+- **Core components** (`packages/core/src/components/`) must **never contain platform-specific code**
+- No direct `vsCodeApi` calls in core components
+- No direct `localStorage`, `fs`, or browser-only APIs in core
+- Use `useAdapter()` hook to access platform-specific functionality
+- See [Adapter Refactoring Guide](../docs/adapter-refactoring-guide.md) for detailed migration patterns
+
+### 2. Code Quality & Best Practices
+
+- Use **TypeScript** for type safety across all packages
+- Use **ESLint and Prettier** for consistent code formatting
+- Follow **idiomatic React and TypeScript patterns**
+- Write **clear, maintainable code** with appropriate comments where logic is non-obvious
+- Use the established **`Result<T, E>` pattern** for functions that can fail
+  - Success: `{ isOk: true, value: data }`
+  - Error: `{ isOk: false, error: errorMessage }`
+
+### 3. Error Handling
+
+- **Always handle errors** from adapter calls using the Result pattern
+- Show **user-friendly error messages** via `notification.showNotification('error', message)`
+- Avoid bare `try/catch` blocks; use Result pattern for consistency
+- Log errors appropriately for debugging
+
+### 4. Component Structure
+
+- Organize components into clear folders: `src/components/`, `src/hooks/`, `src/utils/`
+- Keep components focused and single-responsibility
+- Extract reusable logic into custom hooks
+- Use Tailwind CSS with `@apply` directive for reusable component classes
+
+### 5. Performance
+
+- Avoid unnecessary re-renders by memoizing callbacks and using proper dependency arrays
+- Keep webview fast - debounce/throttle event handlers as needed
+- Batch state updates when possible
+- Lazy load components for routes (when applicable)
+
+### 6. Breaking Changes & Existing Functionality
+
+- When changing any current file, be **extra careful about not breaking existing functionality**
+- Test related components before and after changes
+- If unsure about impact, check component usage with the codebase search tools
+
+### 7. Documentation & Testing
+
+- Do **not** create or update tests in the initial version (will be added later)
+- Do **not** create or update documentation in the initial version (will be added later)
+- Keep code self-documenting through clear names and structure
+
+### 8. Before Deleting Files
+
+- **Always ask for user confirmation** before deleting any files
+- Verify the file is not imported or used elsewhere in the codebase

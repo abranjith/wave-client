@@ -20,6 +20,7 @@ import {
   useHttpAdapter,
   useFileAdapter,
   useNotificationAdapter,
+  useAdapterEvent,
   type Environment,
   type Cookie,
   type Proxy,
@@ -27,6 +28,7 @@ import {
   type Auth,
   type GlobalValidationRule,
   type HttpRequestConfig,
+  type BannerEvent,
 } from '@wave-client/core';
 import type { RequestFormData } from '@wave-client/core';
 
@@ -71,9 +73,31 @@ const App: React.FC = () => {
   const auths = useAppStateStore((state) => state.auths);
   const banner = useAppStateStore((state) => state.banner);
   const clearBanner = useAppStateStore((state) => state.clearBanner);
+  const setBannerSuccess = useAppStateStore((state) => state.setBannerSuccess);
+  const setBannerError = useAppStateStore((state) => state.setBannerError);
+  const setBannerInfo = useAppStateStore((state) => state.setBannerInfo);
+  const setBannerWarning = useAppStateStore((state) => state.setBannerWarning);
   const updateTabMetadata = useAppStateStore((state) => state.updateTabMetadata);
 
   const pendingSaveInfo = useRef<{ tabId: string, collectionName: string | undefined, folderPath: string[], requestName: string } | null>(null);
+
+  // Subscribe to adapter push events for banners
+  useAdapterEvent('banner', (event: BannerEvent) => {
+    switch (event.type) {
+      case 'success':
+        setBannerSuccess(event.message, event.link, event.timeoutSeconds);
+        break;
+      case 'error':
+        setBannerError(event.message, event.link, event.timeoutSeconds);
+        break;
+      case 'info':
+        setBannerInfo(event.message, event.link, event.timeoutSeconds);
+        break;
+      case 'warning':
+        setBannerWarning(event.message, event.link, event.timeoutSeconds);
+        break;
+    }
+  });
 
   // Initialize data on mount
   useEffect(() => {

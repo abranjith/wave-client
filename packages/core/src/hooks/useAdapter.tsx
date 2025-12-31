@@ -21,8 +21,13 @@
  * ```
  */
 
-import React, { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
-import type { IPlatformAdapter } from '../types/adapters';
+import React, { createContext, useContext, useEffect, useState, useCallback, type ReactNode } from 'react';
+import type { 
+    IPlatformAdapter, 
+    AdapterEventType, 
+    AdapterEventMap,
+    AdapterEventHandler 
+} from '../types/adapters';
 
 // ============================================================================
 // Context Definition
@@ -191,4 +196,93 @@ export function usePlatform() {
  */
 export function useAdapterOptional(): IPlatformAdapter | null {
     return useContext(AdapterContext);
+}
+
+// ============================================================================
+// Event Subscription Hooks
+// ============================================================================
+
+/**
+ * Hook to subscribe to a specific adapter event.
+ * Automatically handles subscription and cleanup.
+ * 
+ * @param event - The event type to subscribe to
+ * @param handler - The handler function to call when the event fires
+ * 
+ * @example
+ * ```tsx
+ * // Subscribe to banner notifications
+ * useAdapterEvent('banner', (event) => {
+ *   setBanner({ type: event.type, message: event.message });
+ * });
+ * 
+ * // Subscribe to collections changes
+ * useAdapterEvent('collectionsChanged', () => {
+ *   refetchCollections();
+ * });
+ * ```
+ */
+export function useAdapterEvent<T extends AdapterEventType>(
+    event: T,
+    handler: AdapterEventHandler<T>
+): void {
+    const adapter = useAdapter();
+    
+    // Memoize the handler to avoid unnecessary re-subscriptions
+    const stableHandler = useCallback(handler, [handler]);
+
+    useEffect(() => {
+        adapter.events.on(event, stableHandler);
+        return () => {
+            adapter.events.off(event, stableHandler);
+        };
+    }, [adapter, event, stableHandler]);
+}
+
+/**
+ * Hook to subscribe to multiple adapter events at once.
+ * 
+ * @param handlers - Object mapping event types to their handlers
+ * 
+ * @example
+ * ```tsx
+ * useAdapterEvents({
+ *   banner: (event) => setBanner(event),
+ *   collectionsChanged: () => refetchCollections(),
+ *   encryptionStatusChanged: (status) => setEncryptionStatus(status),
+ * });
+ * ```
+ */
+export function useAdapterEvents(
+    handlers: Partial<{ [K in AdapterEventType]: AdapterEventHandler<K> }>
+): void {
+    const adapter = useAdapter();
+
+    useEffect(() => {
+        // Subscribe to all provided events
+        const entries = Object.entries(handlers) as Array<[AdapterEventType, AdapterEventHandler<any>]>;
+        
+        for (const [event, handler] of entries) {
+            if (handler) {
+                adapter.events.on(event, handler);
+            }
+        }
+
+        // Cleanup: unsubscribe from all events
+        return () => {
+            for (const [event, handler] of entries) {
+                if (handler) {
+                    adapter.events.off(event, handler);
+                }
+            }
+        };
+    }, [adapter, handlers]);
+}
+
+/**
+ * Hook to access the adapter's event emitter directly.
+ * Useful when you need more control over event subscription.
+ */
+export function useAdapterEventEmitter() {
+    return useAdapter().events;
 }

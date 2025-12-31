@@ -24,6 +24,7 @@ export type {
     ISecretAdapter,
     ISecurityAdapter,
     INotificationAdapter,
+    IAdapterEvents,
     HttpRequestConfig,
     HttpResponseResult,
     SaveDialogOptions,
@@ -32,10 +33,13 @@ export type {
     EncryptionStatus,
     AppSettings,
     AdapterEventType,
+    AdapterEventMap,
     AdapterEventHandler,
+    BannerEvent,
+    EncryptionStatusEvent,
 } from './types/adapters';
 
-export { isAdapterSuccess, isAdapterError } from './types/adapters';
+export { isAdapterSuccess, isAdapterError, createAdapterEventEmitter } from './types/adapters';
 
 // Collection types
 export type {
@@ -134,6 +138,9 @@ export {
     useNotificationAdapter,
     usePlatform,
     useAdapterOptional,
+    useAdapterEvent,
+    useAdapterEvents,
+    useAdapterEventEmitter,
 } from './hooks/useAdapter';
 export type { AdapterProviderProps } from './hooks/useAdapter';
 

@@ -9,14 +9,17 @@
  * 1. Adapter methods call vsCodeApi.postMessage() to send requests to the extension
  * 2. The extension's MessageHandler.ts processes requests and sends responses
  * 3. This adapter listens for responses and resolves the corresponding promises
+ * 4. Push events (banners, state changes) are emitted via the events system
  * 
- * This is a transitional implementation. Eventually, the message handling could be
- * simplified when we fully migrate to the adapter pattern.
+ * Message Types:
+ * - Request/Response: Uses requestId correlation (e.g., loadCollections → collectionsLoaded)
+ * - Push Events: No requestId, emitted via adapter.events (e.g., bannerSuccess, bannerError)
  */
 
 import {
     ok,
     err,
+    createAdapterEventEmitter,
     type Result,
     type IPlatformAdapter,
     type IStorageAdapter,
@@ -25,6 +28,7 @@ import {
     type ISecretAdapter,
     type ISecurityAdapter,
     type INotificationAdapter,
+    type IAdapterEvents,
     type HttpRequestConfig,
     type HttpResponseResult,
     type SaveDialogOptions,
@@ -99,7 +103,11 @@ function createVSCodeStorageAdapter(
                 resolve(err(`Request timed out: ${type}`));
             }, defaultTimeout);
 
-            // Map message types to their response data field
+            // Map request types to the field name in the response that contains the data.
+            // The promise resolution uses `requestId` correlation (not message type matching).
+            // Response message types differ from request types (e.g., 'loadCollections' → 'collectionsLoaded'),
+            // but this doesn't matter since we match by requestId.
+            // Empty string means the response doesn't have a data field (void operations).
             const responseDataMap: Record<string, string> = {
                 'loadCollections': 'collections',
                 'saveRequestToCollection': 'collection',
@@ -111,17 +119,17 @@ function createVSCodeStorageAdapter(
                 'exportEnvironments': 'filePath',
                 'loadHistory': 'history',
                 'loadCookies': 'cookies',
-                'saveCookies': '',
+                'saveCookies': '',           // void - no data field
                 'loadAuths': 'auths',
-                'saveAuths': '',
+                'saveAuths': '',             // void - no data field
                 'loadProxies': 'proxies',
-                'saveProxies': '',
+                'saveProxies': '',           // void - no data field
                 'loadCerts': 'certs',
-                'saveCerts': '',
+                'saveCerts': '',             // void - no data field
                 'loadValidationRules': 'rules',
-                'saveValidationRules': '',
+                'saveValidationRules': '',   // void - no data field
                 'loadSettings': 'settings',
-                'saveSettings': '',
+                'saveSettings': '',          // void - no data field
             };
 
             pendingRequests.set(requestId, {
@@ -659,6 +667,10 @@ export interface CreateVSCodeAdapterOptions {
 /**
  * Creates a VS Code platform adapter that bridges the new adapter interface
  * with the existing postMessage-based communication.
+ * 
+ * The adapter handles two types of messages:
+ * 1. Request/Response: Matched by requestId correlation
+ * 2. Push Events: Emitted via adapter.events (banner, state changes, etc.)
  */
 export function createVSCodeAdapter(
     vsCodeApi: VSCodeAPI,
@@ -671,6 +683,9 @@ export function createVSCodeAdapter(
     const defaultTimeout = options.defaultTimeout ?? 120000;
     const pendingRequests = new Map<string, PendingRequest<unknown>>();
 
+    // Create event emitter for push notifications
+    const events: IAdapterEvents = createAdapterEventEmitter();
+
     // Create adapters
     const storage = createVSCodeStorageAdapter(vsCodeApi, pendingRequests, defaultTimeout);
     const http = createVSCodeHttpAdapter(vsCodeApi, pendingRequests, defaultTimeout);
@@ -679,11 +694,16 @@ export function createVSCodeAdapter(
     const security = createVSCodeSecurityAdapter(vsCodeApi);
     const notification = createVSCodeNotificationAdapter();
 
-    // Message handler for responses - all responses now use requestId correlation
+    /**
+     * Message handler for both request/response and push events.
+     * 
+     * Request/Response messages have a requestId and are matched to pending promises.
+     * Push events (no requestId) are emitted via the events system.
+     */
     const handleMessage: MessageListener = (event) => {
         const message = event.data;
 
-        // Handle all responses using requestId correlation
+        // 1. Handle request/response messages (with requestId)
         if (message.requestId) {
             const pending = pendingRequests.get(message.requestId);
             if (pending) {
@@ -694,6 +714,61 @@ export function createVSCodeAdapter(
                 // Pass the entire message object so resolve handlers can check for error field
                 pending.resolve(message);
             }
+            return; // Don't process as push event
+        }
+
+        // 2. Handle push events (no requestId)
+        switch (message.type) {
+            // Banner/notification events
+            case 'bannerSuccess':
+                events.emit('banner', { type: 'success', message: message.message, link: message.link, timeoutSeconds: message.timeoutSeconds });
+                break;
+            case 'bannerError':
+                events.emit('banner', { type: 'error', message: message.message, link: message.link, timeoutSeconds: message.timeoutSeconds });
+                break;
+            case 'bannerInfo':
+                events.emit('banner', { type: 'info', message: message.message, link: message.link, timeoutSeconds: message.timeoutSeconds });
+                break;
+            case 'bannerWarning':
+                events.emit('banner', { type: 'warning', message: message.message, link: message.link, timeoutSeconds: message.timeoutSeconds });
+                break;
+
+            // Encryption/security events
+            case 'encryptionStatus':
+                events.emit('encryptionStatusChanged', message.status);
+                break;
+            case 'encryptionComplete':
+                events.emit('encryptionComplete', undefined);
+                break;
+            case 'decryptionComplete':
+                events.emit('decryptionComplete', undefined);
+                break;
+            case 'recoveryKeyExported':
+                events.emit('recoveryKeyExported', { path: message.path });
+                break;
+            case 'recoveryComplete':
+                events.emit('recoveryComplete', undefined);
+                break;
+
+            // Data change events (for external modifications)
+            case 'collectionsChanged':
+                events.emit('collectionsChanged', undefined);
+                break;
+            case 'environmentsChanged':
+                events.emit('environmentsChanged', undefined);
+                break;
+            case 'historyChanged':
+                events.emit('historyChanged', undefined);
+                break;
+            case 'cookiesChanged':
+                events.emit('cookiesChanged', undefined);
+                break;
+            case 'settingsChanged':
+                events.emit('settingsChanged', undefined);
+                break;
+
+            // Note: Other message types without requestId are ignored
+            // They may be legacy messages handled elsewhere
         }
     };
 
@@ -714,6 +789,7 @@ export function createVSCodeAdapter(
         secret,
         security,
         notification,
+        events,
 
         initialize: async () => {
             // NOTE: Initialization is handled by components calling adapter methods

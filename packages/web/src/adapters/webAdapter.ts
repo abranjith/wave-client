@@ -32,7 +32,7 @@ import type {
   ParamRow,
   CollectionBody,
 } from '@wave-client/core';
-import { ok, err, Result } from '@wave-client/core';
+import { ok, err, Result, createAdapterEventEmitter } from '@wave-client/core';
 
 // Storage keys for localStorage
 const STORAGE_KEYS = {
@@ -620,6 +620,7 @@ export function createWebAdapter(): IPlatformAdapter {
     secret: new WebSecretAdapter(),
     security: new WebSecurityAdapter(),
     notification: new WebNotificationAdapter(),
+    events: createAdapterEventEmitter(),
   };
 }
 

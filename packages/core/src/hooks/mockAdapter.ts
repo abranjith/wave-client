@@ -23,21 +23,23 @@
  */
 
 import { ok, err, type Result } from '../utils/result';
-import type {
-    IPlatformAdapter,
-    IStorageAdapter,
-    IHttpAdapter,
-    IFileAdapter,
-    ISecretAdapter,
-    ISecurityAdapter,
-    INotificationAdapter,
-    HttpRequestConfig,
-    HttpResponseResult,
-    SaveDialogOptions,
-    OpenDialogOptions,
-    NotificationType,
-    EncryptionStatus,
-    AppSettings,
+import {
+    createAdapterEventEmitter,
+    type IPlatformAdapter,
+    type IStorageAdapter,
+    type IHttpAdapter,
+    type IFileAdapter,
+    type ISecretAdapter,
+    type ISecurityAdapter,
+    type INotificationAdapter,
+    type IAdapterEvents,
+    type HttpRequestConfig,
+    type HttpResponseResult,
+    type SaveDialogOptions,
+    type OpenDialogOptions,
+    type NotificationType,
+    type EncryptionStatus,
+    type AppSettings,
 } from '../types/adapters';
 import type {
     Collection,
@@ -584,6 +586,7 @@ export function createMockAdapter(options: CreateMockAdapterOptions = {}): {
         secret: createMockSecretAdapter(store),
         security: createMockSecurityAdapter(store),
         notification: createMockNotificationAdapter(notificationLog),
+        events: createAdapterEventEmitter(),
     };
 
     return { adapter, store, notificationLog };

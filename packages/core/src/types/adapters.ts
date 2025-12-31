@@ -387,9 +387,26 @@ export interface IPlatformAdapter {
     notification: INotificationAdapter;
 
     /**
+     * Event emitter for push notifications from the platform.
+     * Components can subscribe to events like 'banner', 'collectionsChanged', etc.
+     * 
+     * @example
+     * ```tsx
+     * useEffect(() => {
+     *   const handleBanner = (event: BannerEvent) => {
+     *     setBanner({ type: event.type, message: event.message });
+     *   };
+     *   adapter.events.on('banner', handleBanner);
+     *   return () => adapter.events.off('banner', handleBanner);
+     * }, [adapter]);
+     * ```
+     */
+    events: IAdapterEvents;
+
+    /**
      * Platform identifier
      */
-    readonly platform: 'vscode' | 'web' | 'electron' | 'test';
+    readonly platform: 'vscode' | 'web' | 'test';
 
     /**
      * Initialize the adapter (called once on app start)
@@ -403,27 +420,157 @@ export interface IPlatformAdapter {
 }
 
 // ============================================================================
-// Adapter Events (for reactive updates)
+// Adapter Events (for push notifications from platform)
 // ============================================================================
 
 /**
- * Events that adapters can emit to notify the UI of external changes
- * (e.g., another window modified collections)
+ * Push events that the platform can emit to notify the UI.
+ * These are NOT request/response pairs - they're one-way notifications.
+ * 
+ * There are two categories of events:
+ * 
+ * 1. **Notification Events** - User-facing messages (banners, toasts)
+ *    - `banner`: Success/error/info/warning messages to display to the user
+ * 
+ * 2. **State Change Events** - External changes that UI should react to
+ *    - `collectionsChanged`: Collections modified externally (e.g., file system watcher)
+ *    - `environmentsChanged`: Environments modified externally
+ *    - `encryptionStatusChanged`: Encryption state changed
+ *    - etc.
+ * 
+ * VS Code: These come from MessageHandler.ts via postMessage
+ * Web: These could come from WebSocket, server-sent events, or localStorage events
  */
-export type AdapterEventType =
-    | 'collectionsChanged'
-    | 'environmentsChanged'
-    | 'historyChanged'
-    | 'cookiesChanged'
-    | 'authsChanged'
-    | 'proxiesChanged'
-    | 'certsChanged'
-    | 'settingsChanged'
-    | 'encryptionStatusChanged';
 
-export interface AdapterEventHandler {
-    on(event: AdapterEventType, callback: () => void): void;
-    off(event: AdapterEventType, callback: () => void): void;
+/**
+ * Banner/notification event payload
+ */
+export interface BannerEvent {
+    type: 'success' | 'error' | 'info' | 'warning';
+    message: string;
+    link?: { text: string; href: string };
+    timeoutSeconds?: number;
+}
+
+/**
+ * Encryption status change event payload
+ */
+export interface EncryptionStatusEvent {
+    enabled: boolean;
+    hasKey: boolean;
+    recoveryAvailable: boolean;
+}
+
+/**
+ * Map of event types to their payload types
+ */
+export interface AdapterEventMap {
+    // Notification events
+    banner: BannerEvent;
+    
+    // State change events (payload is void - just signals that data changed)
+    collectionsChanged: void;
+    environmentsChanged: void;
+    historyChanged: void;
+    cookiesChanged: void;
+    authsChanged: void;
+    proxiesChanged: void;
+    certsChanged: void;
+    settingsChanged: void;
+    validationRulesChanged: void;
+    
+    // Security events
+    encryptionStatusChanged: EncryptionStatusEvent;
+    encryptionComplete: void;
+    decryptionComplete: void;
+    recoveryKeyExported: { path: string };
+    recoveryComplete: void;
+}
+
+/**
+ * Union type of all event names
+ */
+export type AdapterEventType = keyof AdapterEventMap;
+
+/**
+ * Event handler function type
+ */
+export type AdapterEventHandler<T extends AdapterEventType> = (
+    payload: AdapterEventMap[T]
+) => void;
+
+/**
+ * Interface for subscribing to adapter events.
+ * Implemented by platform adapters to allow UI components to react to push events.
+ * 
+ * Usage:
+ * ```tsx
+ * const adapter = useAdapter();
+ * 
+ * useEffect(() => {
+ *   const handleBanner = (event: BannerEvent) => {
+ *     showBanner(event.type, event.message);
+ *   };
+ *   
+ *   adapter.events.on('banner', handleBanner);
+ *   return () => adapter.events.off('banner', handleBanner);
+ * }, [adapter]);
+ * ```
+ */
+export interface IAdapterEvents {
+    /**
+     * Subscribe to an event
+     */
+    on<T extends AdapterEventType>(
+        event: T,
+        handler: AdapterEventHandler<T>
+    ): void;
+
+    /**
+     * Unsubscribe from an event
+     */
+    off<T extends AdapterEventType>(
+        event: T,
+        handler: AdapterEventHandler<T>
+    ): void;
+
+    /**
+     * Emit an event (used internally by adapter implementations)
+     */
+    emit<T extends AdapterEventType>(
+        event: T,
+        payload: AdapterEventMap[T]
+    ): void;
+}
+
+/**
+ * Simple event emitter implementation for adapters
+ */
+export function createAdapterEventEmitter(): IAdapterEvents {
+    const listeners = new Map<AdapterEventType, Set<AdapterEventHandler<any>>>();
+
+    return {
+        on<T extends AdapterEventType>(event: T, handler: AdapterEventHandler<T>) {
+            if (!listeners.has(event)) {
+                listeners.set(event, new Set());
+            }
+            listeners.get(event)!.add(handler);
+        },
+
+        off<T extends AdapterEventType>(event: T, handler: AdapterEventHandler<T>) {
+            listeners.get(event)?.delete(handler);
+        },
+
+        emit<T extends AdapterEventType>(event: T, payload: AdapterEventMap[T]) {
+            listeners.get(event)?.forEach(handler => {
+                try {
+                    handler(payload);
+                } catch (error) {
+                    console.error(`Error in event handler for '${event}':`, error);
+                }
+            });
+        },
+    };
 }
 
 // ============================================================================

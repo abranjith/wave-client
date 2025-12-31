@@ -4,6 +4,7 @@
 - [Overview](#overview)
 - [Architecture](#architecture)
 - [The Adapter Interface](#the-adapter-interface)
+- [Event Handling Pattern](#event-handling-pattern)
 - [How It Works](#how-it-works)
 - [Implementation Examples](#implementation-examples)
 - [Usage in Components](#usage-in-components)
@@ -222,12 +223,162 @@ interface IPlatformAdapter {
   secret: ISecretAdapter;
   security: ISecurityAdapter;
   notification: INotificationAdapter;
+  events: IAdapterEvents;  // Event emitter for push notifications
   
   readonly platform: 'vscode' | 'web' | 'electron' | 'test';
   
   initialize?(): Promise<void>;
   dispose?(): void;
 }
+```
+
+---
+
+## Event Handling Pattern
+
+The adapter pattern supports two types of communication:
+
+1. **Request/Response** - Component calls adapter method, awaits result
+2. **Push Events** - Platform sends notifications that components subscribe to
+
+### Why Push Events?
+
+Some operations from the platform don't fit the request/response model:
+- **Banner notifications** (`bannerSuccess`, `bannerError`) - The extension may send success/error messages after operations
+- **State changes** - External modifications to data (e.g., file system watcher detects collection changes)
+- **Security events** - Encryption status changes, recovery key exports
+
+### Event Types
+
+Events are defined in `AdapterEventMap`:
+
+```typescript
+interface AdapterEventMap {
+  // Notification events
+  banner: BannerEvent;  // { type: 'success' | 'error' | 'info' | 'warning', message: string }
+  
+  // State change events (void payload - just signals that data changed)
+  collectionsChanged: void;
+  environmentsChanged: void;
+  historyChanged: void;
+  cookiesChanged: void;
+  authsChanged: void;
+  proxiesChanged: void;
+  certsChanged: void;
+  settingsChanged: void;
+  validationRulesChanged: void;
+  
+  // Security events
+  encryptionStatusChanged: EncryptionStatusEvent;
+  encryptionComplete: void;
+  decryptionComplete: void;
+  recoveryKeyExported: { path: string };
+  recoveryComplete: void;
+}
+```
+
+### Subscribing to Events
+
+Use the `useAdapterEvent` hook to subscribe to specific events:
+
+```tsx
+import { useAdapterEvent, useAppStateStore } from '@wave-client/core';
+
+function App() {
+  const setBanner = useAppStateStore((state) => state.setBanner);
+  
+  // Subscribe to banner notifications
+  useAdapterEvent('banner', (event) => {
+    setBanner({ type: event.type, message: event.message });
+  });
+  
+  // Subscribe to collection changes (e.g., from file system watcher)
+  useAdapterEvent('collectionsChanged', () => {
+    // Refetch collections
+    refetchCollections();
+  });
+  
+  return <div>...</div>;
+}
+```
+
+### Multiple Event Subscriptions
+
+Use `useAdapterEvents` for multiple subscriptions:
+
+```tsx
+import { useAdapterEvents } from '@wave-client/core';
+
+function App() {
+  useAdapterEvents({
+    banner: (event) => setBanner(event),
+    collectionsChanged: () => refetchCollections(),
+    encryptionStatusChanged: (status) => setEncryptionStatus(status),
+  });
+  
+  return <div>...</div>;
+}
+```
+
+### Event Emitter Interface
+
+The `IAdapterEvents` interface:
+
+```typescript
+interface IAdapterEvents {
+  on<T extends AdapterEventType>(event: T, handler: (payload: AdapterEventMap[T]) => void): void;
+  off<T extends AdapterEventType>(event: T, handler: (payload: AdapterEventMap[T]) => void): void;
+  emit<T extends AdapterEventType>(event: T, payload: AdapterEventMap[T]): void;
+}
+```
+
+### How VS Code Adapter Handles Events
+
+In `vsCodeAdapter.ts`, the `handleMessage` function processes both request/response and push events:
+
+```typescript
+const handleMessage: MessageListener = (event) => {
+  const message = event.data;
+
+  // 1. Handle request/response (with requestId)
+  if (message.requestId) {
+    const pending = pendingRequests.get(message.requestId);
+    if (pending) {
+      clearTimeout(pending.timeout);
+      pendingRequests.delete(message.requestId);
+      pending.resolve(message);
+    }
+    return;
+  }
+
+  // 2. Handle push events (no requestId)
+  switch (message.type) {
+    case 'bannerSuccess':
+      events.emit('banner', { type: 'success', message: message.message });
+      break;
+    case 'bannerError':
+      events.emit('banner', { type: 'error', message: message.message });
+      break;
+    case 'encryptionStatus':
+      events.emit('encryptionStatusChanged', message.status);
+      break;
+    // ... other events
+  }
+};
+```
+
+### Creating an Event Emitter
+
+For platform adapters, use the helper function:
+
+```typescript
+import { createAdapterEventEmitter } from '@wave-client/core';
+
+const events = createAdapterEventEmitter();
+
+// Emit events
+events.emit('banner', { type: 'success', message: 'Saved!' });
+events.emit('collectionsChanged', undefined);
 ```
 
 ---
@@ -309,11 +460,11 @@ MessageHandler.ts routes to CollectionService.loadCollections()
   ↓
 Reads from file system
   ↓
-Sends response: { type: 'collectionsLoaded', collections: [...] }
+Sends response: { type: 'collectionsLoaded', requestId: 'req-123', collections: [...] }
   ↓
 vsCodeAdapter.handleMessage() receives response
   ↓
-Matches 'collectionsLoaded' message type
+Matches requestId 'req-123' to pending promise
   ↓
 Resolves promise from pendingRequests with Result<Collection[], string>
   ↓
@@ -321,14 +472,14 @@ Component receives data
 ```
 
 > **⚠️ Critical Implementation Detail:**  
-> The vsCodeAdapter uses a **promise-based request/response pattern**. Every adapter method that communicates with the extension:
-> 1. Creates a unique `requestId` 
-> 2. Stores a promise in the `pendingRequests` map
+> The vsCodeAdapter uses a **promise-based request/response pattern** with `requestId` correlation. Every adapter method that communicates with the extension:
+> 1. Creates a unique `requestId` (e.g., `req-1735566000000-1`)
+> 2. Stores a promise in the `pendingRequests` map keyed by requestId
 > 3. Sends a postMessage with the requestId
-> 4. The `handleMessage` listener matches responses by message type (e.g., `collectionsLoaded`)
+> 4. The `handleMessage` listener matches responses by `requestId` (NOT message type)
 > 5. Resolves the promise with the response data
 > 
-> This ensures adapter methods return actual data instead of immediately returning empty arrays. Without this pattern, `await storage.loadCollections()` would return `[]` before the extension responds.
+> The message types (`loadCollections` → `collectionsLoaded`) are semantic/cosmetic - the actual correlation happens via `requestId`. This ensures that even if multiple requests are in flight, each response resolves the correct promise.
 
 **Web Adapter Flow:**
 ```
