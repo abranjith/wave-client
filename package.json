@@ -12,7 +12,11 @@
     "lint": "eslint packages",
     "test": "vscode-test",
     "dev:web": "pnpm --filter @wave-client/web dev",
+    "dev:server": "pnpm --filter @wave-client/server dev",
+    "start:server": "pnpm --filter @wave-client/server start",
     "build:core": "pnpm --filter @wave-client/core build",
+    "build:shared": "pnpm --filter @wave-client/shared build",
+    "build:server": "pnpm --filter @wave-client/server build",
     "build:vscode": "pnpm --filter @wave-client/vscode build",
     "build:web": "pnpm --filter @wave-client/web build"
   },

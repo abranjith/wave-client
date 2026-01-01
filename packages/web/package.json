@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@wave-client/core": "workspace:*",
+    "axios": "^1.7.7",
     "react": "^19.1.1",
     "react-dom": "^19.1.1"
   },

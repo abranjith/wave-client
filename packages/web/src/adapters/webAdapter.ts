@@ -1,10 +1,11 @@
 /**
  * Web Platform Adapter
- * 
+ *
  * Implements IPlatformAdapter for the standalone web version of Wave Client.
- * Uses localStorage for persistence and fetch API for HTTP requests.
+ * Communicates with the Wave Client Server for all I/O operations.
  */
 
+import axios, { AxiosInstance } from 'axios';
 import type {
   IPlatformAdapter,
   IStorageAdapter,
@@ -29,529 +30,788 @@ import type {
   SaveDialogOptions,
   OpenDialogOptions,
   NotificationType,
-  ParamRow,
-  CollectionBody,
 } from '@wave-client/core';
 import { ok, err, Result, createAdapterEventEmitter } from '@wave-client/core';
 
-// Storage keys for localStorage
-const STORAGE_KEYS = {
-  COLLECTIONS: 'wave-client:collections',
-  ENVIRONMENTS: 'wave-client:environments',
-  HISTORY: 'wave-client:history',
-  COOKIES: 'wave-client:cookies',
-  AUTHS: 'wave-client:auths',
-  PROXIES: 'wave-client:proxies',
-  CERTS: 'wave-client:certs',
-  SETTINGS: 'wave-client:settings',
-  VALIDATION_RULES: 'wave-client:validation-rules',
-} as const;
+// Server configuration
+const SERVER_URL = 'http://127.0.0.1:3456';
+const WS_URL = 'ws://127.0.0.1:3456/ws';
 
 /**
- * Helper to safely parse JSON from localStorage
+ * API client for server communication
  */
-function safeJSONParse<T>(value: string | null, defaultValue: T): T {
-  if (!value) {
-    return defaultValue;
+const api: AxiosInstance = axios.create({
+  baseURL: SERVER_URL,
+  timeout: 30000,
+  headers: {
+    'Content-Type': 'application/json',
+  },
+});
+
+/**
+ * WebSocket connection state
+ */
+let wsConnection: WebSocket | null = null;
+let wsReconnectAttempts = 0;
+const MAX_RECONNECT_ATTEMPTS = 5;
+const RECONNECT_DELAY = 2000;
+
+/**
+ * Event emitter for adapter events
+ */
+const events = createAdapterEventEmitter();
+
+/**
+ * Initialize WebSocket connection
+ */
+function initWebSocket(): void {
+  if (wsConnection?.readyState === WebSocket.OPEN) {
+    return;
   }
+
   try {
-    return JSON.parse(value) as T;
-  } catch {
-    return defaultValue;
+    wsConnection = new WebSocket(WS_URL);
+
+    wsConnection.onopen = () => {
+      console.log('WebSocket connected to Wave Client Server');
+      wsReconnectAttempts = 0;
+    };
+
+    wsConnection.onmessage = (event) => {
+      try {
+        const message = JSON.parse(event.data);
+        handleWebSocketMessage(message);
+      } catch {
+        // Ignore invalid messages
+      }
+    };
+
+    wsConnection.onclose = () => {
+      console.log('WebSocket disconnected');
+      wsConnection = null;
+
+      // Attempt reconnection
+      if (wsReconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
+        wsReconnectAttempts++;
+        setTimeout(initWebSocket, RECONNECT_DELAY);
+      }
+    };
+
+    wsConnection.onerror = (error) => {
+      console.error('WebSocket error:', error);
+    };
+  } catch (error) {
+    console.error('Failed to connect WebSocket:', error);
   }
 }
 
 /**
- * Storage adapter using localStorage
+ * Handle WebSocket messages from server
+ */
+function handleWebSocketMessage(message: {
+  type: string;
+  data?: unknown;
+  message?: string;
+}): void {
+  switch (message.type) {
+    case 'connected':
+      console.log('Server:', message.message);
+      break;
+    case 'pong':
+      // Keep-alive response
+      break;
+    case 'banner': {
+      const bannerData = message.data as {
+        type: 'success' | 'error' | 'info' | 'warning';
+        message: string;
+      };
+      events.emit('banner', bannerData);
+      break;
+    }
+    case 'collectionsChanged':
+      events.emit('collectionsChanged', undefined);
+      break;
+    case 'environmentsChanged':
+      events.emit('environmentsChanged', undefined);
+      break;
+    case 'historyChanged':
+      events.emit('historyChanged', undefined);
+      break;
+    case 'cookiesChanged':
+      events.emit('cookiesChanged', undefined);
+      break;
+    case 'authsChanged':
+      events.emit('authsChanged', undefined);
+      break;
+    case 'proxiesChanged':
+      events.emit('proxiesChanged', undefined);
+      break;
+    case 'certsChanged':
+      events.emit('certsChanged', undefined);
+      break;
+    case 'settingsChanged':
+      events.emit('settingsChanged', undefined);
+      break;
+    case 'validationRulesChanged':
+      events.emit('validationRulesChanged', undefined);
+      break;
+    case 'encryptionStatusChanged':
+      events.emit('encryptionStatusChanged', message.data as EncryptionStatus);
+      break;
+  }
+}
+
+/**
+ * Check server health
+ */
+export async function checkServerHealth(): Promise<boolean> {
+  try {
+    const response = await api.get('/health');
+    return response.data?.status === 'ok';
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Storage adapter using server API
  */
 class WebStorageAdapter implements IStorageAdapter {
   // Collections
-  async loadCollections() {
-    const data = safeJSONParse<Collection[]>(
-      localStorage.getItem(STORAGE_KEYS.COLLECTIONS),
-      []
-    );
-    return ok(data);
+  async loadCollections(): Promise<Result<Collection[], string>> {
+    try {
+      const response = await api.get('/api/collections');
+      if (response.data.isOk) {
+        return ok(response.data.value);
+      }
+      return err(response.data.error || 'Failed to load collections');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      return err(`Server error: ${message}`);
+    }
   }
 
-  async saveCollection(collection: Collection) {
-    const result = await this.loadCollections();
-    if (!result.isOk) {
-      return err('Failed to load collections');
+  async saveCollection(collection: Collection): Promise<Result<Collection, string>> {
+    try {
+      const response = await api.post('/api/collections', {
+        collection,
+        filename:
+          collection.filename ||
+          `${collection.info.name.replace(/[^a-z0-9]/gi, '_').toLowerCase()}.json`,
+      });
+      if (response.data.isOk) {
+        return ok(response.data.value);
+      }
+      return err(response.data.error || 'Failed to save collection');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      return err(`Server error: ${message}`);
     }
-    
-    const collections = result.value;
-    const index = collections.findIndex(c => c.filename === collection.filename);
-    
-    if (index >= 0) {
-      collections[index] = collection;
-    } else {
-      collections.push(collection);
-    }
-    
-    localStorage.setItem(STORAGE_KEYS.COLLECTIONS, JSON.stringify(collections));
-    return ok(collection);
   }
 
-  async deleteCollection(filename: string) {
-    const result = await this.loadCollections();
-    if (!result.isOk) {
-      return err('Failed to load collections');
+  async deleteCollection(filename: string): Promise<Result<void, string>> {
+    try {
+      const response = await api.delete(
+        `/api/collections/${encodeURIComponent(filename)}`
+      );
+      if (response.data.isOk) {
+        return ok(undefined);
+      }
+      return err(response.data.error || 'Failed to delete collection');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      return err(`Server error: ${message}`);
     }
-    
-    const collections = result.value.filter(c => c.filename !== filename);
-    localStorage.setItem(STORAGE_KEYS.COLLECTIONS, JSON.stringify(collections));
-    return ok(undefined);
   }
 
   async saveRequestToCollection(
     collectionFilename: string,
-    _itemPath: string[],
-    _item: CollectionItem
-  ) {
-    // Find and update the collection
-    const result = await this.loadCollections();
-    if (!result.isOk) {
-      return err('Failed to load collections');
+    itemPath: string[],
+    item: CollectionItem
+  ): Promise<Result<Collection, string>> {
+    try {
+      const response = await api.post(
+        `/api/collections/${encodeURIComponent(collectionFilename)}/requests`,
+        {
+          requestContent: JSON.stringify(item.request),
+          requestName: item.name,
+          folderPath: itemPath,
+        }
+      );
+      if (response.data.isOk) {
+        // Reload collection to get updated version
+        const collectionsResult = await this.loadCollections();
+        if (collectionsResult.isOk) {
+          const collection = collectionsResult.value.find(
+            (c) => c.filename === collectionFilename
+          );
+          if (collection) {
+            return ok(collection);
+          }
+        }
+        return err('Collection not found after save');
+      }
+      return err(response.data.error || 'Failed to save request');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      return err(`Server error: ${message}`);
     }
-    
-    const collection = result.value.find(c => c.filename === collectionFilename);
-    if (!collection) {
-      return err(`Collection not found: ${collectionFilename}`);
-    }
-    
-    // TODO: Implement proper path-based item insertion
-    return ok(collection);
   }
 
   async deleteRequestFromCollection(
     collectionFilename: string,
     _itemPath: string[],
     _itemId: string
-  ) {
-    const result = await this.loadCollections();
-    if (!result.isOk) {
-      return err('Failed to load collections');
+  ): Promise<Result<Collection, string>> {
+    // TODO: Implement proper delete endpoint on server
+    const collectionsResult = await this.loadCollections();
+    if (collectionsResult.isOk) {
+      const collection = collectionsResult.value.find(
+        (c) => c.filename === collectionFilename
+      );
+      if (collection) {
+        return ok(collection);
+      }
     }
-    
-    const collection = result.value.find(c => c.filename === collectionFilename);
-    if (!collection) {
-      return err(`Collection not found: ${collectionFilename}`);
+    return err('Collection not found');
+  }
+
+  async importCollection(
+    fileName: string,
+    fileContent: string
+  ): Promise<Result<Collection[], string>> {
+    try {
+      const response = await api.post('/api/collections/import', {
+        fileName,
+        fileContent,
+      });
+      if (response.data.isOk) {
+        return ok(response.data.value);
+      }
+      return err(response.data.error || 'Failed to import collection');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      return err(`Server error: ${message}`);
     }
-    
-    // TODO: Implement proper path-based item deletion
-    return ok(collection);
+  }
+
+  async exportCollection(
+    collectionFileName: string
+  ): Promise<Result<{ filePath: string; fileName: string }, string>> {
+    try {
+      const response = await api.get(
+        `/api/collections/${encodeURIComponent(collectionFileName)}/export`
+      );
+      if (response.data.isOk) {
+        const { content, suggestedFilename } = response.data.value;
+        // Trigger browser download
+        const blob = new Blob([content], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = suggestedFilename;
+        a.click();
+        URL.revokeObjectURL(url);
+        return ok({ filePath: '', fileName: suggestedFilename });
+      }
+      return err(response.data.error || 'Failed to export collection');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      return err(`Server error: ${message}`);
+    }
   }
 
   // Environments
-  async loadEnvironments() {
-    const data = safeJSONParse<Environment[]>(
-      localStorage.getItem(STORAGE_KEYS.ENVIRONMENTS),
-      []
-    );
-    return ok(data);
+  async loadEnvironments(): Promise<Result<Environment[], string>> {
+    try {
+      const response = await api.get('/api/environments');
+      if (response.data.isOk) {
+        return ok(response.data.value);
+      }
+      return err(response.data.error || 'Failed to load environments');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      return err(`Server error: ${message}`);
+    }
   }
 
-  async saveEnvironment(environment: Environment) {
-    const result = await this.loadEnvironments();
-    if (!result.isOk) {
-      return err('Failed to load environments');
+  async saveEnvironment(environment: Environment): Promise<Result<void, string>> {
+    try {
+      const response = await api.post('/api/environments', environment);
+      if (response.data.isOk) {
+        return ok(undefined);
+      }
+      return err(response.data.error || 'Failed to save environment');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      return err(`Server error: ${message}`);
     }
-    
-    const environments = result.value;
-    const index = environments.findIndex(e => e.name === environment.name);
-    
-    if (index >= 0) {
-      environments[index] = environment;
-    } else {
-      environments.push(environment);
-    }
-    
-    localStorage.setItem(STORAGE_KEYS.ENVIRONMENTS, JSON.stringify(environments));
-    return ok(undefined);
   }
 
-  async saveEnvironments(environments: Environment[]) {
-    localStorage.setItem(STORAGE_KEYS.ENVIRONMENTS, JSON.stringify(environments));
-    return ok(undefined);
+  async saveEnvironments(environments: Environment[]): Promise<Result<void, string>> {
+    try {
+      const response = await api.put('/api/environments', environments);
+      if (response.data.isOk) {
+        return ok(undefined);
+      }
+      return err(response.data.error || 'Failed to save environments');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      return err(`Server error: ${message}`);
+    }
   }
 
-  async deleteEnvironment(name: string) {
-    const result = await this.loadEnvironments();
-    if (!result.isOk) {
-      return err('Failed to load environments');
+  async deleteEnvironment(environmentId: string): Promise<Result<void, string>> {
+    try {
+      const response = await api.delete(
+        `/api/environments/${encodeURIComponent(environmentId)}`
+      );
+      if (response.data.isOk) {
+        return ok(undefined);
+      }
+      return err(response.data.error || 'Failed to delete environment');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      return err(`Server error: ${message}`);
     }
-    
-    const environments = result.value.filter(e => e.name !== name);
-    localStorage.setItem(STORAGE_KEYS.ENVIRONMENTS, JSON.stringify(environments));
-    return ok(undefined);
+  }
+
+  async importEnvironments(
+    fileContent: string
+  ): Promise<Result<Environment[], string>> {
+    try {
+      const response = await api.post('/api/environments/import', { fileContent });
+      if (response.data.isOk) {
+        return ok(response.data.value);
+      }
+      return err(response.data.error || 'Failed to import environments');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      return err(`Server error: ${message}`);
+    }
+  }
+
+  async exportEnvironments(): Promise<
+    Result<{ filePath: string; fileName: string }, string>
+  > {
+    try {
+      const response = await api.get('/api/environments/export');
+      if (response.data.isOk) {
+        const { content, fileName } = response.data.value;
+        // Trigger browser download
+        const blob = new Blob([content], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = fileName;
+        a.click();
+        URL.revokeObjectURL(url);
+        return ok({ filePath: '', fileName });
+      }
+      return err(response.data.error || 'Failed to export environments');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      return err(`Server error: ${message}`);
+    }
   }
 
   // History
-  async loadHistory() {
-    const data = safeJSONParse<ParsedRequest[]>(
-      localStorage.getItem(STORAGE_KEYS.HISTORY),
-      []
-    );
-    return ok(data);
-  }
-
-  async saveRequestToHistory(request: ParsedRequest) {
-    const result = await this.loadHistory();
-    if (!result.isOk) {
-      return err('Failed to load history');
+  async loadHistory(): Promise<Result<ParsedRequest[], string>> {
+    try {
+      const response = await api.get('/api/history');
+      if (response.data.isOk) {
+        return ok(response.data.value);
+      }
+      return err(response.data.error || 'Failed to load history');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      return err(`Server error: ${message}`);
     }
-    
-    const history = [request, ...result.value].slice(0, 100); // Keep last 100
-    localStorage.setItem(STORAGE_KEYS.HISTORY, JSON.stringify(history));
-    return ok(undefined);
   }
 
-  async clearHistory() {
-    localStorage.setItem(STORAGE_KEYS.HISTORY, JSON.stringify([]));
-    return ok(undefined);
+  async saveRequestToHistory(request: ParsedRequest): Promise<Result<void, string>> {
+    try {
+      const response = await api.post('/api/history', {
+        requestContent: JSON.stringify(request),
+      });
+      if (response.data.isOk) {
+        return ok(undefined);
+      }
+      return err(response.data.error || 'Failed to save to history');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      return err(`Server error: ${message}`);
+    }
+  }
+
+  async clearHistory(): Promise<Result<void, string>> {
+    try {
+      const response = await api.delete('/api/history');
+      if (response.data.isOk) {
+        return ok(undefined);
+      }
+      return err(response.data.error || 'Failed to clear history');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      return err(`Server error: ${message}`);
+    }
   }
 
   // Cookies
-  async loadCookies() {
-    const data = safeJSONParse<Cookie[]>(
-      localStorage.getItem(STORAGE_KEYS.COOKIES),
-      []
-    );
-    return ok(data);
+  async loadCookies(): Promise<Result<Cookie[], string>> {
+    try {
+      const response = await api.get('/api/cookies');
+      if (response.data.isOk) {
+        return ok(response.data.value);
+      }
+      return err(response.data.error || 'Failed to load cookies');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      return err(`Server error: ${message}`);
+    }
   }
 
-  async saveCookies(cookies: Cookie[]) {
-    localStorage.setItem(STORAGE_KEYS.COOKIES, JSON.stringify(cookies));
-    return ok(undefined);
+  async saveCookies(cookies: Cookie[]): Promise<Result<void, string>> {
+    try {
+      const response = await api.post('/api/cookies', cookies);
+      if (response.data.isOk) {
+        return ok(undefined);
+      }
+      return err(response.data.error || 'Failed to save cookies');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      return err(`Server error: ${message}`);
+    }
   }
 
-  // Auths
-  async loadAuths() {
-    const data = safeJSONParse<Auth[]>(
-      localStorage.getItem(STORAGE_KEYS.AUTHS),
-      []
-    );
-    return ok(data);
+  // Auth Store
+  async loadAuths(): Promise<Result<Auth[], string>> {
+    try {
+      const response = await api.get('/api/auths');
+      if (response.data.isOk) {
+        return ok(response.data.value);
+      }
+      return err(response.data.error || 'Failed to load auths');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      return err(`Server error: ${message}`);
+    }
   }
 
-  async saveAuths(auths: Auth[]) {
-    localStorage.setItem(STORAGE_KEYS.AUTHS, JSON.stringify(auths));
-    return ok(undefined);
+  async saveAuths(auths: Auth[]): Promise<Result<void, string>> {
+    try {
+      const response = await api.post('/api/auths', auths);
+      if (response.data.isOk) {
+        return ok(undefined);
+      }
+      return err(response.data.error || 'Failed to save auths');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      return err(`Server error: ${message}`);
+    }
   }
 
-  // Proxies
-  async loadProxies() {
-    const data = safeJSONParse<Proxy[]>(
-      localStorage.getItem(STORAGE_KEYS.PROXIES),
-      []
-    );
-    return ok(data);
+  // Proxy Store
+  async loadProxies(): Promise<Result<Proxy[], string>> {
+    try {
+      const response = await api.get('/api/proxies');
+      if (response.data.isOk) {
+        return ok(response.data.value);
+      }
+      return err(response.data.error || 'Failed to load proxies');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      return err(`Server error: ${message}`);
+    }
   }
 
-  async saveProxies(proxies: Proxy[]) {
-    localStorage.setItem(STORAGE_KEYS.PROXIES, JSON.stringify(proxies));
-    return ok(undefined);
+  async saveProxies(proxies: Proxy[]): Promise<Result<void, string>> {
+    try {
+      const response = await api.post('/api/proxies', proxies);
+      if (response.data.isOk) {
+        return ok(undefined);
+      }
+      return err(response.data.error || 'Failed to save proxies');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      return err(`Server error: ${message}`);
+    }
   }
 
-  // Certs
-  async loadCerts() {
-    const data = safeJSONParse<Cert[]>(
-      localStorage.getItem(STORAGE_KEYS.CERTS),
-      []
-    );
-    return ok(data);
+  // Cert Store
+  async loadCerts(): Promise<Result<Cert[], string>> {
+    try {
+      const response = await api.get('/api/certs');
+      if (response.data.isOk) {
+        return ok(response.data.value);
+      }
+      return err(response.data.error || 'Failed to load certs');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      return err(`Server error: ${message}`);
+    }
   }
 
-  async saveCerts(certs: Cert[]) {
-    localStorage.setItem(STORAGE_KEYS.CERTS, JSON.stringify(certs));
-    return ok(undefined);
-  }
-
-  // Settings
-  async loadSettings() {
-    const data = safeJSONParse<AppSettings>(
-      localStorage.getItem(STORAGE_KEYS.SETTINGS),
-      { encryptionEnabled: false }
-    );
-    return ok(data);
-  }
-
-  async saveSettings(settings: AppSettings) {
-    localStorage.setItem(STORAGE_KEYS.SETTINGS, JSON.stringify(settings));
-    return ok(undefined);
+  async saveCerts(certs: Cert[]): Promise<Result<void, string>> {
+    try {
+      const response = await api.post('/api/certs', certs);
+      if (response.data.isOk) {
+        return ok(undefined);
+      }
+      return err(response.data.error || 'Failed to save certs');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      return err(`Server error: ${message}`);
+    }
   }
 
   // Validation Rules
-  async loadValidationRules() {
-    const data = safeJSONParse<ValidationRule[]>(
-      localStorage.getItem(STORAGE_KEYS.VALIDATION_RULES),
-      []
-    );
-    return ok(data);
+  async loadValidationRules(): Promise<Result<ValidationRule[], string>> {
+    try {
+      const response = await api.get('/api/validation-rules');
+      if (response.data.isOk) {
+        return ok(response.data.value);
+      }
+      return err(response.data.error || 'Failed to load validation rules');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      return err(`Server error: ${message}`);
+    }
   }
 
-  async saveValidationRules(rules: ValidationRule[]) {
-    localStorage.setItem(STORAGE_KEYS.VALIDATION_RULES, JSON.stringify(rules));
-    return ok(undefined);
+  async saveValidationRules(rules: ValidationRule[]): Promise<Result<void, string>> {
+    try {
+      const response = await api.post('/api/validation-rules', rules);
+      if (response.data.isOk) {
+        return ok(undefined);
+      }
+      return err(response.data.error || 'Failed to save validation rules');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      return err(`Server error: ${message}`);
+    }
+  }
+
+  // Settings
+  async loadSettings(): Promise<Result<AppSettings, string>> {
+    try {
+      const response = await api.get('/api/settings');
+      if (response.data.isOk) {
+        return ok(response.data.value);
+      }
+      return err(response.data.error || 'Failed to load settings');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      return err(`Server error: ${message}`);
+    }
+  }
+
+  async saveSettings(settings: AppSettings): Promise<Result<void, string>> {
+    try {
+      const response = await api.post('/api/settings', settings);
+      if (response.data.isOk) {
+        return ok(undefined);
+      }
+      return err(response.data.error || 'Failed to save settings');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      return err(`Server error: ${message}`);
+    }
   }
 }
 
 /**
- * HTTP adapter using fetch API
+ * HTTP adapter using server API
  */
 class WebHttpAdapter implements IHttpAdapter {
-  private abortControllers: Map<string, AbortController> = new Map();
-
-  async executeRequest(config: HttpRequestConfig) {
-    const startTime = performance.now();
-    const abortController = new AbortController();
-    
-    if (config.id) {
-      this.abortControllers.set(config.id, abortController);
-    }
-    
+  async executeRequest(
+    config: HttpRequestConfig
+  ): Promise<Result<HttpResponseResult, string>> {
     try {
-      // Build headers from config
-      const headers: Record<string, string> = {};
-      if (Array.isArray(config.headers)) {
-        // HeaderRow[] format
-        for (const header of config.headers) {
-          if (!header.disabled && header.key) {
-            headers[header.key] = header.value;
-          }
-        }
-      } else {
-        // Record<string, string | string[]> format
-        for (const [key, value] of Object.entries(config.headers)) {
-          headers[key] = Array.isArray(value) ? value.join(', ') : value;
-        }
+      const response = await api.post('/api/http/execute', config);
+      if (response.data.isOk) {
+        return ok(response.data.value.response);
       }
-
-      // Build URL with params
-      let url = config.url;
-      if (typeof config.params === 'string') {
-        // Already a query string
-        if (config.params) {
-          const separator = url.includes('?') ? '&' : '?';
-          url = `${url}${separator}${config.params}`;
-        }
-      } else if (Array.isArray(config.params)) {
-        // ParamRow[] format
-        const enabledParams = config.params.filter((p: ParamRow) => !p.disabled && p.key);
-        if (enabledParams.length > 0) {
-          const searchParams = new URLSearchParams();
-          for (const param of enabledParams) {
-            searchParams.append(param.key, param.value);
-          }
-          const separator = url.includes('?') ? '&' : '?';
-          url = `${url}${separator}${searchParams.toString()}`;
-        }
-      }
-
-      const fetchOptions: RequestInit = {
-        method: config.method,
-        headers,
-        signal: abortController.signal,
-      };
-
-      // Add body for non-GET requests
-      if (config.method !== 'GET' && config.body) {
-        const body = config.body as CollectionBody;
-        if (body.mode === 'raw' && body.raw) {
-          fetchOptions.body = body.raw;
-        } else if (body.mode === 'formdata' && body.formdata) {
-          const formData = new FormData();
-          for (const field of body.formdata) {
-            if (field.fieldType === 'text' && typeof field.value === 'string') {
-              formData.append(field.key, field.value || '');
-            }
-          }
-          fetchOptions.body = formData;
-        } else if (body.mode === 'urlencoded' && body.urlencoded) {
-          const urlencoded = new URLSearchParams();
-          for (const field of body.urlencoded) {
-            urlencoded.append(field.key, field.value ?? '');
-          }
-          fetchOptions.body = urlencoded.toString();
-          headers['Content-Type'] = 'application/x-www-form-urlencoded';
-        }
-      }
-
-      const fetchResponse = await fetch(url, fetchOptions);
-      const elapsedTime = Math.round(performance.now() - startTime);
-
-      // Get response body as text
-      const bodyText = await fetchResponse.text();
-      const bodyBase64 = btoa(unescape(encodeURIComponent(bodyText)));
-
-      // Extract headers
-      const responseHeaders: Record<string, string> = {};
-      fetchResponse.headers.forEach((value, key) => {
-        responseHeaders[key] = value;
-      });
-
-      const response: HttpResponseResult = {
-        id: config.id,
-        status: fetchResponse.status,
-        statusText: fetchResponse.statusText,
-        headers: responseHeaders,
-        body: bodyBase64,
-        elapsedTime,
-        size: bodyText.length,
-        is_encoded: true,
-      };
-
-      return ok(response);
-    } catch (error: unknown) {
-      if (error instanceof Error && error.name === 'AbortError') {
-        return err('Request was cancelled');
-      }
-      
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      return err(errorMessage);
-    } finally {
-      if (config.id) {
-        this.abortControllers.delete(config.id);
-      }
-    }
-  }
-
-  cancelRequest(requestId: string) {
-    const controller = this.abortControllers.get(requestId);
-    if (controller) {
-      controller.abort();
-      this.abortControllers.delete(requestId);
+      return err(response.data.error || 'Request failed');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      return err(`Server error: ${message}`);
     }
   }
 }
 
 /**
- * File adapter using browser File API
+ * File adapter for browser file operations
  */
 class WebFileAdapter implements IFileAdapter {
-  async showSaveDialog(_options: SaveDialogOptions): Promise<string | null> {
-    // In web, we don't have a native save dialog - return null
-    // The actual saving happens via browser download
-    return null;
+  async showSaveDialog(options: SaveDialogOptions): Promise<string | null> {
+    // Browser doesn't support native save dialogs, use download instead
+    // Return a placeholder path that indicates browser download
+    return `download://${options.defaultFileName || 'file'}`;
   }
 
-  async showOpenDialog(_options: OpenDialogOptions): Promise<string[] | null> {
-    // In web, we trigger the file input which returns file contents, not paths
-    return null;
+  async showOpenDialog(options: OpenDialogOptions): Promise<string[] | null> {
+    // Create a file input element and trigger it
+    return new Promise((resolve) => {
+      const input = document.createElement('input');
+      input.type = 'file';
+      input.multiple = (options as any).multiple || false;
+
+      if (options.filters && options.filters.length > 0) {
+        const extensions = options.filters.flatMap((f) =>
+          f.extensions.map((e) => `.${e}`)
+        );
+        input.accept = extensions.join(',');
+      }
+
+      input.onchange = () => {
+        if (input.files && input.files.length > 0) {
+          resolve(Array.from(input.files).map((f) => f.name));
+        } else {
+          resolve(null);
+        }
+      };
+
+      input.oncancel = () => resolve(null);
+      input.click();
+    });
   }
 
-  async readFile(_path: string) {
-    // Web doesn't have direct file system access
-    return err('File system access not available in web browser');
+  async readFile(_path: string): Promise<Result<string, string>> {
+    // In browser, we can't read files by path. Use file input instead.
+    return err('Use importFile() to read files in browser');
   }
 
-  async readFileAsBinary(_path: string) {
-    return err('Binary file reading not available in web browser');
+  async readFileAsBinary(_path: string): Promise<Result<Uint8Array, string>> {
+    return err('Use importFile() to read files in browser');
   }
 
-  async writeFile(path: string, content: string) {
-    // Create a blob and trigger download
+  async writeFile(_path: string, content: string): Promise<Result<void, string>> {
+    // Trigger browser download
     const blob = new Blob([content], { type: 'text/plain' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = path;
-    document.body.appendChild(a);
+    a.download = _path.split('/').pop() || 'file.txt';
     a.click();
-    document.body.removeChild(a);
     URL.revokeObjectURL(url);
     return ok(undefined);
   }
 
-  async writeBinaryFile(path: string, data: Uint8Array) {
-    const blob = new Blob([data.buffer as ArrayBuffer], { type: 'application/octet-stream' });
+  async writeBinaryFile(
+    _path: string,
+    data: Uint8Array
+  ): Promise<Result<void, string>> {
+    const blob = new Blob([new Uint8Array(data)]);
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = path;
-    document.body.appendChild(a);
+    a.download = _path.split('/').pop() || 'file';
     a.click();
-    document.body.removeChild(a);
     URL.revokeObjectURL(url);
     return ok(undefined);
   }
 
-  async downloadResponse(data: Uint8Array, filename: string, contentType: string) {
-    const blob = new Blob([data.buffer as ArrayBuffer], { type: contentType });
+  async downloadResponse(
+    data: Uint8Array,
+    filename: string,
+    contentType: string
+  ): Promise<Result<void, string>> {
+    const blob = new Blob([new Uint8Array(data)], { type: contentType });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
     a.download = filename;
-    document.body.appendChild(a);
     a.click();
-    document.body.removeChild(a);
     URL.revokeObjectURL(url);
     return ok(undefined);
   }
 
-  async importFile(options: OpenDialogOptions) {
-    return new Promise<Result<{ content: string; filename: string; } | null, string>>((resolve) => {
+  async importFile(
+    options: OpenDialogOptions
+  ): Promise<Result<{ content: string; filename: string } | null, string>> {
+    return new Promise((resolve) => {
       const input = document.createElement('input');
       input.type = 'file';
-      
-      if (options?.filters && options.filters.length > 0) {
-        input.accept = options.filters
-          .flatMap(f => f.extensions.map(ext => `.${ext}`))
-          .join(',');
+
+      if (options.filters && options.filters.length > 0) {
+        const extensions = options.filters.flatMap((f) =>
+          f.extensions.map((e) => `.${e}`)
+        );
+        input.accept = extensions.join(',');
       }
 
       input.onchange = async () => {
-        const file = input.files?.[0];
-        if (file) {
-          const content = await file.text();
-          resolve(ok({ content, filename: file.name }));
+        if (input.files && input.files.length > 0) {
+          const file = input.files[0];
+          try {
+            const content = await file.text();
+            resolve(ok({ content, filename: file.name }));
+          } catch {
+            resolve(err('Failed to read file'));
+          }
         } else {
           resolve(ok(null));
         }
       };
 
-      input.oncancel = () => {
-        resolve(ok(null));
-      };
-
+      input.oncancel = () => resolve(ok(null));
       input.click();
     });
   }
 }
 
 /**
- * Secret adapter using localStorage (NOT secure for production!)
- * In production, this should use a proper backend with encrypted storage
+ * Secret adapter - uses localStorage (NOT secure, for development only)
  */
 class WebSecretAdapter implements ISecretAdapter {
-  private readonly PREFIX = 'wave-client:secret:';
+  private readonly prefix = 'wave-client:secret:';
 
-  async storeSecret(key: string, value: string) {
-    localStorage.setItem(this.PREFIX + key, value);
-    return ok(undefined);
+  async storeSecret(key: string, value: string): Promise<Result<void, string>> {
+    try {
+      localStorage.setItem(this.prefix + key, value);
+      return ok(undefined);
+    } catch {
+      return err('Failed to store secret');
+    }
   }
 
-  async getSecret(key: string) {
-    const value = localStorage.getItem(this.PREFIX + key);
-    return ok(value ?? undefined);
+  async getSecret(key: string): Promise<Result<string | undefined, string>> {
+    try {
+      const value = localStorage.getItem(this.prefix + key);
+      return ok(value ?? undefined);
+    } catch {
+      return err('Failed to get secret');
+    }
   }
 
-  async deleteSecret(key: string) {
-    localStorage.removeItem(this.PREFIX + key);
-    return ok(undefined);
+  async deleteSecret(key: string): Promise<Result<void, string>> {
+    try {
+      localStorage.removeItem(this.prefix + key);
+      return ok(undefined);
+    } catch {
+      return err('Failed to delete secret');
+    }
   }
 
   async hasSecret(key: string): Promise<boolean> {
-    return localStorage.getItem(this.PREFIX + key) !== null;
+    return localStorage.getItem(this.prefix + key) !== null;
   }
 }
 
 /**
- * Security adapter - stub for web (encryption handled differently)
+ * Security adapter using server API
  */
 class WebSecurityAdapter implements ISecurityAdapter {
   async getEncryptionStatus(): Promise<EncryptionStatus> {
+    try {
+      const response = await api.get('/api/security/status');
+      if (response.data.isOk) {
+        return response.data.value;
+      }
+    } catch {
+      // Ignore errors
+    }
     return {
       enabled: false,
       hasKey: false,
@@ -559,69 +819,112 @@ class WebSecurityAdapter implements ISecurityAdapter {
     };
   }
 
-  async enableEncryption(_password: string) {
-    return err('Encryption not supported in web version');
+  async enableEncryption(_password: string): Promise<Result<void, string>> {
+    return err('Encryption is not yet supported in the web version');
   }
 
-  async disableEncryption(_password: string) {
-    return ok(undefined);
+  async disableEncryption(_password: string): Promise<Result<void, string>> {
+    return err('Encryption is not yet supported in the web version');
   }
 
-  async changePassword(_oldPassword: string, _newPassword: string) {
-    return err('Password change not supported in web version');
+  async changePassword(
+    _oldPassword: string,
+    _newPassword: string
+  ): Promise<Result<void, string>> {
+    return err('Encryption is not yet supported in the web version');
   }
 
-  async exportRecoveryKey() {
-    return err('Recovery key not supported in web version');
+  async exportRecoveryKey(): Promise<Result<void, string>> {
+    return err('Encryption is not yet supported in the web version');
   }
 
-  async recoverWithKey(_recoveryKeyPath: string) {
-    return err('Recovery not supported in web version');
+  async recoverWithKey(_recoveryKeyPath: string): Promise<Result<void, string>> {
+    return err('Encryption is not yet supported in the web version');
   }
 }
 
 /**
- * Notification adapter using browser console (could use toast library)
+ * Notification adapter using browser notifications and console
  */
 class WebNotificationAdapter implements INotificationAdapter {
-  showNotification(type: NotificationType, message: string, _duration?: number): void {
+  showNotification(
+    type: NotificationType,
+    message: string,
+    _duration?: number
+  ): void {
+    // Emit banner event for UI to display
+    events.emit('banner', { type, message });
+
+    // Also log to console
     switch (type) {
       case 'success':
-      case 'info':
-        console.info(`[Wave Client] ${type}:`, message);
-        break;
-      case 'warning':
-        console.warn('[Wave Client]', message);
+        console.log('✅', message);
         break;
       case 'error':
-        console.error('[Wave Client]', message);
+        console.error('❌', message);
+        break;
+      case 'warning':
+        console.warn('⚠️', message);
+        break;
+      case 'info':
+      default:
+        console.info('ℹ️', message);
         break;
     }
   }
 
-  async showConfirmation(message: string, _confirmLabel?: string, _cancelLabel?: string): Promise<boolean> {
+  async showConfirmation(
+    message: string,
+    _confirmLabel?: string,
+    _cancelLabel?: string
+  ): Promise<boolean> {
     return window.confirm(message);
   }
 
-  async showInput(message: string, defaultValue?: string, _placeholder?: string): Promise<string | null> {
+  async showInput(
+    message: string,
+    defaultValue?: string,
+    _placeholder?: string
+  ): Promise<string | null> {
     return window.prompt(message, defaultValue);
   }
 }
 
 /**
- * Creates the web platform adapter
+ * Create the web adapter with server communication
  */
 export function createWebAdapter(): IPlatformAdapter {
+  // Initialize WebSocket connection
+  initWebSocket();
+
   return {
-    platform: 'web',
     storage: new WebStorageAdapter(),
     http: new WebHttpAdapter(),
     file: new WebFileAdapter(),
     secret: new WebSecretAdapter(),
     security: new WebSecurityAdapter(),
     notification: new WebNotificationAdapter(),
-    events: createAdapterEventEmitter(),
+    events,
+    platform: 'web',
+
+    async initialize() {
+      // Check server health
+      const healthy = await checkServerHealth();
+      if (!healthy) {
+        console.warn(
+          '⚠️ Wave Client Server is not running. Start it with: pnpm dev:server'
+        );
+      }
+    },
+
+    dispose() {
+      if (wsConnection) {
+        wsConnection.close();
+        wsConnection = null;
+      }
+    },
   };
 }
 
-export default createWebAdapter;
+// Export default adapter instance
+export const webAdapter = createWebAdapter();

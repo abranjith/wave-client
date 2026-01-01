@@ -1,1 +1,1 @@
-export { createWebAdapter, default } from './webAdapter';
+export { createWebAdapter, checkServerHealth, webAdapter as default } from './webAdapter';

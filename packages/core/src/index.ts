@@ -100,7 +100,7 @@ export type {
     BodyValidationRule,
     TimeValidationRule,
     ValidationRuleRef,
-    RequestValidation,
+    RequestValidation as RequestValidationData,  // Renamed to avoid conflict with RequestValidation component
     ValidationResult,
     ValidationRuleResult,
     GlobalValidationRule,
@@ -113,7 +113,7 @@ export type {
     RequestBinaryBody,
     RequestFormBody,
     RequestMultiPartFormBody,
-    RequestBody,
+    RequestBody as RequestBodyData,  // Renamed to avoid conflict with RequestBody component
     FileWithPreview,
     FileMetadata,
     RequestSectionTab,
