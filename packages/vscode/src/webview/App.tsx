@@ -482,7 +482,7 @@ const App: React.FC = () => {
 
   return (
     <div
-      className="min-h-screen h-screen w-screen bg-slate-50 dark:bg-slate-900 grid relative"
+      className="min-h-screen h-screen w-screen bg-background text-foreground grid relative transition-colors"
       style={{
         display: 'grid',
         gridTemplateColumns: '400px 1fr',

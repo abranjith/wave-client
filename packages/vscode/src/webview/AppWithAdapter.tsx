@@ -15,7 +15,7 @@
  * has its own vsCodeRef but this is fine during transition - both point to same API.
  */
 
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, createContext, useContext } from 'react';
 import { AdapterProvider, type IPlatformAdapter } from '@wave-client/core';
 import { createVSCodeAdapter } from './vsCodeAdapter';
 import App from './App';
@@ -40,6 +40,22 @@ function getVSCodeApi() {
 // Export for use by App.tsx during transition
 export { getVSCodeApi };
 
+// Theme Context
+interface ThemeContextType {
+  theme: 'light' | 'dark';
+  toggleTheme: () => void;
+}
+
+const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
+
+export const useTheme = () => {
+  const context = useContext(ThemeContext);
+  if (!context) {
+    throw new Error('useTheme must be used within ThemeContext.Provider');
+  }
+  return context;
+};
+
 /**
  * Wrapper component that provides the adapter context.
  * During the migration period, this coexists with the legacy vsCodeRef pattern in App.tsx.
@@ -47,7 +63,16 @@ export { getVSCodeApi };
 export const AppWithAdapter: React.FC = () => {
     const [adapter, setAdapter] = useState<IPlatformAdapter | null>(null);
     const [error, setError] = useState<Error | null>(null);
+    const [theme, setTheme] = useState<'light' | 'dark'>('light');
     const cleanupRef = useRef<(() => void) | null>(null);
+
+    const toggleTheme = () => {
+        setTheme((prev) => (prev === 'light' ? 'dark' : 'light'));
+    };
+
+    useEffect(() => {
+        document.documentElement.classList.toggle('dark', theme === 'dark');
+    }, [theme]);
 
     useEffect(() => {
         try {
@@ -105,7 +130,9 @@ export const AppWithAdapter: React.FC = () => {
 
     return (
         <AdapterProvider adapter={adapter}>
-            <App />
+            <ThemeContext.Provider value={{ theme, toggleTheme }}>
+                    <App />
+            </ThemeContext.Provider>
         </AdapterProvider>
     );
 };

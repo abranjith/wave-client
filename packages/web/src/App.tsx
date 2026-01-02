@@ -5,7 +5,7 @@
  * Uses the web platform adapter with server-based persistence.
  */
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, createContext, useContext } from 'react';
 import ConfigPanel from './components/ConfigPanel';
 import RequestEditor from './components/RequestEditor';
 import {
@@ -44,6 +44,22 @@ import { createWebAdapter, checkServerHealth } from './adapters';
 // Create the web adapter instance
 const webAdapter = createWebAdapter();
 
+// Theme Context
+interface ThemeContextType {
+  theme: 'light' | 'dark';
+  toggleTheme: () => void;
+}
+
+const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
+
+export const useTheme = () => {
+  const context = useContext(ThemeContext);
+  if (!context) {
+    throw new Error('useTheme must be used within ThemeContext.Provider');
+  }
+  return context;
+};
+
 /**
  * Server connection status component
  */
@@ -57,7 +73,7 @@ function ServerStatus() {
     };
 
     checkConnection();
-    const interval = setInterval(checkConnection, 5000);
+    const interval = setInterval(checkConnection, 10000);
     return () => clearInterval(interval);
   }, []);
 
@@ -535,7 +551,7 @@ function WaveClientUI() {
 
   return (
     <div
-      className="min-h-screen h-screen w-screen bg-slate-50 dark:bg-slate-900 grid relative"
+      className="min-h-screen h-screen w-screen bg-background text-foreground grid relative transition-colors"
       style={{
         display: 'grid',
         gridTemplateColumns: '400px 1fr',
@@ -636,9 +652,34 @@ function WaveClientUI() {
  * Main App component with adapter provider
  */
 function App() {
+  const [theme, setTheme] = useState<'light' | 'dark'>('light');
+
+  const toggleTheme = () => {
+    setTheme((prev) => (prev === 'light' ? 'dark' : 'light'));
+  };
+
+  useEffect(() => {
+    // Ensure we start in light mode and do not inherit browser/system theme
+    // Force a clean light default (avoid inheriting browser/system dark)
+    document.documentElement.classList.remove('dark');
+    document.body.classList.remove('dark');
+    const root = document.getElementById('root');
+    root?.classList.remove('dark');
+  }, []);
+
+  useEffect(() => {
+    const isDark = theme === 'dark';
+    document.documentElement.classList.toggle('dark', isDark);
+    document.body.classList.toggle('dark', isDark);
+    const root = document.getElementById('root');
+    root?.classList.toggle('dark', isDark);
+  }, [theme]);
+
   return (
     <AdapterProvider adapter={webAdapter}>
-      <WaveClientUI />
+      <ThemeContext.Provider value={{ theme, toggleTheme }}>
+        <WaveClientUI />
+      </ThemeContext.Provider>
     </AdapterProvider>
   );
 }

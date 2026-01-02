@@ -22,6 +22,7 @@ import { registerSecurityRoutes } from './routes/security.js';
 import { registerWebSocketRoutes } from './routes/websocket.js';
 import { initializeServices } from './services/init.js';
 
+//TODO: Make PORT and HOST configurable via environment variables or config file
 const PORT = 3456;
 const HOST = '127.0.0.1';
 

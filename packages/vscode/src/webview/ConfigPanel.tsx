@@ -1,5 +1,5 @@
 import React from 'react';
-import { SunIcon , LibraryIcon , HistoryIcon, PlusIcon, ShieldCheckIcon, SettingsIcon } from 'lucide-react';
+import { SunIcon , MoonIcon, LibraryIcon , HistoryIcon, ShieldCheckIcon, SettingsIcon, LightbulbIcon } from 'lucide-react';
 import {
   Tabs,
   TabsContent,
@@ -9,7 +9,6 @@ import {
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
-  Button,
   SecondaryButton,
   CollectionsPane,
   EnvironmentsPane,
@@ -18,6 +17,7 @@ import {
   type Environment,
   type RequestFormData,
 } from '@wave-client/core';
+import { useTheme } from './AppWithAdapter';
 
 interface ConfigPanelProps {
   onRequestSelect: ((request: RequestFormData) => void)
@@ -39,6 +39,8 @@ const TABS = [
 ];
 
 const ConfigPanel: React.FC<ConfigPanelProps> = ({ onRequestSelect, onEnvSelect, onStoreSelect, onSettingsSelect, onImportCollection, onExportCollection, onImportEnvironments, onExportEnvironments, vsCodeApi }) => {
+  const { theme, toggleTheme } = useTheme();
+
   return (
     <div className="flex h-full w-full overflow-hidden">
       <Tabs
@@ -69,7 +71,7 @@ const ConfigPanel: React.FC<ConfigPanelProps> = ({ onRequestSelect, onEnvSelect,
           ))}
           </TabsList>
           {/* Settings Button at the bottom */}
-          <div className="mt-auto pt-2 border-t border-slate-200 dark:border-slate-700">
+          <div className="mt-auto pt-2 border-t border-slate-200 dark:border-slate-700 space-y-2">
             <SecondaryButton
               variant="ghost"
               onClick={onSettingsSelect}
@@ -77,6 +79,13 @@ const ConfigPanel: React.FC<ConfigPanelProps> = ({ onRequestSelect, onEnvSelect,
               tooltip="Settings"
               className="flex items-center justify-center w-full h-12 text-slate-600 hover:bg-slate-100 hover:text-blue-600 rounded-md transition-colors dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-blue-400"
             />
+            <button
+              onClick={toggleTheme}
+              className="flex items-center justify-center w-full h-12 text-slate-600 hover:bg-slate-100 hover:text-blue-600 rounded-md transition-colors dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-blue-400 p-0"
+              title={theme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'}
+            >
+              {theme === 'dark' ? <LightbulbIcon size={20}/> : <MoonIcon size={20}/>}
+            </button>
           </div>
         </div>
         <div className="flex-1 overflow-hidden">

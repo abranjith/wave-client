@@ -20,6 +20,7 @@
 @layer base {
   :root {
     --radius: 0.625rem;
+    color-scheme: light;
     --background: 0 0% 100%;
     --foreground: 222.2 84% 4.9%;
     --card: 0 0% 100%;
@@ -63,7 +64,9 @@
     --vscode-editor-foreground: 222.2 84% 4.9%;
   }
 
-  .dark {
+    .dark,
+    :root.dark {
+    color-scheme: dark;
     --background: 222.2 84% 4.9%;
     --foreground: 210 40% 98%;
     --card: 222.2 84% 4.9%;
@@ -254,4 +257,9 @@
 /* Constants - Indigo */
 .hljs-constant {
   @apply text-indigo-600 dark:text-indigo-400;
+}
+
+body {
+  background-color: hsl(var(--background));
+  color: hsl(var(--foreground));
 }
