@@ -3,12 +3,14 @@ import { ClockIcon } from 'lucide-react';
 import { ParsedRequest } from '../../types/collection';
 import useAppStateStore from '../../hooks/store/useAppStateStore';
 import { getHttpMethodColor } from '../../utils/common';
+import { Button } from '../ui/button';
 
 interface HistoryPaneProps {
   onRequestSelect: (request: ParsedRequest) => void;
+  onRetry?: () => void;
 }
 
-const HistoryPane: React.FC<HistoryPaneProps> = ({ onRequestSelect }) => {
+const HistoryPane: React.FC<HistoryPaneProps> = ({ onRequestSelect, onRetry }) => {
   const history = useAppStateStore((state) => state.history);
   const isLoading = useAppStateStore((state) => state.isHistoryLoading);
   const error = useAppStateStore((state) => state.historyLoadError);
@@ -58,7 +60,17 @@ const HistoryPane: React.FC<HistoryPaneProps> = ({ onRequestSelect }) => {
           <div className="text-center">
             <div className="text-red-500 mb-2">⚠️</div>
             <p className="text-sm text-red-600 dark:text-red-400 mb-2">Error loading history</p>
-            <p className="text-xs text-slate-500 dark:text-slate-400">{error}</p>
+            <p className="text-xs text-slate-500 dark:text-slate-400 mb-4">{error}</p>
+            {onRetry && (
+              <Button
+                onClick={onRetry}
+                variant="outline"
+                size="sm"
+                className="text-xs"
+              >
+                Retry
+              </Button>
+            )}
           </div>
         </div>
       </div>

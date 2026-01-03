@@ -28,6 +28,9 @@ interface ConfigPanelProps {
   onExportCollection: (collectionName: string, exportFormat: string) => void;
   onImportEnvironments: (fileName: string, fileContent: string) => void;
   onExportEnvironments: () => void;
+  onRetryCollections?: () => void;
+  onRetryHistory?: () => void;
+  onRetryEnvironments?: () => void;
   vsCodeApi?: { postMessage: (message: unknown) => void };
 }
 
@@ -38,7 +41,7 @@ const TABS = [
   { key: 'store', label: 'Wave Store', icon: <ShieldCheckIcon size={20} /> },
 ];
 
-const ConfigPanel: React.FC<ConfigPanelProps> = ({ onRequestSelect, onEnvSelect, onStoreSelect, onSettingsSelect, onImportCollection, onExportCollection, onImportEnvironments, onExportEnvironments, vsCodeApi }) => {
+const ConfigPanel: React.FC<ConfigPanelProps> = ({ onRequestSelect, onEnvSelect, onStoreSelect, onSettingsSelect, onImportCollection, onExportCollection, onImportEnvironments, onExportEnvironments, onRetryCollections, onRetryHistory, onRetryEnvironments, vsCodeApi }) => {
   const { theme, toggleTheme } = useTheme();
 
   return (
@@ -94,12 +97,14 @@ const ConfigPanel: React.FC<ConfigPanelProps> = ({ onRequestSelect, onEnvSelect,
                 onRequestSelect={onRequestSelect}
                 onImportCollection={onImportCollection}
                 onExportCollection={onExportCollection}
+                onRetry={onRetryCollections}
                 vsCodeApi={vsCodeApi}
               />
           </TabsContent>
           <TabsContent value="history" className="h-full overflow-hidden">
             <HistoryPane 
                 onRequestSelect={onRequestSelect}
+                onRetry={onRetryHistory}
               />
           </TabsContent>
           <TabsContent value="environments" className="h-full overflow-hidden">
@@ -107,6 +112,7 @@ const ConfigPanel: React.FC<ConfigPanelProps> = ({ onRequestSelect, onEnvSelect,
                 onEnvSelect={onEnvSelect}
                 onImportEnvironments={onImportEnvironments}
                 onExportEnvironments={onExportEnvironments}
+                onRetry={onRetryEnvironments}
               />
           </TabsContent>
           <TabsContent value="store" className="h-full overflow-hidden">

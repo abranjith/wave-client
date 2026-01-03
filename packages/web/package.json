@@ -5,6 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "start": "node scripts/start-dev.js",
+    "start:custom": "node scripts/start-dev.js",
     "build": "vite build",
     "preview": "vite preview",
     "lint": "eslint src",

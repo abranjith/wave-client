@@ -11,6 +11,7 @@ interface EnvironmentsPaneProps {
   onEnvSelect: (environment: Environment) => void;
   onImportEnvironments: (fileName: string, fileContent: string) => void;
   onExportEnvironments: () => void;
+  onRetry?: () => void;
 }
 
 interface EnvironmentsPaneHeaderProps {
@@ -69,7 +70,7 @@ const EnvironmentsPaneHeader: React.FC<EnvironmentsPaneHeaderProps> = ({ label, 
   );
 };
 
-const EnvironmentsPane: React.FC<EnvironmentsPaneProps> = ({ onEnvSelect, onImportEnvironments, onExportEnvironments }) => {
+const EnvironmentsPane: React.FC<EnvironmentsPaneProps> = ({ onEnvSelect, onImportEnvironments, onExportEnvironments, onRetry }) => {
   const environments = useAppStateStore((state) => state.environments);
   const isLoading = useAppStateStore((state) => state.isEnvironmentsLoading);
   const error = useAppStateStore((state) => state.environmentLoadError);
@@ -149,7 +150,17 @@ const EnvironmentsPane: React.FC<EnvironmentsPaneProps> = ({ onEnvSelect, onImpo
           <div className="text-center">
             <div className="text-red-500 mb-2">⚠️</div>
             <p className="text-sm text-red-600 dark:text-red-400 mb-2">Error loading environments</p>
-            <p className="text-xs text-slate-500 dark:text-slate-400">{error}</p>
+            <p className="text-xs text-slate-500 dark:text-slate-400 mb-4">{error}</p>
+            {onRetry && (
+              <Button
+                onClick={onRetry}
+                variant="outline"
+                size="sm"
+                className="text-xs"
+              >
+                Retry
+              </Button>
+            )}
           </div>
         </div>
         <EnvImportWizard

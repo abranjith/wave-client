@@ -245,6 +245,39 @@ function WaveClientUI() {
     initializeData();
   }, [storage]);
 
+  const handleRetryCollections = async () => {
+    setIsCollectionsLoading(true);
+    const collectionsResult = await storage.loadCollections();
+    if (collectionsResult.isOk) {
+      setCollections(collectionsResult.value);
+    } else {
+      setCollectionLoadError(collectionsResult.error);
+    }
+    setIsCollectionsLoading(false);
+  };
+
+  const handleRetryHistory = async () => {
+    setIsHistoryLoading(true);
+    const historyResult = await storage.loadHistory();
+    if (historyResult.isOk) {
+      setHistory(historyResult.value);
+    } else {
+      setHistoryLoadError(historyResult.error);
+    }
+    setIsHistoryLoading(false);
+  };
+
+  const handleRetryEnvironments = async () => {
+    setIsEnvironmentsLoading(true);
+    const environmentsResult = await storage.loadEnvironments();
+    if (environmentsResult.isOk) {
+      setEnvironments(environmentsResult.value);
+    } else {
+      setEnvironmentLoadError(environmentsResult.error);
+    }
+    setIsEnvironmentsLoading(false);
+  };
+
   const handleRequestSelect = (request: RequestFormData) => {
     loadRequestIntoTab(request);
     setSelectedEnvironment(null);
@@ -588,6 +621,9 @@ function WaveClientUI() {
           onExportCollection={handleExportCollection}
           onImportEnvironments={handleImportEnvironments}
           onExportEnvironments={handleExportEnvironments}
+          onRetryCollections={handleRetryCollections}
+          onRetryHistory={handleRetryHistory}
+          onRetryEnvironments={handleRetryEnvironments}
         />
       </div>
 

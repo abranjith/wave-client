@@ -28,6 +28,9 @@ interface ConfigPanelProps {
   onExportCollection: (collectionName: string, exportFormat: string) => void;
   onImportEnvironments: (fileName: string, fileContent: string) => void;
   onExportEnvironments: () => void;
+  onRetryCollections?: () => void;
+  onRetryHistory?: () => void;
+  onRetryEnvironments?: () => void;
 }
 
 const TABS = [
@@ -46,6 +49,9 @@ const ConfigPanel: React.FC<ConfigPanelProps> = ({
   onExportCollection,
   onImportEnvironments,
   onExportEnvironments,
+  onRetryCollections,
+  onRetryHistory,
+  onRetryEnvironments,
 }) => {
   const { theme, toggleTheme } = useTheme();
 
@@ -107,16 +113,18 @@ const ConfigPanel: React.FC<ConfigPanelProps> = ({
               onRequestSelect={onRequestSelect}
               onImportCollection={onImportCollection}
               onExportCollection={onExportCollection}
+              onRetry={onRetryCollections}
             />
           </TabsContent>
           <TabsContent value="history" className="h-full overflow-hidden">
-            <HistoryPane onRequestSelect={onRequestSelect} />
+            <HistoryPane onRequestSelect={onRequestSelect} onRetry={onRetryHistory} />
           </TabsContent>
           <TabsContent value="environments" className="h-full overflow-hidden">
             <EnvironmentsPane
               onEnvSelect={onEnvSelect}
               onImportEnvironments={onImportEnvironments}
               onExportEnvironments={onExportEnvironments}
+              onRetry={onRetryEnvironments}
             />
           </TabsContent>
           <TabsContent value="store" className="h-full overflow-hidden">

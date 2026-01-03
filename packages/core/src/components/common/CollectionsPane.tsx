@@ -22,6 +22,7 @@ interface CollectionsPaneProps {
   onRequestSelect: (request: RequestFormData) => void;
   onImportCollection: (fileName: string, fileContent: string, collectionType: string) => void;
   onExportCollection: (collectionName: string, exportFormat: string) => void;
+  onRetry?: () => void;
   vsCodeApi?: { postMessage: (message: unknown) => void };
 }
 
@@ -155,6 +156,7 @@ const CollectionsPane: React.FC<CollectionsPaneProps> = ({
   onRequestSelect,
   onImportCollection,
   onExportCollection,
+  onRetry,
   vsCodeApi,
 }) => {
   const collections = useAppStateStore((state) => state.collections);
@@ -348,7 +350,17 @@ const CollectionsPane: React.FC<CollectionsPaneProps> = ({
           <div className="text-center">
             <div className="text-red-500 mb-2">⚠️</div>
             <p className="text-sm text-red-600 dark:text-red-400 mb-2">Error loading collections</p>
-            <p className="text-xs text-slate-500 dark:text-slate-400">{error}</p>
+            <p className="text-xs text-slate-500 dark:text-slate-400 mb-4">{error}</p>
+            {onRetry && (
+              <Button
+                onClick={onRetry}
+                variant="outline"
+                size="sm"
+                className="text-xs"
+              >
+                Retry
+              </Button>
+            )}
           </div>
         </div>
         <CollectionsImportWizard
