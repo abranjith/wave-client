@@ -151,13 +151,13 @@ export {
     createMockCollection,
     createMockEnvironment,
     createMockParsedRequest,
-} from './hooks/mockAdapter';
+} from './test/mocks/mockAdapter';
 export type {
     MockDataStore,
     MockHttpOptions,
     MockNotificationLog,
     CreateMockAdapterOptions,
-} from './hooks/mockAdapter';
+} from './test/mocks/mockAdapter';
 
 // ============================================================================
 // Utilities

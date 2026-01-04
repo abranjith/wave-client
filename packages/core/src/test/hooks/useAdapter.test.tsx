@@ -37,7 +37,7 @@ describe('useAdapter', () => {
     });
 
     it('should return adapter when used inside AdapterProvider', () => {
-      const mockAdapter = createMockAdapter();
+      const { adapter: mockAdapter } = createMockAdapter();
       let capturedAdapter: IPlatformAdapter | null = null;
 
       function TestComponent() {
@@ -57,7 +57,7 @@ describe('useAdapter', () => {
 
   describe('specific adapter hooks', () => {
     it('useStorageAdapter should return storage adapter', () => {
-      const mockAdapter = createMockAdapter();
+      const { adapter: mockAdapter } = createMockAdapter();
       let storageAdapter: any = null;
 
       function TestComponent() {
@@ -75,7 +75,7 @@ describe('useAdapter', () => {
     });
 
     it('useHttpAdapter should return http adapter', () => {
-      const mockAdapter = createMockAdapter();
+      const { adapter: mockAdapter } = createMockAdapter();
       let httpAdapter: any = null;
 
       function TestComponent() {
@@ -93,7 +93,7 @@ describe('useAdapter', () => {
     });
 
     it('useFileAdapter should return file adapter', () => {
-      const mockAdapter = createMockAdapter();
+      const { adapter: mockAdapter } = createMockAdapter();
       let fileAdapter: any = null;
 
       function TestComponent() {
@@ -111,7 +111,7 @@ describe('useAdapter', () => {
     });
 
     it('useSecretAdapter should return secret adapter', () => {
-      const mockAdapter = createMockAdapter();
+      const { adapter: mockAdapter } = createMockAdapter();
       let secretAdapter: any = null;
 
       function TestComponent() {
@@ -129,7 +129,7 @@ describe('useAdapter', () => {
     });
 
     it('useSecurityAdapter should return security adapter', () => {
-      const mockAdapter = createMockAdapter();
+      const { adapter: mockAdapter } = createMockAdapter();
       let securityAdapter: any = null;
 
       function TestComponent() {
@@ -147,7 +147,7 @@ describe('useAdapter', () => {
     });
 
     it('useNotificationAdapter should return notification adapter', () => {
-      const mockAdapter = createMockAdapter();
+      const { adapter: mockAdapter } = createMockAdapter();
       let notificationAdapter: any = null;
 
       function TestComponent() {
@@ -167,7 +167,7 @@ describe('useAdapter', () => {
 
   describe('usePlatform hook', () => {
     it('should return the platform type', () => {
-      const mockAdapter = createMockAdapter({ platform: 'test' });
+      const { adapter: mockAdapter } = createMockAdapter();
       let platform: any = null;
 
       function TestComponent() {
@@ -200,7 +200,7 @@ describe('useAdapter', () => {
     });
 
     it('should return adapter when used inside AdapterProvider', () => {
-      const mockAdapter = createMockAdapter();
+      const { adapter: mockAdapter } = createMockAdapter();
       let adapter: any = null;
 
       function TestComponent() {
@@ -220,7 +220,7 @@ describe('useAdapter', () => {
 
   describe('AdapterProvider', () => {
     it('should render children when adapter does not need initialization', () => {
-      const mockAdapter = createMockAdapter();
+      const { adapter: mockAdapter } = createMockAdapter();
 
       render(
         <AdapterProvider adapter={mockAdapter}>
@@ -232,7 +232,7 @@ describe('useAdapter', () => {
     });
 
     it('should show loading state while initializing', async () => {
-      const mockAdapter = createMockAdapter();
+      const { adapter: mockAdapter } = createMockAdapter();
       mockAdapter.initialize = vi.fn(
         () => new Promise<void>((resolve) => setTimeout(resolve, 100))
       );
@@ -248,7 +248,7 @@ describe('useAdapter', () => {
 
     it('should call onInitialized after successful initialization', async () => {
       const onInitialized = vi.fn();
-      const mockAdapter = createMockAdapter();
+      const { adapter: mockAdapter } = createMockAdapter();
       mockAdapter.initialize = vi.fn(() => Promise.resolve());
 
       render(
@@ -264,7 +264,7 @@ describe('useAdapter', () => {
 
     it('should show error when initialization fails', async () => {
       const onError = vi.fn();
-      const mockAdapter = createMockAdapter();
+      const { adapter: mockAdapter } = createMockAdapter();
       mockAdapter.initialize = vi.fn(() =>
         Promise.reject(new Error('Init failed'))
       );
@@ -283,7 +283,7 @@ describe('useAdapter', () => {
 
     it('should call dispose on unmount', () => {
       const dispose = vi.fn();
-      const mockAdapter = createMockAdapter();
+      const { adapter: mockAdapter } = createMockAdapter();
       mockAdapter.dispose = dispose;
 
       const { unmount } = render(
@@ -300,7 +300,7 @@ describe('useAdapter', () => {
 
   describe('useAdapterEvent hook', () => {
     it('should subscribe to events and receive notifications', async () => {
-      const mockAdapter = createMockAdapter();
+      const { adapter: mockAdapter } = createMockAdapter();
       const handler = vi.fn();
 
       function TestComponent() {
@@ -327,7 +327,7 @@ describe('useAdapter', () => {
     });
 
     it('should unsubscribe from events on unmount', () => {
-      const mockAdapter = createMockAdapter();
+      const { adapter: mockAdapter } = createMockAdapter();
       const handler = vi.fn();
 
       function TestComponent() {
@@ -363,9 +363,9 @@ describe('useAdapter', () => {
         },
       ];
 
-      const mockAdapter = createMockAdapter({
-        storage: {
-          loadCollections: async () => Ok(mockCollections),
+      const { adapter: mockAdapter, store } = createMockAdapter({
+        initialData: {
+          collections: mockCollections,
         },
       });
 

@@ -1,222 +1,656 @@
-import type {
-  IPlatformAdapter,
-  IStorageAdapter,
-  IHttpAdapter,
-  IFileAdapter,
-  ISecretAdapter,
-  ISecurityAdapter,
-  INotificationAdapter,
-  IAdapterEvents,
-  EncryptionStatus,
-  HttpRequestConfig,
-  HttpResponseResult,
-  SaveDialogOptions,
-  OpenDialogOptions,
+/**
+ * Mock Platform Adapter for Testing
+ * 
+ * Provides in-memory implementations of all adapter interfaces.
+ * Useful for:
+ * - Unit testing components that use adapters
+ * - Storybook stories
+ * - Development without a real backend
+ * 
+ * Usage:
+ * ```tsx
+ * import { createMockAdapter } from './mockAdapter';
+ * 
+ * const mockAdapter = createMockAdapter({
+ *   collections: [mockCollection],
+ *   environments: [mockEnv],
+ * });
+ * 
+ * <AdapterProvider adapter={mockAdapter}>
+ *   <ComponentUnderTest />
+ * </AdapterProvider>
+ * ```
+ */
+
+import { ok, err, type Result } from '../../utils/result';
+import {
+    createAdapterEventEmitter,
+    type IPlatformAdapter,
+    type IStorageAdapter,
+    type IHttpAdapter,
+    type IFileAdapter,
+    type ISecretAdapter,
+    type ISecurityAdapter,
+    type INotificationAdapter,
+    type IAdapterEvents,
+    type HttpRequestConfig,
+    type HttpResponseResult,
+    type SaveDialogOptions,
+    type OpenDialogOptions,
+    type NotificationType,
+    type EncryptionStatus,
+    type AppSettings,
 } from '../../types/adapters';
 import type {
-  Collection,
-  Environment,
-  ParsedRequest,
-  Cookie,
-  Proxy,
-  Cert,
+    Collection,
+    CollectionItem,
+    Environment,
+    ParsedRequest,
+    Cookie,
+    Proxy,
+    Cert,
 } from '../../types/collection';
 import type { Auth } from '../../types/auth';
 import type { ValidationRule } from '../../types/validation';
-import type { AppSettings } from '../../types/adapters';
-import { Ok, Err } from '../../utils/result';
-import { createAdapterEventEmitter } from '../../types/adapters';
 
-/**
- * Factory function to create a mock adapter for testing
- * 
- * Usage:
- * ```ts
- * const adapter = createMockAdapter({
- *   storage: {
- *     loadCollections: async () => Ok([mockCollection]),
- *   },
- *   http: {
- *     executeRequest: async () => Ok(mockResponse),
- *   },
- * });
- * ```
- */
-export function createMockAdapter(
-  overrides: Partial<{
-    storage: Partial<IStorageAdapter>;
-    http: Partial<IHttpAdapter>;
-    file: Partial<IFileAdapter>;
-    secret: Partial<ISecretAdapter>;
-    security: Partial<ISecurityAdapter>;
-    notification: Partial<INotificationAdapter>;
-    platform: 'vscode' | 'web' | 'test';
-  }> = {}
-): IPlatformAdapter {
-  const events = createAdapterEventEmitter();
+// ============================================================================
+// Mock Data Store (in-memory)
+// ============================================================================
 
-  // Default mock implementations that return empty/success results
-  const defaultStorage: IStorageAdapter = {
-    loadCollections: async () => Ok([]),
-    saveCollection: async (collection) => Ok(collection),
-    deleteCollection: async () => Ok(undefined),
-    saveRequestToCollection: async (collectionFilename, itemPath, item) => Ok(createMockCollection()),
-    deleteRequestFromCollection: async () => Ok(createMockCollection()),
-    importCollection: async () => Ok([]),
-    exportCollection: async () => Ok({ filePath: '', fileName: '' }),
-    loadEnvironments: async () => Ok([]),
-    saveEnvironment: async () => Ok(undefined),
-    saveEnvironments: async () => Ok(undefined),
-    deleteEnvironment: async () => Ok(undefined),
-    importEnvironments: async () => Ok([]),
-    exportEnvironments: async () => Ok({ filePath: '', fileName: '' }),
-    loadHistory: async () => Ok([]),
-    saveRequestToHistory: async () => Ok(undefined),
-    clearHistory: async () => Ok(undefined),
-    loadCookies: async () => Ok([]),
-    saveCookies: async () => Ok(undefined),
-    loadAuths: async () => Ok([]),
-    saveAuths: async () => Ok(undefined),
-    loadProxies: async () => Ok([]),
-    saveProxies: async () => Ok(undefined),
-    loadCerts: async () => Ok([]),
-    saveCerts: async () => Ok(undefined),
-    loadSettings: async () => Ok({ encryptionEnabled: false }),
-    saveSettings: async () => Ok(undefined),
-    loadValidationRules: async () => Ok([]),
-    saveValidationRules: async () => Ok(undefined),
-    ...overrides.storage,
-  };
+export interface MockDataStore {
+    collections: Collection[];
+    environments: Environment[];
+    history: ParsedRequest[];
+    cookies: Cookie[];
+    auths: Auth[];
+    proxies: Proxy[];
+    certs: Cert[];
+    validationRules: ValidationRule[];
+    settings: AppSettings;
+    secrets: Map<string, string>;
+    files: Map<string, string | Uint8Array>;
+}
 
-  const defaultHttp: IHttpAdapter = {
-    executeRequest: async () =>
-      Ok({
-        id: 'test-request-id',
-        status: 200,
-        statusText: 'OK',
-        elapsedTime: 100,
-        size: 1024,
-        body: '',
-        headers: {},
-        is_encoded: false,
-      }),
-    cancelRequest: () => {},
-    ...overrides.http,
-  };
+function createDefaultMockStore(): MockDataStore {
+    return {
+        collections: [],
+        environments: [],
+        history: [],
+        cookies: [],
+        auths: [],
+        proxies: [],
+        certs: [],
+        validationRules: [],
+        settings: {
+            encryptionEnabled: false,
+            theme: 'system',
+            autoSaveHistory: true,
+            maxHistoryItems: 100,
+        },
+        secrets: new Map(),
+        files: new Map(),
+    };
+}
 
-  const defaultFile: IFileAdapter = {
-    showSaveDialog: async () => null,
-    showOpenDialog: async () => null,
-    readFile: async () => Ok(''),
-    readFileAsBinary: async () => Ok(new Uint8Array()),
-    writeFile: async () => Ok(undefined),
-    writeBinaryFile: async () => Ok(undefined),
-    downloadResponse: async () => Ok(undefined),
-    importFile: async () => Ok(null),
-    ...overrides.file,
-  };
+// ============================================================================
+// Mock Storage Adapter
+// ============================================================================
 
-  const defaultSecret: ISecretAdapter = {
-    storeSecret: async () => Ok(undefined),
-    getSecret: async () => Ok(undefined),
-    deleteSecret: async () => Ok(undefined),
-    hasSecret: async () => false,
-    ...overrides.secret,
-  };
+function createMockStorageAdapter(store: MockDataStore): IStorageAdapter {
+    return {
+        // Collections
+        async loadCollections() {
+            return ok([...store.collections]);
+        },
+        async saveCollection(collection) {
+            const index = store.collections.findIndex(
+                c => c.info.waveId === collection.info.waveId
+            );
+            if (index >= 0) {
+                store.collections[index] = collection;
+            } else {
+                store.collections.push(collection);
+            }
+            return ok(collection);
+        },
+        async deleteCollection(collectionId) {
+            store.collections = store.collections.filter(
+                c => c.info.waveId !== collectionId
+            );
+            return ok(undefined);
+        },
+        async saveRequestToCollection(collectionFilename, itemPath, item) {
+            const collection = store.collections.find(c => c.filename === collectionFilename);
+            if (!collection) {
+                return err(`Collection not found: ${collectionFilename}`);
+            }
+            // Simple mock - just add to root
+            collection.item.push(item);
+            return ok(collection);
+        },
+        async deleteRequestFromCollection(collectionFilename, itemPath, itemId) {
+            const collection = store.collections.find(c => c.filename === collectionFilename);
+            if (!collection) {
+                return err(`Collection not found: ${collectionFilename}`);
+            }
+            collection.item = collection.item.filter(i => i.id !== itemId);
+            return ok(collection);
+        },
+        async importCollection(fileName, fileContent) {
+            try {
+                const parsed = JSON.parse(fileContent);
+                const collections = Array.isArray(parsed) ? parsed : [parsed];
+                store.collections.push(...collections);
+                return ok(collections);
+            } catch (error) {
+                return err(`Failed to parse collection: ${error}`);
+            }
+        },
+        async exportCollection(collectionFileName) {
+            const collection = store.collections.find(c => c.filename === collectionFileName);
+            if (!collection) {
+                return err(`Collection not found: ${collectionFileName}`);
+            }
+            const filePath = `mock://exports/${collectionFileName}`;
+            const fileName = collectionFileName;
+            store.files.set(filePath, JSON.stringify(collection, null, 2));
+            return ok({ filePath, fileName });
+        },
 
-  const defaultSecurity: ISecurityAdapter = {
-    getEncryptionStatus: async () => ({
-      enabled: false,
-      hasKey: false,
-      recoveryAvailable: false,
-    }),
-    enableEncryption: async () => Ok(undefined),
-    disableEncryption: async () => Ok(undefined),
-    changePassword: async () => Ok(undefined),
-    exportRecoveryKey: async () => Ok(undefined),
-    recoverWithKey: async () => Ok(undefined),
-    ...overrides.security,
-  };
+        // Environments
+        async loadEnvironments() {
+            return ok([...store.environments]);
+        },
+        async saveEnvironment(environment) {
+            const index = store.environments.findIndex(e => e.id === environment.id);
+            if (index >= 0) {
+                store.environments[index] = environment;
+            } else {
+                store.environments.push(environment);
+            }
+            return ok(undefined);
+        },
+        async saveEnvironments(environments) {
+            store.environments = [...environments];
+            return ok(undefined);
+        },
+        async deleteEnvironment(environmentId) {
+            store.environments = store.environments.filter(e => e.id !== environmentId);
+            return ok(undefined);
+        },
+        async importEnvironments(fileContent) {
+            try {
+                const parsed = JSON.parse(fileContent);
+                const environments = Array.isArray(parsed) ? parsed : [parsed];
+                store.environments.push(...environments);
+                return ok(environments);
+            } catch (error) {
+                return err(`Failed to parse environments: ${error}`);
+            }
+        },
+        async exportEnvironments() {
+            const filePath = `mock://exports/environments.json`;
+            const fileName = 'environments.json';
+            store.files.set(filePath, JSON.stringify(store.environments, null, 2));
+            return ok({ filePath, fileName });
+        },
 
-  const defaultNotification: INotificationAdapter = {
-    showNotification: () => {},
-    showConfirmation: async () => true,
-    showInput: async () => null,
-    ...overrides.notification,
-  };
+        // History
+        async loadHistory() {
+            return ok([...store.history]);
+        },
+        async saveRequestToHistory(request) {
+            store.history.unshift(request);
+            if (store.history.length > (store.settings.maxHistoryItems ?? 100)) {
+                store.history = store.history.slice(0, store.settings.maxHistoryItems ?? 100);
+            }
+            return ok(undefined);
+        },
+        async clearHistory() {
+            store.history = [];
+            return ok(undefined);
+        },
 
-  return {
-    storage: defaultStorage,
-    http: defaultHttp,
-    file: defaultFile,
-    secret: defaultSecret,
-    security: defaultSecurity,
-    notification: defaultNotification,
-    events,
-    platform: overrides.platform ?? 'test',
-  };
+        // Cookies
+        async loadCookies() {
+            return ok([...store.cookies]);
+        },
+        async saveCookies(cookies) {
+            store.cookies = [...cookies];
+            return ok(undefined);
+        },
+
+        // Auth Store
+        async loadAuths() {
+            return ok([...store.auths]);
+        },
+        async saveAuths(auths) {
+            store.auths = [...auths];
+            return ok(undefined);
+        },
+
+        // Proxy Store
+        async loadProxies() {
+            return ok([...store.proxies]);
+        },
+        async saveProxies(proxies) {
+            store.proxies = [...proxies];
+            return ok(undefined);
+        },
+
+        // Certificate Store
+        async loadCerts() {
+            return ok([...store.certs]);
+        },
+        async saveCerts(certs) {
+            store.certs = [...certs];
+            return ok(undefined);
+        },
+
+        // Validation Rules Store
+        async loadValidationRules() {
+            return ok([...store.validationRules]);
+        },
+        async saveValidationRules(rules) {
+            store.validationRules = [...rules];
+            return ok(undefined);
+        },
+
+        // Settings
+        async loadSettings() {
+            return ok({ ...store.settings });
+        },
+        async saveSettings(settings) {
+            store.settings = { ...settings };
+            return ok(undefined);
+        },
+    };
+}
+
+// ============================================================================
+// Mock HTTP Adapter
+// ============================================================================
+
+export interface MockHttpOptions {
+    /**
+     * Default response to return for all requests
+     */
+    defaultResponse?: Partial<HttpResponseResult>;
+    /**
+     * Map of URL patterns to responses
+     */
+    responses?: Map<string | RegExp, HttpResponseResult | ((config: HttpRequestConfig) => HttpResponseResult)>;
+    /**
+     * Simulate network delay in ms
+     */
+    delay?: number;
+    /**
+     * Simulate errors for certain URLs
+     */
+    errorUrls?: Set<string | RegExp>;
+}
+
+function createMockHttpAdapter(options: MockHttpOptions = {}): IHttpAdapter {
+    const pendingRequests = new Map<string, AbortController>();
+
+    return {
+        async executeRequest(config) {
+            const controller = new AbortController();
+            pendingRequests.set(config.id, controller);
+
+            try {
+                // Simulate network delay
+                if (options.delay) {
+                    await new Promise(resolve => setTimeout(resolve, options.delay));
+                }
+
+                // Check if aborted
+                if (controller.signal.aborted) {
+                    return err('Request cancelled');
+                }
+
+                // Check for error URLs
+                if (options.errorUrls) {
+                    for (const pattern of options.errorUrls) {
+                        if (typeof pattern === 'string' && config.url.includes(pattern)) {
+                            return err(`Network error: ${config.url}`);
+                        }
+                        if (pattern instanceof RegExp && pattern.test(config.url)) {
+                            return err(`Network error: ${config.url}`);
+                        }
+                    }
+                }
+
+                // Check for custom responses
+                if (options.responses) {
+                    for (const [pattern, response] of options.responses) {
+                        const matches = typeof pattern === 'string'
+                            ? config.url.includes(pattern)
+                            : pattern.test(config.url);
+
+                        if (matches) {
+                            const result = typeof response === 'function'
+                                ? response(config)
+                                : response;
+                            // Ensure we use the request's id, not any id from the response template
+                            const { id: _responseId, ...restResult } = result;
+                            return ok({ ...restResult, id: config.id });
+                        }
+                    }
+                }
+
+                // Return default mock response
+                // Extract id from defaultResponse to avoid duplicate property warning
+                const { id: _ignoredId, ...restDefaultResponse } = options.defaultResponse ?? {};
+                const defaultResponse: HttpResponseResult = {
+                    id: config.id,
+                    status: 200,
+                    statusText: 'OK',
+                    elapsedTime: options.delay ?? 50,
+                    size: 100,
+                    body: JSON.stringify({ success: true, mock: true }),
+                    headers: { 'content-type': 'application/json' },
+                    is_encoded: false,
+                    ...restDefaultResponse,
+                };
+
+                return ok(defaultResponse);
+            } finally {
+                pendingRequests.delete(config.id);
+            }
+        },
+
+        cancelRequest(requestId) {
+            const controller = pendingRequests.get(requestId);
+            if (controller) {
+                controller.abort();
+                pendingRequests.delete(requestId);
+            }
+        },
+    };
+}
+
+// ============================================================================
+// Mock File Adapter
+// ============================================================================
+
+function createMockFileAdapter(store: MockDataStore): IFileAdapter {
+    return {
+        async showSaveDialog(options) {
+            // In tests, return a predictable path
+            return `/mock/path/${options.defaultFileName ?? 'file.txt'}`;
+        },
+
+        async showOpenDialog(options) {
+            // In tests, return empty array (user cancelled) by default
+            // Override in specific tests as needed
+            return null;
+        },
+
+        async readFile(path) {
+            const content = store.files.get(path);
+            if (content === undefined) {
+                return err(`File not found: ${path}`);
+            }
+            if (content instanceof Uint8Array) {
+                return ok(new TextDecoder().decode(content));
+            }
+            return ok(content);
+        },
+
+        async readFileAsBinary(path) {
+            const content = store.files.get(path);
+            if (content === undefined) {
+                return err(`File not found: ${path}`);
+            }
+            if (typeof content === 'string') {
+                return ok(new TextEncoder().encode(content));
+            }
+            return ok(content);
+        },
+
+        async writeFile(path, content) {
+            store.files.set(path, content);
+            return ok(undefined);
+        },
+
+        async writeBinaryFile(path, data) {
+            store.files.set(path, data);
+            return ok(undefined);
+        },
+
+        async downloadResponse(data, filename, contentType) {
+            // In mock, just store the file
+            store.files.set(`/downloads/${filename}`, data);
+            return ok(undefined);
+        },
+
+        async importFile(options) {
+            // In tests, return null (cancelled) by default
+            return ok(null);
+        },
+    };
+}
+
+// ============================================================================
+// Mock Secret Adapter
+// ============================================================================
+
+function createMockSecretAdapter(store: MockDataStore): ISecretAdapter {
+    return {
+        async storeSecret(key, value) {
+            store.secrets.set(key, value);
+            return ok(undefined);
+        },
+
+        async getSecret(key) {
+            return ok(store.secrets.get(key));
+        },
+
+        async deleteSecret(key) {
+            store.secrets.delete(key);
+            return ok(undefined);
+        },
+
+        async hasSecret(key) {
+            return store.secrets.has(key);
+        },
+    };
+}
+
+// ============================================================================
+// Mock Security Adapter
+// ============================================================================
+
+function createMockSecurityAdapter(store: MockDataStore): ISecurityAdapter {
+    let encryptionEnabled = false;
+    let hasKey = false;
+
+    return {
+        async getEncryptionStatus(): Promise<EncryptionStatus> {
+            return {
+                enabled: encryptionEnabled,
+                hasKey,
+                recoveryAvailable: hasKey,
+            };
+        },
+
+        async enableEncryption(password) {
+            if (password.length < 8) {
+                return err('Password must be at least 8 characters');
+            }
+            encryptionEnabled = true;
+            hasKey = true;
+            return ok(undefined);
+        },
+
+        async disableEncryption(password) {
+            encryptionEnabled = false;
+            hasKey = false;
+            return ok(undefined);
+        },
+
+        async changePassword(oldPassword, newPassword) {
+            if (newPassword.length < 8) {
+                return err('New password must be at least 8 characters');
+            }
+            return ok(undefined);
+        },
+
+        async exportRecoveryKey() {
+            return ok(undefined);
+        },
+
+        async recoverWithKey(recoveryKeyPath) {
+            hasKey = true;
+            return ok(undefined);
+        },
+    };
+}
+
+// ============================================================================
+// Mock Notification Adapter
+// ============================================================================
+
+export interface MockNotificationLog {
+    type: NotificationType;
+    message: string;
+    timestamp: number;
+}
+
+function createMockNotificationAdapter(
+    notificationLog?: MockNotificationLog[]
+): INotificationAdapter {
+    const log = notificationLog ?? [];
+
+    return {
+        showNotification(type, message, duration) {
+            log.push({ type, message, timestamp: Date.now() });
+            // In tests, notifications are just logged
+        },
+
+        async showConfirmation(message, confirmLabel, cancelLabel) {
+            // Default to true in tests
+            return true;
+        },
+
+        async showInput(message, defaultValue, placeholder) {
+            // Default to the default value in tests
+            return defaultValue ?? null;
+        },
+    };
+}
+
+// ============================================================================
+// Create Mock Adapter Factory
+// ============================================================================
+
+export interface CreateMockAdapterOptions {
+    /**
+     * Initial data for the mock store
+     */
+    initialData?: Partial<MockDataStore>;
+    /**
+     * HTTP mock options
+     */
+    http?: MockHttpOptions;
+    /**
+     * Notification log (for assertions in tests)
+     */
+    notificationLog?: MockNotificationLog[];
 }
 
 /**
- * Helper to create mock collections for testing
+ * Creates a complete mock platform adapter for testing.
+ * Returns both the adapter and the underlying store for manipulation in tests.
+ */
+export function createMockAdapter(options: CreateMockAdapterOptions = {}): {
+    adapter: IPlatformAdapter;
+    store: MockDataStore;
+    notificationLog: MockNotificationLog[];
+} {
+    const store: MockDataStore = {
+        ...createDefaultMockStore(),
+        ...options.initialData,
+        secrets: new Map(options.initialData?.secrets ?? []),
+        files: new Map(options.initialData?.files ?? []),
+    };
+
+    const notificationLog = options.notificationLog ?? [];
+
+    const adapter: IPlatformAdapter = {
+        platform: 'test',
+        storage: createMockStorageAdapter(store),
+        http: createMockHttpAdapter(options.http),
+        file: createMockFileAdapter(store),
+        secret: createMockSecretAdapter(store),
+        security: createMockSecurityAdapter(store),
+        notification: createMockNotificationAdapter(notificationLog),
+        events: createAdapterEventEmitter(),
+    };
+
+    return { adapter, store, notificationLog };
+}
+
+// ============================================================================
+// Test Utilities
+// ============================================================================
+
+/**
+ * Creates a minimal mock adapter for simple component tests.
+ * Use createMockAdapter for more control.
+ */
+export function createMinimalMockAdapter(): IPlatformAdapter {
+    return createMockAdapter().adapter;
+}
+
+/**
+ * Creates a mock collection for testing
  */
 export function createMockCollection(overrides: Partial<Collection> = {}): Collection {
-  return {
-    info: {
-      waveId: 'test-id',
-      name: 'Test Collection',
-    },
-    item: [],
-    filename: 'test-collection',
-    ...overrides,
-  };
+    return {
+        info: {
+            waveId: `mock-${Date.now()}`,
+            name: 'Mock Collection',
+            description: 'A mock collection for testing',
+        },
+        item: [],
+        filename: 'mock-collection.json',
+        ...overrides,
+    };
 }
 
 /**
- * Helper to create mock environments for testing
+ * Creates a mock environment for testing
  */
 export function createMockEnvironment(overrides: Partial<Environment> = {}): Environment {
-  return {
-    id: 'test-env',
-    name: 'Test Environment',
-    values: [],
-    ...overrides,
-  };
+    return {
+        id: `mock-env-${Date.now()}`,
+        name: 'Mock Environment',
+        values: [
+            { key: 'BASE_URL', value: 'https://api.example.com', type: 'default', enabled: true },
+        ],
+        ...overrides,
+    };
 }
 
 /**
- * Helper to create mock HTTP response for testing
+ * Creates a mock parsed request for testing
  */
-export function createMockHttpResponse(
-  overrides: Partial<HttpResponseResult> = {}
-): HttpResponseResult {
-  return {
-    id: 'test-response',
-    status: 200,
-    statusText: 'OK',
-    elapsedTime: 100,
-    size: 1024,
-    body: '',
-    headers: {},
-    is_encoded: false,
-    ...overrides,
-  };
-}
-
-/**
- * Helper to create mock HTTP request config for testing
- */
-export function createMockHttpRequest(
-  overrides: Partial<HttpRequestConfig> = {}
-): HttpRequestConfig {
-  return {
-    id: 'test-request',
-    method: 'GET',
-    url: 'https://api.example.com',
-    headers: [],
-    params: [],
-    body: { type: 'none' },
-    envVars: {},
-    ...overrides,
-  };
+export function createMockParsedRequest(overrides: Partial<ParsedRequest> = {}): ParsedRequest {
+    return {
+        id: `mock-req-${Date.now()}`,
+        name: 'Mock Request',
+        method: 'GET',
+        url: 'https://api.example.com/test',
+        headers: [],
+        params: [],
+        body: null,
+        sourceRef: {
+            collectionFilename: 'mock.json',
+            collectionName: 'Mock Collection',
+            itemPath: [],
+        },
+        ...overrides,
+    };
 }

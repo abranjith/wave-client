@@ -130,11 +130,53 @@ function MyComponent() {
 
 ### 7. Documentation & Testing
 
-- Do **not** create or update tests in the initial version (will be added later)
-- Do **not** create or update documentation in the initial version (will be added later)
+- **Write tests for new functionality** using Vitest and React Testing Library
+- Follow the Testing Strategy guidelines below
 - Keep code self-documenting through clear names and structure
+- Do **not** create or update documentation in the initial version (will be added later)
 
 ### 8. Before Deleting Files
 
 - **Always ask for user confirmation** before deleting any files
 - Verify the file is not imported or used elsewhere in the codebase
+
+## Testing Strategy
+
+The project uses **Vitest** and **React Testing Library** for testing the core package.
+
+### Test Stack
+- **Runner:** Vitest
+- **Environment:** jsdom
+- **Utilities:** `@testing-library/react`, `@testing-library/user-event`
+- **Location:** `packages/core/src/test/`
+
+### Writing Tests
+1. **Location:** Place unit tests in `packages/core/src/test/` mirroring the source structure.
+2. **Mocking Adapters:** Use `createMockAdapter` similar to `packages/core/src/test/mocks/mockAdapter.ts` when testing components that rely on `useAdapter`.
+3. **Pattern:**
+   - Use `render` from `@testing-library/react`.
+   - Wrap components in `<AdapterProvider adapter={mockAdapter}>` where needed.
+   - Assert on user-visible behavior (text, buttons), not implementation details.
+
+### Example Test
+```tsx
+import { render, screen } from '@testing-library/react';
+import { describe, it, expect } from 'vitest';
+import { AdapterProvider } from '../../hooks/useAdapter';
+import { createMockAdapter } from '../mocks/mockAdapter';
+import { MyComponent } from '../../components/MyComponent';
+
+describe('MyComponent', () => {
+  it('renders correctly', () => {
+    const mockAdapter = createMockAdapter();
+    
+    render(
+      <AdapterProvider adapter={mockAdapter}>
+        <MyComponent />
+      </AdapterProvider>
+    );
+    
+    expect(screen.getByText('Hello')).toBeInTheDocument();
+  });
+});
+```
