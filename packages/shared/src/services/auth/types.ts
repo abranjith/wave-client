@@ -1,19 +1,19 @@
 /**
  * Auth types for the Auth Service layer.
  * 
- * These types are defined locally to avoid ESM/CJS import issues with @wave-client/core.
- * Keep in sync with @wave-client/core/types/auth.ts when updating.
+ * These types define the authentication structures used across
+ * VS Code extension, server, and web packages.
  */
 
-// ==================== Result Pattern (simplified for auth) ====================
+// ==================== Result Pattern ====================
 
-export interface Ok<T, E> {
+export interface Ok<T, _E = unknown> {
     isOk: true;
     isErr: false;
     value: T;
 }
 
-export interface Err<T, E> {
+export interface Err<_T = unknown, E = unknown> {
     isOk: false;
     isErr: true;
     error: E;
@@ -143,7 +143,7 @@ export interface InternalAuthResponse {
     status: number;
     statusText: string;
     headers: Record<string, unknown>;
-    data: Buffer | ArrayBuffer | string | unknown;
+    data?: Buffer | ArrayBuffer | string | unknown;
 }
 
 /**

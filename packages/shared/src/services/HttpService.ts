@@ -2,11 +2,13 @@ import axios, { AxiosResponse } from 'axios';
 import * as https from 'https';
 import { URL } from 'url';
 
-import { cookieService } from './CookieService.js';
-import { storeService } from './StoreService.js';
-import { getGlobalSettings } from './BaseStorageService.js';
-import { convertToBase64 } from '../utils.js';
-import type { Cookie, Auth, AuthType, EnvVarsMap, AuthRequestConfig, InternalAuthResponse } from '../types.js';
+import { cookieService } from './CookieService';
+import { storeService } from './StoreService';
+import { getGlobalSettings } from './BaseStorageService';
+import { convertToBase64 } from '../utils';
+import type { Cookie } from '../types';
+import type { Auth, AuthType, EnvVarsMap, AuthRequestConfig, InternalAuthResponse } from './auth/types';
+import { AuthServiceFactory } from './auth';
 
 // Re-export AuthService types that may be needed externally
 export type { AuthRequestConfig, InternalAuthResponse };
@@ -33,6 +35,16 @@ export interface SendResult {
 }
 
 /**
+ * Flexible auth type for HTTP requests.
+ * Can be a full Auth object or a simpler configuration.
+ */
+export interface HttpAuth {
+    type: AuthType | string;
+    enabled: boolean;
+    [key: string]: unknown;
+}
+
+/**
  * HTTP request configuration
  */
 export interface HttpRequestConfig {
@@ -42,7 +54,7 @@ export interface HttpRequestConfig {
     headers: Record<string, string>;
     params?: string | Record<string, string>; // Can be string or object
     body?: unknown;
-    auth?: Auth;
+    auth?: HttpAuth;
     envVars?: EnvVarsMap;
 }
 
@@ -234,6 +246,7 @@ export class HttpService {
             }
 
             // Handle authentication if provided
+            authServiceFactory ??= AuthServiceFactory;
             if (request.auth && request.auth.enabled && authServiceFactory) {
                 const authService = authServiceFactory.getService(request.auth.type as AuthType);
                 if (authService) {
@@ -247,7 +260,7 @@ export class HttpService {
 
                     const authResult = await authService.applyAuth(
                         authConfig,
-                        request.auth,
+                        request.auth as unknown as Auth,
                         request.envVars || {}
                     );
 

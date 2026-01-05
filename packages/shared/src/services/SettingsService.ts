@@ -1,11 +1,11 @@
 import * as path from 'path';
 import * as os from 'os';
 
-import { BaseStorageService, setGlobalSettingsProvider } from './BaseStorageService.js';
-import type { AppSettings } from '../types.js';
+import { BaseStorageService, setGlobalSettingsProvider } from './BaseStorageService';
+import type { AppSettings } from '../types';
 
 // Re-export AppSettings from this module for convenience
-export type { AppSettings } from '../types.js';
+export type { AppSettings } from '../types';
 
 /**
  * Service for managing application settings.

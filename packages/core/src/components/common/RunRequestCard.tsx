@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { ChevronDownIcon, ChevronRightIcon, LoaderCircle, CheckCircle2, XCircle, Circle } from 'lucide-react';
-import { CollectionItem, CollectionRequest } from '../../types/collection';
-import { urlToString } from '../../utils/collectionParser';
+import { CollectionRequest } from '../../types/collection';
 import { getHttpMethodColor } from '../../utils/common';
 import { Checkbox } from '../ui/checkbox';
 

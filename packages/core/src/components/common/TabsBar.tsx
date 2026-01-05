@@ -6,7 +6,6 @@
 
 import React, { useEffect, useCallback, useState } from 'react';
 import { PlusIcon, XIcon, CircleIcon, SaveIcon, BanIcon } from 'lucide-react';
-import { Button } from '../ui/button';
 import { PrimaryButton } from '../ui/PrimaryButton';
 import { SecondaryButton } from '../ui/SecondaryButton';
 import {

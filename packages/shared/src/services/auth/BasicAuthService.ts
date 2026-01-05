@@ -4,7 +4,8 @@
  */
 
 import { AuthServiceBase } from './AuthServiceBase';
-import { Auth, AuthResult, AuthRequestConfig, AuthType, BasicAuth, EnvVarsMap, authOk, authErr } from './types';
+import type { Auth, AuthResult, AuthRequestConfig, EnvVarsMap, BasicAuth } from './types';
+import { AuthType, authOk, authErr } from './types';
 
 export class BasicAuthService extends AuthServiceBase {
     getAuthType(): string {

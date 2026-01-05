@@ -1,7 +1,7 @@
 import * as path from 'path';
 
-import { BaseStorageService } from './BaseStorageService.js';
-import type { Environment } from '../types.js';
+import { BaseStorageService } from './BaseStorageService';
+import type { Environment } from '../types';
 
 /**
  * Service for managing environments (environment variables for requests).

@@ -17,7 +17,7 @@
 
 import React, { useEffect, useRef, useState, createContext, useContext } from 'react';
 import { AdapterProvider, type IPlatformAdapter } from '@wave-client/core';
-import { createVSCodeAdapter } from './vsCodeAdapter';
+import { createVSCodeAdapter } from './adapters/vsCodeAdapter';
 import App from './App';
 
 // Declare the VS Code API acquisition function (provided by VS Code webview runtime)

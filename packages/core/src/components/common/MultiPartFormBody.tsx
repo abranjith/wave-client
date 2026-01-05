@@ -1,6 +1,5 @@
 import React, { useState, useEffect, JSX, useMemo } from 'react';
 import { Trash2Icon, PlusIcon, XIcon, PaperclipIcon } from 'lucide-react';
-import { Button } from '../ui/button';
 import { SecondaryButton } from '../ui/SecondaryButton';
 import { Input } from '../ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';

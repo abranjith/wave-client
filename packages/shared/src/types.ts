@@ -246,19 +246,37 @@ export interface ValidationRuleResult {
     error?: string;
 }
 
+/**
+ * Entry in the global validation rules store
+ * Used for persisting validation rules with all needed metadata
+ */
 export interface GlobalValidationRule {
     id: string;
     name: string;
+    description?: string;
     category: 'status' | 'header' | 'body' | 'time';
     enabled: boolean;
-    config: Record<string, unknown>;
+    createdAt: string;       // ISO timestamp
+    updatedAt: string;       // ISO timestamp
+    // Rule-specific fields
+    operator: string;        // The operator type
+    value?: number | string; // Primary value
+    value2?: number;         // Secondary value (for 'between' operator)
+    values?: (number | string)[]; // Multiple values (for 'in', 'not_in' operators)
+    headerName?: string;     // For header rules
+    jsonPath?: string;       // For body rules with JSON path
+    caseSensitive?: boolean; // For header/body string comparisons
 }
 
 // ============================================================================
-// Auth Types
+// Auth Types (re-export from auth services)
+// Note: Full auth types are in services/auth/types.ts. These are simplified
+// types for basic usage (e.g., Collection auth). For auth service types,
+// import from services/auth/types.ts directly.
 // ============================================================================
 
-export type AuthType = 
+// Simple auth type string (for collection auth, etc.)
+export type SimpleAuthType = 
     | 'none'
     | 'basic'
     | 'digest'
@@ -268,28 +286,13 @@ export type AuthType =
     | 'aws'
     | 'ntlm';
 
-export interface Auth {
-    type: AuthType;
+// Simple auth interface (for collection auth, etc.)
+export interface SimpleAuth {
+    type: SimpleAuthType;
     enabled: boolean;
     [key: string]: unknown;
 }
 
-export type EnvVarsMap = Record<string, string>;
-
-export interface AuthRequestConfig {
-    method: string;
-    url: string;
-    headers: Record<string, string>;
-    params?: string;
-    body?: unknown;
-}
-
-export interface InternalAuthResponse {
-    status: number;
-    statusText: string;
-    headers: Record<string, unknown>;
-    data?: unknown;
-}
 
 // ============================================================================
 // Settings Types

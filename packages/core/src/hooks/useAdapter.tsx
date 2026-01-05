@@ -2,7 +2,7 @@
  * Platform Adapter Context
  * 
  * Provides platform-specific adapter implementations to the React component tree.
- * This is the key abstraction that allows the same UI to run on VS Code and Web.
+ * This is the key abstraction that allows the same UI to run on VS Code, Web etc.
  * 
  * Usage:
  * ```tsx
@@ -24,8 +24,7 @@
 import React, { createContext, useContext, useEffect, useState, useCallback, type ReactNode } from 'react';
 import type { 
     IPlatformAdapter, 
-    AdapterEventType, 
-    AdapterEventMap,
+    AdapterEventType,
     AdapterEventHandler 
 } from '../types/adapters';
 

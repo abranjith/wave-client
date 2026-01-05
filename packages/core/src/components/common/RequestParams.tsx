@@ -1,6 +1,5 @@
 import React, { useState, useEffect, JSX } from 'react';
 import { Trash2Icon, PlusIcon } from 'lucide-react';
-import { Button } from '../ui/button';
 import { SecondaryButton } from '../ui/SecondaryButton';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
 import { Switch } from '../ui/switch';

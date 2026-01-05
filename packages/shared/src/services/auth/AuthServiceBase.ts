@@ -3,8 +3,9 @@
  * Provides common functionality like caching, value resolution, and validation.
  */
 
-import { Auth, AuthResult, AuthRequestConfig, CachedAuthData, EnvVarsMap } from './types';
-import { resolveParameterizedValue, isUrlInDomains } from '../../utils/common';
+import * as crypto from 'crypto';
+import type { Auth, AuthResult, AuthRequestConfig, CachedAuthData, EnvVarsMap } from './types';
+import { resolveParameterizedValue, isUrlInDomains } from '../../utils';
 
 /**
  * Abstract base class for authentication services.
@@ -72,7 +73,7 @@ export abstract class AuthServiceBase {
      * @param data The data to cache
      * @param ttlMs Time-to-live in milliseconds (default: 1 hour)
      */
-    protected setCache(authId: string, data: any, ttlMs?: number): void {
+    protected setCache(authId: string, data: unknown, ttlMs?: number): void {
         const ttl = ttlMs ?? this.defaultCacheTTL;
         this.cache.set(authId, {
             data,
@@ -212,7 +213,7 @@ export abstract class AuthServiceBase {
     protected generateRandomString(length: number = 16): string {
         const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
         let result = '';
-        const randomBytes = require('crypto').randomBytes(length);
+        const randomBytes = crypto.randomBytes(length);
         for (let i = 0; i < length; i++) {
             result += chars[randomBytes[i] % chars.length];
         }

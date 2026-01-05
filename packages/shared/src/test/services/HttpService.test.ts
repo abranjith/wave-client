@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { HttpService, setAuthServiceFactory } from '../../services/HttpService.js';
-import type { HttpRequestConfig, SendConfig } from '../../services/HttpService.js';
-import type { AppSettings, Cookie, Auth } from '../../types.js';
+import type { HttpRequestConfig, SendConfig, HttpAuth } from '../../services/HttpService.js';
+import type { AppSettings, Cookie } from '../../types.js';
 
 // Mock axios
 vi.mock('axios', () => ({
@@ -550,7 +550,7 @@ describe('HttpService', () => {
                 data: Buffer.from(''),
             });
 
-            const auth: Auth = {
+            const auth: HttpAuth = {
                 id: 'auth-1',
                 enabled: true,
                 type: 'bearer',
@@ -601,7 +601,7 @@ describe('HttpService', () => {
                 data: Buffer.from(''),
             });
 
-            const auth: Auth = {
+            const auth: HttpAuth = {
                 id: 'auth-1',
                 enabled: true,
                 type: 'apikey',
@@ -651,7 +651,7 @@ describe('HttpService', () => {
 
             setAuthServiceFactory(mockAuthFactory);
 
-            const auth: Auth = {
+            const auth: HttpAuth = {
                 id: 'auth-1',
                 enabled: true,
                 type: 'digest',
@@ -693,7 +693,7 @@ describe('HttpService', () => {
 
             setAuthServiceFactory(mockAuthFactory);
 
-            const auth: Auth = {
+            const auth: HttpAuth = {
                 id: 'auth-1',
                 enabled: true,
                 type: 'basic',
@@ -800,7 +800,7 @@ describe('HttpService', () => {
                 data: Buffer.from(''),
             });
 
-            const auth: Auth = {
+            const auth: HttpAuth = {
                 id: 'auth-1',
                 enabled: false, // Disabled
                 type: 'basic',

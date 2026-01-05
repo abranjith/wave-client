@@ -510,7 +510,7 @@ const App: React.FC = () => {
   };
 
   // Note: Message handling is now done by the adapter layer
-  // The adapter (vsCodeAdapter.ts) handles all postMessage communication
+  // The adapter (./adapters/vsCodeAdapter.ts) handles all postMessage communication
   // and resolves promises directly, eliminating the need for this message listener
 
   return (

@@ -2,7 +2,7 @@ import * as crypto from 'crypto';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as vscode from 'vscode';
-import { getGlobalSettings, setSecurityServiceInstance } from './BaseStorageService';
+import { getGlobalSettings, setSecurityServiceInstance } from '@wave-client/shared';
 
 /**
  * Encryption status information

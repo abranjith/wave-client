@@ -4,8 +4,10 @@
  */
 
 import { AuthServiceBase } from './AuthServiceBase';
-import { Auth, AuthResult, AuthRequestConfig, AuthType, OAuth2RefreshAuth, EnvVarsMap, authOk, authErr } from './types';
-import { httpService, SendConfig } from '../HttpService';
+import type { Auth, AuthResult, AuthRequestConfig, EnvVarsMap, OAuth2RefreshAuth } from './types';
+import { AuthType, authOk, authErr } from './types';
+import { httpService } from '../HttpService';
+import type { SendConfig } from '../HttpService';
 
 /**
  * Cached OAuth2 token data
@@ -95,8 +97,9 @@ export class OAuth2RefreshService extends AuthServiceBase {
                     'Authorization': `${newToken.tokenType} ${newToken.accessToken}`,
                 },
             });
-        } catch (error: any) {
-            return authErr(error.message || 'OAuth2 token refresh failed');
+        } catch (error: unknown) {
+            const message = error instanceof Error ? error.message : 'OAuth2 token refresh failed';
+            return authErr(message);
         }
     }
 
@@ -164,12 +167,13 @@ export class OAuth2RefreshService extends AuthServiceBase {
                 expiresAt,
                 tokenType: (data.token_type as string) || 'Bearer',
             };
-        } catch (error: any) {
-            if (error.response) {
-                const errorData = error.response.data;
+        } catch (error: unknown) {
+            const err = error as { response?: { data?: { error_description?: string; error?: string }; status?: number } };
+            if (err.response) {
+                const errorData = err.response.data;
                 const errorMessage = errorData?.error_description 
                     || errorData?.error 
-                    || `Token refresh failed with status ${error.response.status}`;
+                    || `Token refresh failed with status ${err.response.status}`;
                 throw new Error(`Error calling token endpoint: ${errorMessage}`);
             }
             throw error;

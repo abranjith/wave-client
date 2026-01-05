@@ -1,9 +1,9 @@
 import * as path from 'path';
 import * as crypto from 'crypto';
 
-import { BaseStorageService } from './BaseStorageService.js';
-import { isUrlInDomains } from '../utils.js';
-import type { Cookie } from '../types.js';
+import { BaseStorageService } from './BaseStorageService';
+import { isUrlInDomains } from '../utils';
+import type { Cookie } from '../types';
 
 /**
  * Service for managing HTTP cookies.

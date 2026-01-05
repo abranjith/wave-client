@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback, useId, useRef, useEffect } from 'react';
+import React, { useState, useMemo, useCallback, useId } from 'react';
 import { PlayIcon, StopCircleIcon, ChevronDownIcon, ChevronRightIcon, SearchIcon } from 'lucide-react';
 import { CollectionItem, isRequest } from '../../types/collection';
 import { urlToString } from '../../utils/collectionParser';

@@ -4,7 +4,8 @@
  */
 
 import { AuthServiceBase } from './AuthServiceBase';
-import { Auth, AuthResult, AuthRequestConfig, AuthType, ApiKeyAuth, EnvVarsMap, authOk, authErr } from './types';
+import type { Auth, AuthResult, AuthRequestConfig, EnvVarsMap, ApiKeyAuth } from './types';
+import { AuthType, authOk, authErr } from './types';
 
 export class ApiKeyAuthService extends AuthServiceBase {
     getAuthType(): string {

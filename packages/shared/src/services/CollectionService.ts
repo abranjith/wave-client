@@ -1,8 +1,8 @@
 import * as path from 'path';
 
-import { BaseStorageService } from './BaseStorageService.js';
-import { generateUniqueId } from '../utils.js';
-import type { Collection, CollectionItem, CollectionRequest } from '../types.js';
+import { BaseStorageService } from './BaseStorageService';
+import { generateUniqueId } from '../utils';
+import type { Collection, CollectionItem, CollectionRequest } from '../types';
 
 /**
  * Ensures all items in a collection have unique IDs

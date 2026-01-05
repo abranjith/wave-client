@@ -1,4 +1,4 @@
-import React, { useId, useMemo } from 'react';
+import React, { useId } from 'react';
 import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from '../ui/select';
 import TextBody from './TextBody';
 import BinaryBody from './BinaryBody';

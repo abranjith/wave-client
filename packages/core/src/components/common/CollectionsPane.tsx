@@ -17,6 +17,7 @@ import CollectionTreeItem from './CollectionTreeItem';
 import RunCollectionModal from './RunCollectionModal';
 import { RequestFormData } from '../../utils/collectionParser';
 import { Input } from '../ui/input';
+import { SecondaryButton } from '../ui';
 
 interface CollectionsPaneProps {
   onRequestSelect: (request: RequestFormData) => void;
@@ -352,14 +353,14 @@ const CollectionsPane: React.FC<CollectionsPaneProps> = ({
             <p className="text-sm text-red-600 dark:text-red-400 mb-2">Error loading collections</p>
             <p className="text-xs text-slate-500 dark:text-slate-400 mb-4">{error}</p>
             {onRetry && (
-              <Button
+              <SecondaryButton
                 onClick={onRetry}
                 variant="outline"
                 size="sm"
                 className="text-xs"
               >
                 Retry
-              </Button>
+              </SecondaryButton>
             )}
           </div>
         </div>

@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import { SaveIcon, XIcon, EyeIcon, EyeOffIcon } from 'lucide-react';
-import { Button } from '../ui/button';
 import { PrimaryButton } from '../ui/PrimaryButton';
 import { SecondaryButton } from '../ui/SecondaryButton';
 import { Input } from '../ui/input';

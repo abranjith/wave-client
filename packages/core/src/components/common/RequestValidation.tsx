@@ -1,6 +1,5 @@
 import React, { useState, useMemo } from 'react';
 import { Trash2Icon, PlusIcon, PencilIcon, LinkIcon, UnlinkIcon, XIcon, SaveIcon } from 'lucide-react';
-import { Button } from '../ui/button';
 import { PrimaryButton } from '../ui/PrimaryButton';
 import { SecondaryButton } from '../ui/SecondaryButton';
 import { Input } from '../ui/input';

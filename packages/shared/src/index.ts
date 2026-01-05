@@ -6,10 +6,10 @@
  */
 
 // Export all types
-export * from './types.js';
+export * from './types';
 
 // Export all utilities
-export * from './utils.js';
+export * from './utils';
 
 // Export all services
-export * from './services/index.js';
+export * from './services/index';

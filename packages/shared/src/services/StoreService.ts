@@ -1,16 +1,16 @@
 import * as path from 'path';
 import https from 'https';
 
-import { BaseStorageService } from './BaseStorageService.js';
-import { isUrlInDomains } from '../utils.js';
+import { BaseStorageService } from './BaseStorageService';
+import { isUrlInDomains } from '../utils';
 import type { 
     Proxy, 
     Cert, 
     AuthEntry, 
     AxiosProxyConfig, 
     GlobalValidationRule 
-} from '../types.js';
-import { CertType as CertTypeEnum } from '../types.js';
+} from '../types';
+import { CertType as CertTypeEnum } from '../types';
 
 /**
  * Service for managing store items (auth configs, proxies, certificates).

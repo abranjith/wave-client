@@ -10,16 +10,16 @@ export {
     setSecurityServiceInstance,
     type SettingsProvider,
     type ISecurityService
-} from './BaseStorageService.js';
+} from './BaseStorageService';
 
-export { SettingsService, settingsService } from './SettingsService.js';
-export type { AppSettings } from './SettingsService.js';
+export { SettingsService, settingsService } from './SettingsService';
+export type { AppSettings } from './SettingsService';
 
-export { EnvironmentService, environmentService } from './EnvironmentService.js';
-export { CollectionService, collectionService } from './CollectionService.js';
-export { HistoryService, historyService } from './HistoryService.js';
-export { CookieService, cookieService } from './CookieService.js';
-export { StoreService, storeService } from './StoreService.js';
+export { EnvironmentService, environmentService } from './EnvironmentService';
+export { CollectionService, collectionService } from './CollectionService';
+export { HistoryService, historyService } from './HistoryService';
+export { CookieService, cookieService } from './CookieService';
+export { StoreService, storeService } from './StoreService';
 export { 
     HttpService, 
     httpService, 
@@ -27,5 +27,9 @@ export {
     type HttpRequestConfig, 
     type HttpResponseResult,
     type SendConfig,
-    type SendResult
-} from './HttpService.js';
+    type SendResult,
+    type HttpAuth
+} from './HttpService';
+
+// Auth services
+export * from './auth/index';

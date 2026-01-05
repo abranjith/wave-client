@@ -6,8 +6,10 @@
 
 import * as crypto from 'crypto';
 import { AuthServiceBase } from './AuthServiceBase';
-import { Auth, AuthResult, AuthRequestConfig, AuthType, DigestAuth, EnvVarsMap, authOk, authErr } from './types';
-import { httpService, SendConfig } from '../HttpService';
+import type { Auth, AuthResult, AuthRequestConfig, EnvVarsMap, DigestAuth } from './types';
+import { AuthType, authOk, authErr } from './types';
+import { httpService } from '../HttpService';
+import type { SendConfig } from '../HttpService';
 
 /**
  * Parsed WWW-Authenticate header for Digest auth
@@ -178,8 +180,9 @@ export class DigestAuthService extends AuthServiceBase {
                 challenge,
                 auth.id
             );
-        } catch (error: any) {
-            return authErr(error.message || 'Digest auth failed');
+        } catch (error: unknown) {
+            const message = error instanceof Error ? error.message : 'Digest auth failed';
+            return authErr(message);
         }
     }
 

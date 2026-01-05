@@ -1,8 +1,8 @@
 import * as path from 'path';
 import * as crypto from 'crypto';
 
-import { BaseStorageService } from './BaseStorageService.js';
-import type { ParsedRequest } from '../types.js';
+import { BaseStorageService } from './BaseStorageService';
+import type { ParsedRequest } from '../types';
 
 /**
  * Service for managing request history.
