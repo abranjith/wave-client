@@ -413,9 +413,15 @@ const CookieStoreGrid: React.FC<CookieStoreGridProps> = ({ onBack, onSaveCookies
                           <SecondaryButton
                             size="sm"
                             onClick={() => {
-                              if (confirm(`Are you sure you want to delete the cookie "${cookie.name}"?`)) {
-                                removeCookie(cookie.id);
-                              }
+                              setConfirmDialog({
+                                isOpen: true,
+                                title: 'Delete Cookie',
+                                message: `Are you sure you want to delete the cookie "${cookie.name}"?`,
+                                onConfirm: () => {
+                                  removeCookie(cookie.id);
+                                  setConfirmDialog((prev) => ({ ...prev, isOpen: false }));
+                                },
+                              });
                             }}
                             colorTheme="error"
                             icon={<Trash2Icon />}

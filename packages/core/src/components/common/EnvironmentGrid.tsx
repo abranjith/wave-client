@@ -2,10 +2,12 @@ import React, { useState, useEffect, useRef } from 'react';
 import { EyeIcon, EyeOffIcon, ArrowLeftIcon, PencilIcon, SaveIcon, XIcon, PlusIcon, Trash2Icon } from 'lucide-react';
 import { Button } from '../ui/button';
 import { SecondaryButton } from '../ui/SecondaryButton';
+import { PrimaryButton } from '../ui/PrimaryButton';
 import { Input } from '../ui/input';
 import { Textarea } from '../ui/textarea';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
 import { Switch } from '../ui/switch';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '../ui/dialog';
 import { Environment, EnvironmentVariable } from '../../types/collection';
 import useAppStateStore from '../../hooks/store/useAppStateStore';
 
@@ -28,6 +30,17 @@ const EnvironmentGrid: React.FC<EnvironmentGridProps> = ({ environment, onBack, 
   const [editingData, setEditingData] = useState<EditingVariable | null>(null);
   const [isAddingNew, setIsAddingNew] = useState<boolean>(false);
   const [keyError, setKeyError] = useState<string | null>(null);
+  const [confirmDialog, setConfirmDialog] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+    onConfirm: () => void;
+  }>({
+    isOpen: false,
+    title: '',
+    message: '',
+    onConfirm: () => {},
+  });
   const updateEnvironment = useAppStateStore((state) => state.updateEnvironment);
   const environments = useAppStateStore((state) => state.environments);
   
@@ -82,15 +95,23 @@ const EnvironmentGrid: React.FC<EnvironmentGridProps> = ({ environment, onBack, 
   };
 
   const deleteVariable = (key: string) => {
-    const updatedValues = currentEnvironment.values.filter((variable) => variable.key !== key);
-    updateEnvironment(currentEnvironment.id, { values: updatedValues });
-    
-    // Remove from visibleSecrets if it was there
-    if (visibleSecrets.has(key)) {
-      const newVisible = new Set(visibleSecrets);
-      newVisible.delete(key);
-      setVisibleSecrets(newVisible);
-    }
+    setConfirmDialog({
+      isOpen: true,
+      title: 'Delete Variable',
+      message: `Are you sure you want to delete the variable "${key}"?`,
+      onConfirm: () => {
+        const updatedValues = currentEnvironment.values.filter((variable) => variable.key !== key);
+        updateEnvironment(currentEnvironment.id, { values: updatedValues });
+        
+        // Remove from visibleSecrets if it was there
+        if (visibleSecrets.has(key)) {
+          const newVisible = new Set(visibleSecrets);
+          newVisible.delete(key);
+          setVisibleSecrets(newVisible);
+        }
+        setConfirmDialog((prev) => ({ ...prev, isOpen: false }));
+      },
+    });
   };
 
   const startEditing = (variable: EnvironmentVariable) => {
@@ -482,6 +503,30 @@ const EnvironmentGrid: React.FC<EnvironmentGridProps> = ({ environment, onBack, 
           <span>{enabledCount} of {allVariables.length} variables enabled</span>
         </div>
       </div>
+
+      {/* Confirmation Dialog */}
+      <Dialog open={confirmDialog.isOpen} onOpenChange={(open) => setConfirmDialog((prev) => ({ ...prev, isOpen: open }))}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="text-lg font-semibold text-slate-800 dark:text-slate-200">{confirmDialog.title}</DialogTitle>
+            <DialogDescription>{confirmDialog.message}</DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <SecondaryButton
+              onClick={() => setConfirmDialog((prev) => ({ ...prev, isOpen: false }))}
+              colorTheme="warning"
+              icon={<XIcon />}
+              text="Cancel"
+            />
+            <PrimaryButton
+              onClick={confirmDialog.onConfirm}
+              colorTheme="error"
+              icon={<Trash2Icon />}
+              text="Confirm"
+            />
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

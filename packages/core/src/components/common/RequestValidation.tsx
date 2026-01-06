@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { Trash2Icon, PlusIcon, PencilIcon, LinkIcon, UnlinkIcon, XIcon, SaveIcon } from 'lucide-react';
+import { Trash2Icon, PlusIcon, PencilIcon, LinkIcon, UnlinkIcon, XIcon, SaveIcon, CheckIcon } from 'lucide-react';
 import { PrimaryButton } from '../ui/PrimaryButton';
 import { SecondaryButton } from '../ui/SecondaryButton';
 import { Input } from '../ui/input';
@@ -541,6 +541,17 @@ const RequestValidation: React.FC = () => {
     const [isGlobalSelectorOpen, setIsGlobalSelectorOpen] = useState(false);
     const [editingRule, setEditingRule] = useState<ValidationRule | null>(null);
     const [editingRuleIndex, setEditingRuleIndex] = useState<number | null>(null);
+    const [confirmDialog, setConfirmDialog] = useState<{
+        isOpen: boolean;
+        title: string;
+        message: string;
+        onConfirm: () => void;
+    }>({
+        isOpen: false,
+        title: '',
+        message: '',
+        onConfirm: () => {},
+    });
     
     // Resolve rules to their actual definitions (converted to ValidationRule)
     const resolvedRules = useMemo(() => {
@@ -610,7 +621,15 @@ const RequestValidation: React.FC = () => {
     
     // Handle removing a rule
     const handleRemoveRule = (index: number) => {
-        removeValidationRule(index);
+        setConfirmDialog({
+            isOpen: true,
+            title: 'Delete Validation Rule',
+            message: 'Are you sure you want to delete this validation rule?',
+            onConfirm: () => {
+                removeValidationRule(index);
+                setConfirmDialog((prev) => ({ ...prev, isOpen: false }));
+            },
+        });
     };
     
     if (!activeTab) {
@@ -802,7 +821,29 @@ const RequestValidation: React.FC = () => {
                 onSelect={handleLinkGlobalRule}
                 existingRuleIds={existingGlobalRuleIds}
             />
-        </div>
+            {/* Confirmation Dialog */}
+            <Dialog open={confirmDialog.isOpen} onOpenChange={(open) => setConfirmDialog((prev) => ({ ...prev, isOpen: open }))}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle className="text-lg font-semibold text-slate-800 dark:text-slate-200">{confirmDialog.title}</DialogTitle>
+                        <DialogDescription>{confirmDialog.message}</DialogDescription>
+                    </DialogHeader>
+                    <DialogFooter>
+                        <SecondaryButton
+                            onClick={() => setConfirmDialog((prev) => ({ ...prev, isOpen: false }))}
+                            colorTheme="warning"
+                            icon={<XIcon />}
+                            text="Cancel"
+                        />
+                        <PrimaryButton
+                            onClick={confirmDialog.onConfirm}
+                            colorTheme="error"
+                            icon={<Trash2Icon />}
+                            text="Confirm"
+                        />
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>        </div>
     );
 };
 
