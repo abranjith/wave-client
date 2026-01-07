@@ -16,6 +16,14 @@
     "test": {
       "dependsOn": ["^build"]
     },
+    "test:ui": {
+      "dependsOn": ["^build"],
+      "cache": false,
+      "persistent": true
+    },
+    "test:coverage": {
+      "dependsOn": ["^build"]
+    },
     "typecheck": {
       "dependsOn": ["^build"]
     }

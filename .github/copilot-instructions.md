@@ -56,7 +56,7 @@ Wave Client uses an **adapter pattern** to achieve platform independence. The sa
 - `packages/core` contains **zero platform-specific code** - only pure React components and business logic
 - Each platform (VS Code, web) implements its own adapter (`vsCodeAdapter`, `webAdapter`)
 
-**For detailed information on the adapter pattern, implementation examples, and migration guidelines, see:** [Adapter Refactoring Guide](../docs/adapter-refactoring-guide.md)
+**For detailed information on the adapter pattern, implementation examples, and migration guidelines, see:** [Adapter Refactoring Guide](../docs/adapter-guide.md)
 
 ### Quick Adapter Usage
 
@@ -89,7 +89,7 @@ function MyComponent() {
 - No direct `vsCodeApi` calls in core components
 - No direct `localStorage`, `fs`, or browser-only APIs in core
 - Use `useAdapter()` hook to access platform-specific functionality
-- See [Adapter Refactoring Guide](../docs/adapter-refactoring-guide.md) for detailed migration patterns
+- See [Adapter Refactoring Guide](../docs/adapter-guide.md) for detailed migration patterns
 
 ### 2. Code Quality & Best Practices
 

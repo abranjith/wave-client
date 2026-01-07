@@ -66,15 +66,15 @@ This platform independence is achieved through the **Adapter Pattern**, which ab
 ```
 packages/core/
 ├── src/
-│   ├── components/          # React UI components
-│   │   ├── RequestPanel/
-│   │   ├── ResponseViewer/
-│   │   ├── Sidebar/
-│   │   ├── Collections/
+│   ├── components/common/   # React UI components
+│   │   ├── RequestBody.tsx
+│   │   ├── ResponseBody.tsx
+│   │   ├── CollectionsPane.tsx
+│   │   ├── EnvironmentEditor.tsx
 │   │   └── ...
 │   ├── hooks/               # Custom React hooks
 │   │   ├── useAdapter.tsx   # Access platform adapter
-│   │   ├── useAppStateStore.ts
+│   │   ├── store/useAppStateStore.ts
 │   │   └── ...
 │   ├── types/               # TypeScript type definitions
 │   │   ├── adapters.ts      # IPlatformAdapter interface
@@ -90,7 +90,6 @@ packages/core/
 │   │   └── ...
 │   └── index.ts             # Main entry point
 ├── vite.config.ts
-├── vitest.config.ts
 └── package.json
 ```
 
@@ -110,14 +109,14 @@ interface IPlatformAdapter {
   notification: INotificationAdapter; // User notifications
   events: IAdapterEvents;          // Event emitter for push notifications
   
-  readonly platform: 'vscode' | 'web' | 'electron' | 'test';
+  readonly platform: 'vscode' | 'web' | 'test';
   initialize?(): Promise<void>;
   dispose?(): void;
 }
 ```
 
 **Benefits:**
-- ✅ Write components once, deploy everywhere
+- ✅ Write components once, use everywhere
 - ✅ Easy to test with mock adapters
 - ✅ Simple to add new platforms
 - ✅ Clear separation of concerns
@@ -446,8 +445,7 @@ describe('MyComponent', () => {
 
 ## Documentation
 
-- [Adapter Refactoring Guide](../../docs/adapter-refactoring-guide.md) - Deep dive into the adapter pattern, implementation details, and migration guidelines
-- [Getting Started](../../docs/getting-started.md) - Project setup and initial development steps
+- [Adapter Refactoring Guide](../../docs/adapter-guide.md) - Deep dive into the adapter pattern, implementation details, and migration guidelines
 
 ## Dependencies
 
@@ -471,13 +469,12 @@ The core package exports:
 
 ```typescript
 // Components
-export { RequestPanel } from './components/RequestPanel';
-export { ResponseViewer } from './components/ResponseViewer';
+export { RequestBody } from './components/RequestBody';
+export { ResponseBody } from './components/ResponseBody';
 // ... other components
 
 // Hooks
 export { useAdapter, AdapterProvider } from './hooks/useAdapter';
-export { useStorageAdapter } from './hooks/useStorageAdapter';
 // ... other hooks
 
 // Types
@@ -485,9 +482,6 @@ export type { IPlatformAdapter, IStorageAdapter } from './types/adapters';
 export type { Collection, Request } from './types/collection';
 // ... other types
 
-// Utilities
-export { parseCollection } from './utils/collectionParser';
-// ... other utilities
 ```
 
 ## Contributing
