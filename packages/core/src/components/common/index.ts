@@ -45,6 +45,9 @@ export { default as EnvImportWizard } from './EnvImportWizard';
 // History
 export { default as HistoryPane } from './HistoryPane';
 
+// Flows
+export { default as FlowsPane } from './FlowsPane';
+
 // Store management
 export { default as StorePane } from './StorePane';
 export { default as CookieStoreGrid } from './CookieStoreGrid';

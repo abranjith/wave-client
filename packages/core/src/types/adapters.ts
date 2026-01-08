@@ -24,6 +24,7 @@ import type {
     ParamRow,
     CollectionBody,
 } from './collection';
+import type { Flow } from './flow';
 import type { RequestValidation, ValidationResult } from './validation';
 import type { Auth } from './auth';
 import type { ValidationRule } from './validation';
@@ -181,6 +182,11 @@ export interface IStorageAdapter {
     // Validation Rules Store
     loadValidationRules(): Promise<Result<ValidationRule[], string>>;
     saveValidationRules(rules: ValidationRule[]): Promise<Result<void, string>>;
+
+    // Flows
+    loadFlows(): Promise<Result<Flow[], string>>;
+    saveFlow(flow: Flow): Promise<Result<Flow, string>>;
+    deleteFlow(flowId: string): Promise<Result<void, string>>;
 
     // Settings
     loadSettings(): Promise<Result<AppSettings, string>>;
@@ -478,6 +484,7 @@ export interface AdapterEventMap {
     certsChanged: void;
     settingsChanged: void;
     validationRulesChanged: void;
+    flowsChanged: void;
     
     // Security events
     encryptionStatusChanged: EncryptionStatusEvent;

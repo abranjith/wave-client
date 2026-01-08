@@ -30,6 +30,7 @@ import type {
   SaveDialogOptions,
   OpenDialogOptions,
   NotificationType,
+  Flow,
 } from '@wave-client/core';
 import { ok, err, Result, createAdapterEventEmitter } from '@wave-client/core';
 
@@ -154,6 +155,9 @@ function handleWebSocketMessage(message: {
       break;
     case 'validationRulesChanged':
       events.emit('validationRulesChanged', undefined);
+      break;
+    case 'flowsChanged':
+      events.emit('flowsChanged', undefined);
       break;
     case 'encryptionStatusChanged':
       events.emit('encryptionStatusChanged', message.data as EncryptionStatus);
@@ -613,6 +617,46 @@ class WebStorageAdapter implements IStorageAdapter {
         return ok(undefined);
       }
       return err(response.data.error || 'Failed to save settings');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      return err(`Server error: ${message}`);
+    }
+  }
+
+  // Flows
+  async loadFlows(): Promise<Result<Flow[], string>> {
+    try {
+      const response = await api.get('/api/flows');
+      if (response.data.isOk) {
+        return ok(response.data.value);
+      }
+      return err(response.data.error || 'Failed to load flows');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      return err(`Server error: ${message}`);
+    }
+  }
+
+  async saveFlow(flow: Flow): Promise<Result<Flow, string>> {
+    try {
+      const response = await api.post('/api/flows', flow);
+      if (response.data.isOk) {
+        return ok(response.data.value);
+      }
+      return err(response.data.error || 'Failed to save flow');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      return err(`Server error: ${message}`);
+    }
+  }
+
+  async deleteFlow(flowId: string): Promise<Result<void, string>> {
+    try {
+      const response = await api.delete(`/api/flows/${encodeURIComponent(flowId)}`);
+      if (response.data.isOk) {
+        return ok(undefined);
+      }
+      return err(response.data.error || 'Failed to delete flow');
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unknown error';
       return err(`Server error: ${message}`);

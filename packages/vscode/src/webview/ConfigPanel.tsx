@@ -1,5 +1,5 @@
 import React from 'react';
-import { SunIcon , MoonIcon, LibraryIcon , HistoryIcon, ShieldCheckIcon, SettingsIcon, LightbulbIcon } from 'lucide-react';
+import { SunIcon , MoonIcon, LibraryIcon , HistoryIcon, ShieldCheckIcon, SettingsIcon, LightbulbIcon, GitBranchIcon } from 'lucide-react';
 import {
   Tabs,
   TabsContent,
@@ -14,8 +14,10 @@ import {
   EnvironmentsPane,
   HistoryPane,
   StorePane,
+  FlowsPane,
   type Environment,
   type RequestFormData,
+  type Flow,
 } from '@wave-client/core';
 import { useTheme } from './AppWithAdapter';
 
@@ -23,6 +25,8 @@ interface ConfigPanelProps {
   onRequestSelect: ((request: RequestFormData) => void)
   onEnvSelect: ((environment: Environment) => void)
   onStoreSelect: ((storeType: 'cookie' | 'auth' | 'proxy' | 'cert' | 'validation') => void)
+  onFlowSelect: ((flow: Flow) => void)
+  onFlowRun?: ((flow: Flow) => void)
   onSettingsSelect: () => void;
   onImportCollection: (fileName: string, fileContent: string, collectionType: string) => void;
   onExportCollection: (collectionName: string, exportFormat: string) => void;
@@ -31,17 +35,19 @@ interface ConfigPanelProps {
   onRetryCollections?: () => void;
   onRetryHistory?: () => void;
   onRetryEnvironments?: () => void;
+  onRetryFlows?: () => void;
   vsCodeApi?: { postMessage: (message: unknown) => void };
 }
 
 const TABS = [
   { key: 'collections', label: 'Collections', icon: <LibraryIcon size={20} /> },
+  { key: 'flows', label: 'Flows', icon: <GitBranchIcon size={20} /> },
   { key: 'history', label: 'History', icon: <HistoryIcon size={20} /> },
   { key: 'environments', label: 'Environments', icon: <SunIcon size={20} /> },
   { key: 'store', label: 'Wave Store', icon: <ShieldCheckIcon size={20} /> },
 ];
 
-const ConfigPanel: React.FC<ConfigPanelProps> = ({ onRequestSelect, onEnvSelect, onStoreSelect, onSettingsSelect, onImportCollection, onExportCollection, onImportEnvironments, onExportEnvironments, onRetryCollections, onRetryHistory, onRetryEnvironments, vsCodeApi }) => {
+const ConfigPanel: React.FC<ConfigPanelProps> = ({ onRequestSelect, onEnvSelect, onStoreSelect, onFlowSelect, onFlowRun, onSettingsSelect, onImportCollection, onExportCollection, onImportEnvironments, onExportEnvironments, onRetryCollections, onRetryHistory, onRetryEnvironments, onRetryFlows, vsCodeApi }) => {
   const { theme, toggleTheme } = useTheme();
 
   return (
@@ -99,6 +105,13 @@ const ConfigPanel: React.FC<ConfigPanelProps> = ({ onRequestSelect, onEnvSelect,
                 onExportCollection={onExportCollection}
                 onRetry={onRetryCollections}
                 vsCodeApi={vsCodeApi}
+              />
+          </TabsContent>
+          <TabsContent value="flows" className="h-full overflow-hidden">
+            <FlowsPane
+                onFlowSelect={onFlowSelect}
+                onFlowRun={onFlowRun}
+                onRetry={onRetryFlows}
               />
           </TabsContent>
           <TabsContent value="history" className="h-full overflow-hidden">

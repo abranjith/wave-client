@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import ConfigPanel from './ConfigPanel';
 import RequestEditor from './RequestEditor';
 import {
@@ -21,6 +21,7 @@ import {
   useFileAdapter,
   useNotificationAdapter,
   useAdapterEvent,
+  FlowCanvas,
   type Environment,
   type Cookie,
   type Proxy,
@@ -29,12 +30,14 @@ import {
   type GlobalValidationRule,
   type HttpRequestConfig,
   type BannerEvent,
+  type Flow,
 } from '@wave-client/core';
 import type { RequestFormData } from '@wave-client/core';
 
 const App: React.FC = () => {
   const [selectedEnvironment, setSelectedEnvironment] = useState<Environment | null>(null);
   const [selectedStore, setSelectedStore] = useState<'cookie' | 'auth' | 'proxy' | 'cert' | 'validation' | null>(null);
+  const [selectedFlow, setSelectedFlow] = useState<Flow | null>(null);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
 
   // Adapter hooks
@@ -70,6 +73,7 @@ const App: React.FC = () => {
   const setHistory = useAppStateStore((state) => state.setHistory);
   const setHistoryLoadError = useAppStateStore((state) => state.setHistoryLoadError);
   const environments = useAppStateStore((state) => state.environments);
+  const collections = useAppStateStore((state) => state.collections);
   const auths = useAppStateStore((state) => state.auths);
   const banner = useAppStateStore((state) => state.banner);
   const clearBanner = useAppStateStore((state) => state.clearBanner);
@@ -209,17 +213,40 @@ const App: React.FC = () => {
     loadRequestIntoTab(request);
     setSelectedEnvironment(null); // Clear environment selection when selecting a request
     setSelectedStore(null); // Clear store selection when selecting a request
+    setSelectedFlow(null); // Clear flow selection when selecting a request
   };
 
   const handleEnvironmentSelect = (environment: Environment) => {
     setSelectedEnvironment(environment);
     setSelectedStore(null); // Clear store selection when selecting an environment
+    setSelectedFlow(null); // Clear flow selection when selecting an environment
   };
 
   const handleStoreSelect = (storeType: 'cookie' | 'auth' | 'proxy' | 'cert' | 'validation') => {
     setSelectedStore(storeType);
     setSelectedEnvironment(null); // Clear environment selection when selecting a store
+    setSelectedFlow(null); // Clear flow selection when selecting a store
   };
+
+  const handleFlowSelect = (flow: Flow) => {
+    setSelectedFlow(flow);
+    setSelectedEnvironment(null);
+    setSelectedStore(null);
+  };
+
+  const handleBackFromFlow = () => {
+    setSelectedFlow(null);
+  };
+
+  const handleFlowSave = useCallback(async (flow: Flow) => {
+    const result = await storage.saveFlow(flow);
+    if (result.isOk) {
+      setSelectedFlow(result.value);
+      notification.showNotification('success', 'Flow saved');
+    } else {
+      notification.showNotification('error', result.error);
+    }
+  }, [storage, notification]);
 
   const handleBackFromEnvironment = () => {
     setSelectedEnvironment(null);
@@ -520,7 +547,7 @@ const App: React.FC = () => {
         display: 'grid',
         gridTemplateColumns: '400px 1fr',
         gridTemplateRows: '1fr',
-        gridTemplateAreas: (selectedEnvironment || selectedStore)
+        gridTemplateAreas: (selectedEnvironment || selectedStore || selectedFlow)
           ? `"config environment"`
           : `"config editor"`,
         height: '100vh',
@@ -544,6 +571,7 @@ const App: React.FC = () => {
           onRequestSelect={handleRequestSelect}
           onEnvSelect={handleEnvironmentSelect}
           onStoreSelect={handleStoreSelect}
+          onFlowSelect={handleFlowSelect}
           onSettingsSelect={handleSettingsSelect}
           onImportCollection={handleImportCollection}
           onExportCollection={handleExportCollection}
@@ -555,7 +583,20 @@ const App: React.FC = () => {
         />
       </div>
 
-      {selectedEnvironment ? (
+      {selectedFlow ? (
+        /* Flow Canvas - Full Height */
+        <div style={{ gridArea: 'environment' }} className="overflow-hidden">
+          <FlowCanvas
+            flow={selectedFlow}
+            collections={collections}
+            environments={environments}
+            auths={auths}
+            onFlowChange={setSelectedFlow}
+            onSave={handleFlowSave}
+            onClose={handleBackFromFlow}
+          />
+        </div>
+      ) : selectedEnvironment ? (
         /* Environment Grid - Full Height */
         <div style={{ gridArea: 'environment' }} className="overflow-hidden">
           <EnvironmentGrid 

@@ -9,7 +9,8 @@ import {
     cookieService,
     storeService,
     settingsService,
-    securityService
+    securityService,
+    flowService
 } from '../services';
 import { executeValidation, createGlobalRulesMap, createEnvVarsMap } from '../utils/validationEngine';
 import { RequestValidation } from '../types/validation';
@@ -132,6 +133,16 @@ export class MessageHandler {
                 break;
             case 'saveValidationRules':
                 await this.handleSaveValidationRules(message);
+                break;
+            // Flow handlers
+            case 'loadFlows':
+                await this.handleLoadFlows(message);
+                break;
+            case 'saveFlow':
+                await this.handleSaveFlow(message);
+                break;
+            case 'deleteFlow':
+                await this.handleDeleteFlow(message);
                 break;
         }
     }
@@ -969,6 +980,76 @@ export class MessageHandler {
             console.error('Error saving validation rules:', error);
             this.postMessage({
                 type: 'validationRulesSaved',
+                requestId,
+                error: error.message
+            });
+        }
+    }
+
+    // ==================== Flow Handlers ====================
+
+    /**
+     * Loads all flows from storage.
+     */
+    private async handleLoadFlows(message: any): Promise<void> {
+        const requestId = message.requestId;
+        try {
+            const flows = await flowService.loadAll();
+            this.postMessage({
+                type: 'flowsLoaded',
+                requestId,
+                flows
+            });
+        } catch (error: any) {
+            console.error('Error loading flows:', error);
+            this.postMessage({
+                type: 'flowsLoaded',
+                requestId,
+                error: error.message
+            });
+        }
+    }
+
+    /**
+     * Saves a flow to storage.
+     */
+    private async handleSaveFlow(message: any): Promise<void> {
+        const requestId = message.requestId;
+        try {
+            const flowData = message.data?.flow;
+            const flow = typeof flowData === 'string' ? JSON.parse(flowData) : flowData;
+            const savedFlow = await flowService.save(flow);
+            this.postMessage({
+                type: 'flowSaved',
+                requestId,
+                flow: savedFlow
+            });
+        } catch (error: any) {
+            console.error('Error saving flow:', error);
+            this.postMessage({
+                type: 'flowSaved',
+                requestId,
+                error: error.message
+            });
+        }
+    }
+
+    /**
+     * Deletes a flow from storage.
+     */
+    private async handleDeleteFlow(message: any): Promise<void> {
+        const requestId = message.requestId;
+        try {
+            const flowId = message.data?.flowId;
+            await flowService.delete(flowId);
+            this.postMessage({
+                type: 'flowDeleted',
+                requestId
+            });
+        } catch (error: any) {
+            console.error('Error deleting flow:', error);
+            this.postMessage({
+                type: 'flowDeleted',
                 requestId,
                 error: error.message
             });

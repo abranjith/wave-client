@@ -73,6 +73,38 @@ export type {
 
 export { isFolder, isRequest, CertType } from './types/collection';
 
+// Flow types
+export type {
+    Flow,
+    FlowNode,
+    FlowConnector,
+    ConnectorCondition,
+    FlowRunResult,
+    FlowNodeResult,
+    FlowRunState,
+    FlowRunStatus,
+    FlowNodeStatus,
+    FlowContext,
+    FlowResolveResult,
+} from './types/flow';
+
+export {
+    generateFlowId,
+    generateNodeId,
+    generateConnectorId,
+    createEmptyFlow,
+    createInitialFlowRunResult,
+    isStartingNode,
+    getStartingNodes,
+    getOutgoingConnectors,
+    getIncomingConnectors,
+    isConditionSatisfied,
+    validateFlow,
+    getTopologicalOrder,
+    calculateNodeDepths,
+    autoLayoutFlow,
+} from './types/flow';
+
 // Auth types
 export type {
     Auth,
@@ -179,6 +211,18 @@ export * from './utils/common';
 // Collection parser utilities
 export * from './utils/collectionParser';
 
+// Flow resolver utilities
+export {
+    resolveFlowVariables,
+    resolveFlowPath,
+    hasUnresolvedVariables,
+    extractVariables,
+    isFlowPath,
+    getAliasFromPath,
+    createEmptyFlowContext,
+    addToFlowContext,
+} from './utils/flowResolver';
+
 // ============================================================================
 // State Management
 // ============================================================================
@@ -188,6 +232,7 @@ export { default as useAppStateStore } from './hooks/store/useAppStateStore';
 
 // Custom hooks
 export { useCollectionRunner } from './hooks/useCollectionRunner';
+export { useFlowRunner } from './hooks/useFlowRunner';
 export { useFileUpload } from './hooks/useFileUpload';
 
 // ============================================================================

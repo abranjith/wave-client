@@ -20,6 +20,7 @@ export { CollectionService, collectionService } from './CollectionService';
 export { HistoryService, historyService } from './HistoryService';
 export { CookieService, cookieService } from './CookieService';
 export { StoreService, storeService } from './StoreService';
+export { FlowService, flowService, type Flow, type FlowNode, type FlowConnector, type ConnectorCondition } from './FlowService';
 export { 
     HttpService, 
     httpService, 

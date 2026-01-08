@@ -9,3 +9,6 @@ export * from './ui';
 
 // Common application components
 export * from './common';
+
+// Flow editor components
+export * from './flow';

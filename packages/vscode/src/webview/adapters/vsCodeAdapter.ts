@@ -130,6 +130,9 @@ function createVSCodeStorageAdapter(
                 'saveValidationRules': '',   // void - no data field
                 'loadSettings': 'settings',
                 'saveSettings': '',          // void - no data field
+                'loadFlows': 'flows',
+                'saveFlow': 'flow',
+                'deleteFlow': '',            // void - no data field
             };
 
             pendingRequests.set(requestId, {
@@ -428,6 +431,25 @@ function createVSCodeStorageAdapter(
             return sendAndWait<void>('saveSettings', {
                 data: { settings: JSON.stringify(settings, null, 2) }
             });
+        },
+
+        // Flows
+        async loadFlows(): Promise<Result<import('@wave-client/core').Flow[], string>> {
+            return sendAndWait<import('@wave-client/core').Flow[]>('loadFlows');
+        },
+
+        async saveFlow(flow): Promise<Result<import('@wave-client/core').Flow, string>> {
+            return sendAndWait<import('@wave-client/core').Flow>('saveFlow', {
+                data: { flow: JSON.stringify(flow, null, 2) }
+            });
+        },
+
+        async deleteFlow(flowId): Promise<Result<void, string>> {
+            vsCodeApi.postMessage({
+                type: 'deleteFlow',
+                data: { flowId }
+            });
+            return ok(undefined);
         },
     };
 }

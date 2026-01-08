@@ -5,7 +5,7 @@
  * Uses the web platform adapter with server-based persistence.
  */
 
-import { useState, useEffect, useRef, createContext, useContext } from 'react';
+import { useState, useEffect, useRef, useCallback, createContext, useContext } from 'react';
 import ConfigPanel from './components/ConfigPanel';
 import RequestEditor from './components/RequestEditor';
 import {
@@ -22,6 +22,7 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
+  FlowCanvas,
   useAppStateStore,
   formDataToCollectionRequest,
   useStorageAdapter,
@@ -38,6 +39,7 @@ import {
   type HttpRequestConfig,
   type BannerEvent,
   type RequestFormData,
+  type Flow,
 } from '@wave-client/core';
 import { createWebAdapter, checkServerHealth } from './adapters';
 
@@ -103,6 +105,7 @@ function WaveClientUI() {
   const [selectedStore, setSelectedStore] = useState<
     'cookie' | 'auth' | 'proxy' | 'cert' | 'validation' | null
   >(null);
+  const [selectedFlow, setSelectedFlow] = useState<Flow | null>(null);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
 
   // Adapter hooks
@@ -282,17 +285,40 @@ function WaveClientUI() {
     loadRequestIntoTab(request);
     setSelectedEnvironment(null);
     setSelectedStore(null);
+    setSelectedFlow(null);
   };
 
   const handleEnvironmentSelect = (environment: Environment) => {
     setSelectedEnvironment(environment);
     setSelectedStore(null);
+    setSelectedFlow(null);
   };
 
   const handleStoreSelect = (storeType: 'cookie' | 'auth' | 'proxy' | 'cert' | 'validation') => {
     setSelectedStore(storeType);
     setSelectedEnvironment(null);
+    setSelectedFlow(null);
   };
+
+  const handleFlowSelect = (flow: Flow) => {
+    setSelectedFlow(flow);
+    setSelectedEnvironment(null);
+    setSelectedStore(null);
+  };
+
+  const handleBackFromFlow = () => {
+    setSelectedFlow(null);
+  };
+
+  const handleFlowSave = useCallback(async (flow: Flow) => {
+    const result = await storage.saveFlow(flow);
+    if (result.isOk) {
+      setSelectedFlow(result.value);
+      notification.showNotification('success', 'Flow saved');
+    } else {
+      notification.showNotification('error', result.error);
+    }
+  }, [storage, notification]);
 
   const handleBackFromEnvironment = () => {
     setSelectedEnvironment(null);
@@ -590,7 +616,7 @@ function WaveClientUI() {
         gridTemplateColumns: '400px 1fr',
         gridTemplateRows: '1fr',
         gridTemplateAreas:
-          selectedEnvironment || selectedStore ? `"config environment"` : `"config editor"`,
+          selectedEnvironment || selectedStore || selectedFlow ? `"config environment"` : `"config editor"`,
         height: '100vh',
       }}
     >
@@ -624,10 +650,21 @@ function WaveClientUI() {
           onRetryCollections={handleRetryCollections}
           onRetryHistory={handleRetryHistory}
           onRetryEnvironments={handleRetryEnvironments}
+          onFlowSelect={handleFlowSelect}
         />
       </div>
 
-      {selectedEnvironment ? (
+      {selectedFlow ? (
+        /* Flow Canvas - Full Height */
+        <div style={{ gridArea: 'environment' }} className="overflow-hidden">
+          <FlowCanvas
+            flow={selectedFlow}
+            onFlowChange={setSelectedFlow}
+            onSave={handleFlowSave}
+            onClose={handleBackFromFlow}
+          />
+        </div>
+      ) : selectedEnvironment ? (
         /* Environment Grid - Full Height */
         <div style={{ gridArea: 'environment' }} className="overflow-hidden">
           <EnvironmentGrid
