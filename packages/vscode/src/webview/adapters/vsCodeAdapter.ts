@@ -45,6 +45,7 @@ import {
     type Cert,
     type Auth,
     type ValidationRule,
+    type Flow,
 } from '@wave-client/core';
 
 // ============================================================================
@@ -434,12 +435,12 @@ function createVSCodeStorageAdapter(
         },
 
         // Flows
-        async loadFlows(): Promise<Result<import('@wave-client/core').Flow[], string>> {
-            return sendAndWait<import('@wave-client/core').Flow[]>('loadFlows');
+        async loadFlows(): Promise<Result<Flow[], string>> {
+            return sendAndWait<Flow[]>('loadFlows');
         },
 
-        async saveFlow(flow): Promise<Result<import('@wave-client/core').Flow, string>> {
-            return sendAndWait<import('@wave-client/core').Flow>('saveFlow', {
+        async saveFlow(flow): Promise<Result<Flow, string>> {
+            return sendAndWait<Flow>('saveFlow', {
                 data: { flow: JSON.stringify(flow, null, 2) }
             });
         },

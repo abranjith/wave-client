@@ -1024,6 +1024,10 @@ export class MessageHandler {
                 requestId,
                 flow: savedFlow
             });
+            this.postMessage({
+                type: 'bannerSuccess',
+                message: `Flow ${savedFlow.name} saved successfully`
+            });
         } catch (error: any) {
             console.error('Error saving flow:', error);
             this.postMessage({

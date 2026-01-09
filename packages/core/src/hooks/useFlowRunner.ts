@@ -12,10 +12,10 @@
  */
 
 import { useState, useCallback, useRef } from 'react';
-import { useHttpAdapter, useStorageAdapter } from './useAdapter';
+import { useHttpAdapter } from './useAdapter';
 import type { Environment, CollectionItem, Collection } from '../types/collection';
 import type { Auth } from './store/createAuthSlice';
-import type { HttpRequestConfig, HttpResponseResult } from '../types/adapters';
+import type { HttpRequestConfig } from '../types/adapters';
 import type {
     Flow,
     FlowNode,
@@ -105,7 +105,9 @@ export function useFlowRunner({ environments, auths, collections }: UseFlowRunne
                 }
                 if (item.item) {
                     const found = findInItems(item.item);
-                    if (found) return found;
+                    if (found) {
+                        return found;
+                    }
                 }
             }
             return null;
@@ -335,7 +337,9 @@ export function useFlowRunner({ environments, auths, collections }: UseFlowRunne
         updater: (prev: FlowRunResult) => FlowRunResult
     ) => {
         setState(prev => {
-            if (!prev.result) return prev;
+            if (!prev.result) {
+                return prev;
+            }
             return {
                 ...prev,
                 result: updater(prev.result),

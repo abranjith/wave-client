@@ -12,7 +12,6 @@ import type {
     Flow, 
     FlowNode as FlowNodeType, 
     FlowConnector as FlowConnectorType,
-    FlowRunResult,
     ConnectorCondition,
 } from '../../types/flow';
 import {
@@ -22,6 +21,7 @@ import {
     getOutgoingConnectors,
     getIncomingConnectors,
 } from '../../types/flow';
+import { useFlowRunner } from '../../hooks/useFlowRunner';
 import { FlowNode } from './FlowNode';
 import { FlowConnector, FlowConnectorDefs } from './FlowConnector';
 import { FlowToolbar } from './FlowToolbar';
@@ -39,18 +39,8 @@ export interface FlowCanvasProps {
     flow: Flow;
     /** Callback when flow changes */
     onFlowChange: (flow: Flow) => void;
-    /** Flow run result (from useFlowRunner) */
-    runResult?: FlowRunResult | null;
-    /** Currently running node IDs */
-    runningNodeIds?: Set<string>;
-    /** Whether the flow is running */
-    isRunning?: boolean;
-    /** Callback to run the flow */
-    onRun?: () => void;
-    /** Callback to cancel the running flow */
-    onCancel?: () => void;
-    /** Callback to save the flow */
-    onSave?: () => void;
+    /** Callback to save the flow (receives current flow state) */
+    onSave?: (flow: Flow) => void;
     /** Available collections for adding requests */
     collections: Collection[];
     /** Available environments */
@@ -78,11 +68,6 @@ const HANDLE_OFFSET_X = 8; // Distance from node edge to handle center
 export const FlowCanvas: React.FC<FlowCanvasProps> = ({
     flow,
     onFlowChange,
-    runResult,
-    runningNodeIds = new Set(),
-    isRunning = false,
-    onRun,
-    onCancel,
     onSave,
     collections,
     environments,
@@ -90,6 +75,13 @@ export const FlowCanvas: React.FC<FlowCanvasProps> = ({
     hasUnsavedChanges = false,
     showResults = true,
 }) => {
+    // Flow runner hook - manages flow execution internally
+    const flowRunner = useFlowRunner({
+        environments,
+        auths,
+        collections,
+    });
+
     // State
     const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
     const [selectedConnectorId, setSelectedConnectorId] = useState<string | null>(null);
@@ -344,9 +336,9 @@ export const FlowCanvas: React.FC<FlowCanvasProps> = ({
     
     // Get node status from run result
     const getNodeStatus = useCallback((nodeId: string) => {
-        if (runningNodeIds.has(nodeId)) return 'running';
-        return runResult?.nodeResults.get(nodeId)?.status || 'idle';
-    }, [runResult, runningNodeIds]);
+        if (flowRunner.runningNodeIds.has(nodeId)) return 'running';
+        return flowRunner.result?.nodeResults.get(nodeId)?.status || 'idle';
+    }, [flowRunner.result, flowRunner.runningNodeIds]);
     
     // Get selected connector for popover
     const selectedConnector = selectedConnectorId 
@@ -360,11 +352,14 @@ export const FlowCanvas: React.FC<FlowCanvasProps> = ({
                 flowName={flow.name}
                 onNameChange={handleNameChange}
                 onAddRequest={() => setIsSearchOpen(true)}
-                onRun={onRun || (() => {})}
-                onCancel={onCancel || (() => {})}
+                onRun={() => flowRunner.runFlow(flow, {
+                    environmentId: flow.defaultEnvId,
+                    defaultAuthId: flow.defaultAuthId,
+                })}
+                onCancel={flowRunner.cancelFlow}
                 onAutoLayout={handleAutoLayout}
-                onSave={onSave}
-                isRunning={isRunning}
+                onSave={onSave ? () => onSave(flow) : undefined}
+                isRunning={flowRunner.isRunning}
                 hasUnsavedChanges={hasUnsavedChanges}
                 environments={environments}
                 selectedEnvId={flow.defaultEnvId}
@@ -403,8 +398,8 @@ export const FlowCanvas: React.FC<FlowCanvasProps> = ({
                             const positions = getConnectorPositions(connector);
                             if (!positions) return null;
                             
-                            const isActive = runResult?.activeConnectorIds.includes(connector.id) || false;
-                            const isSkipped = runResult?.skippedConnectorIds.includes(connector.id) || false;
+                            const isActive = flowRunner.result?.activeConnectorIds.includes(connector.id) || false;
+                            const isSkipped = flowRunner.result?.skippedConnectorIds.includes(connector.id) || false;
                             
                             return (
                                 <FlowConnector
@@ -472,7 +467,7 @@ export const FlowCanvas: React.FC<FlowCanvasProps> = ({
                 {showResults && (
                     <div className="w-80 flex-shrink-0">
                         <FlowResultsPanel
-                            result={runResult || null}
+                            result={flowRunner.result}
                             selectedNodeId={selectedNodeId || undefined}
                             onNodeClick={handleNodeClick}
                         />

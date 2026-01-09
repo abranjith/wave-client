@@ -105,12 +105,39 @@ export class FlowService extends BaseStorageService {
 
     /**
      * Saves a flow to the flows directory.
+     * Ensures node aliases are unique within the flow.
+     * Ensures flow name is unique across all flows.
      * @param flow The flow to save
      * @returns The saved flow
+     * @throws Error if node aliases are not unique or flow name already exists
      */
     async save(flow: Flow): Promise<Flow> {
         const flowsDir = await this.getFlowsDir();
         this.ensureDirectoryExists(flowsDir);
+
+        // Validate flow name is not empty
+        if (!flow.name || flow.name.trim().length === 0) {
+            throw new Error('Flow name cannot be empty.');
+        }
+
+        // Check for unique flow name
+        const existingFlows = await this.loadAll();
+        const duplicateNameFlow = existingFlows.find(
+            (f) => f.name.toLowerCase().trim() === flow.name.toLowerCase().trim() && f.id !== flow.id
+        );
+        if (duplicateNameFlow) {
+            throw new Error(`A flow with the name "${flow.name}" already exists. Please choose a different name.`);
+        }
+
+        // Validate unique node aliases
+        if (flow.nodes && flow.nodes.length > 0) {
+            const aliases = flow.nodes.map(node => node.alias);
+            const duplicates = aliases.filter((alias, index) => aliases.indexOf(alias) !== index);
+            if (duplicates.length > 0) {
+                const uniqueDuplicates = [...new Set(duplicates)];
+                throw new Error(`Duplicate node names found: ${uniqueDuplicates.join(', ')}. Each node must have a unique name.`);
+            }
+        }
 
         // Ensure flow has an ID and timestamps
         if (!flow.id) {

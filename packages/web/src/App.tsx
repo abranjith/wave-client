@@ -141,6 +141,7 @@ function WaveClientUI() {
   const setHistory = useAppStateStore((state) => state.setHistory);
   const setHistoryLoadError = useAppStateStore((state) => state.setHistoryLoadError);
   const environments = useAppStateStore((state) => state.environments);
+  const collections = useAppStateStore((state) => state.collections);
   const auths = useAppStateStore((state) => state.auths);
   const banner = useAppStateStore((state) => state.banner);
   const clearBanner = useAppStateStore((state) => state.clearBanner);
@@ -149,6 +150,12 @@ function WaveClientUI() {
   const setBannerInfo = useAppStateStore((state) => state.setBannerInfo);
   const setBannerWarning = useAppStateStore((state) => state.setBannerWarning);
   const updateTabMetadata = useAppStateStore((state) => state.updateTabMetadata);
+  // Flows state
+  const flows = useAppStateStore((state) => state.flows);
+  const setFlows = useAppStateStore((state) => state.setFlows);
+  const setIsFlowsLoading = useAppStateStore((state) => state.setIsFlowsLoading);
+  const setFlowsLoadError = useAppStateStore((state) => state.setFlowsLoadError);
+  const updateFlow = useAppStateStore((state) => state.updateFlow);
 
   const pendingSaveInfo = useRef<{
     tabId: string;
@@ -243,6 +250,16 @@ function WaveClientUI() {
       if (settingsResult.isOk) {
         setSettings(settingsResult.value as any);
       }
+
+      // Load flows
+      setIsFlowsLoading(true);
+      const flowsResult = await storage.loadFlows();
+      if (flowsResult.isOk) {
+        setFlows(flowsResult.value);
+      } else {
+        setFlowsLoadError(flowsResult.error);
+      }
+      setIsFlowsLoading(false);
     }
 
     initializeData();
@@ -268,6 +285,17 @@ function WaveClientUI() {
       setHistoryLoadError(historyResult.error);
     }
     setIsHistoryLoading(false);
+  };
+
+  const handleRetryFlows = async () => {
+    setIsFlowsLoading(true);
+    const flowsResult = await storage.loadFlows();
+    if (flowsResult.isOk) {
+      setFlows(flowsResult.value);
+    } else {
+      setFlowsLoadError(flowsResult.error);
+    }
+    setIsFlowsLoading(false);
   };
 
   const handleRetryEnvironments = async () => {
@@ -314,11 +342,13 @@ function WaveClientUI() {
     const result = await storage.saveFlow(flow);
     if (result.isOk) {
       setSelectedFlow(result.value);
+      // Update the flow in the store
+      updateFlow(result.value);
       notification.showNotification('success', 'Flow saved');
     } else {
       notification.showNotification('error', result.error);
     }
-  }, [storage, notification]);
+  }, [storage, notification, updateFlow]);
 
   const handleBackFromEnvironment = () => {
     setSelectedEnvironment(null);
@@ -650,6 +680,7 @@ function WaveClientUI() {
           onRetryCollections={handleRetryCollections}
           onRetryHistory={handleRetryHistory}
           onRetryEnvironments={handleRetryEnvironments}
+          onRetryFlows={handleRetryFlows}
           onFlowSelect={handleFlowSelect}
         />
       </div>
@@ -659,9 +690,11 @@ function WaveClientUI() {
         <div style={{ gridArea: 'environment' }} className="overflow-hidden">
           <FlowCanvas
             flow={selectedFlow}
+            collections={collections}
+            environments={environments}
+            auths={auths}
             onFlowChange={setSelectedFlow}
             onSave={handleFlowSave}
-            onClose={handleBackFromFlow}
           />
         </div>
       ) : selectedEnvironment ? (

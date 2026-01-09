@@ -11,7 +11,6 @@ import {
     StopCircleIcon, 
     LayoutGrid,
     SaveIcon,
-    Settings2,
 } from 'lucide-react';
 import type { Environment } from '../../types/collection';
 import type { Auth } from '../../hooks/store/createAuthSlice';
@@ -183,6 +182,7 @@ export const FlowToolbar: React.FC<FlowToolbarProps> = ({
                                 size="sm"
                                 onClick={onSave}
                                 disabled={isRunning}
+                                colorTheme="success"
                                 className={hasUnsavedChanges ? 'text-amber-600 border-amber-300' : ''}
                             >
                                 <SaveIcon className="h-4 w-4" />

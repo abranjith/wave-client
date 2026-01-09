@@ -54,10 +54,19 @@ const FlowsPane: React.FC<FlowsPaneProps> = ({
     const storageAdapter = useStorageAdapter();
     const notification = useNotificationAdapter();
     
-    // Local state
-    const [flows, setFlows] = useState<Flow[]>([]);
-    const [isLoading, setIsLoading] = useState(true);
-    const [error, setError] = useState<string | null>(null);
+    // Use store state for flows
+    const flows = useAppStateStore((state) => state.flows);
+    const setFlows = useAppStateStore((state) => state.setFlows);
+    const isLoading = useAppStateStore((state) => state.isFlowsLoading);
+    const setIsLoading = useAppStateStore((state) => state.setIsFlowsLoading);
+    const error = useAppStateStore((state) => state.flowsLoadError);
+    const setError = useAppStateStore((state) => state.setFlowsLoadError);
+    const updateFlow = useAppStateStore((state) => state.updateFlow);
+    const removeFlow = useAppStateStore((state) => state.removeFlow);
+    const addFlow = useAppStateStore((state) => state.addFlow);
+    const isFlowNameUnique = useAppStateStore((state) => state.isFlowNameUnique);
+    
+    // Local state for UI
     const [searchText, setSearchText] = useState('');
     const [editingFlowId, setEditingFlowId] = useState<string | null>(null);
     const [editingName, setEditingName] = useState('');
@@ -76,18 +85,29 @@ const FlowsPane: React.FC<FlowsPaneProps> = ({
         }
         
         setIsLoading(false);
-    }, [storageAdapter]);
+    }, [storageAdapter, setFlows, setIsLoading, setError]);
 
-    // Initial load
+    // Initial load - only if flows are empty
     useEffect(() => {
-        loadFlows();
-    }, [loadFlows]);
+        if (flows.length === 0 && !isLoading && !error) {
+            loadFlows();
+        }
+    }, []);
 
     // Create new flow
     const handleCreateFlow = useCallback(async () => {
+        // Generate a unique name
+        let baseName = 'New Flow';
+        let name = baseName;
+        let counter = 1;
+        while (!isFlowNameUnique(name)) {
+            counter++;
+            name = `${baseName} ${counter}`;
+        }
+        
         const newFlow: Flow = {
             id: `flow-${Date.now()}`,
-            name: 'New Flow',
+            name,
             description: '',
             nodes: [],
             connectors: [],
@@ -98,25 +118,25 @@ const FlowsPane: React.FC<FlowsPaneProps> = ({
         const result = await storageAdapter.saveFlow(newFlow);
         
         if (result.isOk) {
-            setFlows(prev => [result.value, ...prev]);
+            addFlow(result.value);
             onFlowSelect(result.value);
             notification.showNotification('success', 'Flow created');
         } else {
             notification.showNotification('error', result.error);
         }
-    }, [storageAdapter, notification, onFlowSelect]);
+    }, [storageAdapter, notification, onFlowSelect, addFlow, isFlowNameUnique]);
 
     // Delete flow
     const handleDeleteFlow = useCallback(async (flowId: string, flowName: string) => {
         const result = await storageAdapter.deleteFlow(flowId);
         
         if (result.isOk) {
-            setFlows(prev => prev.filter(f => f.id !== flowId));
+            removeFlow(flowId);
             notification.showNotification('success', `Deleted "${flowName}"`);
         } else {
             notification.showNotification('error', result.error);
         }
-    }, [storageAdapter, notification]);
+    }, [storageAdapter, notification, removeFlow]);
 
     // Rename flow
     const handleRenameStart = useCallback((flow: Flow) => {
@@ -133,22 +153,30 @@ const FlowsPane: React.FC<FlowsPaneProps> = ({
             return;
         }
         
+        // Check if the new name is unique
+        const trimmedName = editingName.trim() || 'Untitled Flow';
+        if (!isFlowNameUnique(trimmedName, editingFlowId)) {
+            notification.showNotification('error', `A flow with the name "${trimmedName}" already exists.`);
+            setEditingFlowId(null);
+            return;
+        }
+        
         const updatedFlow: Flow = {
             ...flow,
-            name: editingName.trim() || 'Untitled Flow',
+            name: trimmedName,
             updatedAt: new Date().toISOString(),
         };
         
         const result = await storageAdapter.saveFlow(updatedFlow);
         
         if (result.isOk) {
-            setFlows(prev => prev.map(f => f.id === editingFlowId ? result.value : f));
+            updateFlow(editingFlowId, result.value);
         } else {
             notification.showNotification('error', result.error);
         }
         
         setEditingFlowId(null);
-    }, [editingFlowId, editingName, flows, storageAdapter, notification]);
+    }, [editingFlowId, editingName, flows, storageAdapter, notification, updateFlow, isFlowNameUnique]);
 
     // Filter flows by search text
     const filteredFlows = searchText.trim()

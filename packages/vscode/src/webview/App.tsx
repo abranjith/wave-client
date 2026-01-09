@@ -82,6 +82,12 @@ const App: React.FC = () => {
   const setBannerInfo = useAppStateStore((state) => state.setBannerInfo);
   const setBannerWarning = useAppStateStore((state) => state.setBannerWarning);
   const updateTabMetadata = useAppStateStore((state) => state.updateTabMetadata);
+  // Flows state
+  const flows = useAppStateStore((state) => state.flows);
+  const setFlows = useAppStateStore((state) => state.setFlows);
+  const setIsFlowsLoading = useAppStateStore((state) => state.setIsFlowsLoading);
+  const setFlowsLoadError = useAppStateStore((state) => state.setFlowsLoadError);
+  const updateFlow = useAppStateStore((state) => state.updateFlow);
 
   const pendingSaveInfo = useRef<{ tabId: string, collectionName: string | undefined, folderPath: string[], requestName: string } | null>(null);
 
@@ -171,6 +177,16 @@ const App: React.FC = () => {
       if (settingsResult.isOk) {
         setSettings(settingsResult.value as any);
       }
+
+      // Load flows
+      setIsFlowsLoading(true);
+      const flowsResult = await storage.loadFlows();
+      if (flowsResult.isOk) {
+        setFlows(flowsResult.value);
+      } else {
+        setFlowsLoadError(flowsResult.error);
+      }
+      setIsFlowsLoading(false);
     }
 
     initializeData();
@@ -209,6 +225,17 @@ const App: React.FC = () => {
     setIsEnvironmentsLoading(false);
   };
 
+  const handleRetryFlows = async () => {
+    setIsFlowsLoading(true);
+    const flowsResult = await storage.loadFlows();
+    if (flowsResult.isOk) {
+      setFlows(flowsResult.value);
+    } else {
+      setFlowsLoadError(flowsResult.error);
+    }
+    setIsFlowsLoading(false);
+  };
+
   const handleRequestSelect = (request: RequestFormData) => {
     loadRequestIntoTab(request);
     setSelectedEnvironment(null); // Clear environment selection when selecting a request
@@ -241,12 +268,24 @@ const App: React.FC = () => {
   const handleFlowSave = useCallback(async (flow: Flow) => {
     const result = await storage.saveFlow(flow);
     if (result.isOk) {
-      setSelectedFlow(result.value);
+      const savedFlow = result.value;
+      setSelectedFlow(savedFlow);
+      // Update flows in the store
+      const existingFlow = flows.find(f => f.id === savedFlow.id);
+      if (existingFlow) {
+        updateFlow(savedFlow.id, savedFlow);
+      } else {
+        // Reload all flows if it's a new flow
+        const flowsResult = await storage.loadFlows();
+        if (flowsResult.isOk) {
+          setFlows(flowsResult.value);
+        }
+      }
       notification.showNotification('success', 'Flow saved');
     } else {
       notification.showNotification('error', result.error);
     }
-  }, [storage, notification]);
+  }, [storage, notification, flows, updateFlow, setFlows]);
 
   const handleBackFromEnvironment = () => {
     setSelectedEnvironment(null);
@@ -580,6 +619,7 @@ const App: React.FC = () => {
           onRetryCollections={handleRetryCollections}
           onRetryHistory={handleRetryHistory}
           onRetryEnvironments={handleRetryEnvironments}
+          onRetryFlows={handleRetryFlows}
         />
       </div>
 
@@ -593,7 +633,6 @@ const App: React.FC = () => {
             auths={auths}
             onFlowChange={setSelectedFlow}
             onSave={handleFlowSave}
-            onClose={handleBackFromFlow}
           />
         </div>
       ) : selectedEnvironment ? (
