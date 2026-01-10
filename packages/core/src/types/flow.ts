@@ -539,7 +539,7 @@ export function autoLayoutFlow(flow: Flow): Flow {
     }
     
     // Layout constants
-    const HORIZONTAL_SPACING = 250;
+    const HORIZONTAL_SPACING = 350;
     const VERTICAL_SPACING = 100;
     const START_X = 50;
     const START_Y = 50;

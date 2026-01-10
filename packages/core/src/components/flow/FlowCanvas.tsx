@@ -246,7 +246,7 @@ export const FlowCanvas: React.FC<FlowCanvasProps> = ({
         setSelectedConnectorId(null);
     }, [flow, onFlowChange]);
     
-    // Handle connector condition change
+    // Handle connector condition change (from popover - uses selected connector)
     const handleConnectorConditionChange = useCallback((condition: ConnectorCondition) => {
         if (!selectedConnectorId) return;
         
@@ -260,6 +260,19 @@ export const FlowCanvas: React.FC<FlowCanvasProps> = ({
             updatedAt: new Date().toISOString(),
         });
     }, [selectedConnectorId, flow, onFlowChange]);
+    
+    // Handle connector condition change (from inline dropdown - receives connector ID)
+    const handleConnectorConditionChangeById = useCallback((connectorId: string, condition: ConnectorCondition) => {
+        const updatedConnectors = flow.connectors.map(c =>
+            c.id === connectorId ? { ...c, condition } : c
+        );
+        
+        onFlowChange({
+            ...flow,
+            connectors: updatedConnectors,
+            updatedAt: new Date().toISOString(),
+        });
+    }, [flow, onFlowChange]);
     
     // Handle add request from search
     const handleAddRequest = useCallback((request: SearchableRequest) => {
@@ -412,6 +425,7 @@ export const FlowCanvas: React.FC<FlowCanvasProps> = ({
                                     isSkipped={isSkipped}
                                     onClick={handleConnectorClick}
                                     onDelete={handleConnectorDelete}
+                                    onConditionChange={handleConnectorConditionChangeById}
                                 />
                             );
                         })}
@@ -465,8 +479,10 @@ export const FlowCanvas: React.FC<FlowCanvasProps> = ({
                 
                 {/* Results Panel */}
                 {showResults && (
-                    <div className="w-80 flex-shrink-0">
+                    <div className="w-96 min-w-80 max-w-2xl flex-shrink-0 resize-x overflow-auto">
                         <FlowResultsPanel
+                                    flow={flow}
+                                    collections={collections}
                             result={flowRunner.result}
                             selectedNodeId={selectedNodeId || undefined}
                             onNodeClick={handleNodeClick}

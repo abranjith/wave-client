@@ -24,14 +24,17 @@ export interface RunRequestData {
   // Response data
   responseHeaders?: Record<string, string>;
   responseBody?: string;
+  isResponseEncoded?: boolean;
   // Error info
   error?: string;
 }
 
 interface RunRequestCardProps {
   data: RunRequestData;
-  isSelected: boolean;
-  onSelectionChange: (id: string, selected: boolean) => void;
+  isSelected?: boolean;
+  onSelectionChange?: (id: string, selected: boolean) => void;
+  showSelection?: boolean;
+  onCardClick?: (id: string) => void;
 }
 
 // ==================== Helper Components ====================
@@ -208,15 +211,29 @@ const CardTabContent: React.FC<CardTabContentProps> = ({ activeTab, data }) => {
     case 'Response Headers':
       return renderHeaders(data.responseHeaders);
 
-    case 'Response Body':
+    case 'Response Body': {
       if (!data.responseBody) {
         return <div className="text-slate-500 text-sm italic">No response body</div>;
       }
+      
+      let displayBody = data.responseBody;
+      
+      // Decode base64 if response is encoded
+      if (data.isResponseEncoded && data.responseBody) {
+        try {
+          displayBody = atob(data.responseBody);
+        } catch (e) {
+          // Keep original if decoding fails
+          displayBody = data.responseBody;
+        }
+      }
+      
       return (
         <pre className="text-sm font-mono text-slate-700 dark:text-slate-300 whitespace-pre-wrap break-all bg-slate-50 dark:bg-slate-800 p-3 rounded-md max-h-64 overflow-auto">
-          {data.responseBody}
+          {displayBody}
         </pre>
       );
+    }
 
     case 'Validation':
       if (data.validationStatus === 'idle') {
@@ -240,8 +257,10 @@ const CardTabContent: React.FC<CardTabContentProps> = ({ activeTab, data }) => {
 
 const RunRequestCard: React.FC<RunRequestCardProps> = ({
   data,
-  isSelected,
+  isSelected = false,
   onSelectionChange,
+  showSelection = true,
+  onCardClick,
 }) => {
   const [isExpanded, setIsExpanded] = useState(false);
   const [activeTab, setActiveTab] = useState<RequestCardTab>('Request Headers');
@@ -255,7 +274,12 @@ const RunRequestCard: React.FC<RunRequestCardProps> = ({
     if (hasError && activeTab !== 'Error') {
       setActiveTab('Error');
     }
-  }, [hasError]);
+  }, [hasError, activeTab]);
+
+  const handleHeaderClick = () => {
+    setIsExpanded((prev) => !prev);
+    onCardClick?.(data.id);
+  };
 
   return (
     <div className={`border rounded-lg transition-colors ${
@@ -266,15 +290,17 @@ const RunRequestCard: React.FC<RunRequestCardProps> = ({
       {/* Card Header */}
       <div 
         className="flex items-center gap-3 p-3 cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-700/50 transition-colors"
-        onClick={() => setIsExpanded(!isExpanded)}
+        onClick={handleHeaderClick}
       >
-        {/* Checkbox */}
-        <div onClick={(e) => e.stopPropagation()}>
-          <Checkbox
-            checked={isSelected}
-            onCheckedChange={(checked) => onSelectionChange(data.id, checked)}
-          />
-        </div>
+        {/* Checkbox (optional) */}
+        {showSelection && (
+          <div onClick={(e) => e.stopPropagation()}>
+            <Checkbox
+              checked={isSelected}
+              onCheckedChange={(checked) => onSelectionChange?.(data.id, Boolean(checked))}
+            />
+          </div>
+        )}
 
         {/* Expand/Collapse Icon */}
         {isExpanded ? (
