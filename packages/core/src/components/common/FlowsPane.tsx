@@ -14,7 +14,8 @@ import {
     AlertCircleIcon,
     RefreshCwIcon,
     MoreVerticalIcon,
-    PencilIcon
+    PencilIcon,
+    CircleIcon,
 } from 'lucide-react';
 import useAppStateStore from '../../hooks/store/useAppStateStore';
 import { useStorageAdapter, useNotificationAdapter } from '../../hooks/useAdapter';
@@ -65,6 +66,8 @@ const FlowsPane: React.FC<FlowsPaneProps> = ({
     const removeFlow = useAppStateStore((state) => state.removeFlow);
     const addFlow = useAppStateStore((state) => state.addFlow);
     const isFlowNameUnique = useAppStateStore((state) => state.isFlowNameUnique);
+    const setCurrentEditingFlowId = useAppStateStore((state) => state.setCurrentEditingFlowId);
+    const isFlowDirty = useAppStateStore((state) => state.isFlowDirty);
     
     // Local state for UI
     const [searchText, setSearchText] = useState('');
@@ -290,7 +293,10 @@ const FlowsPane: React.FC<FlowsPaneProps> = ({
                             <div
                                 key={flow.id}
                                 className="group flex items-center gap-2 p-2 rounded-md hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer"
-                                onClick={() => onFlowSelect(flow)}
+                                onClick={() => {
+                                    setCurrentEditingFlowId(flow.id);
+                                    onFlowSelect(flow);
+                                }}
                             >
                                 <GitBranchIcon className="h-4 w-4 text-blue-500 flex-shrink-0" />
                                 
@@ -309,15 +315,21 @@ const FlowsPane: React.FC<FlowsPaneProps> = ({
                                             autoFocus
                                         />
                                     ) : (
-                                        <>
+                                        <div className="flex items-center gap-2">
                                             <p className="text-sm font-medium text-slate-800 dark:text-slate-200 truncate">
                                                 {flow.name}
                                             </p>
-                                            <p className="text-xs text-slate-500 dark:text-slate-400">
-                                                {flow.nodes.length} node{flow.nodes.length !== 1 ? 's' : ''} • {formatDate(flow.updatedAt)}
-                                            </p>
-                                        </>
+                                            {isFlowDirty(flow.id) && (
+                                                <CircleIcon 
+                                                    size={6} 
+                                                    className="flex-shrink-0 fill-current text-blue-500 dark:text-blue-400" 
+                                                />
+                                            )}
+                                        </div>
                                     )}
+                                    <p className="text-xs text-slate-500 dark:text-slate-400">
+                                        {flow.nodes.length} node{flow.nodes.length !== 1 ? 's' : ''} • {formatDate(flow.updatedAt)}
+                                    </p>
                                 </div>
 
                                 {/* Actions */}

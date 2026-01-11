@@ -22,25 +22,23 @@ import type {
     FlowRunResult,
     FlowNodeResult,
     FlowRunState,
-    FlowNodeStatus,
     FlowContext,
 } from '../types/flow';
 import {
     getTopologicalOrder,
     getOutgoingConnectors,
     getIncomingConnectors,
+    getUpstreamNodeIds,
     isConditionSatisfied,
     createInitialFlowRunResult,
     validateFlow,
-} from '../types/flow';
+} from '../utils/flowUtils';
 import {
-    resolveFlowVariables,
     createEmptyFlowContext,
     addToFlowContext,
-    hasUnresolvedVariables,
+    flowContextToDynamicEnvVars,
 } from '../utils/flowResolver';
-import { buildEnvVarsMap, getDictFromHeaderRows, getURLSearchParamsFromParamRows } from '../utils/requestBuilder';
-import { resolveParameterizedValue } from '../utils/common';
+import { buildEnvVarsMap, buildHttpRequest } from '../utils/requestBuilder';
 
 // ============================================================================
 // Types
@@ -80,6 +78,7 @@ export function useFlowRunner({ environments, auths, collections }: UseFlowRunne
     const isCancelledRef = useRef(false);
     const flowContextRef = useRef<FlowContext>(createEmptyFlowContext());
     const envVarsMapRef = useRef<Map<string, string>>(new Map());
+    const environmentIdRef = useRef<string | null>(null);
     const runningRef = useRef<Set<string>>(new Set());
     
     /**
@@ -92,7 +91,7 @@ export function useFlowRunner({ environments, auths, collections }: UseFlowRunne
         let itemId: string;
         
         if (requestId.includes(':')) {
-            [collectionFilename, itemId] = requestId.split(':');
+            [collectionFilename, itemId] = requestId.split(':', 2);
         } else {
             itemId = requestId;
         }
@@ -129,12 +128,14 @@ export function useFlowRunner({ environments, auths, collections }: UseFlowRunne
     }, [collections]);
     
     /**
-     * Builds HTTP request config for a node, resolving flow variables
+     * Builds HTTP request config for a node, resolving flow variables.
+     * Only variables from upstream dependencies are available for resolution.
      */
     const buildNodeRequest = useCallback(async (
+        flow: Flow,
         node: FlowNode,
-        envVarsMap: Map<string, string>,
         flowContext: FlowContext,
+        environmentId: string | null,
         defaultAuthId?: string
     ): Promise<{ config: HttpRequestConfig; error?: string; unresolved?: string[] }> => {
         // Find the request definition
@@ -147,121 +148,92 @@ export function useFlowRunner({ environments, auths, collections }: UseFlowRunne
             };
         }
         
-        const { request: item, collection } = found;
+        const { request: item } = found;
         const request = item.request!;
-        const unresolved = new Set<string>();
         
-        // Get URL
-        let url = typeof request.url === 'string' 
-            ? request.url 
-            : request.url?.raw || '';
+        // Get upstream node IDs that this node depends on
+        const upstreamNodeIds = getUpstreamNodeIds(flow, node.id);
         
-        // Resolve URL with flow context
-        const urlResult = resolveFlowVariables(url, envVarsMap, flowContext);
-        if (urlResult.unresolved.length > 0) {
-            urlResult.unresolved.forEach(u => unresolved.add(u));
-        }
-        url = urlResult.resolved;
+        // Create node ID to alias map for flow context filtering
+        const nodeIdToAliasMap = new Map(
+            flow.nodes.map(n => [n.id, n.alias])
+        );
         
-        // Add protocol if missing
-        if (url && !url.startsWith('http://') && !url.startsWith('https://')) {
-            url = `https://${url}`;
-        }
+        // Convert flow context to dynamic env vars (only from upstream dependencies)
+        // Only extracts values that are actually referenced in the request
+        const dynamicEnvVars = flowContextToDynamicEnvVars(
+            flowContext,
+            upstreamNodeIds,
+            nodeIdToAliasMap,
+            request
+        );
         
-        // Resolve headers
-        const headerRows = request.header || [];
-        const headers = getDictFromHeaderRows(headerRows, envVarsMap, unresolved);
+        // Build request using buildHttpRequest with dynamic env vars
+        const result = await buildHttpRequest(
+            {
+                id: `${node.id}-${Date.now()}`,
+                name: item.name,
+                method: request.method,
+                url: typeof request.url === 'string' ? request.url : request.url?.raw || '',
+                headers: request.header || [],
+                params: typeof request.url === 'object' ? request.url?.query || [] : [],
+                authId: request.authId,
+                request: request,
+            },
+            environmentId, // Use flow's environment for base variables
+            environments,
+            auths,
+            defaultAuthId || flow.defaultAuthId,
+            dynamicEnvVars // Pass dynamic vars from flow context (highest priority)
+        );
         
-        // Resolve headers with flow context for any remaining placeholders
-        for (const [key, value] of Object.entries(headers)) {
-            if (typeof value === 'string' && hasUnresolvedVariables(value)) {
-                const result = resolveFlowVariables(value, envVarsMap, flowContext);
-                result.unresolved.forEach(u => unresolved.add(u));
-                headers[key] = result.resolved;
-            }
-        }
-        
-        // Resolve params
-        const queryParams = typeof request.url === 'object' && request.url?.query 
-            ? request.url.query 
-            : [];
-        const params = getURLSearchParamsFromParamRows(queryParams, envVarsMap, unresolved);
-        
-        // Extract and resolve body
-        let body: string | null = null;
-        if (request.body) {
-            // Handle raw body (most common for JSON APIs)
-            if (request.body.raw) {
-                const bodyResult = resolveParameterizedValue(request.body.raw, envVarsMap);
-                bodyResult.unresolved.forEach(u => unresolved.add(u));
-                body = bodyResult.resolved;
-            }
-            // Handle urlencoded
-            else if (request.body.urlencoded && Array.isArray(request.body.urlencoded)) {
-                const bodyParams = new URLSearchParams();
-                request.body.urlencoded.forEach(field => {
-                    if (field.key && !field.disabled) {
-                        const keyResult = resolveParameterizedValue(field.key, envVarsMap);
-                        keyResult.unresolved.forEach(u => unresolved.add(u));
-                        const valueResult = resolveParameterizedValue(field.value || '', envVarsMap);
-                        valueResult.unresolved.forEach(u => unresolved.add(u));
-                        bodyParams.append(keyResult.resolved, valueResult.resolved);
-                    }
-                });
-                body = bodyParams.toString();
-            }
-        }
-        
-        // Resolve body with flow context for any remaining placeholders
-        if (body && hasUnresolvedVariables(body)) {
-            const result = resolveFlowVariables(body, envVarsMap, flowContext);
-            result.unresolved.forEach(u => unresolved.add(u));
-            body = result.resolved;
-        }
-        
-        // Get auth
-        const authId = request.authId || defaultAuthId;
-        const auth = authId ? auths.find(a => a.id === authId) : undefined;
-        
-        // Check for unresolved variables
-        if (unresolved.size > 0) {
+        if (result.error || result.unresolved) {
             return {
                 config: null as unknown as HttpRequestConfig,
-                error: `Unresolved variables: ${Array.from(unresolved).join(', ')}`,
-                unresolved: Array.from(unresolved),
+                error: result.error,
+                unresolved: result.unresolved,
             };
         }
         
-        // Build config
+        if (!result.request) {
+            return {
+                config: null as unknown as HttpRequestConfig,
+                error: 'Failed to build request',
+            };
+        }
+        
+        // Convert PreparedHttpRequest to HttpRequestConfig
         const config: HttpRequestConfig = {
-            id: `${node.id}-${Date.now()}`,
-            method: request.method,
-            url,
-            headers,
-            params: params.toString(),
-            body,
-            auth,
-            envVars: Object.fromEntries(envVarsMap),
+            id: result.request.id,
+            method: result.request.method,
+            url: result.request.url,
+            headers: result.request.headers,
+            params: result.request.params || '',
+            body: result.request.body,
+            auth: result.request.auth,
+            envVars: result.request.envVars,
             validation: request.validation,
         };
         
         return { config };
-    }, [findRequest, auths]);
+    }, [findRequest, auths, environments]);
     
     /**
      * Executes a single node
      */
     const executeNode = useCallback(async (
+        flow: Flow,
         node: FlowNode,
         defaultAuthId?: string
     ): Promise<FlowNodeResult> => {
         const startedAt = new Date().toISOString();
         
         // Build request with flow context
-        const { config, error, unresolved } = await buildNodeRequest(
+        const { config, error } = await buildNodeRequest(
+            flow,
             node,
-            envVarsMapRef.current,
             flowContextRef.current,
+            environmentIdRef.current,
             defaultAuthId
         );
         
@@ -415,7 +387,8 @@ export function useFlowRunner({ environments, auths, collections }: UseFlowRunne
         // Reset refs
         isCancelledRef.current = false;
         flowContextRef.current = createEmptyFlowContext();
-        envVarsMapRef.current = buildEnvVarsMap(environments, environmentId || flow.defaultEnvId || null);
+        environmentIdRef.current = environmentId || flow.defaultEnvId || null;
+        envVarsMapRef.current = buildEnvVarsMap(environments, environmentIdRef.current);
         runningRef.current = new Set();
         
         // Initialize result
@@ -504,7 +477,7 @@ export function useFlowRunner({ environments, auths, collections }: UseFlowRunne
                 }));
                 
                 // Execute
-                const result = await executeNode(node, defaultAuthId || flow.defaultAuthId);
+                const result = await executeNode(flow, node, defaultAuthId || flow.defaultAuthId);
                 
                 runningRef.current.delete(node.id);
                 nodeResults.set(node.id, result);

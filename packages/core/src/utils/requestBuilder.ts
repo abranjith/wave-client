@@ -52,9 +52,20 @@ export interface CollectionRequestInput {
 
 /**
  * Creates environment variables map from global and active environment
+ * @param dynamicEnvVars Optional dynamic variables (e.g., from flow context) that override all other vars
  */
-export function buildEnvVarsMap(environments: Environment[], environmentId: string | null): Map<string, string> {
+export function buildEnvVarsMap(
+    environments: Environment[], 
+    environmentId: string | null,
+    dynamicEnvVars?: Record<string, string>
+): Map<string, string> {
     const envVarsMap = new Map<string, string>();
+
+    if (dynamicEnvVars) {
+        Object.entries(dynamicEnvVars).forEach(([key, value]) => {
+            envVarsMap.set(key, value);
+        });
+    }
     
     // First add global environment variables
     const globalEnv = environments.find(e => e.name.toLowerCase() === 'global');
@@ -318,16 +329,18 @@ function getBodyTypeFromCollectionRequest(request: CollectionRequest | undefined
 /**
  * Builds a prepared HTTP request from collection request input.
  * Resolves environment variables, validates auth, and prepares the body.
+ * @param dynamicEnvVars Optional dynamic variables (e.g., from flow context) that override environment vars
  */
 export async function buildHttpRequest(
     input: CollectionRequestInput,
     environmentId: string | null,
     environments: Environment[],
     auths: Auth[],
-    defaultAuthId?: string | null
+    defaultAuthId?: string | null,
+    dynamicEnvVars?: Record<string, string>
 ): Promise<RequestBuildResult> {
-    // Build environment variables map
-    const envVarsMap = buildEnvVarsMap(environments, environmentId);
+    // Build environment variables map with optional dynamic overrides
+    const envVarsMap = buildEnvVarsMap(environments, environmentId, dynamicEnvVars);
     const allUnresolved: Set<string> = new Set();
 
     // Resolve URL

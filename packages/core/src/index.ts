@@ -98,12 +98,13 @@ export {
     getStartingNodes,
     getOutgoingConnectors,
     getIncomingConnectors,
+    getUpstreamNodeIds,
     isConditionSatisfied,
     validateFlow,
     getTopologicalOrder,
     calculateNodeDepths,
     autoLayoutFlow,
-} from './types/flow';
+} from './utils/flowUtils';
 
 // Auth types
 export type {
@@ -221,6 +222,7 @@ export {
     getAliasFromPath,
     createEmptyFlowContext,
     addToFlowContext,
+    flowContextToDynamicEnvVars,
 } from './utils/flowResolver';
 
 // ============================================================================

@@ -1,10 +1,12 @@
 import { StateCreator } from 'zustand';
-import { Flow } from '../../types/flow';
+import { Flow, FlowNode, FlowConnector } from '../../types/flow';
 
 interface FlowsSlice {
     flows: Flow[];
     isFlowsLoading: boolean;
     flowsLoadError: string | null;
+    currentEditingFlowId: string | null;
+    flowDirtyStates: Record<string, boolean>; // Track dirty state per flow ID
     setFlows: (flows: Flow[]) => void;
     setIsFlowsLoading: (isLoading: boolean) => void;
     setFlowsLoadError: (error: string | null) => void;
@@ -14,12 +16,24 @@ interface FlowsSlice {
     getFlowById: (id: string) => Flow | undefined;
     getFlowByName: (name: string) => Flow | undefined;
     isFlowNameUnique: (name: string, excludeId?: string) => boolean;
+    setCurrentEditingFlowId: (flowId: string | null) => void;
+    isFlowDirty: (flowId: string) => boolean; // Check if specific flow is dirty
+    
+    // Flow mutation methods (auto-mark dirty)
+    updateFlowNodes: (flowId: string, nodes: FlowNode[]) => void;
+    updateFlowConnectors: (flowId: string, connectors: FlowConnector[]) => void;
+    updateFlowName: (flowId: string, name: string) => void;
+    updateFlowDefaultEnv: (flowId: string, envId: string | undefined) => void;
+    updateFlowDefaultAuth: (flowId: string, authId: string | undefined) => void;
+    markFlowClean: (flowId: string) => void;
 }
 
 const createFlowsSlice: StateCreator<FlowsSlice> = (set, get) => ({
     flows: [],
     isFlowsLoading: false,
     flowsLoadError: null,
+    currentEditingFlowId: null,
+    flowDirtyStates: {},
 
     setFlows: (flows) => set({ flows, flowsLoadError: null }),
 
@@ -32,7 +46,10 @@ const createFlowsSlice: StateCreator<FlowsSlice> = (set, get) => ({
     })),
 
     removeFlow: (id) => set((state) => ({
-        flows: state.flows.filter((flow) => flow.id !== id)
+        flows: state.flows.filter((flow) => flow.id !== id),
+        flowDirtyStates: Object.fromEntries(
+            Object.entries(state.flowDirtyStates).filter(([flowId]) => flowId !== id)
+        )
     })),
 
     updateFlow: (id, updates) => set((state) => ({
@@ -55,6 +72,74 @@ const createFlowsSlice: StateCreator<FlowsSlice> = (set, get) => ({
         return !flows.some((flow) => 
             flow.name.toLowerCase().trim() === normalizedName && flow.id !== excludeId
         );
+    },
+
+    setCurrentEditingFlowId: (flowId) => set({ currentEditingFlowId: flowId }),
+
+    isFlowDirty: (flowId) => {
+        return get().flowDirtyStates[flowId] || false;
+    },
+    
+    // Flow mutation methods - automatically mark dirty and update timestamp
+    updateFlowNodes: (flowId, nodes) => {
+        set((state) => ({
+            flowDirtyStates: { ...state.flowDirtyStates, [flowId]: true },
+            flows: state.flows.map((flow) => 
+                flow.id === flowId 
+                    ? { ...flow, nodes, updatedAt: new Date().toISOString() } 
+                    : flow
+            )
+        }));
+    },
+    
+    updateFlowConnectors: (flowId, connectors) => {
+        set((state) => ({
+            flowDirtyStates: { ...state.flowDirtyStates, [flowId]: true },
+            flows: state.flows.map((flow) => 
+                flow.id === flowId 
+                    ? { ...flow, connectors, updatedAt: new Date().toISOString() } 
+                    : flow
+            )
+        }));
+    },
+    
+    updateFlowName: (flowId, name) => {
+        set((state) => ({
+            flowDirtyStates: { ...state.flowDirtyStates, [flowId]: true },
+            flows: state.flows.map((flow) => 
+                flow.id === flowId 
+                    ? { ...flow, name, updatedAt: new Date().toISOString() } 
+                    : flow
+            )
+        }));
+    },
+    
+    updateFlowDefaultEnv: (flowId, envId) => {
+        set((state) => ({
+            flowDirtyStates: { ...state.flowDirtyStates, [flowId]: true },
+            flows: state.flows.map((flow) => 
+                flow.id === flowId 
+                    ? { ...flow, defaultEnvId: envId, updatedAt: new Date().toISOString() } 
+                    : flow
+            )
+        }));
+    },
+    
+    updateFlowDefaultAuth: (flowId, authId) => {
+        set((state) => ({
+            flowDirtyStates: { ...state.flowDirtyStates, [flowId]: true },
+            flows: state.flows.map((flow) => 
+                flow.id === flowId 
+                    ? { ...flow, defaultAuthId: authId, updatedAt: new Date().toISOString() } 
+                    : flow
+            )
+        }));
+    },
+    
+    markFlowClean: (flowId) => {
+        set((state) => ({
+            flowDirtyStates: { ...state.flowDirtyStates, [flowId]: false }
+        }));
     },
 });
 

@@ -36,7 +36,6 @@ interface ConfigPanelProps {
   onRetryHistory?: () => void;
   onRetryEnvironments?: () => void;
   onRetryFlows?: () => void;
-  vsCodeApi?: { postMessage: (message: unknown) => void };
 }
 
 const TABS = [
@@ -47,7 +46,7 @@ const TABS = [
   { key: 'store', label: 'Wave Store', icon: <ShieldCheckIcon size={20} /> },
 ];
 
-const ConfigPanel: React.FC<ConfigPanelProps> = ({ onRequestSelect, onEnvSelect, onStoreSelect, onFlowSelect, onFlowRun, onSettingsSelect, onImportCollection, onExportCollection, onImportEnvironments, onExportEnvironments, onRetryCollections, onRetryHistory, onRetryEnvironments, onRetryFlows, vsCodeApi }) => {
+const ConfigPanel: React.FC<ConfigPanelProps> = ({ onRequestSelect, onEnvSelect, onStoreSelect, onFlowSelect, onFlowRun, onSettingsSelect, onImportCollection, onExportCollection, onImportEnvironments, onExportEnvironments, onRetryCollections, onRetryHistory, onRetryEnvironments, onRetryFlows}) => {
   const { theme, toggleTheme } = useTheme();
 
   return (
@@ -104,7 +103,6 @@ const ConfigPanel: React.FC<ConfigPanelProps> = ({ onRequestSelect, onEnvSelect,
                 onImportCollection={onImportCollection}
                 onExportCollection={onExportCollection}
                 onRetry={onRetryCollections}
-                vsCodeApi={vsCodeApi}
               />
           </TabsContent>
           <TabsContent value="flows" className="h-full overflow-hidden">

@@ -42,7 +42,7 @@ interface FlowToolbarProps {
     /** Whether the flow is currently running */
     isRunning: boolean;
     /** Whether there are unsaved changes */
-    hasUnsavedChanges?: boolean;
+    isDirty?: boolean;
     /** Available environments */
     environments: Environment[];
     /** Selected environment ID */
@@ -72,7 +72,7 @@ export const FlowToolbar: React.FC<FlowToolbarProps> = ({
     onAutoLayout,
     onSave,
     isRunning,
-    hasUnsavedChanges = false,
+    isDirty = false,
     environments,
     selectedEnvId,
     onEnvChange,
@@ -96,11 +96,6 @@ export const FlowToolbar: React.FC<FlowToolbarProps> = ({
                         )}
                         placeholder="Flow Name"
                     />
-                    {hasUnsavedChanges && (
-                        <span className="text-xs text-amber-600 bg-amber-50 px-2 py-0.5 rounded">
-                            Unsaved
-                        </span>
-                    )}
                 </div>
                 
                 {/* Environment Select */}
@@ -181,9 +176,8 @@ export const FlowToolbar: React.FC<FlowToolbarProps> = ({
                             <SecondaryButton
                                 size="sm"
                                 onClick={onSave}
-                                disabled={isRunning}
+                                disabled={isRunning || !isDirty}
                                 colorTheme="success"
-                                className={hasUnsavedChanges ? 'text-amber-600 border-amber-300' : ''}
                             >
                                 <SaveIcon className="h-4 w-4" />
                             </SecondaryButton>

@@ -261,10 +261,6 @@ const App: React.FC = () => {
     setSelectedStore(null);
   };
 
-  const handleBackFromFlow = () => {
-    setSelectedFlow(null);
-  };
-
   const handleFlowSave = useCallback(async (flow: Flow) => {
     const result = await storage.saveFlow(flow);
     if (result.isOk) {

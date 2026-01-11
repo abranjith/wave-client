@@ -24,7 +24,6 @@ interface CollectionsPaneProps {
   onImportCollection: (fileName: string, fileContent: string, collectionType: string) => void;
   onExportCollection: (collectionName: string, exportFormat: string) => void;
   onRetry?: () => void;
-  vsCodeApi?: { postMessage: (message: unknown) => void };
 }
 
 // Extract domain + path (no query/fragment) from a collection URL
@@ -157,8 +156,7 @@ const CollectionsPane: React.FC<CollectionsPaneProps> = ({
   onRequestSelect,
   onImportCollection,
   onExportCollection,
-  onRetry,
-  vsCodeApi,
+  onRetry
 }) => {
   const collections = useAppStateStore((state) => state.collections);
   const isLoading = useAppStateStore((state) => state.isCollectionsLoading);
@@ -475,7 +473,7 @@ const CollectionsPane: React.FC<CollectionsPaneProps> = ({
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end" className="min-w-24">
                       <DropdownMenuItem onClick={() => handleRunCollection(collection.info.name, collection.item, [])}>Run</DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => {}}>Delete</DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => {}}>Delete</DropdownMenuItem> {/* Add delete functionality later */}
                     </DropdownMenuContent>
                   </DropdownMenu>
                 </div>

@@ -6,14 +6,15 @@
  * 2. Second pass: Resolve remaining placeholders from completed node responses
  * 
  * Supports dot-path notation for JSON access:
- * - {{alias.body.data.id}} - Access nested JSON from response body
- * - {{alias.body.items[0].name}} - Array access
- * - {{alias.headers.content-type}} - Access response headers
- * - {{alias.status}} - Access response status code
+ * - {{alias.$body.data.id}} - Access nested JSON from response body
+ * - {{alias.$body.items[0].name}} - Array access
+ * - {{alias.$headers.content-type}} - Access response headers
+ * - {{alias.$status}} - Access response status code
  */
 
 import type { HttpResponseResult } from '../types/adapters';
 import type { FlowContext, FlowResolveResult } from '../types/flow';
+import type { CollectionRequest } from '../types/collection';
 import { resolveParameterizedValue } from './common';
 
 // ============================================================================
@@ -23,8 +24,8 @@ import { resolveParameterizedValue } from './common';
 /** Regex to match {{variable}} placeholders */
 const PLACEHOLDER_REGEX = /\{\{([^}]+)\}\}/g;
 
-/** Regex to detect if a variable looks like a flow path (contains a dot) */
-const FLOW_PATH_REGEX = /^[a-zA-Z_][a-zA-Z0-9_]*\./;
+/** Regex to detect if a variable looks like a flow path (could be just a property or have a dot path) */
+const FLOW_PATH_REGEX = /^[a-zA-Z_$][a-zA-Z0-9_$]*/;
 
 // ============================================================================
 // Main Resolution Function
@@ -44,13 +45,13 @@ const FLOW_PATH_REGEX = /^[a-zA-Z_][a-zA-Z0-9_]*\./;
  * 
  * @example
  * // Environment variable: {{baseUrl}} → "https://api.example.com"
- * // Flow variable: {{getUser.body.data.id}} → "123" (from response JSON)
+ * // Flow variable: {{getUser.$body.data.id}} → "123" (from response JSON)
  * resolveFlowVariables(
- *   "{{baseUrl}}/users/{{getUser.body.data.id}}",
+ *   "{{baseUrl}}/users/{{getUser.$body.data.id}}",
  *   envVars,
  *   flowContext
  * );
- * // Returns: { resolved: "https://api.example.com/users/123", unresolved: [], resolvedFromFlow: ["getUser.body.data.id"] }
+ * // Returns: { resolved: "https://api.example.com/users/123", unresolved: [], resolvedFromFlow: ["getUser.$body.data.id"] }
  */
 export function resolveFlowVariables(
     template: string,
@@ -91,16 +92,15 @@ export function resolveFlowVariables(
 // ============================================================================
 
 /**
- * Resolves a flow path like "alias.body.data.id" to its value.
+ * Resolves a flow path like "alias.$body.data.id" to its value.
  * 
  * Supported paths:
- * - alias.body.* - Access response body (parsed as JSON)
- * - alias.headers.* - Access response headers
- * - alias.status - Access response status code
- * - alias.statusText - Access response status text
- * - alias.elapsedTime - Access response elapsed time
+ * - alias.$body.* - Access response body (parsed as JSON)
+ * - alias.$headers.* - Access response headers
+ * - alias.$status - Access response status code
+ * - alias.$statusText - Access response status text
  * 
- * @param path - The flow path to resolve (e.g., "getUser.body.data.id")
+ * @param path - The flow path to resolve (e.g., "getUser.$body.data.id")
  * @param flowContext - Context containing completed node responses
  * @returns The resolved value as a string, or null if not found
  */
@@ -138,8 +138,8 @@ export function resolveFlowPath(
  * Parses a flow path string into parts, handling array notation.
  * 
  * @example
- * parseFlowPath("alias.body.items[0].name")
- * // Returns: ["alias", "body", "items", "0", "name"]
+ * parseFlowPath("alias.$body.items[0].name")
+ * // Returns: ["alias", "$body", "items", "0", "name"]
  */
 function parseFlowPath(path: string): string[] {
     const parts: string[] = [];
@@ -204,23 +204,17 @@ function resolvePropertyPath(
     const remainingPath = pathParts.slice(1);
     
     switch (property) {
-        case 'body':
+        case '$body':
             return resolveBodyPath(response.body, remainingPath, response.headers);
             
-        case 'headers':
+        case '$headers':
             return resolveHeadersPath(response.headers, remainingPath);
             
-        case 'status':
+        case '$status':
             return String(response.status);
             
-        case 'statusText':
+        case '$statusText':
             return response.statusText;
-            
-        case 'elapsedTime':
-            return String(response.elapsedTime);
-            
-        case 'size':
-            return String(response.size);
             
         default:
             return null;
@@ -387,7 +381,7 @@ export function isFlowPath(variableName: string): boolean {
  * Gets the alias portion of a flow path.
  * 
  * @example
- * getAliasFromPath("getUser.body.data.id") // Returns "getUser"
+ * getAliasFromPath("getUser.$body.data.id") // Returns "getUser"
  */
 export function getAliasFromPath(path: string): string | null {
     const match = path.match(/^([a-zA-Z_][a-zA-Z0-9_]*)\./);
@@ -419,4 +413,261 @@ export function addToFlowContext(
         responses: newResponses,
         executionOrder: [...context.executionOrder, alias],
     };
+}
+
+/**
+ * Creates dynamic environment variables from flow context responses.
+ * Only includes values that are actually referenced in the collection request.
+ * 
+ * This enables dependency-aware parameter resolution where only variables from
+ * nodes that the current node depends on are available.
+ * 
+ * Supports multiple reference formats:
+ * - With alias: `{{alias.$body.data.id}}`, `{{alias.$headers.key}}`, `{{alias.$status}}`, `{{alias.$statusText}}`
+ * - Without alias: `{{$body.data.id}}`, `{{$headers.key}}`, `{{$status}}`, `{{$statusText}}`
+ * - Body shorthand: `{{data.id}}` (assumes $body when no $ prefix)
+ * 
+ * @param flowContext - Flow context containing all node responses
+ * @param allowedNodeIds - Set of node IDs whose responses can be used (upstream dependencies)
+ * @param nodeIdToAliasMap - Map from node ID to node alias for filtering
+ * @param collectionRequest - The collection request to extract variable references from
+ * @returns Record of environment variable name → value (preserves original placeholder format)
+ * 
+ * @example
+ * // Request URL: "{{baseUrl}}/users/{{getUser.$body.data.id}}"
+ * // Context has: { "getUser": { body: '{"data": {"id": 123}}', status: 200 } }
+ * // Allowed nodes: Set(["node-1"]) where node-1 has alias "getUser"
+ * flowContextToDynamicEnvVars(context, allowedNodeIds, nodeAliasMap, request)
+ * // Returns: { "getUser.$body.data.id": "123" }
+ */
+export function flowContextToDynamicEnvVars(
+    flowContext: FlowContext,
+    allowedNodeIds: Set<string>,
+    nodeIdToAliasMap: Map<string, string>,
+    collectionRequest: CollectionRequest
+): Record<string, string> {
+    const envVars: Record<string, string> = {};
+    
+    // Get allowed aliases from allowed node IDs
+    const allowedAliases = new Set<string>();
+    for (const nodeId of allowedNodeIds) {
+        const alias = nodeIdToAliasMap.get(nodeId);
+        if (alias) {
+            allowedAliases.add(alias);
+        }
+    }
+    
+    // Extract all variables from the collection request
+    const allVariables = extractVariablesFromRequest(collectionRequest);
+    
+    // For each variable, try to resolve from allowed responses
+    for (const variable of allVariables) {
+        const value = resolveVariableFromContext(
+            variable,
+            flowContext,
+            allowedAliases
+        );
+        
+        if (value !== null) {
+            envVars[variable] = value;
+        }
+    }
+    
+    return envVars;
+}
+
+/**
+ * Extracts all {{variable}} placeholders from a collection request.
+ */
+function extractVariablesFromRequest(request: CollectionRequest): Set<string> {
+    const variables = new Set<string>();
+    
+    // Extract from URL
+    const url = typeof request.url === 'string' ? request.url : request.url?.raw || '';
+    extractVariables(url).forEach(v => variables.add(v));
+    
+    // Extract from headers
+    if (request.header) {
+        for (const header of request.header) {
+            if (header.key) {
+                extractVariables(header.key).forEach(v => variables.add(v));
+            }
+            if (header.value) {
+                extractVariables(header.value).forEach(v => variables.add(v));
+            }
+        }
+    }
+    
+    // Extract from query params
+    if (typeof request.url === 'object' && request.url?.query) {
+        for (const param of request.url.query) {
+            if (param.key) {
+                extractVariables(param.key).forEach(v => variables.add(v));
+            }
+            if (param.value) {
+                extractVariables(param.value).forEach(v => variables.add(v));
+            }
+        }
+    }
+    
+    // Extract from body
+    if (request.body?.raw) {
+        extractVariables(request.body.raw).forEach(v => variables.add(v));
+    }
+    
+    if (request.body?.urlencoded) {
+        for (const field of request.body.urlencoded) {
+            if (field.key) {
+                extractVariables(field.key).forEach(v => variables.add(v));
+            }
+            if (field.value) {
+                extractVariables(field.value).forEach(v => variables.add(v));
+            }
+        }
+    }
+    
+    return variables;
+}
+
+/**
+ * Resolves a variable from flow context based on allowed aliases.
+ * 
+ * Supports formats:
+ * - alias.$body.data.id
+ * - alias.$headers.key
+ * - alias.$status
+ * - alias.$statusText
+ * - $body.data.id (tries all allowed aliases)
+ * - $headers.key (tries all allowed aliases)
+ * - $status (tries all allowed aliases)
+ * - $statusText (tries all allowed aliases)
+ * - data.id (assumes $body, tries all allowed aliases)
+ */
+function resolveVariableFromContext(
+    variable: string,
+    flowContext: FlowContext,
+    allowedAliases: Set<string>
+): string | null {
+    // Parse the variable to extract alias (if present) and path
+    const parsed = parseVariableReference(variable);
+    
+    if (parsed.alias) {
+        // Variable has explicit alias - check if it's allowed
+        if (!allowedAliases.has(parsed.alias)) {
+            return null;
+        }
+        
+        // Get response for this alias
+        const response = flowContext.responses.get(parsed.alias);
+        if (!response) {
+            return null;
+        }
+        
+        // Resolve the path within the response
+        return resolvePathInResponse(response, parsed.section, parsed.path);
+    } else {
+        // No explicit alias - try all allowed aliases (most recent first)
+        const orderedAliases = flowContext.executionOrder
+            .filter(alias => allowedAliases.has(alias))
+            .reverse();
+        
+        for (const alias of orderedAliases) {
+            const response = flowContext.responses.get(alias);
+            if (!response) {
+                continue;
+            }
+            
+            const value = resolvePathInResponse(response, parsed.section, parsed.path);
+            if (value !== null) {
+                return value;
+            }
+        }
+        
+        return null;
+    }
+}
+
+/**
+ * Parses a variable reference into components.
+ * 
+ * @example
+ * parseVariableReference("alias.$body.data.id") 
+ * // { alias: "alias", section: "$body", path: ["data", "id"] }
+ * 
+ * parseVariableReference("$body.data.id")
+ * // { alias: null, section: "$body", path: ["data", "id"] }
+ * 
+ * parseVariableReference("data.id")
+ * // { alias: null, section: "$body", path: ["data", "id"] }
+ */
+function parseVariableReference(variable: string): {
+    alias: string | null;
+    section: '$body' | '$headers' | '$status' | '$statusText';
+    path: string[];
+} {
+    const parts = parseFlowPath(variable);
+    
+    if (parts.length === 0) {
+        return { alias: null, section: '$body', path: [] };
+    }
+    
+    // Check if first part is a known section keyword
+    const firstPart = parts[0];
+    if (firstPart === '$body' || firstPart === '$headers' || firstPart === '$status' || firstPart === '$statusText') {
+        // No alias, starts with section
+        return {
+            alias: null,
+            section: firstPart as '$body' | '$headers' | '$status' | '$statusText',
+            path: parts.slice(1),
+        };
+    }
+    
+    // Check if second part is a known section keyword
+    if (parts.length >= 2) {
+        const secondPart = parts[1];
+        if (secondPart === '$body' || secondPart === '$headers' || secondPart === '$status' || secondPart === '$statusText') {
+            // First part is alias, second is section
+            return {
+                alias: firstPart,
+                section: secondPart as '$body' | '$headers' | '$status' | '$statusText',
+                path: parts.slice(2),
+            };
+        }
+    }
+    
+    // No section keyword found - assume $body
+    return {
+        alias: null,
+        section: '$body',
+        path: parts,
+    };
+}
+
+/**
+ * Resolves a path within a response based on section.
+ */
+function resolvePathInResponse(
+    response: HttpResponseResult,
+    section: '$body' | '$headers' | '$status' | '$statusText',
+    path: string[]
+): string | null {
+    switch (section) {
+        case '$status':
+            return String(response.status);
+            
+        case '$statusText':
+            return response.statusText;
+            
+        case '$headers':
+            if (path.length === 0) {
+                return JSON.stringify(response.headers);
+            }
+            return resolveHeadersPath(response.headers, path);
+            
+        case '$body':
+            return resolveBodyPath(response.body, path, response.headers);
+            
+        default:
+            return null;
+    }
 }

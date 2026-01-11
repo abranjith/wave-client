@@ -138,8 +138,8 @@ function calculateMidpoint(
 const CONDITION_OPTIONS: { value: ConnectorCondition; label: string }[] = [
     { value: 'success', label: 'Success' },
     { value: 'failure', label: 'Failure' },
-    { value: 'validation_pass', label: 'Valid ✓' },
-    { value: 'validation_fail', label: 'Valid ✗' },
+    { value: 'validation_pass', label: 'Validation Pass' },
+    { value: 'validation_fail', label: 'Validation Fail' },
     { value: 'any', label: 'Always' },
 ];
 

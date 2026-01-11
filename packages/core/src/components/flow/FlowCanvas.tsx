@@ -18,10 +18,9 @@ import {
     generateNodeId,
     generateConnectorId,
     autoLayoutFlow,
-    getOutgoingConnectors,
-    getIncomingConnectors,
-} from '../../types/flow';
+} from '../../utils/flowUtils';
 import { useFlowRunner } from '../../hooks/useFlowRunner';
+import useAppStateStore from '../../hooks/store/useAppStateStore';
 import { FlowNode } from './FlowNode';
 import { FlowConnector, FlowConnectorDefs } from './FlowConnector';
 import { FlowToolbar } from './FlowToolbar';
@@ -75,12 +74,23 @@ export const FlowCanvas: React.FC<FlowCanvasProps> = ({
     hasUnsavedChanges = false,
     showResults = true,
 }) => {
-    // Flow runner hook - manages flow execution internally
+    // Flow runner hook - manages flow execution
     const flowRunner = useFlowRunner({
         environments,
         auths,
         collections,
     });
+
+    // Store for tracking dirty state and current editing flow
+    const setCurrentEditingFlowId = useAppStateStore((state) => state.setCurrentEditingFlowId);
+    const updateFlowNodes = useAppStateStore((state) => state.updateFlowNodes);
+    const updateFlowConnectors = useAppStateStore((state) => state.updateFlowConnectors);
+    const updateFlowName = useAppStateStore((state) => state.updateFlowName);
+    const updateFlowDefaultEnv = useAppStateStore((state) => state.updateFlowDefaultEnv);
+    const updateFlowDefaultAuth = useAppStateStore((state) => state.updateFlowDefaultAuth);
+    const markFlowClean = useAppStateStore((state) => state.markFlowClean);
+    const isFlowDirty = useAppStateStore((state) => state.isFlowDirty);
+    const currentFlowIsDirty = isFlowDirty(flow.id);
 
     // State
     const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
@@ -89,6 +99,11 @@ export const FlowCanvas: React.FC<FlowCanvasProps> = ({
     const [connectingFrom, setConnectingFrom] = useState<string | null>(null);
     const [conditionPopoverOpen, setConditionPopoverOpen] = useState(false);
     const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
+    
+    // Set current editing flow ID on mount
+    useEffect(() => {
+        setCurrentEditingFlowId(flow.id);
+    }, [flow.id, setCurrentEditingFlowId]);
     
     const canvasRef = useRef<HTMLDivElement>(null);
     
@@ -151,12 +166,13 @@ export const FlowCanvas: React.FC<FlowCanvasProps> = ({
         const updatedNodes = flow.nodes.map(n =>
             n.id === nodeId ? { ...n, position } : n
         );
-        onFlowChange({
+        updateFlowNodes(flow.id, updatedNodes);
+        onFlowChange?.({
             ...flow,
             nodes: updatedNodes,
             updatedAt: new Date().toISOString(),
         });
-    }, [flow, onFlowChange]);
+    }, [flow, updateFlowNodes, onFlowChange]);
     
     // Handle node delete
     const handleNodeDelete = useCallback((nodeId: string) => {
@@ -166,7 +182,9 @@ export const FlowCanvas: React.FC<FlowCanvasProps> = ({
             c => c.sourceNodeId !== nodeId && c.targetNodeId !== nodeId
         );
         
-        onFlowChange({
+        updateFlowNodes(flow.id, updatedNodes);
+        updateFlowConnectors(flow.id, updatedConnectors);
+        onFlowChange?.({
             ...flow,
             nodes: updatedNodes,
             connectors: updatedConnectors,
@@ -174,7 +192,7 @@ export const FlowCanvas: React.FC<FlowCanvasProps> = ({
         });
         
         setSelectedNodeId(null);
-    }, [flow, onFlowChange]);
+    }, [flow, updateFlowNodes, updateFlowConnectors, onFlowChange]);
     
     // Handle connection start
     const handleConnectStart = useCallback((nodeId: string) => {
@@ -208,14 +226,15 @@ export const FlowCanvas: React.FC<FlowCanvasProps> = ({
             condition: 'success', // Default condition
         };
         
-        onFlowChange({
+        updateFlowConnectors(flow.id, [...flow.connectors, newConnector]);
+        onFlowChange?.({
             ...flow,
             connectors: [...flow.connectors, newConnector],
             updatedAt: new Date().toISOString(),
         });
         
         setConnectingFrom(null);
-    }, [connectingFrom, flow, onFlowChange]);
+    }, [connectingFrom, flow, updateFlowConnectors, onFlowChange]);
     
     // Check if a node is a valid connection target
     const isValidConnectionTarget = useCallback((nodeId: string) => {
@@ -238,13 +257,14 @@ export const FlowCanvas: React.FC<FlowCanvasProps> = ({
     // Handle connector delete
     const handleConnectorDelete = useCallback((connectorId: string) => {
         const updatedConnectors = flow.connectors.filter(c => c.id !== connectorId);
-        onFlowChange({
+        updateFlowConnectors(flow.id, updatedConnectors);
+        onFlowChange?.({
             ...flow,
             connectors: updatedConnectors,
             updatedAt: new Date().toISOString(),
         });
         setSelectedConnectorId(null);
-    }, [flow, onFlowChange]);
+    }, [flow, updateFlowConnectors, onFlowChange]);
     
     // Handle connector condition change (from popover - uses selected connector)
     const handleConnectorConditionChange = useCallback((condition: ConnectorCondition) => {
@@ -254,12 +274,13 @@ export const FlowCanvas: React.FC<FlowCanvasProps> = ({
             c.id === selectedConnectorId ? { ...c, condition } : c
         );
         
-        onFlowChange({
+        updateFlowConnectors(flow.id, updatedConnectors);
+        onFlowChange?.({
             ...flow,
             connectors: updatedConnectors,
             updatedAt: new Date().toISOString(),
         });
-    }, [selectedConnectorId, flow, onFlowChange]);
+    }, [selectedConnectorId, flow, updateFlowConnectors, onFlowChange]);
     
     // Handle connector condition change (from inline dropdown - receives connector ID)
     const handleConnectorConditionChangeById = useCallback((connectorId: string, condition: ConnectorCondition) => {
@@ -267,20 +288,23 @@ export const FlowCanvas: React.FC<FlowCanvasProps> = ({
             c.id === connectorId ? { ...c, condition } : c
         );
         
-        onFlowChange({
+        updateFlowConnectors(flow.id, updatedConnectors);
+        onFlowChange?.({
             ...flow,
             connectors: updatedConnectors,
             updatedAt: new Date().toISOString(),
         });
-    }, [flow, onFlowChange]);
+    }, [flow, updateFlowConnectors, onFlowChange]);
     
     // Handle add request from search
     const handleAddRequest = useCallback((request: SearchableRequest) => {
         // Generate unique alias from request name
-        const baseAlias = request.name
-            .replace(/[^a-zA-Z0-9]/g, '')
+        let baseAlias = request.name
+            .replace(/[^a-zA-Z0-9]/g, '-')
             .substring(0, 20) || 'request';
-        
+        //remove trailing - if any
+        baseAlias = baseAlias.replace(/-+$/g, '');
+
         let alias = baseAlias;
         let counter = 1;
         while (flow.nodes.some(n => n.alias.toLowerCase() === alias.toLowerCase())) {
@@ -291,7 +315,7 @@ export const FlowCanvas: React.FC<FlowCanvasProps> = ({
         // Calculate position (right of the last node, or start position)
         const lastNode = flow.nodes[flow.nodes.length - 1];
         const position = lastNode
-            ? { x: lastNode.position.x + 250, y: lastNode.position.y }
+            ? { x: lastNode.position.x + 300, y: lastNode.position.y }
             : { x: 50, y: 50 };
         
         const newNode: FlowNodeType = {
@@ -305,47 +329,52 @@ export const FlowCanvas: React.FC<FlowCanvasProps> = ({
             position,
         };
         
-        onFlowChange({
+        updateFlowNodes(flow.id, [...flow.nodes, newNode]);
+        onFlowChange?.({
             ...flow,
             nodes: [...flow.nodes, newNode],
             updatedAt: new Date().toISOString(),
         });
         
         setIsSearchOpen(false);
-    }, [flow, onFlowChange]);
+    }, [flow, updateFlowNodes, onFlowChange]);
     
     // Handle auto-layout
     const handleAutoLayout = useCallback(() => {
         const layoutedFlow = autoLayoutFlow(flow);
-        onFlowChange(layoutedFlow);
-    }, [flow, onFlowChange]);
+        updateFlowNodes(flow.id, layoutedFlow.nodes);
+        onFlowChange?.(layoutedFlow);
+    }, [flow, updateFlowNodes, onFlowChange]);
     
     // Handle name change
     const handleNameChange = useCallback((name: string) => {
-        onFlowChange({
+        updateFlowName(flow.id, name);
+        onFlowChange?.({
             ...flow,
             name,
             updatedAt: new Date().toISOString(),
         });
-    }, [flow, onFlowChange]);
+    }, [flow, updateFlowName, onFlowChange]);
     
     // Handle env change
     const handleEnvChange = useCallback((envId: string | undefined) => {
-        onFlowChange({
+        updateFlowDefaultEnv(flow.id, envId);
+        onFlowChange?.({
             ...flow,
             defaultEnvId: envId,
             updatedAt: new Date().toISOString(),
         });
-    }, [flow, onFlowChange]);
+    }, [flow, updateFlowDefaultEnv, onFlowChange]);
     
     // Handle auth change
     const handleAuthChange = useCallback((authId: string | undefined) => {
-        onFlowChange({
+        updateFlowDefaultAuth(flow.id, authId);
+        onFlowChange?.({
             ...flow,
             defaultAuthId: authId,
             updatedAt: new Date().toISOString(),
         });
-    }, [flow, onFlowChange]);
+    }, [flow, updateFlowDefaultAuth, onFlowChange]);
     
     // Get node status from run result
     const getNodeStatus = useCallback((nodeId: string) => {
@@ -357,6 +386,12 @@ export const FlowCanvas: React.FC<FlowCanvasProps> = ({
     const selectedConnector = selectedConnectorId 
         ? flow.connectors.find(c => c.id === selectedConnectorId)
         : null;
+    
+    // Handle save and clear dirty flag
+    const handleSave = useCallback(() => {
+        markFlowClean(flow.id);
+        onSave?.(flow);
+    }, [flow, markFlowClean, onSave]);
     
     return (
         <div className="flex flex-col h-full">
@@ -371,9 +406,9 @@ export const FlowCanvas: React.FC<FlowCanvasProps> = ({
                 })}
                 onCancel={flowRunner.cancelFlow}
                 onAutoLayout={handleAutoLayout}
-                onSave={onSave ? () => onSave(flow) : undefined}
+                onSave={onSave ? handleSave : undefined}
                 isRunning={flowRunner.isRunning}
-                hasUnsavedChanges={hasUnsavedChanges}
+                isDirty={currentFlowIsDirty}
                 environments={environments}
                 selectedEnvId={flow.defaultEnvId}
                 onEnvChange={handleEnvChange}
