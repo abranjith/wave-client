@@ -19,6 +19,7 @@ import { registerCookieRoutes } from './routes/cookies.js';
 import { registerStoreRoutes } from './routes/store.js';
 import { registerSettingsRoutes } from './routes/settings.js';
 import { registerSecurityRoutes } from './routes/security.js';
+import { registerFlowRoutes } from './routes/flows.js';
 import { registerWebSocketRoutes } from './routes/websocket.js';
 import { initializeServices } from './services/init.js';
 
@@ -59,6 +60,7 @@ async function main() {
     await registerStoreRoutes(fastify);
     await registerSettingsRoutes(fastify);
     await registerSecurityRoutes(fastify);
+    await registerFlowRoutes(fastify);
     await registerWebSocketRoutes(fastify);
 
     // Start server

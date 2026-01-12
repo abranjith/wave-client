@@ -11,6 +11,7 @@ import {
     StopCircleIcon, 
     LayoutGrid,
     SaveIcon,
+    Lock,
 } from 'lucide-react';
 import type { Environment } from '../../types/collection';
 import type { Auth } from '../../hooks/store/createAuthSlice';
@@ -83,18 +84,32 @@ export const FlowToolbar: React.FC<FlowToolbarProps> = ({
 }) => {
     return (
         <TooltipProvider>
-            <div className="flex items-center gap-3 p-3 bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700">
+            <div className={cn(
+                "flex items-center gap-3 p-3 bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700",
+                isRunning && "opacity-80"
+            )}>
                 {/* Flow Name */}
                 <div className="flex items-center gap-2 flex-1">
+                    {isRunning && (
+                        <Tooltip>
+                            <TooltipTrigger asChild>
+                                <Lock className="h-4 w-4 text-amber-600 flex-shrink-0 cursor-help" />
+                            </TooltipTrigger>
+                            <TooltipContent>Flow is running - editing disabled</TooltipContent>
+                        </Tooltip>
+                    )}
                     <input
                         type="text"
                         value={flowName}
                         onChange={(e) => onNameChange?.(e.target.value)}
+                        disabled={isRunning}
                         className={cn(
                             'text-lg font-semibold bg-transparent border-none focus:outline-none focus:ring-2 focus:ring-blue-500 rounded px-2 py-1',
-                            'text-slate-800 dark:text-slate-200'
+                            'text-slate-800 dark:text-slate-200',
+                            'disabled:cursor-not-allowed disabled:text-slate-400 disabled:focus:ring-0'
                         )}
                         placeholder="Flow Name"
+                        aria-disabled={isRunning}
                     />
                 </div>
                 
@@ -105,7 +120,7 @@ export const FlowToolbar: React.FC<FlowToolbarProps> = ({
                         value={selectedEnvId || 'none'}
                         onValueChange={(val) => onEnvChange(val === 'none' ? undefined : val)}
                     >
-                        <SelectTrigger className="w-[140px] h-8 text-sm">
+                        <SelectTrigger className="w-[140px] h-8 text-sm" disabled={isRunning}>
                             <SelectValue placeholder="No Environment" />
                         </SelectTrigger>
                         <SelectContent>
@@ -126,7 +141,7 @@ export const FlowToolbar: React.FC<FlowToolbarProps> = ({
                         value={selectedAuthId || 'none'}
                         onValueChange={(val) => onAuthChange(val === 'none' ? undefined : val)}
                     >
-                        <SelectTrigger className="w-[140px] h-8 text-sm">
+                        <SelectTrigger className="w-[140px] h-8 text-sm" disabled={isRunning}>
                             <SelectValue placeholder="No Auth" />
                         </SelectTrigger>
                         <SelectContent>

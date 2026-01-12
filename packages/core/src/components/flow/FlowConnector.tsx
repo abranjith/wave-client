@@ -32,6 +32,8 @@ export interface FlowConnectorProps {
     onDelete?: (connectorId: string) => void;
     /** Callback when condition changes */
     onConditionChange?: (connectorId: string, condition: ConnectorCondition) => void;
+    /** Whether the connector is read-only (e.g., flow running) */
+    isReadOnly?: boolean;
 }
 
 // ============================================================================
@@ -157,6 +159,7 @@ export const FlowConnector: React.FC<FlowConnectorProps> = ({
     onClick,
     onDelete,
     onConditionChange,
+    isReadOnly = false,
 }) => {
     const [showDropdown, setShowDropdown] = useState(false);
     const dropdownRef = useRef<HTMLDivElement>(null);
@@ -185,14 +188,18 @@ export const FlowConnector: React.FC<FlowConnectorProps> = ({
     
     const handleClick = (e: React.MouseEvent) => {
         e.stopPropagation();
-        // Only select if not editing condition
-        if (!onConditionChange) {
+        // Allow selection but block editing pathways when read-only
+        if (!onConditionChange || isReadOnly) {
             onClick?.(connector.id);
         }
     };
     
     const handleLabelClick = (e: React.MouseEvent) => {
         e.stopPropagation();
+        if (isReadOnly) {
+            onClick?.(connector.id);
+            return;
+        }
         if (onConditionChange) {
             setShowDropdown(!showDropdown);
         } else {
@@ -201,14 +208,23 @@ export const FlowConnector: React.FC<FlowConnectorProps> = ({
     };
     
     const handleConditionSelect = (condition: ConnectorCondition) => {
+        if (isReadOnly) return;
         onConditionChange?.(connector.id, condition);
         setShowDropdown(false);
     };
     
     const handleDeleteClick = (e: React.MouseEvent) => {
         e.stopPropagation();
+        if (isReadOnly) return;
         onDelete?.(connector.id);
     };
+
+    // Close dropdown if we become read-only mid-edit
+    useEffect(() => {
+        if (isReadOnly) {
+            setShowDropdown(false);
+        }
+    }, [isReadOnly]);
     
     return (
         <g className="flow-connector">
@@ -241,7 +257,11 @@ export const FlowConnector: React.FC<FlowConnectorProps> = ({
                 transform={`translate(${midpoint.x}, ${midpoint.y})`}
                 onClick={handleLabelClick}
                 style={{ pointerEvents: 'auto' }}
-                className={cn('cursor-pointer', onConditionChange && 'hover:opacity-75 transition-opacity')}
+                className={cn(
+                    'cursor-pointer',
+                    onConditionChange && !isReadOnly && 'hover:opacity-75 transition-opacity',
+                    isReadOnly && 'cursor-default'
+                )}
             >
                 <rect
                     x={-labelWidth / 2}
@@ -265,7 +285,7 @@ export const FlowConnector: React.FC<FlowConnectorProps> = ({
                     {label}
                 </text>
                 {/* Small edit indicator */}
-                {onConditionChange && !isSelected && !showDropdown && (
+                {onConditionChange && !isSelected && !showDropdown && !isReadOnly && (
                     <text
                         x={labelWidth / 2 - 8}
                         y={4}
@@ -279,7 +299,7 @@ export const FlowConnector: React.FC<FlowConnectorProps> = ({
             </g>
             
             {/* Condition dropdown (using foreignObject for HTML dropdown) */}
-            {showDropdown && (
+            {showDropdown && !isReadOnly && (
                 <foreignObject
                     x={midpoint.x - 75}
                     y={midpoint.y + 15}
@@ -315,7 +335,7 @@ export const FlowConnector: React.FC<FlowConnectorProps> = ({
                                 </button>
                             ))}
                         </div>
-                        {onDelete && (
+                        {onDelete && !isReadOnly && (
                             <>
                                 <div className="border-t border-slate-200 dark:border-slate-700" style={{ pointerEvents: 'auto' }} />
                                 <button

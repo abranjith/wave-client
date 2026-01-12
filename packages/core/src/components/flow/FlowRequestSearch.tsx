@@ -30,6 +30,8 @@ interface FlowRequestSearchProps {
     onSelectRequest: (request: SearchableRequest) => void;
     /** Node IDs already in the flow (to prevent duplicates, optional) */
     existingRequestIds?: string[];
+    /** Disable interactions (e.g., while flow is running) */
+    isDisabled?: boolean;
 }
 
 export interface SearchableRequest {
@@ -104,6 +106,7 @@ export const FlowRequestSearch: React.FC<FlowRequestSearchProps> = ({
     collections,
     onSelectRequest,
     existingRequestIds = [],
+    isDisabled = false,
 }) => {
     const [searchQuery, setSearchQuery] = useState('');
     
@@ -128,6 +131,7 @@ export const FlowRequestSearch: React.FC<FlowRequestSearchProps> = ({
     
     // Handle request selection
     const handleSelect = (request: SearchableRequest) => {
+        if (isDisabled) return;
         onSelectRequest(request);
         setSearchQuery('');
     };
@@ -137,7 +141,7 @@ export const FlowRequestSearch: React.FC<FlowRequestSearchProps> = ({
         existingRequestIds.includes(requestId);
     
     return (
-        <Dialog open={isOpen} onOpenChange={onClose}>
+        <Dialog open={isOpen && !isDisabled} onOpenChange={onClose}>
             <DialogContent className="max-w-2xl max-h-[80vh] flex flex-col">
                 <DialogHeader>
                     <DialogTitle>Add Request to Flow</DialogTitle>
@@ -151,6 +155,7 @@ export const FlowRequestSearch: React.FC<FlowRequestSearchProps> = ({
                         placeholder="Search requests by name, URL, or collection..."
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}
+                        disabled={isDisabled}
                         className="pl-9"
                         autoFocus
                     />
@@ -176,9 +181,10 @@ export const FlowRequestSearch: React.FC<FlowRequestSearchProps> = ({
                                         'flex items-center gap-3 p-3 rounded-lg border transition-colors',
                                         alreadyAdded
                                             ? 'border-slate-200 bg-slate-50 opacity-60 cursor-not-allowed'
-                                            : 'border-slate-200 hover:border-blue-300 hover:bg-blue-50 cursor-pointer'
+                                            : 'border-slate-200 hover:border-blue-300 hover:bg-blue-50 cursor-pointer',
+                                        isDisabled && 'cursor-not-allowed opacity-60'
                                     )}
-                                    onClick={() => !alreadyAdded && handleSelect(request)}
+                                    onClick={() => !alreadyAdded && !isDisabled && handleSelect(request)}
                                 >
                                     {/* Method Badge */}
                                     <span className={cn(
@@ -220,6 +226,7 @@ export const FlowRequestSearch: React.FC<FlowRequestSearchProps> = ({
                                                 e.stopPropagation();
                                                 handleSelect(request);
                                             }}
+                                            disabled={isDisabled}
                                         >
                                             <PlusCircle className="h-4 w-4 mr-1" />
                                             Add

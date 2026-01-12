@@ -80,6 +80,7 @@ export const FlowCanvas: React.FC<FlowCanvasProps> = ({
         auths,
         collections,
     });
+    const isLocked = flowRunner.isRunning;
 
     // Store for tracking dirty state and current editing flow
     const setCurrentEditingFlowId = useAppStateStore((state) => state.setCurrentEditingFlowId);
@@ -99,6 +100,15 @@ export const FlowCanvas: React.FC<FlowCanvasProps> = ({
     const [connectingFrom, setConnectingFrom] = useState<string | null>(null);
     const [conditionPopoverOpen, setConditionPopoverOpen] = useState(false);
     const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
+
+    // Lock down interactive editors while running
+    useEffect(() => {
+        if (isLocked) {
+            setConnectingFrom(null);
+            setIsSearchOpen(false);
+            setConditionPopoverOpen(false);
+        }
+    }, [isLocked]);
     
     // Set current editing flow ID on mount
     useEffect(() => {
@@ -163,6 +173,7 @@ export const FlowCanvas: React.FC<FlowCanvasProps> = ({
     
     // Handle node position change
     const handleNodePositionChange = useCallback((nodeId: string, position: { x: number; y: number }) => {
+        if (isLocked) return;
         const updatedNodes = flow.nodes.map(n =>
             n.id === nodeId ? { ...n, position } : n
         );
@@ -172,10 +183,11 @@ export const FlowCanvas: React.FC<FlowCanvasProps> = ({
             nodes: updatedNodes,
             updatedAt: new Date().toISOString(),
         });
-    }, [flow, updateFlowNodes, onFlowChange]);
+    }, [flow, updateFlowNodes, onFlowChange, isLocked]);
     
     // Handle node delete
     const handleNodeDelete = useCallback((nodeId: string) => {
+        if (isLocked) return;
         // Remove node and all connected connectors
         const updatedNodes = flow.nodes.filter(n => n.id !== nodeId);
         const updatedConnectors = flow.connectors.filter(
@@ -192,17 +204,22 @@ export const FlowCanvas: React.FC<FlowCanvasProps> = ({
         });
         
         setSelectedNodeId(null);
-    }, [flow, updateFlowNodes, updateFlowConnectors, onFlowChange]);
+    }, [flow, updateFlowNodes, updateFlowConnectors, onFlowChange, isLocked]);
     
     // Handle connection start
     const handleConnectStart = useCallback((nodeId: string) => {
+        if (isLocked) return;
         setConnectingFrom(nodeId);
         setSelectedNodeId(null);
         setSelectedConnectorId(null);
-    }, []);
+    }, [isLocked]);
     
     // Handle connection end
     const handleConnectEnd = useCallback((targetNodeId: string) => {
+        if (isLocked) {
+            setConnectingFrom(null);
+            return;
+        }
         if (!connectingFrom || connectingFrom === targetNodeId) {
             setConnectingFrom(null);
             return;
@@ -234,10 +251,11 @@ export const FlowCanvas: React.FC<FlowCanvasProps> = ({
         });
         
         setConnectingFrom(null);
-    }, [connectingFrom, flow, updateFlowConnectors, onFlowChange]);
+    }, [connectingFrom, flow, updateFlowConnectors, onFlowChange, isLocked]);
     
     // Check if a node is a valid connection target
     const isValidConnectionTarget = useCallback((nodeId: string) => {
+        if (isLocked) return false;
         if (!connectingFrom) return false;
         if (connectingFrom === nodeId) return false;
         
@@ -245,17 +263,20 @@ export const FlowCanvas: React.FC<FlowCanvasProps> = ({
         return !flow.connectors.some(
             c => c.sourceNodeId === connectingFrom && c.targetNodeId === nodeId
         );
-    }, [connectingFrom, flow.connectors]);
+    }, [connectingFrom, flow.connectors, isLocked]);
     
     // Handle connector selection
     const handleConnectorClick = useCallback((connectorId: string) => {
         setSelectedConnectorId(connectorId);
         setSelectedNodeId(null);
-        setConditionPopoverOpen(true);
-    }, []);
+        if (!isLocked) {
+            setConditionPopoverOpen(true);
+        }
+    }, [isLocked]);
     
     // Handle connector delete
     const handleConnectorDelete = useCallback((connectorId: string) => {
+        if (isLocked) return;
         const updatedConnectors = flow.connectors.filter(c => c.id !== connectorId);
         updateFlowConnectors(flow.id, updatedConnectors);
         onFlowChange?.({
@@ -264,11 +285,12 @@ export const FlowCanvas: React.FC<FlowCanvasProps> = ({
             updatedAt: new Date().toISOString(),
         });
         setSelectedConnectorId(null);
-    }, [flow, updateFlowConnectors, onFlowChange]);
+    }, [flow, updateFlowConnectors, onFlowChange, isLocked]);
     
     // Handle connector condition change (from popover - uses selected connector)
     const handleConnectorConditionChange = useCallback((condition: ConnectorCondition) => {
         if (!selectedConnectorId) return;
+        if (isLocked) return;
         
         const updatedConnectors = flow.connectors.map(c =>
             c.id === selectedConnectorId ? { ...c, condition } : c
@@ -280,10 +302,11 @@ export const FlowCanvas: React.FC<FlowCanvasProps> = ({
             connectors: updatedConnectors,
             updatedAt: new Date().toISOString(),
         });
-    }, [selectedConnectorId, flow, updateFlowConnectors, onFlowChange]);
+    }, [selectedConnectorId, flow, updateFlowConnectors, onFlowChange, isLocked]);
     
     // Handle connector condition change (from inline dropdown - receives connector ID)
     const handleConnectorConditionChangeById = useCallback((connectorId: string, condition: ConnectorCondition) => {
+        if (isLocked) return;
         const updatedConnectors = flow.connectors.map(c =>
             c.id === connectorId ? { ...c, condition } : c
         );
@@ -294,10 +317,11 @@ export const FlowCanvas: React.FC<FlowCanvasProps> = ({
             connectors: updatedConnectors,
             updatedAt: new Date().toISOString(),
         });
-    }, [flow, updateFlowConnectors, onFlowChange]);
+    }, [flow, updateFlowConnectors, onFlowChange, isLocked]);
     
     // Handle add request from search
     const handleAddRequest = useCallback((request: SearchableRequest) => {
+        if (isLocked) return;
         // Generate unique alias from request name
         let baseAlias = request.name
             .replace(/[^a-zA-Z0-9]/g, '-')
@@ -337,44 +361,48 @@ export const FlowCanvas: React.FC<FlowCanvasProps> = ({
         });
         
         setIsSearchOpen(false);
-    }, [flow, updateFlowNodes, onFlowChange]);
+    }, [flow, updateFlowNodes, onFlowChange, isLocked]);
     
     // Handle auto-layout
     const handleAutoLayout = useCallback(() => {
+        if (isLocked) return;
         const layoutedFlow = autoLayoutFlow(flow);
         updateFlowNodes(flow.id, layoutedFlow.nodes);
         onFlowChange?.(layoutedFlow);
-    }, [flow, updateFlowNodes, onFlowChange]);
+    }, [flow, updateFlowNodes, onFlowChange, isLocked]);
     
     // Handle name change
     const handleNameChange = useCallback((name: string) => {
+        if (isLocked) return;
         updateFlowName(flow.id, name);
         onFlowChange?.({
             ...flow,
             name,
             updatedAt: new Date().toISOString(),
         });
-    }, [flow, updateFlowName, onFlowChange]);
+    }, [flow, updateFlowName, onFlowChange, isLocked]);
     
     // Handle env change
     const handleEnvChange = useCallback((envId: string | undefined) => {
+        if (isLocked) return;
         updateFlowDefaultEnv(flow.id, envId);
         onFlowChange?.({
             ...flow,
             defaultEnvId: envId,
             updatedAt: new Date().toISOString(),
         });
-    }, [flow, updateFlowDefaultEnv, onFlowChange]);
+    }, [flow, updateFlowDefaultEnv, onFlowChange, isLocked]);
     
     // Handle auth change
     const handleAuthChange = useCallback((authId: string | undefined) => {
+        if (isLocked) return;
         updateFlowDefaultAuth(flow.id, authId);
         onFlowChange?.({
             ...flow,
             defaultAuthId: authId,
             updatedAt: new Date().toISOString(),
         });
-    }, [flow, updateFlowDefaultAuth, onFlowChange]);
+    }, [flow, updateFlowDefaultAuth, onFlowChange, isLocked]);
     
     // Get node status from run result
     const getNodeStatus = useCallback((nodeId: string) => {
@@ -399,7 +427,7 @@ export const FlowCanvas: React.FC<FlowCanvasProps> = ({
             <FlowToolbar
                 flowName={flow.name}
                 onNameChange={handleNameChange}
-                onAddRequest={() => setIsSearchOpen(true)}
+                onAddRequest={() => !isLocked && setIsSearchOpen(true)}
                 onRun={() => flowRunner.runFlow(flow, {
                     environmentId: flow.defaultEnvId,
                     defaultAuthId: flow.defaultAuthId,
@@ -461,6 +489,7 @@ export const FlowCanvas: React.FC<FlowCanvasProps> = ({
                                     onClick={handleConnectorClick}
                                     onDelete={handleConnectorDelete}
                                     onConditionChange={handleConnectorConditionChangeById}
+                                    isReadOnly={isLocked}
                                 />
                             );
                         })}
@@ -493,6 +522,7 @@ export const FlowCanvas: React.FC<FlowCanvasProps> = ({
                             onConnectEnd={handleConnectEnd}
                             isConnecting={!!connectingFrom}
                             isValidConnectionTarget={isValidConnectionTarget(node.id)}
+                            isReadOnly={isLocked}
                         />
                     ))}
                     
@@ -533,6 +563,7 @@ export const FlowCanvas: React.FC<FlowCanvasProps> = ({
                 collections={collections}
                 onSelectRequest={handleAddRequest}
                 existingRequestIds={flow.nodes.map(n => n.requestId)}
+                isDisabled={isLocked}
             />
             
             {/* Connector Condition Popover */}
@@ -540,8 +571,8 @@ export const FlowCanvas: React.FC<FlowCanvasProps> = ({
                 <ConnectorConditionPopover
                     condition={selectedConnector.condition}
                     onChange={handleConnectorConditionChange}
-                    open={conditionPopoverOpen}
-                    onOpenChange={setConditionPopoverOpen}
+                    open={!isLocked && conditionPopoverOpen}
+                    onOpenChange={(open) => !isLocked && setConditionPopoverOpen(open)}
                 >
                     {/* Hidden trigger - popover is positioned via selected connector */}
                     <div className="hidden" />

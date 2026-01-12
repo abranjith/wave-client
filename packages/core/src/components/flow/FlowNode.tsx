@@ -14,6 +14,7 @@ import {
     XCircle, 
     Loader2,
     Trash2,
+    Lock,
 } from 'lucide-react';
 import type { FlowNode as FlowNodeType, FlowNodeStatus } from '../../types/flow';
 import { getHttpMethodColor, cn } from '../../utils/common';
@@ -44,6 +45,8 @@ export interface FlowNodeProps {
     isConnecting?: boolean;
     /** Whether this node is a valid connection target */
     isValidConnectionTarget?: boolean;
+    /** Whether the node is read-only (flow running) */
+    isReadOnly?: boolean;
 }
 
 // ============================================================================
@@ -82,6 +85,7 @@ export const FlowNode: React.FC<FlowNodeProps> = ({
     onConnectEnd,
     isConnecting = false,
     isValidConnectionTarget = false,
+    isReadOnly = false,
 }) => {
     const nodeRef = useRef<HTMLDivElement>(null);
     const [isDragging, setIsDragging] = useState(false);
@@ -89,6 +93,9 @@ export const FlowNode: React.FC<FlowNodeProps> = ({
     
     // Handle drag start
     const handleDragStart = useCallback((e: React.PointerEvent) => {
+        if (isReadOnly) {
+            return;
+        }
         if ((e.target as HTMLElement).closest('.handle')) {
             return; // Don't drag when clicking handles
         }
@@ -110,7 +117,7 @@ export const FlowNode: React.FC<FlowNodeProps> = ({
     
     // Handle drag move
     const handleDragMove = useCallback((e: React.PointerEvent) => {
-        if (!isDragging || !nodeRef.current) return;
+        if (!isDragging || !nodeRef.current || isReadOnly) return;
         
         const parent = nodeRef.current.parentElement;
         if (!parent) return;
@@ -129,7 +136,7 @@ export const FlowNode: React.FC<FlowNodeProps> = ({
     
     // Handle drag end
     const handleDragEnd = useCallback((e: React.PointerEvent) => {
-        if (!isDragging) return;
+        if (!isDragging || isReadOnly) return;
         
         setIsDragging(false);
         (e.target as HTMLElement).releasePointerCapture(e.pointerId);
@@ -150,22 +157,25 @@ export const FlowNode: React.FC<FlowNodeProps> = ({
     // Handle output connection start
     const handleOutputClick = useCallback((e: React.MouseEvent) => {
         e.stopPropagation();
+        if (isReadOnly) return;
         onConnectStart?.(node.id, 'output');
-    }, [node.id, onConnectStart]);
+    }, [node.id, onConnectStart, isReadOnly]);
     
     // Handle input connection end
     const handleInputClick = useCallback((e: React.MouseEvent) => {
         e.stopPropagation();
+        if (isReadOnly) return;
         if (isConnecting && isValidConnectionTarget) {
             onConnectEnd?.(node.id, 'input');
         }
-    }, [node.id, isConnecting, isValidConnectionTarget, onConnectEnd]);
+    }, [node.id, isConnecting, isValidConnectionTarget, onConnectEnd, isReadOnly]);
     
     // Handle delete
     const handleDelete = useCallback((e: React.MouseEvent) => {
         e.stopPropagation();
+        if (isReadOnly) return;
         onDelete?.(node.id);
-    }, [node.id, onDelete]);
+    }, [node.id, onDelete, isReadOnly]);
     
     // Status-based border color
     const getBorderColor = () => {
@@ -185,10 +195,11 @@ export const FlowNode: React.FC<FlowNodeProps> = ({
             <div
                 ref={nodeRef}
                 className={cn(
-                    'absolute flex items-center gap-2 p-2 bg-white dark:bg-slate-800 rounded-lg border-2 shadow-sm cursor-move transition-colors',
+                    'absolute flex items-center gap-2 p-2 bg-white dark:bg-slate-800 rounded-lg border-2 shadow-sm transition-colors',
                     getBorderColor(),
                     isDragging && 'shadow-lg opacity-90',
-                    'min-w-[140px]'
+                    'min-w-[140px]',
+                    isReadOnly ? 'cursor-not-allowed opacity-50' : 'cursor-move'
                 )}
                 style={{
                     left: node.position.x,
@@ -205,8 +216,10 @@ export const FlowNode: React.FC<FlowNodeProps> = ({
                         <button
                             className={cn(
                                 'handle absolute -left-2 top-1/2 -translate-y-1/2 w-4 h-4 rounded-full border-2 border-slate-300 bg-white dark:bg-slate-700 cursor-crosshair hover:border-blue-500 hover:bg-blue-50 transition-colors',
-                                isConnecting && isValidConnectionTarget && 'border-green-500 bg-green-50 animate-pulse'
+                                isConnecting && isValidConnectionTarget && 'border-green-500 bg-green-50 animate-pulse',
+                                isReadOnly && 'cursor-not-allowed opacity-60 hover:border-slate-300 hover:bg-white'
                             )}
+                            disabled={isReadOnly}
                             onClick={handleInputClick}
                         />
                     </TooltipTrigger>
@@ -249,7 +262,7 @@ export const FlowNode: React.FC<FlowNodeProps> = ({
                 )}
                 
                 {/* Delete Button (shown on hover/selection) */}
-                {isSelected && onDelete && (
+                {isSelected && onDelete && !isReadOnly && (
                     <button
                         className="absolute -top-2 -right-2 p-1 bg-red-100 hover:bg-red-200 rounded-full text-red-600 transition-colors"
                         onClick={handleDelete}
@@ -257,12 +270,25 @@ export const FlowNode: React.FC<FlowNodeProps> = ({
                         <Trash2 className="h-3 w-3" />
                     </button>
                 )}
+
+                {/* Lock Indicator (shown when read-only) */}
+                {isReadOnly && (
+                    <Tooltip>
+                        <TooltipTrigger asChild>
+                            <div className="absolute -top-2 -right-2 p-1 bg-amber-100 dark:bg-amber-900 rounded-full text-amber-600 dark:text-amber-400 cursor-help">
+                                <Lock className="h-3 w-3" />
+                            </div>
+                        </TooltipTrigger>
+                        <TooltipContent>Flow is running - this node cannot be edited</TooltipContent>
+                    </Tooltip>
+                )}
                 
                 {/* Output Handle */}
                 <Tooltip>
                     <TooltipTrigger asChild>
                         <button
                             className="handle absolute -right-2 top-1/2 -translate-y-1/2 w-4 h-4 rounded-full border-2 border-slate-300 bg-white dark:bg-slate-700 cursor-crosshair hover:border-blue-500 hover:bg-blue-50 transition-colors"
+                            disabled={isReadOnly}
                             onClick={handleOutputClick}
                         />
                     </TooltipTrigger>

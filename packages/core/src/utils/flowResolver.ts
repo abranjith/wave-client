@@ -15,7 +15,6 @@
 import type { HttpResponseResult } from '../types/adapters';
 import type { FlowContext, FlowResolveResult } from '../types/flow';
 import type { CollectionRequest } from '../types/collection';
-import { resolveParameterizedValue } from './common';
 
 // ============================================================================
 // Constants
@@ -23,116 +22,6 @@ import { resolveParameterizedValue } from './common';
 
 /** Regex to match {{variable}} placeholders */
 const PLACEHOLDER_REGEX = /\{\{([^}]+)\}\}/g;
-
-/** Regex to detect if a variable looks like a flow path (could be just a property or have a dot path) */
-const FLOW_PATH_REGEX = /^[a-zA-Z_$][a-zA-Z0-9_$]*/;
-
-// ============================================================================
-// Main Resolution Function
-// ============================================================================
-
-/**
- * Resolves all {{variable}} placeholders in a string using env vars and flow context.
- * 
- * Resolution order:
- * 1. Environment variables (global → active environment)
- * 2. Flow context (completed node responses, most recent first)
- * 
- * @param template - String containing {{variable}} placeholders
- * @param envVars - Map of environment variable name → value
- * @param flowContext - Context containing completed node responses
- * @returns Resolution result with resolved string and unresolved/resolved lists
- * 
- * @example
- * // Environment variable: {{baseUrl}} → "https://api.example.com"
- * // Flow variable: {{getUser.$body.data.id}} → "123" (from response JSON)
- * resolveFlowVariables(
- *   "{{baseUrl}}/users/{{getUser.$body.data.id}}",
- *   envVars,
- *   flowContext
- * );
- * // Returns: { resolved: "https://api.example.com/users/123", unresolved: [], resolvedFromFlow: ["getUser.$body.data.id"] }
- */
-export function resolveFlowVariables(
-    template: string,
-    envVars: Map<string, string>,
-    flowContext: FlowContext
-): FlowResolveResult {
-    const unresolved: string[] = [];
-    const resolvedFromFlow: string[] = [];
-    
-    // First pass: Resolve environment variables
-    const envResult = resolveParameterizedValue(template, envVars);
-    let currentTemplate = envResult.resolved;
-    
-    // Second pass: Resolve flow variables from context
-    const resolved = currentTemplate.replace(PLACEHOLDER_REGEX, (match, variableName) => {
-        const trimmedName = variableName.trim();
-        
-        // Check if this looks like a flow path (alias.path.to.field)
-        if (FLOW_PATH_REGEX.test(trimmedName)) {
-            const result = resolveFlowPath(trimmedName, flowContext);
-            
-            if (result !== null) {
-                resolvedFromFlow.push(trimmedName);
-                return result;
-            }
-        }
-        
-        // Variable couldn't be resolved
-        unresolved.push(trimmedName);
-        return match; // Keep original placeholder
-    });
-    
-    return { resolved, unresolved, resolvedFromFlow };
-}
-
-// ============================================================================
-// Flow Path Resolution
-// ============================================================================
-
-/**
- * Resolves a flow path like "alias.$body.data.id" to its value.
- * 
- * Supported paths:
- * - alias.$body.* - Access response body (parsed as JSON)
- * - alias.$headers.* - Access response headers
- * - alias.$status - Access response status code
- * - alias.$statusText - Access response status text
- * 
- * @param path - The flow path to resolve (e.g., "getUser.$body.data.id")
- * @param flowContext - Context containing completed node responses
- * @returns The resolved value as a string, or null if not found
- */
-export function resolveFlowPath(
-    path: string,
-    flowContext: FlowContext
-): string | null {
-    const parts = parseFlowPath(path);
-    
-    if (parts.length < 2) {
-        return null; // Need at least alias.property
-    }
-    
-    const alias = parts[0];
-    const property = parts[1];
-    
-    // Look up response by alias
-    const response = flowContext.responses.get(alias);
-    
-    if (!response) {
-        // Try case-insensitive lookup
-        const aliasLower = alias.toLowerCase();
-        for (const [key, value] of flowContext.responses) {
-            if (key.toLowerCase() === aliasLower) {
-                return resolvePropertyPath(value, parts.slice(1));
-            }
-        }
-        return null;
-    }
-    
-    return resolvePropertyPath(response, parts.slice(1));
-}
 
 /**
  * Parses a flow path string into parts, handling array notation.
@@ -183,42 +72,6 @@ function parseFlowPath(path: string): string[] {
     }
     
     return parts;
-}
-
-/**
- * Resolves a property path within an HttpResponseResult.
- * 
- * @param response - The HTTP response to access
- * @param pathParts - Path parts after the alias (e.g., ["body", "data", "id"])
- * @returns The resolved value as string, or null if not found
- */
-function resolvePropertyPath(
-    response: HttpResponseResult,
-    pathParts: string[]
-): string | null {
-    if (pathParts.length === 0) {
-        return null;
-    }
-    
-    const property = pathParts[0];
-    const remainingPath = pathParts.slice(1);
-    
-    switch (property) {
-        case '$body':
-            return resolveBodyPath(response.body, remainingPath, response.headers);
-            
-        case '$headers':
-            return resolveHeadersPath(response.headers, remainingPath);
-            
-        case '$status':
-            return String(response.status);
-            
-        case '$statusText':
-            return response.statusText;
-            
-        default:
-            return null;
-    }
 }
 
 /**
@@ -368,24 +221,6 @@ export function extractVariables(text: string): string[] {
     }
     
     return variables;
-}
-
-/**
- * Checks if a variable name looks like a flow path (alias.property).
- */
-export function isFlowPath(variableName: string): boolean {
-    return FLOW_PATH_REGEX.test(variableName);
-}
-
-/**
- * Gets the alias portion of a flow path.
- * 
- * @example
- * getAliasFromPath("getUser.$body.data.id") // Returns "getUser"
- */
-export function getAliasFromPath(path: string): string | null {
-    const match = path.match(/^([a-zA-Z_][a-zA-Z0-9_]*)\./);
-    return match ? match[1] : null;
 }
 
 /**

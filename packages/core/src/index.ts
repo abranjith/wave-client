@@ -214,12 +214,8 @@ export * from './utils/collectionParser';
 
 // Flow resolver utilities
 export {
-    resolveFlowVariables,
-    resolveFlowPath,
     hasUnresolvedVariables,
     extractVariables,
-    isFlowPath,
-    getAliasFromPath,
     createEmptyFlowContext,
     addToFlowContext,
     flowContextToDynamicEnvVars,

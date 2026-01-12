@@ -320,6 +320,44 @@ export function useFlowRunner({ environments, auths, collections }: UseFlowRunne
     }, []);
     
     /**
+     * Updates state for a single node completion
+     * Called per-node to keep UI responsive
+     */
+    const updateStateForNodeCompletion = useCallback((
+        nodeResults: Map<string, FlowNodeResult>,
+        activeConnectorIds: string[],
+        completedNodes: Set<string>
+    ) => {
+        const completed = completedNodes.size;
+        const succeeded = Array.from(nodeResults.values()).filter(r => r.status === 'success').length;
+        const failed = Array.from(nodeResults.values()).filter(r => r.status === 'failed').length;
+        const skipped = Array.from(nodeResults.values()).filter(r => r.status === 'skipped').length;
+        
+        setState(prev => {
+            if (!prev.result) {
+                return prev;
+            }
+            
+            return {
+                ...prev,
+                runningNodeIds: new Set(runningRef.current),
+                result: {
+                    ...prev.result,
+                    nodeResults: new Map(nodeResults),
+                    activeConnectorIds: [...activeConnectorIds],
+                    progress: {
+                        ...prev.result.progress,
+                        completed,
+                        succeeded,
+                        failed,
+                        skipped,
+                    },
+                },
+            };
+        });
+    }, []);
+    
+    /**
      * Checks if all incoming dependencies for a node are satisfied
      */
     const areDependenciesSatisfied = useCallback((
@@ -407,23 +445,34 @@ export function useFlowRunner({ environments, auths, collections }: UseFlowRunne
         const activeConnectorIds: string[] = [];
         const skippedConnectorIds: string[] = [];
         
+        // Refs for tracking promises across iterations (not just current batch)
+        const activePromises = new Map<string, Promise<FlowNodeResult>>();
+        const inFlightNodeIds = new Set<string>();
+        
         // Process nodes in topological order
-        // We'll use a queue-based approach to handle parallel execution of independent nodes
+        // Use continuous loop that processes nodes as they complete (Promise.race pattern)
         const pendingNodes = new Set(executionOrder.map(n => n.id));
         const completedNodes = new Set<string>();
         
-        while (pendingNodes.size > 0 && !isCancelledRef.current) {
-            // Find nodes ready to execute (all dependencies satisfied and condition met)
+        while (pendingNodes.size > 0 || activePromises.size > 0) {
+            if (isCancelledRef.current) {
+                break;
+            }
+            
+            // STEP 1: Queue new ready nodes (find dependencies satisfied)
             const readyNodes: FlowNode[] = [];
             
             for (const nodeId of pendingNodes) {
                 const { satisfied, canExecute } = areDependenciesSatisfied(flow, nodeId, nodeResults);
                 
                 if (satisfied) {
-                    if (canExecute) {
+                    if (canExecute && !inFlightNodeIds.has(nodeId)) {
+                        // Node is ready and not already in-flight
                         readyNodes.push(nodeMap.get(nodeId)!);
-                    } else {
-                        // All dependencies completed but no condition was met - skip this node
+                        pendingNodes.delete(nodeId);
+                        inFlightNodeIds.add(nodeId);
+                    } else if (!canExecute) {
+                        // All dependencies completed but condition not met - skip this node
                         const node = nodeMap.get(nodeId)!;
                         nodeResults.set(nodeId, {
                             nodeId,
@@ -444,19 +493,11 @@ export function useFlowRunner({ environments, auths, collections }: UseFlowRunne
                     }
                 }
             }
+
+            //console.log('Ready nodes:', readyNodes.map(n => n.alias).join(', '), 'In-flight:', Array.from(inFlightNodeIds).map(id => nodeMap.get(id)?.alias).join(', '));
             
-            if (readyNodes.length === 0 && pendingNodes.size > 0) {
-                // No ready nodes but still pending - waiting for something
-                // This shouldn't happen with proper topological order
-                // but let's prevent infinite loop
-                await new Promise(resolve => setTimeout(resolve, 10));
-                continue;
-            }
-            
-            // Execute ready nodes in parallel
-            const nodePromises = readyNodes.map(async (node) => {
-                pendingNodes.delete(node.id);
-                
+            // STEP 2: Start new node executions and track promises
+            for (const node of readyNodes) {
                 // Mark as running
                 nodeResults.set(node.id, {
                     nodeId: node.id,
@@ -467,68 +508,76 @@ export function useFlowRunner({ environments, auths, collections }: UseFlowRunne
                 
                 runningRef.current.add(node.id);
                 
-                setState(prev => ({
-                    ...prev,
-                    runningNodeIds: new Set(runningRef.current),
-                    result: prev.result ? {
-                        ...prev.result,
-                        nodeResults: new Map(nodeResults),
-                    } : null,
-                }));
+                // Create and track promise without awaiting yet
+                const promise = (async () => {
+                    const result = await executeNode(flow, node, defaultAuthId || flow.defaultAuthId);
+                    return result;
+                })();
                 
-                // Execute
-                const result = await executeNode(flow, node, defaultAuthId || flow.defaultAuthId);
+                // Store promise for later racing
+                activePromises.set(node.id, promise);
                 
-                runningRef.current.delete(node.id);
-                nodeResults.set(node.id, result);
-                completedNodes.add(node.id);
+                // Add cleanup logic via .finally()
+                // Note: We only clean up runningRef and inFlightNodeIds here.
+                // The promise will be removed from activePromises after we retrieve its result.
+                promise.finally(() => {
+                    runningRef.current.delete(node.id);
+                    inFlightNodeIds.delete(node.id);
+                });
+            }
+            
+            // STEP 3: Wait for ANY in-flight promise to complete (not all)
+            if (activePromises.size > 0) {
+                const promisesArray = Array.from(activePromises.entries());
+                
+                // Race all active promises - resolve with first completion
+                const [completedNodeId] = await Promise.race(
+                    promisesArray.map(async ([nodeId, promise]) => {
+                        await promise;
+                        return [nodeId] as const;
+                    })
+                );
+                
+                // Get the completed result (promise already settled from race)
+                const completedPromise = activePromises.get(completedNodeId)!;
+                const result = await completedPromise;
+                
+                // NOW remove from activePromises after we've retrieved the result
+                activePromises.delete(completedNodeId);
+                
+                // Update node result
+                nodeResults.set(completedNodeId, result);
+                completedNodes.add(completedNodeId);
                 
                 // Add response to flow context if successful
                 if (result.response) {
                     flowContextRef.current = addToFlowContext(
                         flowContextRef.current,
-                        node.alias,
+                        result.alias,
                         result.response
                     );
                 }
                 
                 // Mark activated connectors
-                const outgoing = getOutgoingConnectors(flow, node.id);
+                const outgoing = getOutgoingConnectors(flow, completedNodeId);
                 for (const conn of outgoing) {
                     if (isConditionSatisfied(conn.condition, result)) {
                         activeConnectorIds.push(conn.id);
                     }
                 }
                 
-                // Update state with progress
-                const completed = completedNodes.size;
-                const succeeded = Array.from(nodeResults.values()).filter(r => r.status === 'success').length;
-                const failed = Array.from(nodeResults.values()).filter(r => r.status === 'failed').length;
-                const skipped = Array.from(nodeResults.values()).filter(r => r.status === 'skipped').length;
-                
-                updateResult(prev => ({
-                    ...prev,
-                    nodeResults: new Map(nodeResults),
-                    activeConnectorIds: [...activeConnectorIds],
-                    progress: {
-                        ...prev.progress,
-                        completed,
-                        succeeded,
-                        failed,
-                        skipped,
-                    },
-                }));
-                
                 // Check for failure - stop flow
                 if (result.status === 'failed') {
                     isCancelledRef.current = true;
                 }
                 
-                return result;
-            });
-            
-            // Wait for all parallel nodes to complete
-            await Promise.all(nodePromises);
+                // Update state with progress for this completed node
+                updateStateForNodeCompletion(nodeResults, activeConnectorIds, completedNodes);
+            } else if (pendingNodes.size > 0) {
+                // No ready nodes and no in-flight promises - waiting for something
+                // Small delay to prevent busy-waiting
+                await new Promise(resolve => setTimeout(resolve, 10));
+            }
         }
         
         // Build final result
