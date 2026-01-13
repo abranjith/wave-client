@@ -17,6 +17,8 @@ interface FlowsSlice {
     getFlowByName: (name: string) => Flow | undefined;
     isFlowNameUnique: (name: string, excludeId?: string) => boolean;
     setCurrentEditingFlowId: (flowId: string | null) => void;
+    setFlowRunning: (flowId: string, isRunning: boolean) => void; // Set running state for a specific flow
+    isFlowRunning: (flowId: string) => boolean; // Check if specific flow is running
     isFlowDirty: (flowId: string) => boolean; // Check if specific flow is dirty
     
     // Flow mutation methods (auto-mark dirty)
@@ -75,6 +77,19 @@ const createFlowsSlice: StateCreator<FlowsSlice> = (set, get) => ({
     },
 
     setCurrentEditingFlowId: (flowId) => set({ currentEditingFlowId: flowId }),
+
+    setFlowRunning: (flowId, isRunning) => {
+        set((state) => ({
+            flows: state.flows.map((flow) => 
+                flow.id === flowId ? { ...flow, isRunning } : flow
+            )
+        }));
+    },
+
+    isFlowRunning: (flowId) => {
+        const flow = get().flows.find((f) => f.id === flowId);
+        return flow?.isRunning || false;
+    },
 
     isFlowDirty: (flowId) => {
         return get().flowDirtyStates[flowId] || false;

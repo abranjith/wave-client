@@ -110,7 +110,7 @@ const ConfigPanel: React.FC<ConfigPanelProps> = ({ onRequestSelect, onEnvSelect,
                 onFlowSelect={onFlowSelect}
                 onFlowRun={onFlowRun}
                 onRetry={onRetryFlows}
-              />
+            />
           </TabsContent>
           <TabsContent value="history" className="h-full overflow-hidden">
             <HistoryPane 

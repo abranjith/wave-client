@@ -213,12 +213,12 @@ export function validateFlow(flow: Flow): string[] {
     }
     
     // Check for duplicate node requests
-    const requestIds = new Set<string>();
+    const aliasSet = new Set<string>();
     for (const node of flow.nodes) {
-        if (requestIds.has(node.requestId.toLowerCase())) {
-            errors.push(`Duplicate node request: ${node.requestId}`);
+        if (aliasSet.has(node.alias.toLowerCase())) {
+            errors.push(`Duplicate node request: ${node.alias}`);
         }
-        requestIds.add(node.requestId.toLowerCase());
+        aliasSet.add(node.alias.toLowerCase());
     }
     
     // Check for duplicate connectors (same source → target)

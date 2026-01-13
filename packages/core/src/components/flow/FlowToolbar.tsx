@@ -20,12 +20,15 @@ import { SecondaryButton } from '../ui/SecondaryButton';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../ui/tooltip';
 import { cn } from '../../utils/common';
+import useAppStateStore from '../../hooks/store/useAppStateStore';
 
 // ============================================================================
 // Types
 // ============================================================================
 
 interface FlowToolbarProps {
+    /** Flow ID (to check running state from store) */
+    flowId: string;
     /** Flow name */
     flowName: string;
     /** Callback when name changes */
@@ -40,8 +43,6 @@ interface FlowToolbarProps {
     onAutoLayout: () => void;
     /** Callback to save the flow */
     onSave?: () => void;
-    /** Whether the flow is currently running */
-    isRunning: boolean;
     /** Whether there are unsaved changes */
     isDirty?: boolean;
     /** Available environments */
@@ -65,6 +66,7 @@ interface FlowToolbarProps {
 // ============================================================================
 
 export const FlowToolbar: React.FC<FlowToolbarProps> = ({
+    flowId,
     flowName,
     onNameChange,
     onAddRequest,
@@ -72,7 +74,6 @@ export const FlowToolbar: React.FC<FlowToolbarProps> = ({
     onCancel,
     onAutoLayout,
     onSave,
-    isRunning,
     isDirty = false,
     environments,
     selectedEnvId,
@@ -82,6 +83,8 @@ export const FlowToolbar: React.FC<FlowToolbarProps> = ({
     onAuthChange,
     hasNodes,
 }) => {
+    const isRunning = useAppStateStore((state) => state.isFlowRunning(flowId));
+    
     return (
         <TooltipProvider>
             <div className={cn(

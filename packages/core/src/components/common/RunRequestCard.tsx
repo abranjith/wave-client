@@ -104,7 +104,7 @@ const ValidationIndicator: React.FC<{ status: ValidationStatus }> = ({ status })
 
 // ==================== Request Tabs Content ====================
 
-const BASE_TABS = ['Request Headers', 'Request Body', 'Response Headers', 'Response Body', 'Validation'] as const;
+const BASE_TABS = ['Response Headers', 'Response Body', 'Request Headers', 'Request Body', 'Validation'] as const;
 type RequestCardTab = 'Error' | typeof BASE_TABS[number];
 
 /**
@@ -341,7 +341,7 @@ const RunRequestCard: React.FC<RunRequestCardProps> = ({
             responseStatus={data.responseStatus}
             responseTime={data.responseTime}
           />
-          <ValidationIndicator status={data.validationStatus} />
+          {data.runStatus !== 'running' && <ValidationIndicator status={data.validationStatus} />}
         </div>
       </div>
 

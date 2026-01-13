@@ -405,10 +405,19 @@ export function useFlowRunner({ environments, auths, collections }: UseFlowRunne
         // Validate flow
         const validationErrors = validateFlow(flow);
         if (validationErrors.length > 0) {
+            const errorMessage = validationErrors.join('; ');
+            
             const result = createInitialFlowRunResult(flow);
             result.status = 'failed';
-            result.error = `Invalid flow: ${validationErrors.join('; ')}`;
+            result.error = `Invalid flow: ${errorMessage}`;
             result.completedAt = new Date().toISOString();
+            
+            setState({
+                isRunning: false,
+                result: result,
+                runningNodeIds: new Set(),
+            });
+            
             return result;
         }
         
@@ -419,6 +428,13 @@ export function useFlowRunner({ environments, auths, collections }: UseFlowRunne
             result.status = 'failed';
             result.error = 'Flow contains a cycle';
             result.completedAt = new Date().toISOString();
+            
+            setState({
+                isRunning: false,
+                result: result,
+                runningNodeIds: new Set(),
+            });
+            
             return result;
         }
         

@@ -100,6 +100,9 @@ function MyComponent() {
 - Use the established **`Result<T, E>` pattern** for functions that can fail
   - Success: `{ isOk: true, value: data }`
   - Error: `{ isOk: false, error: errorMessage }`
+- **State Management**
+  - This project uses zustand for global state management. Use React Context and hooks for local component state.
+  - If a particular object is already being tracked in global state, avoid duplicating it in local state. In particular, avoid passing arguments to components that can be retrieved or managed from global state instead.
 
 ### 3. Error Handling
 

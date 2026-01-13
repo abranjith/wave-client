@@ -79,6 +79,8 @@ export interface Flow {
     defaultAuthId?: string;
     /** Default environment ID for variable resolution */
     defaultEnvId?: string;
+    /** Whether this flow is currently running (supports parallel execution) */
+    isRunning?: boolean;
     /** Creation timestamp */
     createdAt: string;
     /** Last update timestamp */

@@ -58,7 +58,7 @@ export interface FlowCanvasProps {
 
 const NODE_WIDTH = 160;
 const NODE_HEIGHT = 48;
-const HANDLE_OFFSET_X = 8; // Distance from node edge to handle center
+const HANDLE_SIZE = 16; // Handle circle diameter (w-4 = 1rem = 16px)
 
 // ============================================================================
 // Main Component
@@ -84,6 +84,7 @@ export const FlowCanvas: React.FC<FlowCanvasProps> = ({
 
     // Store for tracking dirty state and current editing flow
     const setCurrentEditingFlowId = useAppStateStore((state) => state.setCurrentEditingFlowId);
+    const setFlowRunning = useAppStateStore((state) => state.setFlowRunning);
     const updateFlowNodes = useAppStateStore((state) => state.updateFlowNodes);
     const updateFlowConnectors = useAppStateStore((state) => state.updateFlowConnectors);
     const updateFlowName = useAppStateStore((state) => state.updateFlowName);
@@ -115,6 +116,11 @@ export const FlowCanvas: React.FC<FlowCanvasProps> = ({
         setCurrentEditingFlowId(flow.id);
     }, [flow.id, setCurrentEditingFlowId]);
     
+    // Sync running state with global store
+    useEffect(() => {
+        setFlowRunning(flow.id, flowRunner.isRunning);
+    }, [flowRunner.isRunning, flow.id, setFlowRunning]);
+    
     const canvasRef = useRef<HTMLDivElement>(null);
     
     // Derived state
@@ -132,15 +138,16 @@ export const FlowCanvas: React.FC<FlowCanvasProps> = ({
             return null;
         }
         
-        // Output handle is on the right side of source node
+        // Output handle center is at the right edge of node (handle extends 8px outside with -right-2)
+        // Handle is 16px wide, centered on node edge
         const startPos = {
-            x: sourceNode.position.x + NODE_WIDTH - HANDLE_OFFSET_X,
+            x: sourceNode.position.x + NODE_WIDTH,
             y: sourceNode.position.y + NODE_HEIGHT / 2,
         };
         
-        // Input handle is on the left side of target node
+        // Input handle center is at the left edge of node (handle extends 8px outside with -left-2)
         const endPos = {
-            x: targetNode.position.x + HANDLE_OFFSET_X,
+            x: targetNode.position.x,
             y: targetNode.position.y + NODE_HEIGHT / 2,
         };
         
@@ -425,6 +432,7 @@ export const FlowCanvas: React.FC<FlowCanvasProps> = ({
         <div className="flex flex-col h-full">
             {/* Toolbar */}
             <FlowToolbar
+                flowId={flow.id}
                 flowName={flow.name}
                 onNameChange={handleNameChange}
                 onAddRequest={() => !isLocked && setIsSearchOpen(true)}
@@ -435,7 +443,6 @@ export const FlowCanvas: React.FC<FlowCanvasProps> = ({
                 onCancel={flowRunner.cancelFlow}
                 onAutoLayout={handleAutoLayout}
                 onSave={onSave ? handleSave : undefined}
-                isRunning={flowRunner.isRunning}
                 isDirty={currentFlowIsDirty}
                 environments={environments}
                 selectedEnvId={flow.defaultEnvId}
@@ -465,7 +472,11 @@ export const FlowCanvas: React.FC<FlowCanvasProps> = ({
                     {/* SVG Layer for Connectors */}
                     <svg
                         className="absolute inset-0 w-full h-full pointer-events-none"
-                        style={{ minWidth: '100%', minHeight: '100%' }}
+                        style={{ 
+                            minWidth: '100%', 
+                            minHeight: '100%', 
+                            zIndex: 10
+                        }}
                     >
                         <FlowConnectorDefs />
                         
@@ -497,7 +508,7 @@ export const FlowCanvas: React.FC<FlowCanvasProps> = ({
                         {/* Connection preview line */}
                         {connectingFrom && nodeMap.get(connectingFrom) && (
                             <line
-                                x1={nodeMap.get(connectingFrom)!.position.x + NODE_WIDTH - HANDLE_OFFSET_X}
+                                x1={nodeMap.get(connectingFrom)!.position.x + NODE_WIDTH}
                                 y1={nodeMap.get(connectingFrom)!.position.y + NODE_HEIGHT / 2}
                                 x2={mousePos.x}
                                 y2={mousePos.y}

@@ -50,7 +50,7 @@ export interface FlowsPaneProps {
 const FlowsPane: React.FC<FlowsPaneProps> = ({ 
     onFlowSelect, 
     onFlowRun,
-    onRetry 
+    onRetry
 }) => {
     const storageAdapter = useStorageAdapter();
     const notification = useNotificationAdapter();
@@ -68,6 +68,7 @@ const FlowsPane: React.FC<FlowsPaneProps> = ({
     const isFlowNameUnique = useAppStateStore((state) => state.isFlowNameUnique);
     const setCurrentEditingFlowId = useAppStateStore((state) => state.setCurrentEditingFlowId);
     const isFlowDirty = useAppStateStore((state) => state.isFlowDirty);
+    const isFlowRunning = useAppStateStore((state) => state.isFlowRunning);
     
     // Local state for UI
     const [searchText, setSearchText] = useState('');
@@ -334,58 +335,64 @@ const FlowsPane: React.FC<FlowsPaneProps> = ({
 
                                 {/* Actions */}
                                 <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                    {onFlowRun && (
-                                        <Tooltip>
-                                            <TooltipTrigger asChild>
-                                                <Button
-                                                    variant="ghost"
-                                                    size="sm"
-                                                    className="h-6 w-6 p-0"
-                                                    onClick={(e) => {
-                                                        e.stopPropagation();
-                                                        onFlowRun(flow);
-                                                    }}
-                                                >
-                                                    <PlayIcon className="h-3 w-3 text-green-600" />
-                                                </Button>
-                                            </TooltipTrigger>
-                                            <TooltipContent>Run Flow</TooltipContent>
-                                        </Tooltip>
+                                    {isFlowRunning(flow.id) ? (
+                                        <span className="text-xs text-blue-600 dark:text-blue-400 font-medium px-2">Running...</span>
+                                    ) : (
+                                        <>
+                                            {onFlowRun && (
+                                                <Tooltip>
+                                                    <TooltipTrigger asChild>
+                                                        <Button
+                                                            variant="ghost"
+                                                            size="sm"
+                                                            className="h-6 w-6 p-0"
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                onFlowRun(flow);
+                                                            }}
+                                                        >
+                                                            <PlayIcon className="h-3 w-3 text-green-600" />
+                                                        </Button>
+                                                    </TooltipTrigger>
+                                                    <TooltipContent>Run Flow</TooltipContent>
+                                                </Tooltip>
+                                            )}
+                                            
+                                            <DropdownMenu>
+                                                <DropdownMenuTrigger asChild>
+                                                    <Button
+                                                        variant="ghost"
+                                                        size="sm"
+                                                        className="h-6 w-6 p-0"
+                                                        onClick={(e) => e.stopPropagation()}
+                                                    >
+                                                        <MoreVerticalIcon className="h-3 w-3" />
+                                                    </Button>
+                                                </DropdownMenuTrigger>
+                                                <DropdownMenuContent align="end">
+                                                    <DropdownMenuItem 
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            handleRenameStart(flow);
+                                                        }}
+                                                    >
+                                                        <PencilIcon className="h-4 w-4 mr-2" />
+                                                        Rename
+                                                    </DropdownMenuItem>
+                                                    <DropdownMenuItem 
+                                                        className="text-red-600"
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            handleDeleteFlow(flow.id, flow.name);
+                                                        }}
+                                                    >
+                                                        <Trash2Icon className="h-4 w-4 mr-2" />
+                                                        Delete
+                                                    </DropdownMenuItem>
+                                                </DropdownMenuContent>
+                                            </DropdownMenu>
+                                        </>
                                     )}
-                                    
-                                    <DropdownMenu>
-                                        <DropdownMenuTrigger asChild>
-                                            <Button
-                                                variant="ghost"
-                                                size="sm"
-                                                className="h-6 w-6 p-0"
-                                                onClick={(e) => e.stopPropagation()}
-                                            >
-                                                <MoreVerticalIcon className="h-3 w-3" />
-                                            </Button>
-                                        </DropdownMenuTrigger>
-                                        <DropdownMenuContent align="end">
-                                            <DropdownMenuItem 
-                                                onClick={(e) => {
-                                                    e.stopPropagation();
-                                                    handleRenameStart(flow);
-                                                }}
-                                            >
-                                                <PencilIcon className="h-4 w-4 mr-2" />
-                                                Rename
-                                            </DropdownMenuItem>
-                                            <DropdownMenuItem 
-                                                className="text-red-600"
-                                                onClick={(e) => {
-                                                    e.stopPropagation();
-                                                    handleDeleteFlow(flow.id, flow.name);
-                                                }}
-                                            >
-                                                <Trash2Icon className="h-4 w-4 mr-2" />
-                                                Delete
-                                            </DropdownMenuItem>
-                                        </DropdownMenuContent>
-                                    </DropdownMenu>
                                 </div>
                             </div>
                         ))}
