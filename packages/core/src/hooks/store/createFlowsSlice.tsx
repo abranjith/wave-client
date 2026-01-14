@@ -1,5 +1,5 @@
 import { StateCreator } from 'zustand';
-import { Flow, FlowNode, FlowConnector } from '../../types/flow';
+import { Flow, FlowNode, FlowConnector, FlowRunState } from '../../types/flow';
 
 interface FlowsSlice {
     flows: Flow[];
@@ -7,6 +7,7 @@ interface FlowsSlice {
     flowsLoadError: string | null;
     currentEditingFlowId: string | null;
     flowDirtyStates: Record<string, boolean>; // Track dirty state per flow ID
+    flowRunStates: Record<string, FlowRunState>; // Track execution state per flow ID
     setFlows: (flows: Flow[]) => void;
     setIsFlowsLoading: (isLoading: boolean) => void;
     setFlowsLoadError: (error: string | null) => void;
@@ -17,11 +18,15 @@ interface FlowsSlice {
     getFlowByName: (name: string) => Flow | undefined;
     isFlowNameUnique: (name: string, excludeId?: string) => boolean;
     setCurrentEditingFlowId: (flowId: string | null) => void;
-    setFlowRunning: (flowId: string, isRunning: boolean) => void; // Set running state for a specific flow
     isFlowRunning: (flowId: string) => boolean; // Check if specific flow is running
     isFlowDirty: (flowId: string) => boolean; // Check if specific flow is dirty
     
-    // Flow mutation methods (auto-mark dirty)
+    // Flow run state management
+    getFlowRunState: (flowId: string) => FlowRunState;
+    setFlowRunState: (flowId: string, state: FlowRunState) => void;
+    clearFlowRunState: (flowId: string) => void;
+    
+    // Flow mutation methods (auto-mark dirty and clear results)
     updateFlowNodes: (flowId: string, nodes: FlowNode[]) => void;
     updateFlowConnectors: (flowId: string, connectors: FlowConnector[]) => void;
     updateFlowName: (flowId: string, name: string) => void;
@@ -36,6 +41,7 @@ const createFlowsSlice: StateCreator<FlowsSlice> = (set, get) => ({
     flowsLoadError: null,
     currentEditingFlowId: null,
     flowDirtyStates: {},
+    flowRunStates: {},
 
     setFlows: (flows) => set({ flows, flowsLoadError: null }),
 
@@ -51,6 +57,9 @@ const createFlowsSlice: StateCreator<FlowsSlice> = (set, get) => ({
         flows: state.flows.filter((flow) => flow.id !== id),
         flowDirtyStates: Object.fromEntries(
             Object.entries(state.flowDirtyStates).filter(([flowId]) => flowId !== id)
+        ),
+        flowRunStates: Object.fromEntries(
+            Object.entries(state.flowRunStates).filter(([flowId]) => flowId !== id)
         )
     })),
 
@@ -78,24 +87,39 @@ const createFlowsSlice: StateCreator<FlowsSlice> = (set, get) => ({
 
     setCurrentEditingFlowId: (flowId) => set({ currentEditingFlowId: flowId }),
 
-    setFlowRunning: (flowId, isRunning) => {
-        set((state) => ({
-            flows: state.flows.map((flow) => 
-                flow.id === flowId ? { ...flow, isRunning } : flow
-            )
-        }));
-    },
-
     isFlowRunning: (flowId) => {
-        const flow = get().flows.find((f) => f.id === flowId);
-        return flow?.isRunning || false;
+        const flowRunState = get().flowRunStates[flowId];
+        return flowRunState?.isRunning || false;
     },
 
     isFlowDirty: (flowId) => {
         return get().flowDirtyStates[flowId] || false;
     },
     
-    // Flow mutation methods - automatically mark dirty and update timestamp
+    // Flow run state management
+    getFlowRunState: (flowId) => {
+        return get().flowRunStates[flowId] || {
+            isRunning: false,
+            result: null,
+            runningNodeIds: new Set(),
+        };
+    },
+    
+    setFlowRunState: (flowId, state) => {
+        set((prevState) => ({
+            flowRunStates: { ...prevState.flowRunStates, [flowId]: state }
+        }));
+    },
+    
+    clearFlowRunState: (flowId) => {
+        set((state) => {
+            const newFlowRunStates = { ...state.flowRunStates };
+            delete newFlowRunStates[flowId];
+            return { flowRunStates: newFlowRunStates };
+        });
+    },
+    
+    // Flow mutation methods - automatically mark dirty, clear results, and update timestamp
     updateFlowNodes: (flowId, nodes) => {
         set((state) => ({
             flowDirtyStates: { ...state.flowDirtyStates, [flowId]: true },

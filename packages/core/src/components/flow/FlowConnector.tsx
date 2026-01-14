@@ -101,17 +101,15 @@ function getLabelWidth(condition: ConnectorCondition): number {
 /**
  * Calculate bezier curve path between two points
  * For backwards connections (end.x < start.x), creates a loop going below
- * Arrow marker is 10px long, so we end the path 10px before the actual endpoint
  */
 function calculatePath(
     start: { x: number; y: number },
     end: { x: number; y: number }
 ): string {
     const dx = end.x - start.x;
-    const ARROW_LENGTH = 10; // markerWidth in FlowConnectorDefs
     
     // Check if this is a backwards connection (target is to the left)
-    const isBackwards = dx < -20;
+    const isBackwards = dx < -30;
     
     if (isBackwards) {
         // Create a loop path going BELOW the nodes (stays in viewport)
@@ -119,8 +117,6 @@ function calculatePath(
         const curveRadius = 25;
         
         const bottomY = Math.max(start.y, end.y) + loopDrop;
-        // End Y adjusted for arrow (arrow points up, so stop short)
-        const endY = end.y + ARROW_LENGTH;
         
         // Path: start → curve down-right → horizontal left → curve up → end
         return `M ${start.x} ${start.y}
@@ -129,21 +125,14 @@ function calculatePath(
                   ${start.x} ${bottomY}
                 L ${end.x} ${bottomY}
                 C ${end.x - curveRadius} ${bottomY}, 
-                  ${end.x - curveRadius} ${endY}, 
-                  ${end.x} ${endY}`;
+                  ${end.x - curveRadius} ${end.y}, 
+                  ${end.x} ${end.y}`;
     }
     
-    // Forward connection - regular curved path
-    // Adjust end.x for arrow marker (arrow points right)
-    const adjustedEndX = end.x - ARROW_LENGTH;
-    const curvature = Math.min(Math.abs(dx) * 0.5, 80);
+    // Forward connection - smooth bezier curve
+    const curvature = Math.min(Math.abs(dx) * 0.4, 60);
     
-    const cx1 = start.x + curvature;
-    const cy1 = start.y;
-    const cx2 = adjustedEndX - curvature;
-    const cy2 = end.y;
-    
-    return `M ${start.x} ${start.y} C ${cx1} ${cy1}, ${cx2} ${cy2}, ${adjustedEndX} ${end.y}`;
+    return `M ${start.x} ${start.y} C ${start.x + curvature} ${start.y}, ${end.x - curvature} ${end.y}, ${end.x} ${end.y}`;
 }
 
 /**
@@ -400,45 +389,45 @@ export const FlowConnector: React.FC<FlowConnectorProps> = ({
 
 /**
  * SVG Defs for arrow markers - include this once in your SVG container
- * refX=0 means the arrow tip is at the path endpoint
+ * refX=10 places the arrow tip exactly at the path endpoint
  */
 export const FlowConnectorDefs: React.FC = () => (
     <defs>
         <marker
             id="arrowhead"
             markerWidth="10"
-            markerHeight="10"
-            refX="5"
-            refY="5"
+            markerHeight="8"
+            refX="10"
+            refY="4"
             orient="auto"
             markerUnits="userSpaceOnUse"
         >
             <polygon
-                points="0 0, 10 5, 0 10"
+                points="0 0, 10 4, 0 8"
                 fill="#64748b"
             />
         </marker>
         <marker
             id="arrowhead-success"
             markerWidth="10"
-            markerHeight="10"
-            refX="5"
-            refY="5"
+            markerHeight="8"
+            refX="10"
+            refY="4"
             orient="auto"
             markerUnits="userSpaceOnUse"
         >
-            <polygon points="0 0, 10 5, 0 10" fill="#22c55e" />
+            <polygon points="0 0, 10 4, 0 8" fill="#22c55e" />
         </marker>
         <marker
             id="arrowhead-failure"
             markerWidth="10"
-            markerHeight="10"
-            refX="5"
-            refY="5"
+            markerHeight="8"
+            refX="10"
+            refY="4"
             orient="auto"
             markerUnits="userSpaceOnUse"
         >
-            <polygon points="0 0, 10 5, 0 10" fill="#ef4444" />
+            <polygon points="0 0, 10 4, 0 8" fill="#ef4444" />
         </marker>
     </defs>
 );

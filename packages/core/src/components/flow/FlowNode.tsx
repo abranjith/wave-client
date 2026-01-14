@@ -198,7 +198,7 @@ export const FlowNode: React.FC<FlowNodeProps> = ({
                     'absolute flex items-center gap-2 p-2 bg-white dark:bg-slate-800 rounded-lg border-2 shadow-sm transition-colors',
                     getBorderColor(),
                     isDragging && 'shadow-lg opacity-90',
-                    'min-w-[140px]',
+                    'w-40', // Fixed width 160px to match NODE_WIDTH constant
                     isReadOnly ? 'cursor-not-allowed opacity-50' : 'cursor-move'
                 )}
                 style={{

@@ -11,8 +11,9 @@
  * Uses the platform adapter pattern for HTTP execution, making it platform-agnostic.
  */
 
-import { useState, useCallback, useRef } from 'react';
+import { useCallback, useRef } from 'react';
 import { useHttpAdapter } from './useAdapter';
+import useAppStateStore from './store/useAppStateStore';
 import type { Environment, CollectionItem, Collection } from '../types/collection';
 import type { Auth } from './store/createAuthSlice';
 import type { HttpRequestConfig } from '../types/adapters';
@@ -21,7 +22,6 @@ import type {
     FlowNode,
     FlowRunResult,
     FlowNodeResult,
-    FlowRunState,
     FlowContext,
 } from '../types/flow';
 import {
@@ -45,6 +45,8 @@ import { buildEnvVarsMap, buildHttpRequest } from '../utils/requestBuilder';
 // ============================================================================
 
 export interface UseFlowRunnerOptions {
+    /** Flow ID being executed (required for global state tracking) */
+    flowId: string;
     /** Available environments for variable resolution */
     environments: Environment[];
     /** Available auth configurations */
@@ -64,15 +66,20 @@ export interface RunFlowOptions {
 // Hook
 // ============================================================================
 
-export function useFlowRunner({ environments, auths, collections }: UseFlowRunnerOptions) {
+// Default empty state (stable reference)
+const DEFAULT_FLOW_RUN_STATE = {
+    isRunning: false,
+    result: null,
+    runningNodeIds: new Set(),
+} as const;
+
+export function useFlowRunner({ flowId, environments, auths, collections }: UseFlowRunnerOptions) {
     const httpAdapter = useHttpAdapter();
     
-    // State
-    const [state, setState] = useState<FlowRunState>({
-        isRunning: false,
-        result: null,
-        runningNodeIds: new Set(),
-    });
+    // Global state management - subscribe directly to flowRunStates[flowId]
+    const state = useAppStateStore((state) => state.flowRunStates[flowId] || DEFAULT_FLOW_RUN_STATE);
+    const setFlowRunState = useAppStateStore((state) => state.setFlowRunState);
+    const clearFlowRunState = useAppStateStore((state) => state.clearFlowRunState);
     
     // Refs for tracking active run
     const isCancelledRef = useRef(false);
@@ -308,16 +315,15 @@ export function useFlowRunner({ environments, auths, collections }: UseFlowRunne
     const updateResult = useCallback((
         updater: (prev: FlowRunResult) => FlowRunResult
     ) => {
-        setState(prev => {
-            if (!prev.result) {
-                return prev;
-            }
-            return {
-                ...prev,
-                result: updater(prev.result),
-            };
-        });
-    }, []);
+        // Use inline selector to get current state
+        const currentState = useAppStateStore.getState().getFlowRunState(flowId);
+        if (currentState.result) {
+            setFlowRunState(flowId, {
+                ...currentState,
+                result: updater(currentState.result),
+            });
+        }
+    }, [flowId, setFlowRunState]);
     
     /**
      * Updates state for a single node completion
@@ -333,29 +339,26 @@ export function useFlowRunner({ environments, auths, collections }: UseFlowRunne
         const failed = Array.from(nodeResults.values()).filter(r => r.status === 'failed').length;
         const skipped = Array.from(nodeResults.values()).filter(r => r.status === 'skipped').length;
         
-        setState(prev => {
-            if (!prev.result) {
-                return prev;
-            }
-            
-            return {
-                ...prev,
+        const currentState = useAppStateStore.getState().getFlowRunState(flowId);
+        if (currentState.result) {
+            setFlowRunState(flowId, {
+                ...currentState,
                 runningNodeIds: new Set(runningRef.current),
                 result: {
-                    ...prev.result,
+                    ...currentState.result,
                     nodeResults: new Map(nodeResults),
                     activeConnectorIds: [...activeConnectorIds],
                     progress: {
-                        ...prev.result.progress,
+                        ...currentState.result.progress,
                         completed,
                         succeeded,
                         failed,
                         skipped,
                     },
                 },
-            };
-        });
-    }, []);
+            });
+        }
+    }, [flowId, setFlowRunState]);
     
     /**
      * Checks if all incoming dependencies for a node are satisfied
@@ -412,7 +415,7 @@ export function useFlowRunner({ environments, auths, collections }: UseFlowRunne
             result.error = `Invalid flow: ${errorMessage}`;
             result.completedAt = new Date().toISOString();
             
-            setState({
+            setFlowRunState(flowId, {
                 isRunning: false,
                 result: result,
                 runningNodeIds: new Set(),
@@ -429,7 +432,7 @@ export function useFlowRunner({ environments, auths, collections }: UseFlowRunne
             result.error = 'Flow contains a cycle';
             result.completedAt = new Date().toISOString();
             
-            setState({
+            setFlowRunState(flowId, {
                 isRunning: false,
                 result: result,
                 runningNodeIds: new Set(),
@@ -449,7 +452,7 @@ export function useFlowRunner({ environments, auths, collections }: UseFlowRunne
         const initialResult = createInitialFlowRunResult(flow);
         initialResult.status = 'running';
         
-        setState({
+        setFlowRunState(flowId, {
             isRunning: true,
             result: initialResult,
             runningNodeIds: new Set(),
@@ -624,14 +627,14 @@ export function useFlowRunner({ environments, auths, collections }: UseFlowRunne
             },
         };
         
-        setState({
+        setFlowRunState(flowId, {
             isRunning: false,
             result: finalResult,
             runningNodeIds: new Set(),
         });
         
         return finalResult;
-    }, [environments, executeNode, areDependenciesSatisfied, updateResult]);
+    }, [flowId, environments, executeNode, areDependenciesSatisfied, updateResult, setFlowRunState]);
     
     /**
      * Cancels the current flow run
@@ -640,18 +643,19 @@ export function useFlowRunner({ environments, auths, collections }: UseFlowRunne
         isCancelledRef.current = true;
         runningRef.current.clear();
         
-        setState(prev => ({
-            ...prev,
+        const currentState = useAppStateStore.getState().getFlowRunState(flowId);
+        setFlowRunState(flowId, {
+            ...currentState,
             isRunning: false,
             runningNodeIds: new Set(),
-            result: prev.result ? {
-                ...prev.result,
+            result: currentState.result ? {
+                ...currentState.result,
                 status: 'cancelled',
                 completedAt: new Date().toISOString(),
                 error: 'Flow was cancelled',
             } : null,
-        }));
-    }, []);
+        });
+    }, [flowId, setFlowRunState]);
     
     /**
      * Resets the flow runner state
@@ -661,12 +665,8 @@ export function useFlowRunner({ environments, auths, collections }: UseFlowRunne
         flowContextRef.current = createEmptyFlowContext();
         runningRef.current.clear();
         
-        setState({
-            isRunning: false,
-            result: null,
-            runningNodeIds: new Set(),
-        });
-    }, []);
+        clearFlowRunState(flowId);
+    }, [flowId, clearFlowRunState]);
     
     /**
      * Gets the result for a specific node

@@ -58,7 +58,6 @@ export interface FlowCanvasProps {
 
 const NODE_WIDTH = 160;
 const NODE_HEIGHT = 48;
-const HANDLE_SIZE = 16; // Handle circle diameter (w-4 = 1rem = 16px)
 
 // ============================================================================
 // Main Component
@@ -71,11 +70,11 @@ export const FlowCanvas: React.FC<FlowCanvasProps> = ({
     collections,
     environments,
     auths,
-    hasUnsavedChanges = false,
     showResults = true,
 }) => {
     // Flow runner hook - manages flow execution
     const flowRunner = useFlowRunner({
+        flowId: flow.id,
         environments,
         auths,
         collections,
@@ -84,7 +83,6 @@ export const FlowCanvas: React.FC<FlowCanvasProps> = ({
 
     // Store for tracking dirty state and current editing flow
     const setCurrentEditingFlowId = useAppStateStore((state) => state.setCurrentEditingFlowId);
-    const setFlowRunning = useAppStateStore((state) => state.setFlowRunning);
     const updateFlowNodes = useAppStateStore((state) => state.updateFlowNodes);
     const updateFlowConnectors = useAppStateStore((state) => state.updateFlowConnectors);
     const updateFlowName = useAppStateStore((state) => state.updateFlowName);
@@ -116,11 +114,6 @@ export const FlowCanvas: React.FC<FlowCanvasProps> = ({
         setCurrentEditingFlowId(flow.id);
     }, [flow.id, setCurrentEditingFlowId]);
     
-    // Sync running state with global store
-    useEffect(() => {
-        setFlowRunning(flow.id, flowRunner.isRunning);
-    }, [flowRunner.isRunning, flow.id, setFlowRunning]);
-    
     const canvasRef = useRef<HTMLDivElement>(null);
     
     // Derived state
@@ -138,16 +131,18 @@ export const FlowCanvas: React.FC<FlowCanvasProps> = ({
             return null;
         }
         
-        // Output handle center is at the right edge of node (handle extends 8px outside with -right-2)
-        // Handle is 16px wide, centered on node edge
+        // Output handle: -right-2 positions handle 8px outside right edge
+        // Handle is 16px (w-4), so center is at: node.x + NODE_WIDTH + 8 - 8 = node.x + NODE_WIDTH
+        // But we want connector to start from outside edge of handle circle (radius 8px)
         const startPos = {
-            x: sourceNode.position.x + NODE_WIDTH,
+            x: sourceNode.position.x + NODE_WIDTH + 8, // Right edge of handle circle
             y: sourceNode.position.y + NODE_HEIGHT / 2,
         };
         
-        // Input handle center is at the left edge of node (handle extends 8px outside with -left-2)
+        // Input handle: -left-2 positions handle 8px outside left edge  
+        // Handle center is at node.x - 8 + 8 = node.x, but connector should end at left edge
         const endPos = {
-            x: targetNode.position.x,
+            x: targetNode.position.x - 8, // Left edge of handle circle
             y: targetNode.position.y + NODE_HEIGHT / 2,
         };
         
@@ -508,7 +503,7 @@ export const FlowCanvas: React.FC<FlowCanvasProps> = ({
                         {/* Connection preview line */}
                         {connectingFrom && nodeMap.get(connectingFrom) && (
                             <line
-                                x1={nodeMap.get(connectingFrom)!.position.x + NODE_WIDTH}
+                                x1={nodeMap.get(connectingFrom)!.position.x + NODE_WIDTH + 8}
                                 y1={nodeMap.get(connectingFrom)!.position.y + NODE_HEIGHT / 2}
                                 x2={mousePos.x}
                                 y2={mousePos.y}
@@ -562,6 +557,7 @@ export const FlowCanvas: React.FC<FlowCanvasProps> = ({
                             result={flowRunner.result}
                             selectedNodeId={selectedNodeId || undefined}
                             onNodeClick={handleNodeClick}
+                            onClearResults={flowRunner.resetFlow}
                         />
                     </div>
                 )}

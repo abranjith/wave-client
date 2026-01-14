@@ -5,13 +5,15 @@
  */
 
 import React, { useMemo } from 'react';
-import { CheckCircle2, XCircle, Circle } from 'lucide-react';
+import { CheckCircle2, XCircle, Circle, Trash2 } from 'lucide-react';
 import type { Flow, FlowRunResult, FlowNodeResult, FlowNodeStatus, FlowNode } from '../../types/flow';
 import type { Collection, CollectionItem, CollectionRequest } from '../../types/collection';
 import { isRequest } from '../../types/collection';
 import { urlToString } from '../../utils/collectionParser';
 import { cn } from '../../utils/common';
 import RunRequestCard, { RunRequestData, RunStatus, ValidationStatus } from '../common/RunRequestCard';
+import { Button } from '../ui/button';
+import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/tooltip';
 
 interface FlowResultsPanelProps {
     /** Current flow definition */
@@ -24,6 +26,8 @@ interface FlowResultsPanelProps {
     onNodeClick?: (nodeId: string) => void;
     /** Currently selected node ID */
     selectedNodeId?: string;
+    /** Callback to clear results */
+    onClearResults?: () => void;
 }
 
 interface RequestLookupResult {
@@ -161,6 +165,7 @@ export const FlowResultsPanel: React.FC<FlowResultsPanelProps> = ({
     result,
     onNodeClick,
     selectedNodeId,
+    onClearResults,
 }) => {
     const progress = result?.progress ?? {
         total: flow.nodes.length,
@@ -190,18 +195,45 @@ export const FlowResultsPanel: React.FC<FlowResultsPanelProps> = ({
 
     return (
         <div className="h-full flex flex-col bg-white dark:bg-slate-800 border-l border-slate-200 dark:border-slate-700">
+            
+            {/* Error Banner */}
+            {result?.error && status !== 'running' && (
+                <div className="p-3 bg-red-50 dark:bg-red-900/20 border-t border-red-100 dark:border-red-800">
+                    <div className="text-sm text-red-700 dark:text-red-400">
+                        <strong>Error:</strong> {result.error}
+                    </div>
+                </div>
+            )}
+
             {/* Header */}
             <div className="p-3 border-b border-slate-200 dark:border-slate-700">
                 <div className="flex items-center justify-between">
                     <h3 className="font-semibold text-slate-800 dark:text-slate-200">
                         Results
                     </h3>
-                    <span className={cn(
-                        'text-xs px-2 py-1 rounded-full font-medium capitalize',
-                        statusColors[status]
-                    )}>
-                        {status}
-                    </span>
+                    <div className="flex items-center gap-2">
+                        {result && onClearResults && (
+                            <Tooltip>
+                                <TooltipTrigger asChild>
+                                    <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        onClick={onClearResults}
+                                        className="h-7 w-7 p-0 text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200"
+                                    >
+                                        <Trash2 className="h-3.5 w-3.5" />
+                                    </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>Clear Results</TooltipContent>
+                            </Tooltip>
+                        )}
+                        <span className={cn(
+                            'text-xs px-2 py-1 rounded-full font-medium capitalize',
+                            statusColors[status]
+                        )}>
+                            {status}
+                        </span>
+                    </div>
                 </div>
 
                 {/* Summary Stats */}
@@ -267,15 +299,6 @@ export const FlowResultsPanel: React.FC<FlowResultsPanelProps> = ({
                     ))
                 )}
             </div>
-
-            {/* Error Footer */}
-            {result?.error && status !== 'running' && (
-                <div className="p-3 bg-red-50 dark:bg-red-900/20 border-t border-red-100 dark:border-red-800">
-                    <div className="text-sm text-red-700 dark:text-red-400">
-                        <strong>Error:</strong> {result.error}
-                    </div>
-                </div>
-            )}
         </div>
     );
 };
