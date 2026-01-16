@@ -12,3 +12,6 @@ export * from './common';
 
 // Flow editor components
 export * from './flow';
+
+// Test Lab components
+export * from './testlab';

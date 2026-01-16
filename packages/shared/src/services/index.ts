@@ -21,6 +21,7 @@ export { HistoryService, historyService } from './HistoryService';
 export { CookieService, cookieService } from './CookieService';
 export { StoreService, storeService } from './StoreService';
 export { FlowService, flowService, type Flow, type FlowNode, type FlowConnector, type ConnectorCondition } from './FlowService';
+export { TestSuiteService, testSuiteService, type TestSuite, type TestItem, type TestSuiteSettings } from './TestSuiteService';
 export { 
     HttpService, 
     httpService, 

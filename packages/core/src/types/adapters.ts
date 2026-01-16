@@ -25,6 +25,7 @@ import type {
     CollectionBody,
 } from './collection';
 import type { Flow } from './flow';
+import type { TestSuite } from './testSuite';
 import type { RequestValidation, ValidationResult } from './validation';
 import type { Auth } from './auth';
 import type { ValidationRule } from './validation';
@@ -187,6 +188,11 @@ export interface IStorageAdapter {
     loadFlows(): Promise<Result<Flow[], string>>;
     saveFlow(flow: Flow): Promise<Result<Flow, string>>;
     deleteFlow(flowId: string): Promise<Result<void, string>>;
+
+    // Test Suites
+    loadTestSuites(): Promise<Result<TestSuite[], string>>;
+    saveTestSuite(suite: TestSuite): Promise<Result<TestSuite, string>>;
+    deleteTestSuite(suiteId: string): Promise<Result<void, string>>;
 
     // Settings
     loadSettings(): Promise<Result<AppSettings, string>>;
@@ -485,6 +491,7 @@ export interface AdapterEventMap {
     settingsChanged: void;
     validationRulesChanged: void;
     flowsChanged: void;
+    testSuitesChanged: void;
     
     // Security events
     encryptionStatusChanged: EncryptionStatusEvent;

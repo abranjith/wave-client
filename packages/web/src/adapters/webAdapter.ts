@@ -31,6 +31,7 @@ import type {
   OpenDialogOptions,
   NotificationType,
   Flow,
+  TestSuite,
 } from '@wave-client/core';
 import { ok, err, Result, createAdapterEventEmitter } from '@wave-client/core';
 
@@ -657,6 +658,46 @@ class WebStorageAdapter implements IStorageAdapter {
         return ok(undefined);
       }
       return err(response.data.error || 'Failed to delete flow');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      return err(`Server error: ${message}`);
+    }
+  }
+
+  // Test Suites
+  async loadTestSuites(): Promise<Result<TestSuite[], string>> {
+    try {
+      const response = await api.get('/api/test-suites');
+      if (response.data.isOk) {
+        return ok(response.data.value);
+      }
+      return err(response.data.error || 'Failed to load test suites');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      return err(`Server error: ${message}`);
+    }
+  }
+
+  async saveTestSuite(testSuite: TestSuite): Promise<Result<TestSuite, string>> {
+    try {
+      const response = await api.post('/api/test-suites', testSuite);
+      if (response.data.isOk) {
+        return ok(response.data.value);
+      }
+      return err(response.data.error || 'Failed to save test suite');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      return err(`Server error: ${message}`);
+    }
+  }
+
+  async deleteTestSuite(testSuiteId: string): Promise<Result<void, string>> {
+    try {
+      const response = await api.delete(`/api/test-suites/${encodeURIComponent(testSuiteId)}`);
+      if (response.data.isOk) {
+        return ok(undefined);
+      }
+      return err(response.data.error || 'Failed to delete test suite');
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unknown error';
       return err(`Server error: ${message}`);

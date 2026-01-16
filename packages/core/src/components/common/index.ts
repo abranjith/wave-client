@@ -48,6 +48,9 @@ export { default as HistoryPane } from './HistoryPane';
 // Flows
 export { default as FlowsPane } from './FlowsPane';
 
+// Test Lab
+export { default as TestLabPane } from './TestLabPane';
+
 // Store management
 export { default as StorePane } from './StorePane';
 export { default as CookieStoreGrid } from './CookieStoreGrid';

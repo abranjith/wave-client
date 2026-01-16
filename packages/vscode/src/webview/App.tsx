@@ -22,6 +22,7 @@ import {
   useNotificationAdapter,
   useAdapterEvent,
   FlowCanvas,
+  TestSuiteEditor,
   type Environment,
   type Cookie,
   type Proxy,
@@ -31,6 +32,7 @@ import {
   type HttpRequestConfig,
   type BannerEvent,
   type Flow,
+  type TestSuite,
 } from '@wave-client/core';
 import type { RequestFormData } from '@wave-client/core';
 
@@ -38,6 +40,7 @@ const App: React.FC = () => {
   const [selectedEnvironment, setSelectedEnvironment] = useState<Environment | null>(null);
   const [selectedStore, setSelectedStore] = useState<'cookie' | 'auth' | 'proxy' | 'cert' | 'validation' | null>(null);
   const [selectedFlow, setSelectedFlow] = useState<Flow | null>(null);
+  const [selectedTestSuite, setSelectedTestSuite] = useState<TestSuite | null>(null);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
 
   // Adapter hooks
@@ -88,6 +91,12 @@ const App: React.FC = () => {
   const setIsFlowsLoading = useAppStateStore((state) => state.setIsFlowsLoading);
   const setFlowsLoadError = useAppStateStore((state) => state.setFlowsLoadError);
   const updateFlow = useAppStateStore((state) => state.updateFlow);
+
+  // Test Suites state
+  const testSuites = useAppStateStore((state) => state.testSuites);
+  const setTestSuites = useAppStateStore((state) => state.setTestSuites);
+  const setIsTestSuitesLoading = useAppStateStore((state) => state.setIsTestSuitesLoading);
+  const setTestSuitesLoadError = useAppStateStore((state) => state.setTestSuitesLoadError);
 
   const pendingSaveInfo = useRef<{ tabId: string, collectionName: string | undefined, folderPath: string[], requestName: string } | null>(null);
 
@@ -187,6 +196,16 @@ const App: React.FC = () => {
         setFlowsLoadError(flowsResult.error);
       }
       setIsFlowsLoading(false);
+
+      // Load test suites
+      setIsTestSuitesLoading(true);
+      const testSuitesResult = await storage.loadTestSuites();
+      if (testSuitesResult.isOk) {
+        setTestSuites(testSuitesResult.value);
+      } else {
+        setTestSuitesLoadError(testSuitesResult.error);
+      }
+      setIsTestSuitesLoading(false);
     }
 
     initializeData();
@@ -236,11 +255,23 @@ const App: React.FC = () => {
     setIsFlowsLoading(false);
   };
 
+  const handleRetryTestSuites = async () => {
+    setIsTestSuitesLoading(true);
+    const testSuitesResult = await storage.loadTestSuites();
+    if (testSuitesResult.isOk) {
+      setTestSuites(testSuitesResult.value);
+    } else {
+      setTestSuitesLoadError(testSuitesResult.error);
+    }
+    setIsTestSuitesLoading(false);
+  };
+
   const handleRequestSelect = (request: RequestFormData) => {
     loadRequestIntoTab(request);
     setSelectedEnvironment(null); // Clear environment selection when selecting a request
     setSelectedStore(null); // Clear store selection when selecting a request
     setSelectedFlow(null); // Clear flow selection when selecting a request
+    setSelectedTestSuite(null); // Clear test suite selection when selecting a request
   };
 
   const handleEnvironmentSelect = (environment: Environment) => {
@@ -259,6 +290,20 @@ const App: React.FC = () => {
     setSelectedFlow(flow);
     setSelectedEnvironment(null);
     setSelectedStore(null);
+    setSelectedTestSuite(null);
+  };
+
+  const handleTestSuiteSelect = (suite: TestSuite) => {
+    setSelectedTestSuite(suite);
+    setSelectedEnvironment(null);
+    setSelectedStore(null);
+    setSelectedFlow(null);
+  };
+
+  const handleTestSuiteRun = (suite: TestSuite) => {
+    // For now, just select the test suite
+    // The actual running logic is handled in TestLabPane
+    setSelectedTestSuite(suite);
   };
 
   const handleFlowSave = useCallback(async (flow: Flow) => {
@@ -282,6 +327,10 @@ const App: React.FC = () => {
       notification.showNotification('error', result.error);
     }
   }, [storage, notification, flows, updateFlow, setFlows]);
+
+  const handleTestSuiteClose = () => {
+    setSelectedTestSuite(null);
+  };
 
   const handleBackFromEnvironment = () => {
     setSelectedEnvironment(null);
@@ -582,7 +631,7 @@ const App: React.FC = () => {
         display: 'grid',
         gridTemplateColumns: '400px 1fr',
         gridTemplateRows: '1fr',
-        gridTemplateAreas: (selectedEnvironment || selectedStore || selectedFlow)
+        gridTemplateAreas: (selectedEnvironment || selectedStore || selectedFlow || selectedTestSuite)
           ? `"config environment"`
           : `"config editor"`,
         height: '100vh',
@@ -607,6 +656,9 @@ const App: React.FC = () => {
           onEnvSelect={handleEnvironmentSelect}
           onStoreSelect={handleStoreSelect}
           onFlowSelect={handleFlowSelect}
+          onFlowRun={undefined}
+          onTestSuiteSelect={handleTestSuiteSelect}
+          onTestSuiteRun={handleTestSuiteRun}
           onSettingsSelect={handleSettingsSelect}
           onImportCollection={handleImportCollection}
           onExportCollection={handleExportCollection}
@@ -616,10 +668,19 @@ const App: React.FC = () => {
           onRetryHistory={handleRetryHistory}
           onRetryEnvironments={handleRetryEnvironments}
           onRetryFlows={handleRetryFlows}
+          onRetryTestSuites={handleRetryTestSuites}
         />
       </div>
 
-      {selectedFlow ? (
+      {selectedTestSuite ? (
+        /* Test Suite Editor - Full Height */
+        <div style={{ gridArea: 'environment' }} className="overflow-hidden">
+          <TestSuiteEditor
+            suite={selectedTestSuite}
+            onClose={handleTestSuiteClose}
+          />
+        </div>
+      ) : selectedFlow ? (
         /* Flow Canvas - Full Height */
         <div style={{ gridArea: 'environment' }} className="overflow-hidden">
           <FlowCanvas

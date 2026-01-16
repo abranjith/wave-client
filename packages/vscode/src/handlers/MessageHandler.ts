@@ -10,7 +10,8 @@ import {
     storeService,
     settingsService,
     securityService,
-    flowService
+    flowService,
+    testSuiteService
 } from '../services';
 import { executeValidation, createGlobalRulesMap, createEnvVarsMap } from '../utils/validationEngine';
 import { RequestValidation } from '../types/validation';
@@ -143,6 +144,16 @@ export class MessageHandler {
                 break;
             case 'deleteFlow':
                 await this.handleDeleteFlow(message);
+                break;
+            // Test Suite handlers
+            case 'loadTestSuites':
+                await this.handleLoadTestSuites(message);
+                break;
+            case 'saveTestSuite':
+                await this.handleSaveTestSuite(message);
+                break;
+            case 'deleteTestSuite':
+                await this.handleDeleteTestSuite(message);
                 break;
         }
     }
@@ -1054,6 +1065,80 @@ export class MessageHandler {
             console.error('Error deleting flow:', error);
             this.postMessage({
                 type: 'flowDeleted',
+                requestId,
+                error: error.message
+            });
+        }
+    }
+
+    // ==================== Test Suite Handlers ====================
+
+    /**
+     * Loads all test suites from storage.
+     */
+    private async handleLoadTestSuites(message: any): Promise<void> {
+        const requestId = message.requestId;
+        try {
+            const testSuites = await testSuiteService.loadAll();
+            this.postMessage({
+                type: 'testSuitesLoaded',
+                requestId,
+                testSuites
+            });
+        } catch (error: any) {
+            console.error('Error loading test suites:', error);
+            this.postMessage({
+                type: 'testSuitesLoaded',
+                requestId,
+                error: error.message
+            });
+        }
+    }
+
+    /**
+     * Saves a test suite to storage.
+     */
+    private async handleSaveTestSuite(message: any): Promise<void> {
+        const requestId = message.requestId;
+        try {
+            const testSuiteData = message.data?.testSuite;
+            const testSuite = typeof testSuiteData === 'string' ? JSON.parse(testSuiteData) : testSuiteData;
+            const savedTestSuite = await testSuiteService.save(testSuite);
+            this.postMessage({
+                type: 'testSuiteSaved',
+                requestId,
+                testSuite: savedTestSuite
+            });
+            this.postMessage({
+                type: 'bannerSuccess',
+                message: `Test suite ${savedTestSuite.name} saved successfully`
+            });
+        } catch (error: any) {
+            console.error('Error saving test suite:', error);
+            this.postMessage({
+                type: 'testSuiteSaved',
+                requestId,
+                error: error.message
+            });
+        }
+    }
+
+    /**
+     * Deletes a test suite from storage.
+     */
+    private async handleDeleteTestSuite(message: any): Promise<void> {
+        const requestId = message.requestId;
+        try {
+            const testSuiteId = message.data?.testSuiteId;
+            await testSuiteService.delete(testSuiteId);
+            this.postMessage({
+                type: 'testSuiteDeleted',
+                requestId
+            });
+        } catch (error: any) {
+            console.error('Error deleting test suite:', error);
+            this.postMessage({
+                type: 'testSuiteDeleted',
                 requestId,
                 error: error.message
             });

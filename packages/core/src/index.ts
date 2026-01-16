@@ -106,6 +106,29 @@ export {
     autoLayoutFlow,
 } from './utils/flowUtils';
 
+// Test Suite types
+export type {
+    TestSuite,
+    TestItem,
+    RequestTestItem,
+    FlowTestItem,
+    TestSuiteSettings,
+    TestSuiteRunState,
+    TestSuiteRunResult,
+    TestItemResult,
+    RequestTestItemResult,
+    FlowTestItemResult,
+} from './types/testSuite';
+
+export {
+    createNewTestSuite,
+    createRequestTestItem,
+    createFlowTestItem,
+    isRequestTestItem,
+    isFlowTestItem,
+    DEFAULT_TEST_SUITE_SETTINGS,
+} from './types/testSuite';
+
 // Auth types
 export type {
     Auth,
@@ -231,6 +254,7 @@ export { default as useAppStateStore } from './hooks/store/useAppStateStore';
 // Custom hooks
 export { useCollectionRunner } from './hooks/useCollectionRunner';
 export { useFlowRunner } from './hooks/useFlowRunner';
+export { useTestSuiteRunner } from './hooks/useTestSuiteRunner';
 export { useFileUpload } from './hooks/useFileUpload';
 
 // ============================================================================

@@ -23,6 +23,7 @@ export { HistoryService, historyService } from '@wave-client/shared';
 export { CookieService, cookieService } from '@wave-client/shared';
 export { StoreService, storeService } from '@wave-client/shared';
 export { FlowService, flowService, type Flow, type FlowNode, type FlowConnector, type ConnectorCondition } from '@wave-client/shared';
+export { TestSuiteService, testSuiteService, type TestSuite, type TestItem, type TestSuiteSettings } from '@wave-client/shared';
 export type { AuthEntry, AxiosProxyConfig } from '@wave-client/shared';
 export { 
     HttpService, 

@@ -46,6 +46,7 @@ import {
     type Auth,
     type ValidationRule,
     type Flow,
+    type TestSuite,
 } from '@wave-client/core';
 
 // ============================================================================
@@ -134,6 +135,9 @@ function createVSCodeStorageAdapter(
                 'loadFlows': 'flows',
                 'saveFlow': 'flow',
                 'deleteFlow': '',            // void - no data field
+                'loadTestSuites': 'testSuites',
+                'saveTestSuite': 'testSuite',
+                'deleteTestSuite': '',       // void - no data field
             };
 
             pendingRequests.set(requestId, {
@@ -449,6 +453,25 @@ function createVSCodeStorageAdapter(
             vsCodeApi.postMessage({
                 type: 'deleteFlow',
                 data: { flowId }
+            });
+            return ok(undefined);
+        },
+
+        // Test Suites
+        async loadTestSuites(): Promise<Result<TestSuite[], string>> {
+            return sendAndWait<TestSuite[]>('loadTestSuites');
+        },
+
+        async saveTestSuite(testSuite): Promise<Result<TestSuite, string>> {
+            return sendAndWait<TestSuite>('saveTestSuite', {
+                data: { testSuite: JSON.stringify(testSuite, null, 2) }
+            });
+        },
+
+        async deleteTestSuite(testSuiteId): Promise<Result<void, string>> {
+            vsCodeApi.postMessage({
+                type: 'deleteTestSuite',
+                data: { testSuiteId }
             });
             return ok(undefined);
         },

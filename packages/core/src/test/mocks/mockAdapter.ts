@@ -53,6 +53,7 @@ import type {
 import type { Auth } from '../../types/auth';
 import type { ValidationRule } from '../../types/validation';
 import type { Flow } from '../../types/flow';
+import type { TestSuite } from '../../types/testSuite';
 
 // ============================================================================
 // Mock Data Store (in-memory)
@@ -68,6 +69,7 @@ export interface MockDataStore {
     certs: Cert[];
     validationRules: ValidationRule[];
     flows: Flow[];
+    testSuites?: TestSuite[];
     settings: AppSettings;
     secrets: Map<string, string>;
     files: Map<string, string | Uint8Array>;
@@ -283,6 +285,29 @@ function createMockStorageAdapter(store: MockDataStore): IStorageAdapter {
         },
         async deleteFlow(flowId) {
             store.flows = store.flows.filter(f => f.id !== flowId);
+            return ok(undefined);
+        },
+
+        // Test Suites
+        async loadTestSuites() {
+            return ok([...store.testSuites || []]);
+        },
+        async saveTestSuite(testSuite) {
+            if (!store.testSuites) {
+                store.testSuites = [];
+            }
+            const index = store.testSuites.findIndex(ts => ts.id === testSuite.id);
+            if (index >= 0) {
+                store.testSuites[index] = testSuite;
+            } else {
+                store.testSuites.push(testSuite);
+            }
+            return ok(testSuite);
+        },
+        async deleteTestSuite(testSuiteId) {
+            if (store.testSuites) {
+                store.testSuites = store.testSuites.filter(ts => ts.id !== testSuiteId);
+            }
             return ok(undefined);
         },
     };

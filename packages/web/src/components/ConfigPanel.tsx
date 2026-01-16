@@ -1,5 +1,5 @@
 import React from 'react';
-import { SunIcon, MoonIcon, LibraryIcon, HistoryIcon, ShieldCheckIcon, SettingsIcon, LightbulbIcon, GitBranchIcon } from 'lucide-react';
+import { SunIcon, MoonIcon, LibraryIcon, HistoryIcon, ShieldCheckIcon, SettingsIcon, LightbulbIcon, GitBranchIcon, FlaskConicalIcon } from 'lucide-react';
 import {
   Tabs,
   TabsContent,
@@ -15,9 +15,11 @@ import {
   HistoryPane,
   StorePane,
   FlowsPane,
+  TestLabPane,
   type Environment,
   type RequestFormData,
   type Flow,
+  type TestSuite,
 } from '@wave-client/core';
 import { useTheme } from '../App';
 
@@ -27,6 +29,8 @@ interface ConfigPanelProps {
   onStoreSelect: (storeType: 'cookie' | 'auth' | 'proxy' | 'cert' | 'validation') => void;
   onFlowSelect: (flow: Flow) => void;
   onFlowRun?: (flow: Flow) => void;
+  onTestSuiteSelect?: (suite: TestSuite) => void;
+  onTestSuiteRun?: (suite: TestSuite) => void;
   onSettingsSelect: () => void;
   onImportCollection: (fileName: string, fileContent: string, collectionType: string) => void;
   onExportCollection: (collectionName: string, exportFormat: string) => void;
@@ -36,11 +40,13 @@ interface ConfigPanelProps {
   onRetryHistory?: () => void;
   onRetryEnvironments?: () => void;
   onRetryFlows?: () => void;
+  onRetryTestSuites?: () => void;
 }
 
 const TABS = [
   { key: 'collections', label: 'Collections', icon: <LibraryIcon size={20} /> },
   { key: 'flows', label: 'Flows', icon: <GitBranchIcon size={20} /> },
+  { key: 'testlab', label: 'Test Lab', icon: <FlaskConicalIcon size={20} /> },
   { key: 'history', label: 'History', icon: <HistoryIcon size={20} /> },
   { key: 'environments', label: 'Environments', icon: <SunIcon size={20} /> },
   { key: 'store', label: 'Wave Store', icon: <ShieldCheckIcon size={20} /> },
@@ -52,6 +58,8 @@ const ConfigPanel: React.FC<ConfigPanelProps> = ({
   onStoreSelect,
   onFlowSelect,
   onFlowRun,
+  onTestSuiteSelect,
+  onTestSuiteRun,
   onSettingsSelect,
   onImportCollection,
   onExportCollection,
@@ -61,6 +69,7 @@ const ConfigPanel: React.FC<ConfigPanelProps> = ({
   onRetryHistory,
   onRetryEnvironments,
   onRetryFlows,
+  onRetryTestSuites,
 }) => {
   const { theme, toggleTheme } = useTheme();
 
@@ -131,6 +140,15 @@ const ConfigPanel: React.FC<ConfigPanelProps> = ({
               onFlowRun={onFlowRun}
               onRetry={onRetryFlows}
             />
+          </TabsContent>
+          <TabsContent value="testlab" className="h-full overflow-hidden">
+            {onTestSuiteSelect && (
+              <TestLabPane
+                onTestSuiteSelect={onTestSuiteSelect}
+                onTestSuiteRun={onTestSuiteRun}
+                onRetry={onRetryTestSuites}
+              />
+            )}
           </TabsContent>
           <TabsContent value="history" className="h-full overflow-hidden">
             <HistoryPane onRequestSelect={onRequestSelect} onRetry={onRetryHistory} />
