@@ -263,7 +263,7 @@ const RunRequestCard: React.FC<RunRequestCardProps> = ({
   onCardClick,
 }) => {
   const [isExpanded, setIsExpanded] = useState(false);
-  const [activeTab, setActiveTab] = useState<RequestCardTab>('Request Headers');
+  const [activeTab, setActiveTab] = useState<RequestCardTab>('Response Headers');
 
   const method = data.method.toUpperCase();
   const hasError = !!data.error;

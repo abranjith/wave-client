@@ -13,19 +13,12 @@
 
 import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import { 
-    XIcon, 
     SaveIcon, 
-    PlusIcon,
-    Trash2Icon,
     AlertCircleIcon,
-    CheckCircleIcon,
-    CopyIcon,
 } from 'lucide-react';
 import type { TestCase, TestCaseData } from '../../types/testSuite';
-import type { RequestValidation } from '../../types/validation';
 import type { Auth } from '../../hooks/store/createAuthSlice';
 import { createTestCase } from '../../types/testSuite';
-import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Label } from '../ui/label';
 import { Textarea } from '../ui/textarea';
@@ -392,7 +385,7 @@ export const TestCaseEditor: React.FC<TestCaseEditorProps> = ({
                             setHeadersJson(v);
                             setHeadersError(undefined);
                         }}
-                        placeholder={`[\n  { "key": "Authorization", "value": "Bearer {{token}}", "disabled": false }\n]`}
+                        placeholder={`[\n  { "key": "Authorization", "value": "Bearer {{token}}" }\n]`}
                         helpText="Array of header objects to merge with base request"
                         error={headersError}
                     />
@@ -405,7 +398,7 @@ export const TestCaseEditor: React.FC<TestCaseEditorProps> = ({
                             setParamsJson(v);
                             setParamsError(undefined);
                         }}
-                        placeholder={`[\n  { "key": "page", "value": "1", "disabled": false }\n]`}
+                        placeholder={`[\n  { "key": "page", "value": "1" }\n]`}
                         helpText="Array of param objects to merge with base request"
                         error={paramsError}
                     />

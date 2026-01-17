@@ -11,7 +11,7 @@ import {
 
 // ==================== Types ====================
 
-export type ColorTheme = "main" | "success" | "error" | "warning";
+export type ColorTheme = "main" | "success" | "error" | "warning" | "purple";
 
 export interface PrimaryButtonProps
   extends Omit<React.ComponentProps<typeof Button>, "color">,
@@ -60,6 +60,14 @@ const colorThemeClasses: Record<ColorTheme, string> = {
     // Dark mode
     "dark:bg-orange-900/40 dark:text-orange-300",
     "dark:hover:bg-orange-900/60 dark:hover:text-orange-200 dark:hover:border-orange-500"
+  ),
+  purple: cn(
+    // Light mode: light purple bg, dark purple text
+    "bg-purple-100 text-purple-700",
+    "hover:bg-purple-200 hover:text-purple-800 hover:border-purple-400",
+    // Dark mode
+    "dark:bg-purple-900/40 dark:text-purple-300",
+    "dark:hover:bg-purple-900/60 dark:hover:text-purple-200 dark:hover:border-purple-500"
   ),
 };
 

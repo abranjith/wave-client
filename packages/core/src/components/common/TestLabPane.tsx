@@ -69,7 +69,12 @@ const TestLabPane: React.FC<TestLabPaneProps> = ({
     const isTestSuiteNameUnique = useAppStateStore((state) => state.isTestSuiteNameUnique);
     const setCurrentEditingTestSuiteId = useAppStateStore((state) => state.setCurrentEditingTestSuiteId);
     const isTestSuiteDirty = useAppStateStore((state) => state.isTestSuiteDirty);
-    const isTestSuiteRunning = useAppStateStore((state) => state.isTestSuiteRunning);
+    // Subscribe to run state map so this component re-renders when run state changes
+    const testSuiteRunStates = useAppStateStore((state) => state.testSuiteRunStates);
+    const isSuiteRunning = useCallback(
+        (suiteId: string) => !!testSuiteRunStates[suiteId]?.isRunning,
+        [testSuiteRunStates]
+    );
     
     // Local state for UI
     const [searchText, setSearchText] = useState('');
@@ -338,7 +343,7 @@ const TestLabPane: React.FC<TestLabPaneProps> = ({
 
                                 {/* Actions */}
                                 <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                    {isTestSuiteRunning(suite.id) ? (
+                                    {isSuiteRunning(suite.id) ? (
                                         <span className="text-xs text-purple-600 dark:text-purple-400 font-medium px-2">Running...</span>
                                     ) : (
                                         <>

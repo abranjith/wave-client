@@ -12,10 +12,6 @@
 import React, { useState, useCallback, useMemo } from 'react';
 import { 
     PlusCircleIcon, 
-    PlayIcon, 
-    StopCircleIcon, 
-    SaveIcon,
-    Lock,
     Trash2Icon,
     GripVerticalIcon,
     SearchIcon,
@@ -27,7 +23,7 @@ import {
     BeakerIcon,
     PencilIcon,
 } from 'lucide-react';
-import type { Environment, CollectionItem, Collection } from '../../types/collection';
+import type { CollectionItem, Collection } from '../../types/collection';
 import type { Auth } from '../../hooks/store/createAuthSlice';
 import type { Flow } from '../../types/flow';
 import type { TestSuite, TestItem, TestSuiteSettings, TestCase, RequestTestItem } from '../../types/testSuite';
@@ -52,6 +48,7 @@ import {
     DialogTitle,
 } from '../ui/dialog';
 import { cn } from '../../utils/common';
+import TestSuiteToolbar from './TestSuiteToolbar';
 import TestResultsPanel from './TestResultsPanel';
 import TestCaseEditor from './TestCaseEditor';
 
@@ -131,77 +128,58 @@ interface SettingsSectionProps {
 }
 
 const SettingsSection: React.FC<SettingsSectionProps> = ({ settings, onSettingsChange, isRunning }) => {
-    const [isExpanded, setIsExpanded] = useState(false);
-
     return (
-        <div className="border border-slate-200 dark:border-slate-700 rounded-lg">
-            <button
-                type="button"
-                className="w-full flex items-center justify-between p-3 text-left hover:bg-slate-50 dark:hover:bg-slate-700/50"
-                onClick={() => setIsExpanded(!isExpanded)}
-                disabled={isRunning}
-            >
-                <div className="flex items-center gap-2">
-                    <SettingsIcon className="h-4 w-4 text-slate-500" />
-                    <span className="text-sm font-medium text-slate-700 dark:text-slate-300">
-                        Run Settings
-                    </span>
+        <div className="border border-slate-200 dark:border-slate-700 rounded-lg p-3 space-y-4 bg-slate-50 dark:bg-slate-900/50">
+            <div className="flex items-center gap-2 mb-2">
+                <SettingsIcon className="h-4 w-4 text-slate-500" />
+                <span className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                    Run Settings
+                </span>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+                <div>
+                    <Label htmlFor="concurrency" className="text-xs">
+                        Concurrent Calls
+                    </Label>
+                    <Input
+                        id="concurrency"
+                        type="number"
+                        min={1}
+                        max={10}
+                        value={settings.concurrentCalls}
+                        onChange={(e) => onSettingsChange({ concurrentCalls: parseInt(e.target.value) || 1 })}
+                        disabled={isRunning}
+                        className="h-8 mt-1"
+                    />
                 </div>
-                {isExpanded ? (
-                    <ChevronUp className="h-4 w-4 text-slate-400" />
-                ) : (
-                    <ChevronDown className="h-4 w-4 text-slate-400" />
-                )}
-            </button>
-
-            {isExpanded && (
-                <div className="p-3 pt-0 space-y-4">
-                    <div className="grid grid-cols-2 gap-4">
-                        <div>
-                            <Label htmlFor="concurrency" className="text-xs">
-                                Concurrent Calls
-                            </Label>
-                            <Input
-                                id="concurrency"
-                                type="number"
-                                min={1}
-                                max={10}
-                                value={settings.concurrentCalls}
-                                onChange={(e) => onSettingsChange({ concurrentCalls: parseInt(e.target.value) || 1 })}
-                                disabled={isRunning}
-                                className="h-8 mt-1"
-                            />
-                        </div>
-                        <div>
-                            <Label htmlFor="delay" className="text-xs">
-                                Delay Between Batches (ms)
-                            </Label>
-                            <Input
-                                id="delay"
-                                type="number"
-                                min={0}
-                                max={10000}
-                                step={100}
-                                value={settings.delayBetweenCalls}
-                                onChange={(e) => onSettingsChange({ delayBetweenCalls: parseInt(e.target.value) || 0 })}
-                                disabled={isRunning}
-                                className="h-8 mt-1"
-                            />
-                        </div>
-                    </div>
-                    <div className="flex items-center gap-2">
-                        <Checkbox
-                            id="stopOnFailure"
-                            checked={settings.stopOnFailure}
-                            onCheckedChange={(checked) => onSettingsChange({ stopOnFailure: !!checked })}
-                            disabled={isRunning}
-                        />
-                        <Label htmlFor="stopOnFailure" className="text-xs cursor-pointer">
-                            Stop on first failure
-                        </Label>
-                    </div>
+                <div>
+                    <Label htmlFor="delay" className="text-xs">
+                        Delay Between Batches (ms)
+                    </Label>
+                    <Input
+                        id="delay"
+                        type="number"
+                        min={0}
+                        max={10000}
+                        step={100}
+                        value={settings.delayBetweenCalls}
+                        onChange={(e) => onSettingsChange({ delayBetweenCalls: parseInt(e.target.value) || 0 })}
+                        disabled={isRunning}
+                        className="h-8 mt-1"
+                    />
                 </div>
-            )}
+            </div>
+            <div className="flex items-center gap-2">
+                <Checkbox
+                    id="stopOnFailure"
+                    checked={settings.stopOnFailure}
+                    onCheckedChange={(checked) => onSettingsChange({ stopOnFailure: !!checked })}
+                    disabled={isRunning}
+                />
+                <Label htmlFor="stopOnFailure" className="text-xs cursor-pointer">
+                    Stop on first failure
+                </Label>
+            </div>
         </div>
     );
 };
@@ -764,6 +742,7 @@ export const TestSuiteEditor: React.FC<TestSuiteEditorProps> = ({
     // Local state
     const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
     const [showResults, setShowResults] = useState(true);
+    const [isSettingsExpanded, setIsSettingsExpanded] = useState(false);
 
     // Get current suite from store (may be updated)
     const currentSuite = getTestSuiteById(suite.id) || suite;
@@ -827,194 +806,98 @@ export const TestSuiteEditor: React.FC<TestSuiteEditorProps> = ({
         runner.resetTestSuite();
     }, [runner]);
 
+    // Enabled item count for toolbar
+    const enabledItemCount = currentSuite.items.filter(i => i.enabled).length;
+
     // ====== Render ======
 
     return (
-        <TooltipProvider>
-            <div className="flex h-full">
+        <div className="flex flex-col h-full">
+            {/* Toolbar - spans full width */}
+            <TestSuiteToolbar
+                suiteId={suite.id}
+                suiteName={currentSuite.name}
+                onNameChange={(name) => updateTestSuiteName(suite.id, name)}
+                onAddItems={() => setIsAddDialogOpen(true)}
+                onRun={handleRun}
+                onCancel={handleCancel}
+                onToggleSettings={() => setIsSettingsExpanded(!isSettingsExpanded)}
+                isSettingsExpanded={isSettingsExpanded}
+                onSave={handleSave}
+                isDirty={isDirty}
+                environments={environments}
+                selectedEnvId={currentSuite.defaultEnvId}
+                onEnvChange={(envId) => updateTestSuiteDefaultEnv(suite.id, envId)}
+                auths={auths}
+                selectedAuthId={currentSuite.defaultAuthId}
+                onAuthChange={(authId) => updateTestSuiteDefaultAuth(suite.id, authId)}
+                enabledItemCount={enabledItemCount}
+            />
+
+            {/* Main content area with editor and results */}
+            <div className="flex flex-1 overflow-hidden">
                 {/* Main Editor Panel */}
                 <div className="flex-1 flex flex-col overflow-hidden">
-                    {/* Toolbar */}
-                    <div className={cn(
-                        "flex items-center gap-3 p-3 bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700",
-                        isRunning && "opacity-80"
-                    )}>
-                        {/* Lock icon when running */}
-                        {isRunning && (
-                            <Tooltip>
-                                <TooltipTrigger asChild>
-                                    <Lock className="h-4 w-4 text-amber-600 flex-shrink-0 cursor-help" />
-                                </TooltipTrigger>
-                                <TooltipContent>Test suite is running - editing disabled</TooltipContent>
-                            </Tooltip>
-                        )}
-
-                        {/* Name input */}
-                        <input
-                            type="text"
-                            value={currentSuite.name}
-                            onChange={(e) => updateTestSuiteName(suite.id, e.target.value)}
-                            disabled={isRunning}
-                            className={cn(
-                                'text-lg font-semibold bg-transparent border-none focus:outline-none focus:ring-2 focus:ring-purple-500 rounded px-2 py-1 flex-1',
-                                'text-slate-800 dark:text-slate-200',
-                                'disabled:cursor-not-allowed disabled:text-slate-400 disabled:focus:ring-0'
-                            )}
-                            placeholder="Test Suite Name"
-                        />
-
-                        {/* Environment Select */}
-                        <div className="flex items-center gap-2">
-                            <span className="text-xs text-slate-500">Env:</span>
-                            <Select
-                                value={currentSuite.defaultEnvId || 'none'}
-                                onValueChange={(val) => updateTestSuiteDefaultEnv(suite.id, val === 'none' ? undefined : val)}
-                            >
-                                <SelectTrigger className="w-[140px] h-8 text-sm" disabled={isRunning}>
-                                    <SelectValue placeholder="No Environment" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="none">No Environment</SelectItem>
-                                    {environments.map((env) => (
-                                        <SelectItem key={env.id} value={env.id}>
-                                            {env.name}
-                                        </SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
-                        </div>
-
-                        {/* Auth Select */}
-                        <div className="flex items-center gap-2">
-                            <span className="text-xs text-slate-500">Auth:</span>
-                            <Select
-                                value={currentSuite.defaultAuthId || 'none'}
-                                onValueChange={(val) => updateTestSuiteDefaultAuth(suite.id, val === 'none' ? undefined : val)}
-                            >
-                                <SelectTrigger className="w-[140px] h-8 text-sm" disabled={isRunning}>
-                                    <SelectValue placeholder="No Auth" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="none">No Auth</SelectItem>
-                                    {auths.map((auth) => (
-                                        <SelectItem key={auth.id} value={auth.id}>
-                                            {auth.name}
-                                        </SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
-                        </div>
-
-                        <div className="w-px h-6 bg-slate-200 dark:bg-slate-700" />
-
-                        {/* Add button */}
-                        <Tooltip>
-                            <TooltipTrigger asChild>
-                                <SecondaryButton
-                                    onClick={() => setIsAddDialogOpen(true)}
-                                    disabled={isRunning}
-                                    icon={<PlusCircleIcon className="h-4 w-4" />}
-                                >
-                                    Add
-                                </SecondaryButton>
-                            </TooltipTrigger>
-                            <TooltipContent>Add requests or flows to this test suite</TooltipContent>
-                        </Tooltip>
-
-                        {/* Save button */}
-                        <Tooltip>
-                            <TooltipTrigger asChild>
-                                <SecondaryButton
-                                    onClick={handleSave}
-                                    disabled={isRunning || !isDirty}
-                                    icon={<SaveIcon className="h-4 w-4" />}
-                                    className={isDirty ? 'text-purple-600' : ''}
-                                >
-                                    Save
-                                </SecondaryButton>
-                            </TooltipTrigger>
-                            <TooltipContent>Save test suite</TooltipContent>
-                        </Tooltip>
-
-                        <div className="w-px h-6 bg-slate-200 dark:bg-slate-700" />
-
-                        {/* Run/Cancel button */}
-                        {isRunning ? (
-                            <PrimaryButton
-                                onClick={handleCancel}
-                                className="bg-red-600 hover:bg-red-700"
-                            >
-                                <StopCircleIcon className="h-4 w-4 mr-1" />
-                                Stop
-                            </PrimaryButton>
-                        ) : (
-                            <PrimaryButton
-                                onClick={handleRun}
-                                disabled={currentSuite.items.filter(i => i.enabled).length === 0}
-                                className="bg-purple-600 hover:bg-purple-700"
-                            >
-                                <PlayIcon className="h-4 w-4 mr-1" />
-                                Run
-                            </PrimaryButton>
-                        )}
-                    </div>
-
                     {/* Content */}
-                    <div className="flex-1 overflow-y-auto p-4 space-y-4">
-                        {/* Settings Section */}
-                        <SettingsSection
-                            settings={currentSuite.settings}
-                            onSettingsChange={(s) => updateTestSuiteSettings(suite.id, s)}
-                            isRunning={isRunning}
-                        />
-
-                        {/* Items List */}
-                        <div className="space-y-2">
-                            <div className="flex items-center justify-between">
-                                <h3 className="text-sm font-medium text-slate-700 dark:text-slate-300">
-                                    Test Items ({currentSuite.items.length})
-                                </h3>
-                            </div>
-
-                            {currentSuite.items.length === 0 ? (
-                                <div className="flex flex-col items-center justify-center py-12 border-2 border-dashed border-slate-200 dark:border-slate-700 rounded-lg">
-                                    <p className="text-sm text-slate-500 mb-4">
-                                        No test items added yet
-                                    </p>
-                                    <SecondaryButton
-                                        onClick={() => setIsAddDialogOpen(true)}
-                                        disabled={isRunning}
-                                        icon={<PlusCircleIcon className="h-4 w-4" />}
-                                    >
-                                        Add Items
-                                    </SecondaryButton>
-                                </div>
-                            ) : (
-                                <div className="space-y-2">
-                                    {currentSuite.items
-                                        .sort((a, b) => a.order - b.order)
-                                        .map((item) => (
-                                            <TestItemRow
-                                                key={item.id}
-                                                item={item}
-                                                collections={collections}
-                                                flows={flows}
-                                                auths={auths}
-                                                suiteId={suite.id}
-                                                onRemove={() => handleRemoveItem(item.id)}
-                                                onToggleEnabled={() => handleToggleItemEnabled(item.id)}
-                                                isRunning={isRunning}
-                                            />
-                                        ))}
-                                </div>
+                    <TooltipProvider>
+                        <div className="flex-1 overflow-y-auto p-4 space-y-4">
+                            {/* Settings Section (collapsible) */}
+                            {isSettingsExpanded && (
+                                <SettingsSection
+                                    settings={currentSuite.settings}
+                                    onSettingsChange={(s) => updateTestSuiteSettings(suite.id, s)}
+                                    isRunning={isRunning}
+                                />
                             )}
+
+                            {/* Items List */}
+                            <div className="space-y-2">
+                                <div className="flex items-center justify-between">
+                                    <h3 className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                                        Test Items ({currentSuite.items.length})
+                                    </h3>
+                                </div>
+
+                                {currentSuite.items.length === 0 ? (
+                                    <div className="flex flex-col items-center justify-center py-12 border-2 border-dashed border-slate-200 dark:border-slate-700 rounded-lg">
+                                        <p className="text-sm text-slate-500 mb-4">
+                                            No test items added yet
+                                        </p>
+                                        <SecondaryButton
+                                            onClick={() => setIsAddDialogOpen(true)}
+                                            disabled={isRunning}
+                                            icon={<PlusCircleIcon className="h-4 w-4" />}
+                                        >
+                                            Add Items
+                                        </SecondaryButton>
+                                    </div>
+                                ) : (
+                                    <div className="space-y-2">
+                                        {currentSuite.items
+                                            .sort((a, b) => a.order - b.order)
+                                            .map((item) => (
+                                                <TestItemRow
+                                                    key={item.id}
+                                                    item={item}
+                                                    collections={collections}
+                                                    flows={flows}
+                                                    auths={auths}
+                                                    suiteId={suite.id}
+                                                    onRemove={() => handleRemoveItem(item.id)}
+                                                    onToggleEnabled={() => handleToggleItemEnabled(item.id)}
+                                                    isRunning={isRunning}
+                                                />
+                                            ))}
+                                    </div>
+                                )}
+                            </div>
                         </div>
-                    </div>
+                    </TooltipProvider>
                 </div>
 
                 {/* Results Panel */}
                 {showResults && (
-                    <div className="w-[400px] flex-shrink-0">
+                    <div className="w-[400px] flex-shrink-0 border-l border-slate-200 dark:border-slate-700">
                         <TestResultsPanel
                             suite={currentSuite}
                             collections={collections}
@@ -1024,18 +907,18 @@ export const TestSuiteEditor: React.FC<TestSuiteEditorProps> = ({
                         />
                     </div>
                 )}
-
-                {/* Add Item Dialog */}
-                <AddItemDialog
-                    isOpen={isAddDialogOpen}
-                    onClose={() => setIsAddDialogOpen(false)}
-                    collections={collections}
-                    flows={flows}
-                    existingItemIds={existingItemIds}
-                    onAddItems={handleAddItems}
-                />
             </div>
-        </TooltipProvider>
+
+            {/* Add Item Dialog */}
+            <AddItemDialog
+                isOpen={isAddDialogOpen}
+                onClose={() => setIsAddDialogOpen(false)}
+                collections={collections}
+                flows={flows}
+                existingItemIds={existingItemIds}
+                onAddItems={handleAddItems}
+            />
+        </div>
     );
 };
 
