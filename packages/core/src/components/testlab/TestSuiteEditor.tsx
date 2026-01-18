@@ -39,7 +39,6 @@ import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Label } from '../ui/label';
 import { Checkbox } from '../ui/checkbox';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../ui/tooltip';
 import {
     Dialog,
@@ -727,7 +726,6 @@ export const TestSuiteEditor: React.FC<TestSuiteEditorProps> = ({
     const updateTestSuiteItems = useAppStateStore((s) => s.updateTestSuiteItems);
     const updateTestSuiteSettings = useAppStateStore((s) => s.updateTestSuiteSettings);
     const markTestSuiteClean = useAppStateStore((s) => s.markTestSuiteClean);
-    const updateTestSuite = useAppStateStore((s) => s.updateTestSuite);
     const getTestSuiteById = useAppStateStore((s) => s.getTestSuiteById);
 
     // Test suite runner

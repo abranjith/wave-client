@@ -339,7 +339,7 @@ const FlowsPane: React.FC<FlowsPaneProps> = ({
                                         <span className="text-xs text-blue-600 dark:text-blue-400 font-medium px-2">Running...</span>
                                     ) : (
                                         <>
-                                            {onFlowRun && (
+                                            {onFlowRun && flow.nodes.length > 0 && (
                                                 <Tooltip>
                                                     <TooltipTrigger asChild>
                                                         <Button

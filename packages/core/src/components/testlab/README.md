@@ -162,3 +162,7 @@ The following features are planned for future iterations:
 - [ ] **CSV/JSON Import**: Bulk import test cases from CSV or JSON files
 - [ ] **Test Data Templates**: Create reusable test data templates that can be applied across multiple test items
 - [ ] **Parameterized Validation**: Allow validation rules to use test case variables (e.g., `{{expectedStatus}}`)
+- [ ] **Enhanced Reporting**: Exportable test reports (JSON, beautiful HTML)
+- [ ] **Web App**: Implement Test Lab UI and functionality in the Wave Client Web application
+- [ ] **Results** Make sure consistent display for response/ input/ validation across request and flow test items
+- [ ] **Erro handling**: Improve error handling and reporting for various failure scenarios

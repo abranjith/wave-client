@@ -61,12 +61,6 @@ export function buildEnvVarsMap(
 ): Map<string, string> {
     const envVarsMap = new Map<string, string>();
 
-    if (dynamicEnvVars) {
-        Object.entries(dynamicEnvVars).forEach(([key, value]) => {
-            envVarsMap.set(key, value);
-        });
-    }
-    
     // First add global environment variables
     const globalEnv = environments.find(e => e.name.toLowerCase() === 'global');
     if (globalEnv) {
@@ -88,6 +82,14 @@ export function buildEnvVarsMap(
             });
         }
     }
+
+    //dynamicEnvVars will override any env specific variables
+    if (dynamicEnvVars) {
+        Object.entries(dynamicEnvVars).forEach(([key, value]) => {
+            envVarsMap.set(key, value);
+        });
+    }
+    
     
     return envVarsMap;
 }

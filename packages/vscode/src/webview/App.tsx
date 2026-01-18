@@ -300,12 +300,6 @@ const App: React.FC = () => {
     setSelectedFlow(null);
   };
 
-  const handleTestSuiteRun = (suite: TestSuite) => {
-    // For now, just select the test suite
-    // The actual running logic is handled in TestLabPane
-    setSelectedTestSuite(suite);
-  };
-
   const handleFlowSave = useCallback(async (flow: Flow) => {
     const result = await storage.saveFlow(flow);
     if (result.isOk) {
@@ -658,7 +652,7 @@ const App: React.FC = () => {
           onFlowSelect={handleFlowSelect}
           onFlowRun={undefined}
           onTestSuiteSelect={handleTestSuiteSelect}
-          onTestSuiteRun={handleTestSuiteRun}
+          onTestSuiteRun={undefined}
           onSettingsSelect={handleSettingsSelect}
           onImportCollection={handleImportCollection}
           onExportCollection={handleExportCollection}

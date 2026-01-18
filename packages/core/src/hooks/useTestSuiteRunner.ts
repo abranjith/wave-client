@@ -268,6 +268,7 @@ export function useTestSuiteRunner({
         const finalHeaders = mergeHeadersWithOverrides(request.header || [], testCaseData.headers);
         const finalParams = mergeParamsWithOverrides(baseQueryParams, testCaseData.params);
         const finalAuthId = testCaseData.authId || request.authId;
+        const dynamicVars = testCaseData.variables || {};
         
         const input: CollectionRequestInput = {
             id: `${item.id}-${testCase?.id || 'default'}-${Date.now()}`,
@@ -279,13 +280,18 @@ export function useTestSuiteRunner({
             authId: finalAuthId,
             request: request,
         };
+
+        if (testCaseData.body !== undefined) {
+            input.body = testCaseData.body;
+        }
         
         const buildResult = await buildHttpRequest(
             input,
             environmentIdRef.current,
             environments,
             auths,
-            defaultAuthIdRef.current
+            defaultAuthIdRef.current,
+            dynamicVars
         );
         
         if (buildResult.error || !buildResult.request) {
@@ -302,16 +308,8 @@ export function useTestSuiteRunner({
             testCaseData.variables
         );
         
-        // Determine body - test case body overrides base body
+        // Determine body - if test case has body override, use that instead
         let finalBody = buildResult.request.body;
-        if (testCaseData.body !== undefined && testCaseData.body !== '') {
-            // Replace placeholder variables in test case body
-            let bodyWithVars = testCaseData.body;
-            for (const [key, value] of Object.entries(finalEnvVars)) {
-                bodyWithVars = bodyWithVars.replace(new RegExp(`\\{\\{${key}\\}\\}`, 'g'), value);
-            }
-            finalBody = bodyWithVars;
-        }
         
         // Determine validation - test case validation > item validation > request validation
         const validation = testCase?.validation || item.validation || request.validation;
