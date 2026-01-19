@@ -111,9 +111,9 @@ function toRunStatus(status: string | undefined): RunStatus {
         case 'success':
             return 'success';
         case 'failed':
-            return 'error';
+            return 'failed';
         case 'skipped':
-            return 'idle';
+            return 'skipped';
         default:
             return 'idle';
     }

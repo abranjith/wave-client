@@ -9,12 +9,13 @@
  * - Fail-fast on errors or unresolved parameters
  * 
  * Uses the platform adapter pattern for HTTP execution, making it platform-agnostic.
+ * Uses shared collection lookup utilities for finding requests.
  */
 
 import { useCallback, useRef } from 'react';
 import { useHttpAdapter } from './useAdapter';
 import useAppStateStore from './store/useAppStateStore';
-import type { Environment, CollectionItem, Collection } from '../types/collection';
+import type { Environment, Collection } from '../types/collection';
 import type { Auth } from './store/createAuthSlice';
 import type { HttpRequestConfig } from '../types/adapters';
 import type {
@@ -39,6 +40,8 @@ import {
     flowContextToDynamicEnvVars,
 } from '../utils/flowResolver';
 import { buildEnvVarsMap, buildHttpRequest } from '../utils/requestBuilder';
+import { findRequestById } from '../utils/collectionLookup';
+import { determineExecutionStatus, extractErrorMessage } from '../types/execution';
 
 // ============================================================================
 // Types
@@ -89,52 +92,6 @@ export function useFlowRunner({ flowId, environments, auths, collections }: UseF
     const runningRef = useRef<Set<string>>(new Set());
     
     /**
-     * Finds a collection request by requestId
-     * requestId format: "collectionFilename:itemId" or just "itemId"
-     */
-    const findRequest = useCallback((requestId: string): { request: CollectionItem; collection: Collection } | null => {
-        // Parse requestId - may include collection prefix
-        let collectionFilename: string | undefined;
-        let itemId: string;
-        
-        if (requestId.includes(':')) {
-            [collectionFilename, itemId] = requestId.split(':', 2);
-        } else {
-            itemId = requestId;
-        }
-        
-        // Search function for nested items
-        const findInItems = (items: CollectionItem[]): CollectionItem | null => {
-            for (const item of items) {
-                if (item.id === itemId) {
-                    return item;
-                }
-                if (item.item) {
-                    const found = findInItems(item.item);
-                    if (found) {
-                        return found;
-                    }
-                }
-            }
-            return null;
-        };
-        
-        // Search in specified collection or all collections
-        const collectionsToSearch = collectionFilename
-            ? collections.filter(c => c.filename === collectionFilename)
-            : collections;
-        
-        for (const collection of collectionsToSearch) {
-            const found = findInItems(collection.item);
-            if (found) {
-                return { request: found, collection };
-            }
-        }
-        
-        return null;
-    }, [collections]);
-    
-    /**
      * Builds HTTP request config for a node, resolving flow variables.
      * Only variables from upstream dependencies are available for resolution.
      */
@@ -145,17 +102,17 @@ export function useFlowRunner({ flowId, environments, auths, collections }: UseF
         environmentId: string | null,
         defaultAuthId?: string
     ): Promise<{ config: HttpRequestConfig; error?: string; unresolved?: string[] }> => {
-        // Find the request definition
-        const found = findRequest(node.requestId);
+        // Find the request definition using shared utility
+        const found = findRequestById(node.requestId, collections);
         
-        if (!found || !found.request.request) {
+        if (!found || !found.item.request) {
             return { 
                 config: null as unknown as HttpRequestConfig, 
                 error: `Request not found: ${node.requestId}` 
             };
         }
         
-        const { request: item } = found;
+        const { item } = found;
         const request = item.request!;
         
         // Get upstream node IDs that this node depends on
@@ -223,7 +180,7 @@ export function useFlowRunner({ flowId, environments, auths, collections }: UseF
         };
         
         return { config };
-    }, [findRequest, auths, environments]);
+    }, [collections, auths, environments]);
     
     /**
      * Executes a single node

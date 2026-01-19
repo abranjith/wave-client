@@ -162,6 +162,22 @@ export type {
     GlobalValidationRule,
 } from './types/validation';
 
+// Execution types (shared across runners)
+export type {
+    ExecutionStatus,
+    ValidationStatus,
+    ExecutionConfig,
+    ExecutionProgress,
+} from './types/execution';
+
+export {
+    determineExecutionStatus,
+    determineValidationStatus,
+    extractErrorMessage,
+    calculateAverageTime,
+    updateProgress,
+} from './types/execution';
+
 // Tab types
 export type {
     TabData,
@@ -244,6 +260,46 @@ export {
     flowContextToDynamicEnvVars,
 } from './utils/flowResolver';
 
+// Collection lookup utilities
+export {
+    findRequestById,
+    findFlowById,
+    getAllRequestsFromCollection,
+    getItemFolderPath,
+} from './utils/collectionLookup';
+
+// Executor types and implementations
+export type {
+    IItemExecutor,
+    ExecutionContext,
+    RequestOverrides,
+    HttpExecutionInput,
+    HttpExecutionResult,
+    FlowExecutionInput,
+    FlowExecutionConfig,
+    FlowExecutionResult,
+} from './utils/executors/types';
+
+export {
+    mergeHeadersWithOverrides,
+    mergeParamsWithOverrides,
+    mergeEnvVarsWithOverrides,
+    extractUrlParts,
+} from './utils/executors/types';
+
+export { HttpRequestExecutor } from './utils/executors/httpRequestExecutor';
+export { FlowExecutor } from './utils/executors/flowExecutor';
+
+// Batch executor
+export type {
+    BatchExecutorCallbacks,
+    BatchExecutionResult,
+    BatchItem,
+    ResultStatusExtractor,
+} from './utils/batchExecutor';
+
+export { BatchExecutor } from './utils/batchExecutor';
+
 // ============================================================================
 // State Management
 // ============================================================================
@@ -256,6 +312,29 @@ export { useCollectionRunner } from './hooks/useCollectionRunner';
 export { useFlowRunner } from './hooks/useFlowRunner';
 export { useTestSuiteRunner } from './hooks/useTestSuiteRunner';
 export { useFileUpload } from './hooks/useFileUpload';
+
+// V2 hooks using executor pattern
+export { useCollectionRunnerV2 } from './hooks/useCollectionRunnerV2';
+export type {
+    CollectionRunItem,
+    CollectionRunResult,
+    CollectionRunState,
+    UseCollectionRunnerV2Options,
+    RunSettings,
+} from './hooks/useCollectionRunnerV2';
+
+export { useFlowRunnerV2 } from './hooks/useFlowRunnerV2';
+export type {
+    UseFlowRunnerV2Options,
+    RunFlowOptions,
+    FlowRunStateV2,
+} from './hooks/useFlowRunnerV2';
+
+export { useTestSuiteRunnerV2 } from './hooks/useTestSuiteRunnerV2';
+export type {
+    UseTestSuiteRunnerV2Options,
+    RunTestSuiteOptions,
+} from './hooks/useTestSuiteRunnerV2';
 
 // ============================================================================
 // Components

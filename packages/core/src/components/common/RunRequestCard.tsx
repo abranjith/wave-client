@@ -6,7 +6,7 @@ import { Checkbox } from '../ui/checkbox';
 
 // ==================== Types ====================
 
-export type RunStatus = 'idle' | 'pending' | 'running' | 'success' | 'error';
+export type RunStatus = 'idle' | 'pending' | 'running' | 'success' | 'failed' | 'skipped' | 'cancelled';
 export type ValidationStatus = 'idle' | 'pending' | 'pass' | 'fail';
 
 export interface RunRequestData {
@@ -75,7 +75,7 @@ const StatusIndicator: React.FC<{ status: RunStatus; responseStatus?: number; re
     );
   }
 
-  if (status === 'error') {
+  if (status === 'failed' || status === 'cancelled') {
     return <XCircle className="h-4 w-4 text-red-500" />;
   }
 

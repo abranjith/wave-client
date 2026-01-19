@@ -98,7 +98,9 @@ function toRunStatus(status?: FlowNodeStatus): RunStatus {
         case 'success':
             return 'success';
         case 'failed':
-            return 'error';
+            return 'failed';
+        case 'skipped':
+            return 'skipped';
         default:
             return 'idle';
     }

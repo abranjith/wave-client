@@ -4,27 +4,37 @@
  * Uses request ID for correlation between requests and responses.
  * 
  * Uses the platform adapter pattern for HTTP execution, making it platform-agnostic.
+ * Leverages shared BatchExecutor for concurrency control and delay handling.
  */
 
-import { useState, useCallback, useEffect, useRef } from 'react';
+import { useState, useCallback, useRef } from 'react';
 import { Environment, CollectionRequest } from '../types/collection';
 import { HttpRequestConfig, HttpResponseResult } from '../types/adapters';
 import { Auth } from './store/createAuthSlice';
-import { buildHttpRequest, CollectionRequestInput } from '../utils/requestBuilder';
 import { RequestValidation } from '../types/validation';
 import { useHttpAdapter } from './useAdapter';
+import { BatchExecutor, BatchItem, ResultStatusExtractor } from '../utils/batchExecutor';
+import { buildHttpRequest, CollectionRequestInput } from '../utils/requestBuilder';
+import {
+    ExecutionStatus,
+    ValidationStatus,
+    ExecutionConfig,
+    determineExecutionStatus,
+    determineValidationStatus,
+    calculateAverageTime,
+} from '../types/execution';
 
 // ==================== Types ====================
 
-export type RunStatus = 'idle' | 'pending' | 'running' | 'success' | 'error';
-export type ValidationStatus = 'idle' | 'pending' | 'pass' | 'fail';
+export type RunStatus = ExecutionStatus;
+export type { ValidationStatus };
 
 export interface RunSettings {
     concurrentCalls: number;
     delayBetweenCalls: number;
 }
 
-export interface RunRequestItem {
+export interface RunRequestItem extends BatchItem {
     id: string;
     name: string;
     method: string;
@@ -60,6 +70,66 @@ interface UseCollectionRunnerOptions {
     auths: Auth[];
 }
 
+// ==================== Helper Functions ====================
+
+/**
+ * Create initial result for a request item (pending state)
+ */
+function createPendingResult(requestId: string): RunResult {
+    return {
+        requestId,
+        status: 'pending',
+        validationStatus: 'idle',
+    };
+}
+
+/**
+ * Create running result for a request item
+ */
+function createRunningResult(requestId: string): RunResult {
+    return {
+        requestId,
+        status: 'running',
+        validationStatus: 'pending',
+    };
+}
+
+/**
+ * Create result from HTTP response
+ */
+function createResultFromResponse(
+    requestId: string,
+    response: HttpResponseResult | null,
+    error?: string
+): RunResult {
+    return {
+        requestId,
+        status: determineExecutionStatus(response, error),
+        validationStatus: determineValidationStatus(response?.validationResult),
+        response: response ?? undefined,
+        error,
+        elapsedTime: response?.elapsedTime,
+    };
+}
+
+/**
+ * Determine if a result is considered "passed" for progress tracking
+ */
+function isResultPassed(result: RunResult): boolean {
+    return result.status === 'success' && result.validationStatus !== 'fail';
+}
+
+/**
+ * Extract status from result for batch executor progress tracking
+ */
+const extractStatus: ResultStatusExtractor<RunResult> = (result) => ({
+    status: result.status === 'success' ? 'success' :
+            result.status === 'failed' ? 'failed' :
+            result.status === 'cancelled' ? 'cancelled' :
+            result.status === 'skipped' ? 'skipped' : 'failed',
+    validationStatus: result.validationStatus,
+});
+
 // ==================== Hook ====================
 
 export function useCollectionRunner({ environments, auths }: UseCollectionRunnerOptions) {
@@ -74,176 +144,22 @@ export function useCollectionRunner({ environments, auths }: UseCollectionRunner
     });
 
     // Refs for tracking active run
-    const activeRequestIds = useRef<Set<string>>(new Set());
-    const pendingQueue = useRef<RunRequestItem[]>([]);
-    const runSettingsRef = useRef<RunSettings>({ concurrentCalls: 1, delayBetweenCalls: 0 });
+    const isCancelledRef = useRef(false);
+    const batchExecutorRef = useRef<BatchExecutor<RunRequestItem, RunResult> | null>(null);
     const environmentIdRef = useRef<string | null>(null);
     const defaultAuthIdRef = useRef<string | null>(null);
-    const isCancelledRef = useRef(false);
-    const activeCountRef = useRef(0);
-    
-    // Track current iteration/batch of requests
-    const currentIterationIds = useRef<Set<string>>(new Set());
-    // Track if we're waiting for delay before next batch
-    const delayTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-    // Helper to handle response completion
-    const handleResponseComplete = useCallback((
-        requestId: string, 
-        response: HttpResponseResult | null, 
-        error?: string
-    ) => {
-        activeRequestIds.current.delete(requestId);
-        activeCountRef.current = Math.max(0, activeCountRef.current - 1);
-        currentIterationIds.current.delete(requestId);
-
-        const isSuccess = response ? (response.status >= 200 && response.status < 400) : false;
-        const validationResult = response?.validationResult;
-        
-        // Determine validation status
-        let validationStatus: ValidationStatus = 'idle';
-        if (validationResult) {
-            validationStatus = validationResult.allPassed ? 'pass' : 'fail';
-        }
-
-        setState(prev => {
-            const newResults = new Map(prev.results);
-            newResults.set(requestId, {
-                requestId,
-                status: error ? 'error' : (isSuccess ? 'success' : 'error'),
-                validationStatus,
-                response: response ?? undefined,
-                error,
-                elapsedTime: response?.elapsedTime
-            });
-
-            // Calculate new progress
-            const completed = prev.progress.completed + 1;
-            const passed = prev.progress.passed + (isSuccess && validationStatus !== 'fail' ? 1 : 0);
-            const failed = prev.progress.failed + (!isSuccess || validationStatus === 'fail' || !!error ? 1 : 0);
-
-            // Calculate average time
-            let totalTime = 0;
-            let timeCount = 0;
-            newResults.forEach(r => {
-                if (r.elapsedTime) {
-                    totalTime += r.elapsedTime;
-                    timeCount++;
-                }
-            });
-            const averageTime = timeCount > 0 ? Math.round(totalTime / timeCount) : 0;
-
-            // Check if run is complete
-            const isRunning = completed < prev.progress.total;
-
+    /**
+     * Execute a single request and return the result
+     */
+    const executeRequest = useCallback(async (item: RunRequestItem): Promise<RunResult> => {
+        if (isCancelledRef.current) {
             return {
-                ...prev,
-                results: newResults,
-                progress: { ...prev.progress, completed, passed, failed },
-                averageTime,
-                isRunning
-            };
-        });
-    }, []);
-
-    // Effect to detect when current iteration is complete and trigger next batch
-    useEffect(() => {
-        // Only proceed if:
-        // 1. Current iteration is complete (no pending requests in batch)
-        // 2. Run is still active
-        // 3. There are more items in the queue
-        // 4. Not cancelled
-        if (
-            currentIterationIds.current.size === 0 &&
-            state.isRunning &&
-            pendingQueue.current.length > 0 &&
-            !isCancelledRef.current
-        ) {
-            const delay = runSettingsRef.current.delayBetweenCalls;
-            
-            // Clear any existing timer
-            if (delayTimerRef.current) {
-                clearTimeout(delayTimerRef.current);
-                delayTimerRef.current = null;
-            }
-            
-            if (delay > 0) {
-                // Apply delay before next batch
-                delayTimerRef.current = setTimeout(() => {
-                    delayTimerRef.current = null;
-                    if (!isCancelledRef.current) {
-                        processQueue();
-                    }
-                }, delay);
-            } else {
-                // No delay, process immediately
-                processQueue();
-            }
-        }
-        
-        // Cleanup timer on unmount or when dependencies change
-        return () => {
-            if (delayTimerRef.current) {
-                clearTimeout(delayTimerRef.current);
-                delayTimerRef.current = null;
-            }
-        };
-    }, [state.results, state.isRunning]);
-
-    // Process queue with concurrency control
-    const processQueue = useCallback(() => {
-        if (isCancelledRef.current) {
-            return;
-        }
-        
-        // Don't start a new batch if current iteration still has pending requests
-        if (currentIterationIds.current.size > 0) {
-            return;
-        }
-
-        const settings = runSettingsRef.current;
-        const batchSize = Math.min(settings.concurrentCalls, pendingQueue.current.length);
-        
-        // Send batch of requests
-        for (let i = 0; i < batchSize; i++) {
-            const item = pendingQueue.current.shift();
-            if (!item) break;
-            
-            if (isCancelledRef.current) {
-                // Put item back if cancelled during batch creation
-                pendingQueue.current.unshift(item);
-                break;
-            }
-            
-            // Add to current iteration tracking before sending
-            currentIterationIds.current.add(item.id);
-            
-            // Fire and forget - sendRequest handles its own errors
-            sendRequest(item);
-        }
-    }, []);
-
-    // Send a single request using the HTTP adapter
-    const sendRequest = useCallback(async (item: RunRequestItem) => {
-        if (isCancelledRef.current) {
-            // Remove from iteration tracking if cancelled
-            currentIterationIds.current.delete(item.id);
-            return;
-        }
-
-        // Mark as running
-        activeRequestIds.current.add(item.id);
-        activeCountRef.current++;
-
-        setState(prev => {
-            const newResults = new Map(prev.results);
-            newResults.set(item.id, {
                 requestId: item.id,
-                status: 'running',
-                validationStatus: 'pending'
-            });
-            return { ...prev, results: newResults };
-        });
+                status: 'cancelled',
+                validationStatus: 'idle',
+            };
+        }
 
         // Build the request configuration
         const urlObj = item.request?.url;
@@ -268,9 +184,11 @@ export function useCollectionRunner({ environments, auths }: UseCollectionRunner
         );
 
         if (buildResult.error || !buildResult.request) {
-            // Build error - mark as failed
-            handleResponseComplete(item.id, null, buildResult.error || 'Failed to build request');
-            return;
+            return createResultFromResponse(
+                item.id,
+                null,
+                buildResult.error || 'Failed to build request'
+            );
         }
 
         // Build the adapter config from the built request
@@ -287,29 +205,29 @@ export function useCollectionRunner({ environments, auths }: UseCollectionRunner
         };
 
         try {
-            // Execute request via adapter
             const result = await httpAdapter.executeRequest(config);
             
             if (isCancelledRef.current) {
-                // Request was cancelled while in flight
-                return;
+                return {
+                    requestId: item.id,
+                    status: 'cancelled',
+                    validationStatus: 'idle',
+                };
             }
 
             if (result.isOk) {
-                handleResponseComplete(item.id, result.value);
+                return createResultFromResponse(item.id, result.value);
             } else {
-                handleResponseComplete(item.id, null, result.error);
+                return createResultFromResponse(item.id, null, result.error);
             }
         } catch (error) {
-            if (!isCancelledRef.current) {
-                handleResponseComplete(
-                    item.id, 
-                    null, 
-                    error instanceof Error ? error.message : 'Unknown error'
-                );
-            }
+            return createResultFromResponse(
+                item.id,
+                null,
+                error instanceof Error ? error.message : 'Unknown error'
+            );
         }
-    }, [httpAdapter, environments, auths, handleResponseComplete]);
+    }, [httpAdapter, environments, auths]);
 
     // Start collection run
     const runCollection = useCallback(async (
@@ -324,32 +242,16 @@ export function useCollectionRunner({ environments, auths }: UseCollectionRunner
 
         // Reset state
         isCancelledRef.current = false;
-        activeRequestIds.current.clear();
-        activeCountRef.current = 0;
-        currentIterationIds.current.clear();
-        runSettingsRef.current = settings;
         environmentIdRef.current = environmentId;
         defaultAuthIdRef.current = defaultAuthId;
-        
-        // Clear any pending delay timer from previous run
-        if (delayTimerRef.current) {
-            clearTimeout(delayTimerRef.current);
-            delayTimerRef.current = null;
-        }
 
         // Initialize results with pending status
         const initialResults = new Map<string, RunResult>();
         requests.forEach(req => {
-            initialResults.set(req.id, {
-                requestId: req.id,
-                status: 'pending',
-                validationStatus: 'idle'
-            });
+            initialResults.set(req.id, createPendingResult(req.id));
         });
 
-        // Set up queue
-        pendingQueue.current = [...requests];
-
+        // Set initial state
         setState({
             isRunning: true,
             results: initialResults,
@@ -362,28 +264,75 @@ export function useCollectionRunner({ environments, auths }: UseCollectionRunner
             averageTime: 0
         });
 
-        // Start processing first batch
-        processQueue();
-    }, [processQueue]);
+        // Create batch executor
+        batchExecutorRef.current = new BatchExecutor<RunRequestItem, RunResult>();
+
+        // Create config
+        const config: ExecutionConfig = {
+            concurrentCalls: settings.concurrentCalls,
+            delayBetweenCalls: settings.delayBetweenCalls,
+            stopOnFailure: false,
+        };
+
+        // Execute all requests with batch executor
+        try {
+            await batchExecutorRef.current.execute(
+                requests,
+                async (item) => {
+                    // Update state to show running
+                    setState(prev => {
+                        const newResults = new Map(prev.results);
+                        newResults.set(item.id, createRunningResult(item.id));
+                        return { ...prev, results: newResults };
+                    });
+                    
+                    // Execute the request
+                    const result = await executeRequest(item);
+                    
+                    // Update state with result
+                    setState(prev => {
+                        const newResults = new Map(prev.results);
+                        newResults.set(item.id, result);
+
+                        // Calculate new progress
+                        const completed = prev.progress.completed + 1;
+                        const passed = prev.progress.passed + (isResultPassed(result) ? 1 : 0);
+                        const failed = prev.progress.failed + (!isResultPassed(result) ? 1 : 0);
+
+                        // Calculate average time from all completed results
+                        const avgTime = calculateAverageTime(
+                            Array.from(newResults.values()).filter(r => r.elapsedTime !== undefined)
+                        );
+
+                        return {
+                            ...prev,
+                            results: newResults,
+                            progress: { ...prev.progress, completed, passed, failed },
+                            averageTime: avgTime,
+                        };
+                    });
+                    
+                    return result;
+                },
+                config,
+                () => isCancelledRef.current,
+                extractStatus
+            );
+        } finally {
+            // Mark as not running when complete
+            setState(prev => ({ ...prev, isRunning: false }));
+        }
+    }, [executeRequest]);
 
     // Cancel run
     const cancelRun = useCallback(() => {
         isCancelledRef.current = true;
-        pendingQueue.current = [];
-        currentIterationIds.current.clear();
+        
+        // Cancel batch executor delay
+        batchExecutorRef.current?.cancelDelay();
         
         // Cancel any in-flight requests via adapter
-        activeRequestIds.current.forEach(id => {
-            httpAdapter.cancelRequest?.(id);
-        });
-        activeRequestIds.current.clear();
-        activeCountRef.current = 0;
-        
-        // Clear any pending delay timer
-        if (delayTimerRef.current) {
-            clearTimeout(delayTimerRef.current);
-            delayTimerRef.current = null;
-        }
+        httpAdapter.cancelRequest?.('*');
         
         setState(prev => ({
             ...prev,
@@ -394,16 +343,7 @@ export function useCollectionRunner({ environments, auths }: UseCollectionRunner
     // Reset results
     const resetResults = useCallback(() => {
         isCancelledRef.current = false;
-        activeRequestIds.current.clear();
-        activeCountRef.current = 0;
-        pendingQueue.current = [];
-        currentIterationIds.current.clear();
-        
-        // Clear any pending delay timer
-        if (delayTimerRef.current) {
-            clearTimeout(delayTimerRef.current);
-            delayTimerRef.current = null;
-        }
+        batchExecutorRef.current = null;
 
         setState({
             isRunning: false,

@@ -9,12 +9,13 @@
  * - useFlowRunner: Global state management, flow execution
  * 
  * Uses the platform adapter pattern for HTTP execution, making it platform-agnostic.
+ * Uses shared utilities for collection lookup and data merging.
  */
 
 import { useCallback, useRef } from 'react';
 import { useHttpAdapter } from './useAdapter';
 import useAppStateStore from './store/useAppStateStore';
-import type { Environment, CollectionItem, Collection } from '../types/collection';
+import type { Environment, Collection } from '../types/collection';
 import type { Auth } from './store/createAuthSlice';
 import type { HttpRequestConfig, HttpResponseResult } from '../types/adapters';
 import type { Flow } from '../types/flow';
@@ -31,30 +32,32 @@ import type {
     TestValidationStatus,
     TestCase,
     TestCaseResult,
-    TestCaseData,
 } from '../types/testSuite';
 import {
     isRequestTestItem,
-    isFlowTestItem,
     createEmptyTestSuiteRunResult,
 } from '../types/testSuite';
 import { buildHttpRequest, CollectionRequestInput } from '../utils/requestBuilder';
 import type { HeaderRow, ParamRow } from '../types/collection';
 import {
     createEmptyFlowContext,
-    addToFlowContext,
     flowContextToDynamicEnvVars,
 } from '../utils/flowResolver';
 import {
     getTopologicalOrder,
-    getOutgoingConnectors,
     getIncomingConnectors,
     getUpstreamNodeIds,
     isConditionSatisfied,
-    createInitialFlowRunResult,
     validateFlow,
 } from '../utils/flowUtils';
 import type { FlowContext, FlowRunResult, FlowNodeResult, FlowNode } from '../types/flow';
+import { findRequestById, findFlowById } from '../utils/collectionLookup';
+import {
+    mergeHeadersWithOverrides,
+    mergeParamsWithOverrides,
+    mergeEnvVarsWithOverrides,
+} from '../utils/executors/types';
+import { determineExecutionStatus, determineValidationStatus } from '../types/execution';
 
 // ============================================================================
 // Types
@@ -117,129 +120,6 @@ export function useTestSuiteRunner({
     const delayTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     
     // ========================================================================
-    // Helper: Find collection request by referenceId
-    // ========================================================================
-    
-    const findRequest = useCallback((referenceId: string): { item: CollectionItem; collection: Collection } | null => {
-        let collectionFilename: string | undefined;
-        let itemId: string;
-        
-        if (referenceId.includes(':')) {
-            [collectionFilename, itemId] = referenceId.split(':', 2);
-        } else {
-            itemId = referenceId;
-        }
-        
-        const findInItems = (items: CollectionItem[]): CollectionItem | null => {
-            for (const item of items) {
-                if (item.id === itemId) {
-                    return item;
-                }
-                if (item.item) {
-                    const found = findInItems(item.item);
-                    if (found) {
-                        return found;
-                    }
-                }
-            }
-            return null;
-        };
-        
-        const collectionsToSearch = collectionFilename
-            ? collections.filter(c => c.filename === collectionFilename)
-            : collections;
-        
-        for (const collection of collectionsToSearch) {
-            const found = findInItems(collection.item);
-            if (found) {
-                return { item: found, collection };
-            }
-        }
-        
-        return null;
-    }, [collections]);
-    
-    // ========================================================================
-    // Helper: Find flow by ID
-    // ========================================================================
-    
-    const findFlow = useCallback((flowId: string): Flow | null => {
-        return flows.find(f => f.id === flowId) || null;
-    }, [flows]);
-    
-    // ========================================================================
-    // Helper: Merge test case data with base request data
-    // ========================================================================
-    
-    const mergeHeadersWithOverrides = (
-        baseHeaders: HeaderRow[],
-        overrideHeaders?: HeaderRow[]
-    ): HeaderRow[] => {
-        if (!overrideHeaders || overrideHeaders.length === 0) {
-            return baseHeaders;
-        }
-        
-        // Create a map of base headers by key (lowercase for case-insensitive matching)
-        const headerMap = new Map<string, HeaderRow>();
-        for (const h of baseHeaders) {
-            headerMap.set(h.key.toLowerCase(), h);
-        }
-        
-        // Apply overrides - override existing or add new
-        for (const override of overrideHeaders) {
-            const key = override.key.toLowerCase();
-            if (headerMap.has(key)) {
-                // Override existing header
-                const existing = headerMap.get(key)!;
-                headerMap.set(key, { ...existing, ...override, key: existing.key });
-            } else {
-                // Add new header
-                headerMap.set(key, override);
-            }
-        }
-        
-        return Array.from(headerMap.values());
-    };
-    
-    const mergeParamsWithOverrides = (
-        baseParams: ParamRow[],
-        overrideParams?: ParamRow[]
-    ): ParamRow[] => {
-        if (!overrideParams || overrideParams.length === 0) {
-            return baseParams;
-        }
-        
-        // Create a map of base params by key
-        const paramMap = new Map<string, ParamRow>();
-        for (const p of baseParams) {
-            paramMap.set(p.key, p);
-        }
-        
-        // Apply overrides
-        for (const override of overrideParams) {
-            if (paramMap.has(override.key)) {
-                const existing = paramMap.get(override.key)!;
-                paramMap.set(override.key, { ...existing, ...override });
-            } else {
-                paramMap.set(override.key, override);
-            }
-        }
-        
-        return Array.from(paramMap.values());
-    };
-    
-    const mergeEnvVarsWithTestCaseVars = (
-        envVars: Record<string, string>,
-        testCaseVars?: Record<string, string>
-    ): Record<string, string> => {
-        if (!testCaseVars) {
-            return envVars;
-        }
-        // Test case variables override environment variables
-        return { ...envVars, ...testCaseVars };
-    };
-    
-    // ========================================================================
     // Helper: Execute a single request with optional test case overrides
     // ========================================================================
     
@@ -247,7 +127,7 @@ export function useTestSuiteRunner({
         item: RequestTestItem,
         testCase?: TestCase
     ): Promise<{ response?: HttpResponseResult; error?: string; status: TestItemStatus; validationStatus: TestValidationStatus }> => {
-        const found = findRequest(item.referenceId);
+        const found = findRequestById(item.referenceId, collections);
         if (!found || !found.item.request) {
             return {
                 status: 'failed',
@@ -263,7 +143,7 @@ export function useTestSuiteRunner({
         const baseQueryParams = typeof urlObj === 'object' && urlObj?.query ? urlObj.query : [];
         const urlString = typeof urlObj === 'string' ? urlObj : urlObj?.raw || '';
         
-        // Apply test case overrides
+        // Apply test case overrides using shared utilities
         const testCaseData = testCase?.data || {};
         const finalHeaders = mergeHeadersWithOverrides(request.header || [], testCaseData.headers);
         const finalParams = mergeParamsWithOverrides(baseQueryParams, testCaseData.params);
@@ -302,8 +182,8 @@ export function useTestSuiteRunner({
             };
         }
         
-        // Merge environment variables with test case variables
-        const finalEnvVars = mergeEnvVarsWithTestCaseVars(
+        // Merge environment variables with test case variables using shared utility
+        const finalEnvVars = mergeEnvVarsWithOverrides(
             buildResult.request.envVars || {},
             testCaseData.variables
         );
@@ -366,7 +246,7 @@ export function useTestSuiteRunner({
                 error: err instanceof Error ? err.message : 'Unknown error',
             };
         }
-    }, [findRequest, httpAdapter, environments, auths]);
+    }, [collections, httpAdapter, environments, auths]);
     
     // ========================================================================
     // Helper: Execute a single request test item (with test cases support)
@@ -474,7 +354,8 @@ export function useTestSuiteRunner({
     ): Promise<FlowTestItemResult> => {
         const startedAt = new Date().toISOString();
         
-        const flow = findFlow(item.referenceId);
+        // Use shared findFlowById utility
+        const flow = findFlowById(item.referenceId, flows);
         if (!flow) {
             return {
                 itemId: item.id,
@@ -517,7 +398,6 @@ export function useTestSuiteRunner({
         
         // Initialize flow execution
         const flowContext: FlowContext = createEmptyFlowContext();
-        const nodeMap = new Map(flow.nodes.map(n => [n.id, n]));
         const nodeResults = new Map<string, FlowNodeResult>();
         const activeConnectorIds: string[] = [];
         const skippedConnectorIds: string[] = [];
@@ -626,7 +506,7 @@ export function useTestSuiteRunner({
             startedAt,
             completedAt: new Date().toISOString(),
         };
-    }, [findFlow, findRequest, httpAdapter, environments, auths]);
+    }, [flows, collections, httpAdapter, environments, auths]);
     
     // Helper to execute a single flow node
     const executeFlowNode = useCallback(async (
@@ -636,7 +516,8 @@ export function useTestSuiteRunner({
     ): Promise<FlowNodeResult> => {
         const startedAt = new Date().toISOString();
         
-        const found = findRequest(node.requestId);
+        // Use shared findRequestById utility
+        const found = findRequestById(node.requestId, collections);
         if (!found || !found.item.request) {
             return {
                 nodeId: node.id,
@@ -750,7 +631,7 @@ export function useTestSuiteRunner({
                 completedAt: new Date().toISOString(),
             };
         }
-    }, [findRequest, httpAdapter, environments, auths]);
+    }, [collections, httpAdapter, environments, auths]);
     
     // ========================================================================
     // Update state helper
