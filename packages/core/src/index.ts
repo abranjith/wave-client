@@ -313,28 +313,23 @@ export { useFlowRunner } from './hooks/useFlowRunner';
 export { useTestSuiteRunner } from './hooks/useTestSuiteRunner';
 export { useFileUpload } from './hooks/useFileUpload';
 
-// V2 hooks using executor pattern
-export { useCollectionRunnerV2 } from './hooks/useCollectionRunnerV2';
 export type {
     CollectionRunItem,
     CollectionRunResult,
     CollectionRunState,
-    UseCollectionRunnerV2Options,
+    UseCollectionRunnerOptions,
     RunSettings,
-} from './hooks/useCollectionRunnerV2';
+} from './hooks/useCollectionRunner';
 
-export { useFlowRunnerV2 } from './hooks/useFlowRunnerV2';
 export type {
-    UseFlowRunnerV2Options,
+    UseFlowRunnerOptions,
     RunFlowOptions,
-    FlowRunStateV2,
-} from './hooks/useFlowRunnerV2';
+} from './hooks/useFlowRunner';
 
-export { useTestSuiteRunnerV2 } from './hooks/useTestSuiteRunnerV2';
 export type {
-    UseTestSuiteRunnerV2Options,
+    UseTestSuiteRunnerOptions,
     RunTestSuiteOptions,
-} from './hooks/useTestSuiteRunnerV2';
+} from './hooks/useTestSuiteRunner';
 
 // ============================================================================
 // Components

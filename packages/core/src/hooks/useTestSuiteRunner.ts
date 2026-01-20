@@ -1,23 +1,24 @@
 /**
  * Test Suite Runner Hook
  * 
- * Manages execution of a TestSuite - a collection of requests and flows that can
- * be run together with configurable settings.
+ * Manages execution of a TestSuite using the executor pattern:
+ * - HttpRequestExecutor: For individual request execution with test case overrides
+ * - FlowExecutor: For flow execution within test suites
+ * - BatchExecutor: For concurrency control
  * 
- * Combines patterns from:
- * - useCollectionRunner: Concurrency control, delay between batches, request execution
- * - useFlowRunner: Global state management, flow execution
+ * This hook handles:
+ * - Test case iteration (data-driven testing)
+ * - Progress tracking and state management
+ * - Cancellation
  * 
- * Uses the platform adapter pattern for HTTP execution, making it platform-agnostic.
- * Uses shared utilities for collection lookup and data merging.
+ * Uses global state (Zustand) for cross-component state sharing.
  */
 
-import { useCallback, useRef } from 'react';
+import { useCallback, useRef, useMemo } from 'react';
 import { useHttpAdapter } from './useAdapter';
 import useAppStateStore from './store/useAppStateStore';
 import type { Environment, Collection } from '../types/collection';
 import type { Auth } from './store/createAuthSlice';
-import type { HttpRequestConfig, HttpResponseResult } from '../types/adapters';
 import type { Flow } from '../types/flow';
 import type {
     TestSuite,
@@ -33,31 +34,23 @@ import type {
     TestCase,
     TestCaseResult,
 } from '../types/testSuite';
+import { isRequestTestItem, createEmptyTestSuiteRunResult } from '../types/testSuite';
+import { httpRequestExecutor } from '../utils/executors/httpRequestExecutor';
+import { flowExecutor } from '../utils/executors/flowExecutor';
 import {
-    isRequestTestItem,
-    createEmptyTestSuiteRunResult,
-} from '../types/testSuite';
-import { buildHttpRequest, CollectionRequestInput } from '../utils/requestBuilder';
-import type { HeaderRow, ParamRow } from '../types/collection';
-import {
-    createEmptyFlowContext,
-    flowContextToDynamicEnvVars,
-} from '../utils/flowResolver';
-import {
-    getTopologicalOrder,
-    getIncomingConnectors,
-    getUpstreamNodeIds,
-    isConditionSatisfied,
-    validateFlow,
-} from '../utils/flowUtils';
-import type { FlowContext, FlowRunResult, FlowNodeResult, FlowNode } from '../types/flow';
-import { findRequestById, findFlowById } from '../utils/collectionLookup';
-import {
-    mergeHeadersWithOverrides,
-    mergeParamsWithOverrides,
-    mergeEnvVarsWithOverrides,
+    ExecutionContext,
+    HttpExecutionInput,
+    HttpExecutionResult,
+    FlowExecutionInput,
+    FlowExecutionConfig,
+    RequestOverrides,
 } from '../utils/executors/types';
-import { determineExecutionStatus, determineValidationStatus } from '../types/execution';
+import {
+    createBatchExecutor,
+    type BatchExecutor,
+    type BatchExecutorCallbacks,
+    type ResultStatusExtractor,
+} from '../utils/batchExecutor';
 
 // ============================================================================
 // Types
@@ -94,6 +87,83 @@ const DEFAULT_TEST_SUITE_RUN_STATE = {
 } as const;
 
 // ============================================================================
+// Helper Functions
+// ============================================================================
+
+/**
+ * Convert HttpExecutionResult status to TestItemStatus
+ */
+function toTestItemStatus(execStatus: HttpExecutionResult['status']): TestItemStatus {
+    switch (execStatus) {
+        case 'success': return 'success';
+        case 'failed': return 'failed';
+        case 'cancelled': return 'skipped';
+        case 'skipped': return 'skipped';
+        default: return 'failed';
+    }
+}
+
+/**
+ * Convert validation status
+ */
+function toTestValidationStatus(validationStatus: HttpExecutionResult['validationStatus']): TestValidationStatus {
+    switch (validationStatus) {
+        case 'pass': return 'pass';
+        case 'fail': return 'fail';
+        case 'pending': return 'pending';
+        default: return 'idle';
+    }
+}
+
+/**
+ * Convert test case data to RequestOverrides
+ */
+function testCaseToOverrides(testCase: TestCase): RequestOverrides {
+    const data = testCase.data || {};
+    return {
+        headers: data.headers,
+        params: data.params,
+        body: data.body,
+        variables: data.variables,
+        authId: data.authId,
+        validation: testCase.validation,
+    };
+}
+
+/**
+ * Check if a result is "passed" for progress
+ */
+function isItemPassed(result: TestItemResult): boolean {
+    return result.status === 'success' && result.validationStatus !== 'fail';
+}
+
+/**
+ * Extract status from TestItemResult for BatchExecutor progress tracking
+ */
+const extractTestItemStatus: ResultStatusExtractor<TestItemResult> = (result) => {
+    const statusMap: Record<TestItemStatus, 'success' | 'failed' | 'skipped' | 'cancelled'> = {
+        'idle': 'skipped',
+        'pending': 'skipped',
+        'running': 'skipped',
+        'success': 'success',
+        'failed': 'failed',
+        'skipped': 'skipped',
+    };
+    
+    const validationMap: Record<TestValidationStatus, 'idle' | 'pending' | 'pass' | 'fail'> = {
+        'idle': 'idle',
+        'pending': 'pending',
+        'pass': 'pass',
+        'fail': 'fail',
+    };
+    
+    return {
+        status: statusMap[result.status] || 'failed',
+        validationStatus: validationMap[result.validationStatus] || 'idle',
+    };
+};
+
+// ============================================================================
 // Hook
 // ============================================================================
 
@@ -113,173 +183,67 @@ export function useTestSuiteRunner({
     
     // Refs for tracking active run
     const isCancelledRef = useRef(false);
-    const pendingQueueRef = useRef<TestItem[]>([]);
-    const activeItemIdsRef = useRef<Set<string>>(new Set());
     const environmentIdRef = useRef<string | null>(null);
     const defaultAuthIdRef = useRef<string | null>(null);
-    const delayTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const batchExecutorRef = useRef<BatchExecutor<TestItem, TestItemResult> | null>(null);
     
-    // ========================================================================
-    // Helper: Execute a single request with optional test case overrides
-    // ========================================================================
+    // Memoize executor instances
+    const httpExecutor = useMemo(() => httpRequestExecutor, []);
+    const flowExec = useMemo(() => flowExecutor, []);
     
-    const executeSingleRequest = useCallback(async (
-        item: RequestTestItem,
-        testCase?: TestCase
-    ): Promise<{ response?: HttpResponseResult; error?: string; status: TestItemStatus; validationStatus: TestValidationStatus }> => {
-        const found = findRequestById(item.referenceId, collections);
-        if (!found || !found.item.request) {
-            return {
-                status: 'failed',
-                validationStatus: 'idle',
-                error: `Request not found: ${item.referenceId}`,
-            };
-        }
-        
-        const { item: collectionItem } = found;
-        const request = collectionItem.request!;
-        
-        const urlObj = request.url;
-        const baseQueryParams = typeof urlObj === 'object' && urlObj?.query ? urlObj.query : [];
-        const urlString = typeof urlObj === 'string' ? urlObj : urlObj?.raw || '';
-        
-        // Apply test case overrides using shared utilities
-        const testCaseData = testCase?.data || {};
-        const finalHeaders = mergeHeadersWithOverrides(request.header || [], testCaseData.headers);
-        const finalParams = mergeParamsWithOverrides(baseQueryParams, testCaseData.params);
-        const finalAuthId = testCaseData.authId || request.authId;
-        const dynamicVars = testCaseData.variables || {};
-        
-        const input: CollectionRequestInput = {
-            id: `${item.id}-${testCase?.id || 'default'}-${Date.now()}`,
-            name: collectionItem.name,
-            method: request.method,
-            url: urlString,
-            headers: finalHeaders,
-            params: finalParams,
-            authId: finalAuthId,
-            request: request,
-        };
-
-        if (testCaseData.body !== undefined) {
-            input.body = testCaseData.body;
-        }
-        
-        const buildResult = await buildHttpRequest(
-            input,
-            environmentIdRef.current,
-            environments,
-            auths,
-            defaultAuthIdRef.current,
-            dynamicVars
-        );
-        
-        if (buildResult.error || !buildResult.request) {
-            return {
-                status: 'failed',
-                validationStatus: 'idle',
-                error: buildResult.error || 'Failed to build request',
-            };
-        }
-        
-        // Merge environment variables with test case variables using shared utility
-        const finalEnvVars = mergeEnvVarsWithOverrides(
-            buildResult.request.envVars || {},
-            testCaseData.variables
-        );
-        
-        // Determine body - if test case has body override, use that instead
-        let finalBody = buildResult.request.body;
-        
-        // Determine validation - test case validation > item validation > request validation
-        const validation = testCase?.validation || item.validation || request.validation;
-        
-        const config: HttpRequestConfig = {
-            id: buildResult.request.id,
-            method: buildResult.request.method,
-            url: buildResult.request.url,
-            headers: buildResult.request.headers || [],
-            params: buildResult.request.params || [],
-            body: finalBody,
-            auth: buildResult.request.auth,
-            envVars: finalEnvVars,
-            validation,
-        };
-        
-        try {
-            const result = await httpAdapter.executeRequest(config);
-            
-            if (isCancelledRef.current) {
-                return {
-                    status: 'failed',
-                    validationStatus: 'idle',
-                    error: 'Cancelled',
-                };
-            }
-            
-            if (result.isOk) {
-                const response = result.value;
-                const isSuccess = response.status >= 200 && response.status < 400;
-                const validationResult = response.validationResult;
-                
-                let validationStatus: TestValidationStatus = 'idle';
-                if (validationResult) {
-                    validationStatus = validationResult.allPassed ? 'pass' : 'fail';
-                }
-                
-                return {
-                    response,
-                    status: isSuccess ? 'success' : 'failed',
-                    validationStatus,
-                };
-            } else {
-                return {
-                    status: 'failed',
-                    validationStatus: 'idle',
-                    error: result.error,
-                };
-            }
-        } catch (err) {
-            return {
-                status: 'failed',
-                validationStatus: 'idle',
-                error: err instanceof Error ? err.message : 'Unknown error',
-            };
-        }
-    }, [collections, httpAdapter, environments, auths]);
+    /**
+     * Create execution context
+     */
+    const createContext = useCallback((): ExecutionContext => ({
+        httpAdapter,
+        environments,
+        auths,
+        collections,
+        flows,
+        environmentId: environmentIdRef.current,
+        defaultAuthId: defaultAuthIdRef.current,
+        isCancelled: () => isCancelledRef.current,
+    }), [httpAdapter, environments, auths, collections, flows]);
     
-    // ========================================================================
-    // Helper: Execute a single request test item (with test cases support)
-    // ========================================================================
-    
+    /**
+     * Execute a single request item (with test cases support)
+     */
     const executeRequestItem = useCallback(async (
         item: RequestTestItem
     ): Promise<RequestTestItemResult> => {
         const startedAt = new Date().toISOString();
+        const context = createContext();
         
         // Get enabled test cases
         const enabledTestCases = (item.testCases || []).filter(tc => tc.enabled);
         
         // If no test cases, run once with defaults
         if (enabledTestCases.length === 0) {
-            const result = await executeSingleRequest(item);
+            const input: HttpExecutionInput = {
+                referenceId: item.referenceId,
+                executionId: `${item.id}-default-${Date.now()}`,
+                validation: item.validation,
+            };
+            
+            const execResult = await httpExecutor.execute(input, context);
+            
             return {
                 itemId: item.id,
                 type: 'request',
-                status: result.status,
-                validationStatus: result.validationStatus,
-                response: result.response,
-                error: result.error,
+                status: toTestItemStatus(execResult.status),
+                validationStatus: toTestValidationStatus(execResult.validationStatus),
+                response: execResult.response,
+                error: execResult.error,
                 startedAt,
                 completedAt: new Date().toISOString(),
             };
         }
         
-        // Execute each test case and collect results
+        // Execute each test case
         const testCaseResults = new Map<string, TestCaseResult>();
         let overallStatus: TestItemStatus = 'success';
         let overallValidationStatus: TestValidationStatus = 'pass';
-        let lastResponse: HttpResponseResult | undefined;
+        let lastResponse = undefined as typeof testCaseResults extends Map<string, TestCaseResult> ? TestCaseResult['response'] : never;
         let lastError: string | undefined;
         
         for (const testCase of enabledTestCases.sort((a, b) => a.order - b.order)) {
@@ -296,39 +260,44 @@ export function useTestSuiteRunner({
             }
             
             const caseStartedAt = new Date().toISOString();
-            const result = await executeSingleRequest(item, testCase);
-            const caseCompletedAt = new Date().toISOString();
+            const overrides = testCaseToOverrides(testCase);
             
-            const caseResult: TestCaseResult = {
-                testCaseId: testCase.id,
-                testCaseName: testCase.name,
-                status: result.status,
-                validationStatus: result.validationStatus,
-                response: result.response,
-                error: result.error,
-                startedAt: caseStartedAt,
-                completedAt: caseCompletedAt,
+            const input: HttpExecutionInput = {
+                referenceId: item.referenceId,
+                executionId: `${item.id}-${testCase.id}-${Date.now()}`,
+                validation: testCase.validation || item.validation,
             };
             
-            testCaseResults.set(testCase.id, caseResult);
-            lastResponse = result.response;
-            lastError = result.error;
+            const execResult = await httpExecutor.execute(input, context, overrides);
             
-            // Aggregate status: failed if any case fails
-            if (result.status === 'failed') {
-                overallStatus = 'failed';
+            const caseStatus = toTestItemStatus(execResult.status);
+            const caseValidation = toTestValidationStatus(execResult.validationStatus);
+            
+            testCaseResults.set(testCase.id, {
+                testCaseId: testCase.id,
+                testCaseName: testCase.name,
+                status: caseStatus,
+                validationStatus: caseValidation,
+                response: execResult.response,
+                error: execResult.error,
+                startedAt: caseStartedAt,
+                completedAt: new Date().toISOString(),
+            });
+            
+            // Track last response/error
+            if (execResult.response) {
+                lastResponse = execResult.response;
+            }
+            if (execResult.error) {
+                lastError = execResult.error;
             }
             
-            // Aggregate validation: fail if any case fails validation
-            if (result.validationStatus === 'fail') {
+            // Aggregate status (any failure = overall failure)
+            if (caseStatus === 'failed') {
+                overallStatus = 'failed';
+            }
+            if (caseValidation === 'fail') {
                 overallValidationStatus = 'fail';
-            } else if (result.validationStatus === 'idle' && overallValidationStatus !== 'fail') {
-                // Keep 'pass' if we had any pass, otherwise stay idle
-                if (overallValidationStatus === 'pass') {
-                    // Already have a pass, keep it
-                } else {
-                    overallValidationStatus = 'idle';
-                }
             }
         }
         
@@ -343,300 +312,45 @@ export function useTestSuiteRunner({
             completedAt: new Date().toISOString(),
             testCaseResults,
         };
-    }, [executeSingleRequest]);
+    }, [createContext, httpExecutor]);
     
-    // ========================================================================
-    // Helper: Execute a single flow test item (simplified inline flow runner)
-    // ========================================================================
-    
+    /**
+     * Execute a flow test item
+     */
     const executeFlowItem = useCallback(async (
         item: FlowTestItem
     ): Promise<FlowTestItemResult> => {
         const startedAt = new Date().toISOString();
+        const context = createContext();
         
-        // Use shared findFlowById utility
-        const flow = findFlowById(item.referenceId, flows);
-        if (!flow) {
-            return {
-                itemId: item.id,
-                type: 'flow',
-                status: 'failed',
-                validationStatus: 'idle',
-                error: `Flow not found: ${item.referenceId}`,
-                startedAt,
-                completedAt: new Date().toISOString(),
-            };
-        }
-        
-        // Validate flow structure
-        const validationErrors = validateFlow(flow);
-        if (validationErrors.length > 0) {
-            return {
-                itemId: item.id,
-                type: 'flow',
-                status: 'failed',
-                validationStatus: 'idle',
-                error: `Invalid flow: ${validationErrors.join('; ')}`,
-                startedAt,
-                completedAt: new Date().toISOString(),
-            };
-        }
-        
-        // Get topological order
-        const executionOrder = getTopologicalOrder(flow);
-        if (!executionOrder) {
-            return {
-                itemId: item.id,
-                type: 'flow',
-                status: 'failed',
-                validationStatus: 'idle',
-                error: 'Flow contains a cycle',
-                startedAt,
-                completedAt: new Date().toISOString(),
-            };
-        }
-        
-        // Initialize flow execution
-        const flowContext: FlowContext = createEmptyFlowContext();
-        const nodeResults = new Map<string, FlowNodeResult>();
-        const activeConnectorIds: string[] = [];
-        const skippedConnectorIds: string[] = [];
-        
-        // Initialize all nodes as idle
-        for (const node of flow.nodes) {
-            nodeResults.set(node.id, {
-                nodeId: node.id,
-                requestId: node.requestId,
-                alias: node.alias,
-                status: 'idle',
-            });
-        }
-        
-        // Execute nodes in order (simplified sequential execution)
-        for (const node of executionOrder) {
-            if (isCancelledRef.current) {
-                break;
-            }
-            
-            // Check if dependencies are satisfied
-            const incoming = getIncomingConnectors(flow, node.id);
-            let canExecute = incoming.length === 0;
-            
-            for (const conn of incoming) {
-                const sourceResult = nodeResults.get(conn.sourceNodeId);
-                if (sourceResult && isConditionSatisfied(conn.condition, sourceResult)) {
-                    canExecute = true;
-                    activeConnectorIds.push(conn.id);
-                } else if (sourceResult) {
-                    skippedConnectorIds.push(conn.id);
-                }
-            }
-            
-            if (!canExecute) {
-                nodeResults.set(node.id, {
-                    nodeId: node.id,
-                    requestId: node.requestId,
-                    alias: node.alias,
-                    status: 'skipped',
-                });
-                continue;
-            }
-            
-            // Execute node
-            nodeResults.set(node.id, {
-                nodeId: node.id,
-                requestId: node.requestId,
-                alias: node.alias,
-                status: 'running',
-            });
-            
-            const nodeResult = await executeFlowNode(flow, node, flowContext);
-            nodeResults.set(node.id, nodeResult);
-            
-            if (nodeResult.response) {
-                flowContext.responses.set(node.alias, nodeResult.response);
-                flowContext.executionOrder.push(node.alias);
-            }
-            
-            if (nodeResult.status === 'failed') {
-                // Stop on first failure within flow
-                break;
-            }
-        }
-        
-        // Build flow result
-        const succeeded = Array.from(nodeResults.values()).filter(r => r.status === 'success').length;
-        const failed = Array.from(nodeResults.values()).filter(r => r.status === 'failed').length;
-        const skipped = Array.from(nodeResults.values()).filter(r => r.status === 'skipped').length;
-        
-        const flowResult: FlowRunResult = {
-            flowId: flow.id,
-            status: failed > 0 ? 'failed' : 'success',
-            nodeResults,
-            activeConnectorIds,
-            skippedConnectorIds,
-            startedAt,
-            completedAt: new Date().toISOString(),
-            progress: {
-                total: flow.nodes.length,
-                completed: succeeded + failed + skipped,
-                succeeded,
-                failed,
-                skipped,
-            },
+        const input: FlowExecutionInput = {
+            flowId: item.referenceId,
+            executionId: `${item.id}-${Date.now()}`,
         };
         
-        // Derive validation status from node validations
-        let validationStatus: TestValidationStatus = 'idle';
-        const nodeValidationResults = Array.from(nodeResults.values())
-            .filter(r => r.response?.validationResult)
-            .map(r => r.response!.validationResult!);
+        const config: FlowExecutionConfig = {
+            parallel: true, // Could be made configurable
+            defaultAuthId: defaultAuthIdRef.current || undefined,
+        };
         
-        if (nodeValidationResults.length > 0) {
-            const allPassed = nodeValidationResults.every(v => v.allPassed);
-            validationStatus = allPassed ? 'pass' : 'fail';
-        }
+        const execResult = await flowExec.execute(input, context, config);
         
         return {
             itemId: item.id,
             type: 'flow',
-            status: failed > 0 ? 'failed' : 'success',
-            validationStatus,
-            flowResult,
+            status: execResult.status === 'success' ? 'success' :
+                   execResult.status === 'cancelled' ? 'skipped' : 'failed',
+            validationStatus: toTestValidationStatus(execResult.validationStatus),
+            flowResult: execResult.flowRunResult,
+            error: execResult.error,
             startedAt,
             completedAt: new Date().toISOString(),
         };
-    }, [flows, collections, httpAdapter, environments, auths]);
+    }, [createContext, flowExec]);
     
-    // Helper to execute a single flow node
-    const executeFlowNode = useCallback(async (
-        flow: Flow,
-        node: FlowNode,
-        flowContext: FlowContext
-    ): Promise<FlowNodeResult> => {
-        const startedAt = new Date().toISOString();
-        
-        // Use shared findRequestById utility
-        const found = findRequestById(node.requestId, collections);
-        if (!found || !found.item.request) {
-            return {
-                nodeId: node.id,
-                requestId: node.requestId,
-                alias: node.alias,
-                status: 'failed',
-                error: `Request not found: ${node.requestId}`,
-                startedAt,
-                completedAt: new Date().toISOString(),
-            };
-        }
-        
-        const { item: collectionItem } = found;
-        const request = collectionItem.request!;
-        
-        // Get upstream node IDs
-        const upstreamNodeIds = getUpstreamNodeIds(flow, node.id);
-        const nodeIdToAliasMap = new Map(flow.nodes.map(n => [n.id, n.alias]));
-        
-        // Convert flow context to dynamic env vars
-        const dynamicEnvVars = flowContextToDynamicEnvVars(
-            flowContext,
-            upstreamNodeIds,
-            nodeIdToAliasMap,
-            request
-        );
-        
-        const urlObj = request.url;
-        const queryParams = typeof urlObj === 'object' && urlObj?.query ? urlObj.query : [];
-        const urlString = typeof urlObj === 'string' ? urlObj : urlObj?.raw || '';
-        
-        const input: CollectionRequestInput = {
-            id: `${node.id}-${Date.now()}`,
-            name: collectionItem.name,
-            method: request.method,
-            url: urlString,
-            headers: request.header || [],
-            params: queryParams,
-            authId: request.authId,
-            request: request,
-        };
-        
-        const buildResult = await buildHttpRequest(
-            input,
-            environmentIdRef.current,
-            environments,
-            auths,
-            defaultAuthIdRef.current || flow.defaultAuthId,
-            dynamicEnvVars
-        );
-        
-        if (buildResult.error || !buildResult.request) {
-            return {
-                nodeId: node.id,
-                requestId: node.requestId,
-                alias: node.alias,
-                status: 'failed',
-                error: buildResult.error || 'Failed to build request',
-                startedAt,
-                completedAt: new Date().toISOString(),
-            };
-        }
-        
-        const config: HttpRequestConfig = {
-            id: buildResult.request.id,
-            method: buildResult.request.method,
-            url: buildResult.request.url,
-            headers: buildResult.request.headers || [],
-            params: buildResult.request.params || [],
-            body: buildResult.request.body || null,
-            auth: buildResult.request.auth,
-            envVars: buildResult.request.envVars || {},
-            validation: request.validation,
-        };
-        
-        try {
-            const result = await httpAdapter.executeRequest(config);
-            
-            if (result.isOk) {
-                const response = result.value;
-                const isSuccess = response.status >= 200 && response.status < 400;
-                
-                return {
-                    nodeId: node.id,
-                    requestId: node.requestId,
-                    alias: node.alias,
-                    status: isSuccess ? 'success' : 'failed',
-                    response,
-                    startedAt,
-                    completedAt: new Date().toISOString(),
-                };
-            } else {
-                return {
-                    nodeId: node.id,
-                    requestId: node.requestId,
-                    alias: node.alias,
-                    status: 'failed',
-                    error: result.error,
-                    startedAt,
-                    completedAt: new Date().toISOString(),
-                };
-            }
-        } catch (err) {
-            return {
-                nodeId: node.id,
-                requestId: node.requestId,
-                alias: node.alias,
-                status: 'failed',
-                error: err instanceof Error ? err.message : 'Unknown error',
-                startedAt,
-                completedAt: new Date().toISOString(),
-            };
-        }
-    }, [collections, httpAdapter, environments, auths]);
-    
-    // ========================================================================
-    // Update state helper
-    // ========================================================================
-    
+    /**
+     * Update state helper
+     */
     const updateRunState = useCallback((
         updater: (prev: TestSuiteRunResult) => TestSuiteRunResult
     ) => {
@@ -649,10 +363,9 @@ export function useTestSuiteRunner({
         }
     }, [suiteId, setTestSuiteRunState]);
     
-    // ========================================================================
-    // Main: Run test suite
-    // ========================================================================
-    
+    /**
+     * Run the test suite
+     */
     const runTestSuite = useCallback(async (
         suite: TestSuite,
         options: RunTestSuiteOptions = {}
@@ -680,16 +393,11 @@ export function useTestSuiteRunner({
         
         // Initialize refs
         isCancelledRef.current = false;
-        pendingQueueRef.current = [...enabledItems];
-        activeItemIdsRef.current = new Set();
         environmentIdRef.current = environmentId || suite.defaultEnvId || null;
         defaultAuthIdRef.current = defaultAuthId || suite.defaultAuthId || null;
         
-        // Clear any pending delay timer
-        if (delayTimerRef.current) {
-            clearTimeout(delayTimerRef.current);
-            delayTimerRef.current = null;
-        }
+        // Create batch executor
+        batchExecutorRef.current = createBatchExecutor<TestItem, TestItemResult>();
         
         // Initialize result
         const initialResult: TestSuiteRunResult = {
@@ -707,12 +415,12 @@ export function useTestSuiteRunner({
             averageTime: 0,
         };
         
-        // Initialize item results as pending
+        // Initialize all items as idle
         for (const item of enabledItems) {
             initialResult.itemResults.set(item.id, {
                 itemId: item.id,
                 type: item.type,
-                status: 'pending',
+                status: 'idle',
                 validationStatus: 'idle',
             } as TestItemResult);
         }
@@ -723,202 +431,167 @@ export function useTestSuiteRunner({
             runningItemIds: new Set(),
         });
         
-        const itemResults = new Map<string, TestItemResult>(initialResult.itemResults);
-        let totalTime = 0;
-        let timeCount = 0;
-        
-        // Process items with concurrency and delay settings
-        const { concurrentCalls, delayBetweenCalls, stopOnFailure } = suite.settings;
-        
-        while (pendingQueueRef.current.length > 0 && !isCancelledRef.current) {
-            // Get batch of items to execute
-            const batchSize = Math.min(concurrentCalls, pendingQueueRef.current.length);
-            const batch = pendingQueueRef.current.splice(0, batchSize);
-            
-            // Mark items as running
-            for (const item of batch) {
-                activeItemIdsRef.current.add(item.id);
-                itemResults.set(item.id, {
-                    itemId: item.id,
-                    type: item.type,
-                    status: 'running',
-                    validationStatus: 'pending',
-                } as TestItemResult);
+        // Polymorphic executor - routes to request or flow executor based on item type
+        const executeItem = async (item: TestItem): Promise<TestItemResult> => {
+            if (isRequestTestItem(item)) {
+                return executeRequestItem(item);
+            } else {
+                return executeFlowItem(item as FlowTestItem);
             }
-            
-            // Update state
-            setTestSuiteRunState(suiteId, {
-                isRunning: true,
-                result: {
-                    ...initialResult,
-                    itemResults: new Map(itemResults),
-                },
-                runningItemIds: new Set(activeItemIdsRef.current),
-            });
-            
-            // Execute batch in parallel
-            const batchPromises = batch.map(async (item): Promise<TestItemResult> => {
-                if (isRequestTestItem(item)) {
-                    return executeRequestItem(item);
-                } else {
-                    return executeFlowItem(item);
-                }
-            });
-            
-            const batchResults = await Promise.all(batchPromises);
-            
-            // Process results
-            let hasFailure = false;
-            for (const result of batchResults) {
-                activeItemIdsRef.current.delete(result.itemId);
-                itemResults.set(result.itemId, result);
+        };
+        
+        // Track all results for average time calculation
+        const allResults: TestItemResult[] = [];
+        
+        // Callbacks for state updates
+        const callbacks: BatchExecutorCallbacks<TestItemResult> = {
+            onItemStart: (itemId) => {
+                // Mark item as running in state
+                updateRunState(prev => {
+                    const newResults = new Map(prev.itemResults);
+                    const existing = newResults.get(itemId);
+                    if (existing) {
+                        newResults.set(itemId, {
+                            ...existing,
+                            status: 'running',
+                            validationStatus: 'pending',
+                        });
+                    }
+                    return { ...prev, itemResults: newResults };
+                });
                 
-                if (result.status === 'failed') {
-                    hasFailure = true;
+                // Update running item IDs
+                const currentState = useAppStateStore.getState().testSuiteRunStates[suiteId];
+                if (currentState) {
+                    const newRunningIds = new Set(currentState.runningItemIds);
+                    newRunningIds.add(itemId);
+                    setTestSuiteRunState(suiteId, {
+                        ...currentState,
+                        runningItemIds: newRunningIds,
+                    });
                 }
+            },
+            onItemComplete: (result) => {
+                allResults.push(result);
                 
-                // Calculate elapsed time
-                if (result.type === 'request' && result.response?.elapsedTime) {
-                    totalTime += result.response.elapsedTime;
-                    timeCount++;
-                } else if (result.type === 'flow' && result.flowResult) {
-                    // Sum up flow node times
-                    result.flowResult.nodeResults.forEach(nodeResult => {
-                        if (nodeResult.response?.elapsedTime) {
-                            totalTime += nodeResult.response.elapsedTime;
-                            timeCount++;
-                        }
+                // Update item result in state
+                updateRunState(prev => {
+                    const newResults = new Map(prev.itemResults);
+                    newResults.set(result.itemId, result);
+                    
+                    const completed = prev.progress.completed + 1;
+                    const passed = prev.progress.passed + (isItemPassed(result) ? 1 : 0);
+                    const failed = prev.progress.failed + (result.status === 'failed' ? 1 : 0);
+                    
+                    // Calculate average time
+                    const timings = allResults
+                        .filter(r => r.type === 'request' && (r as RequestTestItemResult).response?.elapsedTime)
+                        .map(r => (r as RequestTestItemResult).response!.elapsedTime!);
+                    const avgTime = timings.length > 0 
+                        ? timings.reduce((a, b) => a + b, 0) / timings.length 
+                        : 0;
+                    
+                    return {
+                        ...prev,
+                        itemResults: newResults,
+                        progress: { ...prev.progress, completed, passed, failed },
+                        averageTime: avgTime,
+                    };
+                });
+                
+                // Remove from running item IDs
+                const currentState = useAppStateStore.getState().testSuiteRunStates[suiteId];
+                if (currentState) {
+                    const newRunningIds = new Set(currentState.runningItemIds);
+                    newRunningIds.delete(result.itemId);
+                    setTestSuiteRunState(suiteId, {
+                        ...currentState,
+                        runningItemIds: newRunningIds,
+                    });
+                }
+            },
+        };
+        
+        // Execute using BatchExecutor
+        const { settings } = suite;
+        const batchResult = await batchExecutorRef.current!.execute(
+            enabledItems,
+            executeItem,
+            {
+                concurrentCalls: settings.concurrentCalls,
+                delayBetweenCalls: settings.delayBetweenCalls,
+                stopOnFailure: settings.stopOnFailure,
+            },
+            () => isCancelledRef.current,
+            extractTestItemStatus,
+            callbacks
+        );
+        
+        // Handle skipped items if stopped on failure
+        if (batchResult.stoppedOnFailure) {
+            const completedIds = new Set(allResults.map(r => r.itemId));
+            for (const item of enabledItems) {
+                if (!completedIds.has(item.id)) {
+                    updateRunState(prev => {
+                        const newResults = new Map(prev.itemResults);
+                        newResults.set(item.id, {
+                            itemId: item.id,
+                            type: item.type,
+                            status: 'skipped',
+                            validationStatus: 'idle',
+                        } as TestItemResult);
+                        return {
+                            ...prev,
+                            itemResults: newResults,
+                            progress: {
+                                ...prev.progress,
+                                skipped: prev.progress.skipped + 1,
+                            },
+                        };
                     });
                 }
             }
-            
-            // Calculate progress
-            const completed = Array.from(itemResults.values()).filter(
-                r => r.status === 'success' || r.status === 'failed' || r.status === 'skipped'
-            ).length;
-            const passed = Array.from(itemResults.values()).filter(
-                r => r.status === 'success' && r.validationStatus !== 'fail'
-            ).length;
-            const failed = Array.from(itemResults.values()).filter(
-                r => r.status === 'failed' || r.validationStatus === 'fail'
-            ).length;
-            
-            // Update state
-            const currentResult: TestSuiteRunResult = {
-                suiteId: suite.id,
-                status: 'running',
-                itemResults: new Map(itemResults),
-                startedAt: initialResult.startedAt,
-                progress: {
-                    total: enabledItems.length,
-                    completed,
-                    passed,
-                    failed,
-                    skipped: 0,
-                },
-                averageTime: timeCount > 0 ? Math.round(totalTime / timeCount) : 0,
-            };
-            
-            setTestSuiteRunState(suiteId, {
-                isRunning: true,
-                result: currentResult,
-                runningItemIds: new Set(activeItemIdsRef.current),
-            });
-            
-            // Check stop on failure
-            if (stopOnFailure && hasFailure) {
-                // Mark remaining items as skipped
-                for (const item of pendingQueueRef.current) {
-                    itemResults.set(item.id, {
-                        itemId: item.id,
-                        type: item.type,
-                        status: 'skipped',
-                        validationStatus: 'idle',
-                    } as TestItemResult);
-                }
-                pendingQueueRef.current = [];
-                break;
-            }
-            
-            // Apply delay between batches
-            if (delayBetweenCalls > 0 && pendingQueueRef.current.length > 0 && !isCancelledRef.current) {
-                await new Promise<void>(resolve => {
-                    delayTimerRef.current = setTimeout(() => {
-                        delayTimerRef.current = null;
-                        resolve();
-                    }, delayBetweenCalls);
-                });
-            }
         }
         
-        // Calculate final stats
-        const finalCompleted = Array.from(itemResults.values()).filter(
-            r => r.status === 'success' || r.status === 'failed' || r.status === 'skipped'
-        ).length;
-        const finalPassed = Array.from(itemResults.values()).filter(
-            r => r.status === 'success' && r.validationStatus !== 'fail'
-        ).length;
-        const finalFailed = Array.from(itemResults.values()).filter(
-            r => r.status === 'failed' || r.validationStatus === 'fail'
-        ).length;
-        const finalSkipped = Array.from(itemResults.values()).filter(
-            r => r.status === 'skipped'
-        ).length;
+        // Build final result
+        const currentState = useAppStateStore.getState().testSuiteRunStates[suiteId];
+        const finalResult = currentState?.result || initialResult;
         
-        const wasCancelled = isCancelledRef.current;
-        const hasFailed = finalFailed > 0;
+        const anyFailed = batchResult.results.some(r => r.status === 'failed');
+        const wasCancelled = batchResult.cancelled && !anyFailed;
         
-        const finalResult: TestSuiteRunResult = {
-            suiteId: suite.id,
-            status: wasCancelled ? 'cancelled' : (hasFailed ? 'failed' : 'success'),
-            itemResults,
-            startedAt: initialResult.startedAt,
+        const completedResult: TestSuiteRunResult = {
+            ...finalResult,
+            status: anyFailed ? 'failed' : (wasCancelled ? 'cancelled' : 'success'),
             completedAt: new Date().toISOString(),
-            error: wasCancelled 
-                ? 'Test suite was cancelled' 
-                : (hasFailed ? `${finalFailed} test(s) failed` : undefined),
-            progress: {
-                total: enabledItems.length,
-                completed: finalCompleted,
-                passed: finalPassed,
-                failed: finalFailed,
-                skipped: finalSkipped,
-            },
-            averageTime: timeCount > 0 ? Math.round(totalTime / timeCount) : 0,
+            error: anyFailed ? 'One or more tests failed' : 
+                   wasCancelled ? 'Test suite was cancelled' : undefined,
         };
         
         setTestSuiteRunState(suiteId, {
             isRunning: false,
-            result: finalResult,
+            result: completedResult,
             runningItemIds: new Set(),
         });
         
-        return finalResult;
-    }, [suiteId, setTestSuiteRunState, executeRequestItem, executeFlowItem]);
+        return completedResult;
+    }, [suiteId, executeRequestItem, executeFlowItem, updateRunState, setTestSuiteRunState]);
     
-    // ========================================================================
-    // Cancel test suite run
-    // ========================================================================
-    
+    /**
+     * Cancel the test suite run
+     */
     const cancelTestSuite = useCallback(() => {
         isCancelledRef.current = true;
-        pendingQueueRef.current = [];
+        
+        // Cancel batch executor delay
+        batchExecutorRef.current?.cancelDelay();
         
         // Cancel any in-flight requests
-        activeItemIdsRef.current.forEach(id => {
-            httpAdapter.cancelRequest?.(id);
-        });
-        activeItemIdsRef.current.clear();
-        
-        // Clear delay timer
-        if (delayTimerRef.current) {
-            clearTimeout(delayTimerRef.current);
-            delayTimerRef.current = null;
-        }
+        httpAdapter.cancelRequest?.('*');
         
         const currentState = useAppStateStore.getState().testSuiteRunStates[suiteId];
         setTestSuiteRunState(suiteId, {
-            ...currentState,
+            ...(currentState || DEFAULT_TEST_SUITE_RUN_STATE),
             isRunning: false,
             runningItemIds: new Set(),
             result: currentState?.result ? {
@@ -930,27 +603,22 @@ export function useTestSuiteRunner({
         });
     }, [suiteId, httpAdapter, setTestSuiteRunState]);
     
-    // ========================================================================
-    // Reset test suite runner state
-    // ========================================================================
-    
+    /**
+     * Reset the test suite runner state
+     */
     const resetTestSuite = useCallback(() => {
         isCancelledRef.current = false;
-        pendingQueueRef.current = [];
-        activeItemIdsRef.current.clear();
         
-        if (delayTimerRef.current) {
-            clearTimeout(delayTimerRef.current);
-            delayTimerRef.current = null;
-        }
+        // Clean up batch executor
+        batchExecutorRef.current?.cancelDelay();
+        batchExecutorRef.current = null;
         
         clearTestSuiteRunState(suiteId);
     }, [suiteId, clearTestSuiteRunState]);
     
-    // ========================================================================
-    // Get result for specific item
-    // ========================================================================
-    
+    /**
+     * Get result for a specific item
+     */
     const getItemResult = useCallback((itemId: string): TestItemResult | undefined => {
         return state.result?.itemResults.get(itemId);
     }, [state.result]);

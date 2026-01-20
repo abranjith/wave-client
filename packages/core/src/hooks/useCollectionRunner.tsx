@@ -1,61 +1,93 @@
 /**
  * Collection Runner Hook
- * Manages execution of multiple HTTP requests with concurrency control.
- * Uses request ID for correlation between requests and responses.
  * 
- * Uses the platform adapter pattern for HTTP execution, making it platform-agnostic.
- * Leverages shared BatchExecutor for concurrency control and delay handling.
+ * Manages execution of multiple HTTP requests with concurrency control.
+ * Uses the executor pattern for clean separation of concerns:
+ * - HttpRequestExecutor: Handles individual request execution with reference lookup
+ * - BatchExecutor: Handles concurrency control and delay between batches
+ * 
+ * This version uses reference-based execution (looks up requests from collections)
+ * rather than receiving pre-built request data.
  */
 
-import { useState, useCallback, useRef } from 'react';
-import { Environment, CollectionRequest } from '../types/collection';
-import { HttpRequestConfig, HttpResponseResult } from '../types/adapters';
+import { useState, useCallback, useRef, useMemo } from 'react';
+import { Environment, Collection } from '../types/collection';
 import { Auth } from './store/createAuthSlice';
 import { RequestValidation } from '../types/validation';
 import { useHttpAdapter } from './useAdapter';
-import { BatchExecutor, BatchItem, ResultStatusExtractor } from '../utils/batchExecutor';
-import { buildHttpRequest, CollectionRequestInput } from '../utils/requestBuilder';
+import { BatchExecutor, BatchItem, ResultStatusExtractor, BatchExecutorCallbacks } from '../utils/batchExecutor';
+import { httpRequestExecutor } from '../utils/executors/httpRequestExecutor';
+import {
+    ExecutionContext,
+    HttpExecutionInput,
+    HttpExecutionResult,
+    RequestOverrides,
+} from '../utils/executors/types';
 import {
     ExecutionStatus,
     ValidationStatus,
     ExecutionConfig,
-    determineExecutionStatus,
-    determineValidationStatus,
     calculateAverageTime,
 } from '../types/execution';
 
-// ==================== Types ====================
+// ============================================================================
+// Types
+// ============================================================================
 
 export type RunStatus = ExecutionStatus;
-export type { ValidationStatus };
 
+/**
+ * Settings for running a collection
+ */
 export interface RunSettings {
     concurrentCalls: number;
     delayBetweenCalls: number;
 }
 
-export interface RunRequestItem extends BatchItem {
+/**
+ * Input item for collection run (reference-based)
+ */
+export interface CollectionRunItem extends BatchItem {
+    /** Unique ID for tracking this execution */
     id: string;
-    name: string;
-    method: string;
-    url: string;
-    request?: CollectionRequest;
-    folderPath: string[];
+    /** Reference to the collection request (collectionFilename:requestId or requestId) */
+    referenceId: string;
+    /** Optional display name (for UI) */
+    name?: string;
+    /** Optional folder path (for UI grouping) */
+    folderPath?: string[];
+    /** Item-level validation override */
     validation?: RequestValidation;
+    /** Optional overrides for data-driven testing */
+    overrides?: RequestOverrides;
 }
 
-export interface RunResult {
+/**
+ * Result of a single request execution
+ */
+export interface CollectionRunResult {
+    /** Request ID */
     requestId: string;
+    /** Reference ID used */
+    referenceId: string;
+    /** Execution status */
     status: RunStatus;
+    /** Validation status */
     validationStatus: ValidationStatus;
-    response?: HttpResponseResult;
+    /** HTTP response if successful */
+    response?: import('../types/adapters').HttpResponseResult;
+    /** Error message if failed */
     error?: string;
+    /** Elapsed time in milliseconds */
     elapsedTime?: number;
 }
 
+/**
+ * State of the collection run
+ */
 export interface CollectionRunState {
     isRunning: boolean;
-    results: Map<string, RunResult>;
+    results: Map<string, CollectionRunResult>;
     progress: {
         total: number;
         completed: number;
@@ -65,64 +97,72 @@ export interface CollectionRunState {
     averageTime: number;
 }
 
-interface UseCollectionRunnerOptions {
+/**
+ * Options for the collection runner hook
+ */
+export interface UseCollectionRunnerOptions {
+    /** Available environments for variable resolution */
     environments: Environment[];
+    /** Available auth configurations */
     auths: Auth[];
+    /** Available collections for request lookup */
+    collections: Collection[];
 }
 
-// ==================== Helper Functions ====================
+// ============================================================================
+// Helper Functions
+// ============================================================================
 
 /**
- * Create initial result for a request item (pending state)
+ * Convert HttpExecutionResult to CollectionRunResult
  */
-function createPendingResult(requestId: string): RunResult {
+function convertToRunResult(execResult: HttpExecutionResult): CollectionRunResult {
     return {
-        requestId,
+        requestId: execResult.id,
+        referenceId: execResult.referenceId,
+        status: execResult.status,
+        validationStatus: execResult.validationStatus,
+        response: execResult.response,
+        error: execResult.error,
+        elapsedTime: execResult.response?.elapsedTime,
+    };
+}
+
+/**
+ * Create pending result for initial state
+ */
+function createPendingResult(item: CollectionRunItem): CollectionRunResult {
+    return {
+        requestId: item.id,
+        referenceId: item.referenceId,
         status: 'pending',
         validationStatus: 'idle',
     };
 }
 
 /**
- * Create running result for a request item
+ * Create running result for UI feedback
  */
-function createRunningResult(requestId: string): RunResult {
+function createRunningResult(item: CollectionRunItem): CollectionRunResult {
     return {
-        requestId,
+        requestId: item.id,
+        referenceId: item.referenceId,
         status: 'running',
         validationStatus: 'pending',
     };
 }
 
 /**
- * Create result from HTTP response
+ * Determine if a result is "passed" for progress tracking
  */
-function createResultFromResponse(
-    requestId: string,
-    response: HttpResponseResult | null,
-    error?: string
-): RunResult {
-    return {
-        requestId,
-        status: determineExecutionStatus(response, error),
-        validationStatus: determineValidationStatus(response?.validationResult),
-        response: response ?? undefined,
-        error,
-        elapsedTime: response?.elapsedTime,
-    };
-}
-
-/**
- * Determine if a result is considered "passed" for progress tracking
- */
-function isResultPassed(result: RunResult): boolean {
+function isResultPassed(result: CollectionRunResult): boolean {
     return result.status === 'success' && result.validationStatus !== 'fail';
 }
 
 /**
- * Extract status from result for batch executor progress tracking
+ * Extract status from result for BatchExecutor progress tracking
  */
-const extractStatus: ResultStatusExtractor<RunResult> = (result) => ({
+const extractStatus: ResultStatusExtractor<CollectionRunResult> = (result) => ({
     status: result.status === 'success' ? 'success' :
             result.status === 'failed' ? 'failed' :
             result.status === 'cancelled' ? 'cancelled' :
@@ -130,9 +170,18 @@ const extractStatus: ResultStatusExtractor<RunResult> = (result) => ({
     validationStatus: result.validationStatus,
 });
 
-// ==================== Hook ====================
+// ============================================================================
+// Hook
+// ============================================================================
 
-export function useCollectionRunner({ environments, auths }: UseCollectionRunnerOptions) {
+/**
+ * Collection runner hook using the executor pattern
+ */
+export function useCollectionRunner({
+    environments,
+    auths,
+    collections,
+}: UseCollectionRunnerOptions) {
     const httpAdapter = useHttpAdapter();
     
     // State
@@ -140,191 +189,152 @@ export function useCollectionRunner({ environments, auths }: UseCollectionRunner
         isRunning: false,
         results: new Map(),
         progress: { total: 0, completed: 0, passed: 0, failed: 0 },
-        averageTime: 0
+        averageTime: 0,
     });
-
+    
     // Refs for tracking active run
     const isCancelledRef = useRef(false);
-    const batchExecutorRef = useRef<BatchExecutor<RunRequestItem, RunResult> | null>(null);
+    const batchExecutorRef = useRef<BatchExecutor<CollectionRunItem, CollectionRunResult> | null>(null);
     const environmentIdRef = useRef<string | null>(null);
     const defaultAuthIdRef = useRef<string | null>(null);
-
+    
+    // Memoize the HTTP executor instance
+    const executor = useMemo(() => httpRequestExecutor, []);
+    
     /**
-     * Execute a single request and return the result
+     * Create execution context from current refs and dependencies
      */
-    const executeRequest = useCallback(async (item: RunRequestItem): Promise<RunResult> => {
-        if (isCancelledRef.current) {
-            return {
-                requestId: item.id,
-                status: 'cancelled',
-                validationStatus: 'idle',
-            };
-        }
-
-        // Build the request configuration
-        const urlObj = item.request?.url;
-        const queryParams = typeof urlObj === 'object' && urlObj?.query ? urlObj.query : [];
+    const createContext = useCallback((): ExecutionContext => ({
+        httpAdapter,
+        environments,
+        auths,
+        collections,
+        environmentId: environmentIdRef.current,
+        defaultAuthId: defaultAuthIdRef.current,
+        isCancelled: () => isCancelledRef.current,
+    }), [httpAdapter, environments, auths, collections]);
+    
+    /**
+     * Execute a single item using the HttpRequestExecutor
+     */
+    const executeItem = useCallback(async (
+        item: CollectionRunItem
+    ): Promise<CollectionRunResult> => {
+        const context = createContext();
         
-        const input: CollectionRequestInput = {
-            id: item.id,
-            name: item.name,
-            method: item.method,
-            url: item.url,
-            headers: item.request?.header || [],
-            params: queryParams,
-            request: item.request
-        };
-
-        const buildResult = await buildHttpRequest(
-            input,
-            environmentIdRef.current,
-            environments,
-            auths,
-            defaultAuthIdRef.current
-        );
-
-        if (buildResult.error || !buildResult.request) {
-            return createResultFromResponse(
-                item.id,
-                null,
-                buildResult.error || 'Failed to build request'
-            );
-        }
-
-        // Build the adapter config from the built request
-        const config: HttpRequestConfig = {
-            id: item.id,
-            method: buildResult.request.method,
-            url: buildResult.request.url,
-            headers: buildResult.request.headers || [],
-            params: buildResult.request.params || [],
-            body: buildResult.request.body || null,
-            auth: buildResult.request.auth,
-            envVars: buildResult.request.envVars || {},
+        const input: HttpExecutionInput = {
+            referenceId: item.referenceId,
+            executionId: item.id,
             validation: item.validation,
         };
-
-        try {
-            const result = await httpAdapter.executeRequest(config);
-            
-            if (isCancelledRef.current) {
-                return {
-                    requestId: item.id,
-                    status: 'cancelled',
-                    validationStatus: 'idle',
-                };
-            }
-
-            if (result.isOk) {
-                return createResultFromResponse(item.id, result.value);
-            } else {
-                return createResultFromResponse(item.id, null, result.error);
-            }
-        } catch (error) {
-            return createResultFromResponse(
-                item.id,
-                null,
-                error instanceof Error ? error.message : 'Unknown error'
-            );
-        }
-    }, [httpAdapter, environments, auths]);
-
-    // Start collection run
+        
+        const execResult = await executor.execute(input, context, item.overrides);
+        return convertToRunResult(execResult);
+    }, [executor, createContext]);
+    
+    /**
+     * Run a collection of items with concurrency control
+     */
     const runCollection = useCallback(async (
-        requests: RunRequestItem[],
+        items: CollectionRunItem[],
         settings: RunSettings,
         environmentId: string | null,
         defaultAuthId: string | null
-    ) => {
-        if (requests.length === 0) {
+    ): Promise<void> => {
+        if (items.length === 0) {
             return;
         }
-
+        
         // Reset state
         isCancelledRef.current = false;
         environmentIdRef.current = environmentId;
         defaultAuthIdRef.current = defaultAuthId;
-
+        
         // Initialize results with pending status
-        const initialResults = new Map<string, RunResult>();
-        requests.forEach(req => {
-            initialResults.set(req.id, createPendingResult(req.id));
-        });
-
+        const initialResults = new Map<string, CollectionRunResult>();
+        for (const item of items) {
+            initialResults.set(item.id, createPendingResult(item));
+        }
+        
         // Set initial state
         setState({
             isRunning: true,
             results: initialResults,
             progress: {
-                total: requests.length,
+                total: items.length,
                 completed: 0,
                 passed: 0,
-                failed: 0
+                failed: 0,
             },
-            averageTime: 0
+            averageTime: 0,
         });
-
+        
         // Create batch executor
-        batchExecutorRef.current = new BatchExecutor<RunRequestItem, RunResult>();
-
+        batchExecutorRef.current = new BatchExecutor<CollectionRunItem, CollectionRunResult>();
+        
         // Create config
         const config: ExecutionConfig = {
             concurrentCalls: settings.concurrentCalls,
             delayBetweenCalls: settings.delayBetweenCalls,
             stopOnFailure: false,
         };
-
-        // Execute all requests with batch executor
+        
+        // Define callbacks for real-time state updates
+        const callbacks: BatchExecutorCallbacks<CollectionRunResult> = {
+            onItemStart: (itemId) => {
+                setState(prev => {
+                    const newResults = new Map(prev.results);
+                    const item = items.find(i => i.id === itemId);
+                    if (item) {
+                        newResults.set(itemId, createRunningResult(item));
+                    }
+                    return { ...prev, results: newResults };
+                });
+            },
+            onItemComplete: (result) => {
+                setState(prev => {
+                    const newResults = new Map(prev.results);
+                    newResults.set(result.requestId, result);
+                    
+                    // Calculate new progress
+                    const completed = prev.progress.completed + 1;
+                    const isPassed = isResultPassed(result);
+                    const passed = prev.progress.passed + (isPassed ? 1 : 0);
+                    const failed = prev.progress.failed + (!isPassed ? 1 : 0);
+                    
+                    // Calculate average time from all completed results
+                    const avgTime = calculateAverageTime(
+                        Array.from(newResults.values()).filter(r => r.elapsedTime !== undefined)
+                    );
+                    
+                    return {
+                        ...prev,
+                        results: newResults,
+                        progress: { ...prev.progress, completed, passed, failed },
+                        averageTime: avgTime,
+                    };
+                });
+            },
+        };
+        
+        // Execute all items
         try {
             await batchExecutorRef.current.execute(
-                requests,
-                async (item) => {
-                    // Update state to show running
-                    setState(prev => {
-                        const newResults = new Map(prev.results);
-                        newResults.set(item.id, createRunningResult(item.id));
-                        return { ...prev, results: newResults };
-                    });
-                    
-                    // Execute the request
-                    const result = await executeRequest(item);
-                    
-                    // Update state with result
-                    setState(prev => {
-                        const newResults = new Map(prev.results);
-                        newResults.set(item.id, result);
-
-                        // Calculate new progress
-                        const completed = prev.progress.completed + 1;
-                        const passed = prev.progress.passed + (isResultPassed(result) ? 1 : 0);
-                        const failed = prev.progress.failed + (!isResultPassed(result) ? 1 : 0);
-
-                        // Calculate average time from all completed results
-                        const avgTime = calculateAverageTime(
-                            Array.from(newResults.values()).filter(r => r.elapsedTime !== undefined)
-                        );
-
-                        return {
-                            ...prev,
-                            results: newResults,
-                            progress: { ...prev.progress, completed, passed, failed },
-                            averageTime: avgTime,
-                        };
-                    });
-                    
-                    return result;
-                },
+                items,
+                executeItem,
                 config,
                 () => isCancelledRef.current,
-                extractStatus
+                extractStatus,
+                callbacks
             );
         } finally {
-            // Mark as not running when complete
             setState(prev => ({ ...prev, isRunning: false }));
         }
-    }, [executeRequest]);
-
-    // Cancel run
+    }, [executeItem]);
+    
+    /**
+     * Cancel the current run
+     */
     const cancelRun = useCallback(() => {
         isCancelledRef.current = true;
         
@@ -336,34 +346,38 @@ export function useCollectionRunner({ environments, auths }: UseCollectionRunner
         
         setState(prev => ({
             ...prev,
-            isRunning: false
+            isRunning: false,
         }));
     }, [httpAdapter]);
-
-    // Reset results
+    
+    /**
+     * Reset runner state
+     */
     const resetResults = useCallback(() => {
         isCancelledRef.current = false;
         batchExecutorRef.current = null;
-
+        
         setState({
             isRunning: false,
             results: new Map(),
             progress: { total: 0, completed: 0, passed: 0, failed: 0 },
-            averageTime: 0
+            averageTime: 0,
         });
     }, []);
-
-    // Get result for a specific request
-    const getResult = useCallback((requestId: string): RunResult | undefined => {
+    
+    /**
+     * Get result for a specific request
+     */
+    const getResult = useCallback((requestId: string): CollectionRunResult | undefined => {
         return state.results.get(requestId);
     }, [state.results]);
-
+    
     return {
         ...state,
         runCollection,
         cancelRun,
         resetResults,
-        getResult
+        getResult,
     };
 }
 

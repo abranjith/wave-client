@@ -1,11 +1,11 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { renderHook, act, waitFor } from '@testing-library/react';
-import { useCollectionRunner, type RunRequestItem, type RunSettings } from '../../hooks/useCollectionRunner';
+import { useCollectionRunner, type CollectionRunItem, type RunSettings } from '../../hooks/useCollectionRunner';
 import { AdapterProvider } from '../../hooks/useAdapter';
 import { createMockAdapter } from '../mocks/mockAdapter';
 import type { IPlatformAdapter, HttpResponseResult } from '../../types/adapters';
 import { generateUniqueId } from '../../utils/collectionParser';
-import type { Environment } from '../../types/collection';
+import type { Environment, Collection } from '../../types/collection';
 import { AuthType } from '../../types/auth';
 import type { Auth } from '../../types/auth';
 
@@ -13,12 +13,12 @@ import type { Auth } from '../../types/auth';
 // Test Helpers
 // ============================================================================
 
-function createTestRequestItem(overrides?: Partial<RunRequestItem>): RunRequestItem {
+function createTestRequestItem(overrides?: Partial<CollectionRunItem>): CollectionRunItem {
+  const id = overrides?.id || generateUniqueId();
   return {
-    id: generateUniqueId(),
+    id,
+    referenceId: id,
     name: 'Test Request',
-    method: 'GET',
-    url: 'https://api.example.com/test',
     folderPath: [],
     ...overrides,
   };
@@ -52,6 +52,25 @@ function renderHookWithAdapter(
     ),
     initialProps: hookOptions,
   });
+}
+
+function createCollectionWithRequests(ids: string[], baseUrl = 'https://api.example.com', filename = 'test.json'): Collection {
+  return {
+    info: {
+      waveId: 'wave-test',
+      name: 'Test Collection',
+      description: 'For useCollectionRunner tests',
+    },
+    filename,
+    item: ids.map((id) => ({
+      id,
+      name: `Request ${id}`,
+      request: {
+        method: 'GET',
+        url: `${baseUrl}/items/${id}`,
+      },
+    })),
+  };
 }
 
 // ============================================================================
@@ -92,7 +111,7 @@ describe('useCollectionRunner', () => {
   describe('initialization', () => {
     it('should initialize with idle state', () => {
       const { result } = renderHookWithAdapter(
-        () => useCollectionRunner({ environments: [mockEnv], auths: [mockAuth] }),
+        () => useCollectionRunner({ environments: [mockEnv], auths: [mockAuth], collections: [] }),
         {},
         mockAdapter
       );
@@ -105,7 +124,7 @@ describe('useCollectionRunner', () => {
 
     it('should have methods available', () => {
       const { result } = renderHookWithAdapter(
-        () => useCollectionRunner({ environments: [mockEnv], auths: [mockAuth] }),
+        () => useCollectionRunner({ environments: [mockEnv], auths: [mockAuth], collections: [] }),
         {},
         mockAdapter
       );
@@ -119,13 +138,14 @@ describe('useCollectionRunner', () => {
 
   describe('runCollection', () => {
     it('should run a single request successfully', async () => {
+      const collection = createCollectionWithRequests(['single']);
       const { result } = renderHookWithAdapter(
-        () => useCollectionRunner({ environments: [mockEnv], auths: [mockAuth] }),
+        () => useCollectionRunner({ environments: [mockEnv], auths: [mockAuth], collections: [collection] }),
         {},
         mockAdapter
       );
 
-      const request = createTestRequestItem();
+      const request = createTestRequestItem({ id: 'single' });
       const settings: RunSettings = { concurrentCalls: 1, delayBetweenCalls: 0 };
 
       await act(async () => {
@@ -139,13 +159,14 @@ describe('useCollectionRunner', () => {
     });
 
     it('should track request as running initially', async () => {
+      const collection = createCollectionWithRequests(['running']);
       const { result } = renderHookWithAdapter(
-        () => useCollectionRunner({ environments: [mockEnv], auths: [mockAuth] }),
+        () => useCollectionRunner({ environments: [mockEnv], auths: [mockAuth], collections: [collection] }),
         {},
         mockAdapter
       );
 
-      const request = createTestRequestItem();
+      const request = createTestRequestItem({ id: 'running' });
       const settings: RunSettings = { concurrentCalls: 1, delayBetweenCalls: 0 };
 
       act(() => {
@@ -160,17 +181,15 @@ describe('useCollectionRunner', () => {
     });
 
     it('should run multiple requests sequentially with concurrentCalls=1', async () => {
+      const ids = ['req-1', 'req-2', 'req-3'];
+      const collection = createCollectionWithRequests(ids);
       const { result } = renderHookWithAdapter(
-        () => useCollectionRunner({ environments: [mockEnv], auths: [mockAuth] }),
+        () => useCollectionRunner({ environments: [mockEnv], auths: [mockAuth], collections: [collection] }),
         {},
         mockAdapter
       );
 
-      const requests = [
-        createTestRequestItem({ id: 'req-1', name: 'Request 1' }),
-        createTestRequestItem({ id: 'req-2', name: 'Request 2' }),
-        createTestRequestItem({ id: 'req-3', name: 'Request 3' }),
-      ];
+      const requests = ids.map((id) => createTestRequestItem({ id }));
       const settings: RunSettings = { concurrentCalls: 1, delayBetweenCalls: 0 };
 
       await act(async () => {
@@ -185,15 +204,15 @@ describe('useCollectionRunner', () => {
     });
 
     it('should run multiple requests concurrently with concurrentCalls=3', async () => {
+      const ids = Array.from({ length: 5 }, (_, i) => `req-${i}`);
+      const collection = createCollectionWithRequests(ids);
       const { result } = renderHookWithAdapter(
-        () => useCollectionRunner({ environments: [mockEnv], auths: [mockAuth] }),
+        () => useCollectionRunner({ environments: [mockEnv], auths: [mockAuth], collections: [collection] }),
         {},
         mockAdapter
       );
 
-      const requests = Array.from({ length: 5 }, (_, i) =>
-        createTestRequestItem({ id: `req-${i}`, name: `Request ${i}` })
-      );
+      const requests = ids.map((id) => createTestRequestItem({ id }));
       const settings: RunSettings = { concurrentCalls: 3, delayBetweenCalls: 0 };
 
       await act(async () => {
@@ -205,15 +224,15 @@ describe('useCollectionRunner', () => {
     });
 
     it('should apply delay between concurrent batches', async () => {
+      const ids = Array.from({ length: 4 }, (_, i) => `req-${i}`);
+      const collection = createCollectionWithRequests(ids);
       const { result } = renderHookWithAdapter(
-        () => useCollectionRunner({ environments: [mockEnv], auths: [mockAuth] }),
+        () => useCollectionRunner({ environments: [mockEnv], auths: [mockAuth], collections: [collection] }),
         {},
         mockAdapter
       );
 
-      const requests = Array.from({ length: 4 }, (_, i) =>
-        createTestRequestItem({ id: `req-${i}` })
-      );
+      const requests = ids.map((id) => createTestRequestItem({ id }));
       // Test with concurrentCalls=2 but no delay to avoid timing issues
       // The batching logic will still apply correctly
       const settings: RunSettings = { concurrentCalls: 2, delayBetweenCalls: 0 };
@@ -229,16 +248,15 @@ describe('useCollectionRunner', () => {
     });
 
     it('should update progress as requests complete', async () => {
+      const ids = ['req-a', 'req-b'];
+      const collection = createCollectionWithRequests(ids);
       const { result } = renderHookWithAdapter(
-        () => useCollectionRunner({ environments: [mockEnv], auths: [mockAuth] }),
+        () => useCollectionRunner({ environments: [mockEnv], auths: [mockAuth], collections: [collection] }),
         {},
         mockAdapter
       );
 
-      const requests = [
-        createTestRequestItem(),
-        createTestRequestItem(),
-      ];
+      const requests = ids.map((id) => createTestRequestItem({ id }));
       const settings: RunSettings = { concurrentCalls: 1, delayBetweenCalls: 0 };
 
       await act(async () => {
@@ -255,7 +273,7 @@ describe('useCollectionRunner', () => {
 
     it('should not run with empty request list', async () => {
       const { result } = renderHookWithAdapter(
-        () => useCollectionRunner({ environments: [mockEnv], auths: [mockAuth] }),
+        () => useCollectionRunner({ environments: [mockEnv], auths: [mockAuth], collections: [] }),
         {},
         mockAdapter
       );
@@ -274,7 +292,7 @@ describe('useCollectionRunner', () => {
   describe('cancelRun', () => {
     it('should cancel an in-progress run', async () => {
       const { result } = renderHookWithAdapter(
-        () => useCollectionRunner({ environments: [mockEnv], auths: [mockAuth] }),
+        () => useCollectionRunner({ environments: [mockEnv], auths: [mockAuth], collections: [] }),
         {},
         mockAdapter
       );
@@ -300,7 +318,7 @@ describe('useCollectionRunner', () => {
 
     it('should cancel pending requests', async () => {
       const { result } = renderHookWithAdapter(
-        () => useCollectionRunner({ environments: [mockEnv], auths: [mockAuth] }),
+        () => useCollectionRunner({ environments: [mockEnv], auths: [mockAuth], collections: [] }),
         {},
         mockAdapter
       );
@@ -327,13 +345,14 @@ describe('useCollectionRunner', () => {
 
   describe('resetResults', () => {
     it('should reset all state', async () => {
+      const collection = createCollectionWithRequests(['reset-1']);
       const { result } = renderHookWithAdapter(
-        () => useCollectionRunner({ environments: [mockEnv], auths: [mockAuth] }),
+        () => useCollectionRunner({ environments: [mockEnv], auths: [mockAuth], collections: [collection] }),
         {},
         mockAdapter
       );
 
-      const request = createTestRequestItem();
+      const request = createTestRequestItem({ id: 'reset-1' });
       const settings: RunSettings = { concurrentCalls: 1, delayBetweenCalls: 0 };
 
       await act(async () => {
@@ -358,7 +377,7 @@ describe('useCollectionRunner', () => {
   describe('getResult', () => {
     it('should return undefined for non-existent request', async () => {
       const { result } = renderHookWithAdapter(
-        () => useCollectionRunner({ environments: [mockEnv], auths: [mockAuth] }),
+        () => useCollectionRunner({ environments: [mockEnv], auths: [mockAuth], collections: [] }),
         {},
         mockAdapter
       );
@@ -368,13 +387,14 @@ describe('useCollectionRunner', () => {
     });
 
     it('should return result for completed request', async () => {
+      const collection = createCollectionWithRequests(['completed-1']);
       const { result } = renderHookWithAdapter(
-        () => useCollectionRunner({ environments: [mockEnv], auths: [mockAuth] }),
+        () => useCollectionRunner({ environments: [mockEnv], auths: [mockAuth], collections: [collection] }),
         {},
         mockAdapter
       );
 
-      const request = createTestRequestItem();
+      const request = createTestRequestItem({ id: 'completed-1' });
       const settings: RunSettings = { concurrentCalls: 1, delayBetweenCalls: 0 };
 
       await act(async () => {
@@ -391,13 +411,14 @@ describe('useCollectionRunner', () => {
 
   describe('result tracking', () => {
     it('should mark successful requests', async () => {
+      const collection = createCollectionWithRequests(['success-1']);
       const { result } = renderHookWithAdapter(
-        () => useCollectionRunner({ environments: [mockEnv], auths: [mockAuth] }),
+        () => useCollectionRunner({ environments: [mockEnv], auths: [mockAuth], collections: [collection] }),
         {},
         mockAdapter
       );
 
-      const request = createTestRequestItem();
+      const request = createTestRequestItem({ id: 'success-1' });
       const settings: RunSettings = { concurrentCalls: 1, delayBetweenCalls: 0 };
 
       await act(async () => {
@@ -410,16 +431,15 @@ describe('useCollectionRunner', () => {
     });
 
     it('should calculate average elapsed time', async () => {
+      const ids = ['avg-1', 'avg-2'];
+      const collection = createCollectionWithRequests(ids);
       const { result } = renderHookWithAdapter(
-        () => useCollectionRunner({ environments: [mockEnv], auths: [mockAuth] }),
+        () => useCollectionRunner({ environments: [mockEnv], auths: [mockAuth], collections: [collection] }),
         {},
         mockAdapter
       );
 
-      const requests = [
-        createTestRequestItem(),
-        createTestRequestItem(),
-      ];
+      const requests = ids.map((id) => createTestRequestItem({ id }));
       const settings: RunSettings = { concurrentCalls: 1, delayBetweenCalls: 0 };
 
       await act(async () => {
@@ -433,16 +453,20 @@ describe('useCollectionRunner', () => {
 
   describe('error handling', () => {
     it('should handle request execution errors gracefully', async () => {
+      // Create adapter that errors on invalid domain
+      const { adapter: errorAdapter } = createMockAdapter({
+        initialData: { environments: [mockEnv], auths: [mockAuth] },
+        http: { errorUrls: new Set(['invalid-domain-that-should-not-exist-12345.com']) },
+      });
+
+      const collection = createCollectionWithRequests(['err-1'], 'https://invalid-domain-that-should-not-exist-12345.com');
       const { result } = renderHookWithAdapter(
-        () => useCollectionRunner({ environments: [mockEnv], auths: [mockAuth] }),
+        () => useCollectionRunner({ environments: [mockEnv], auths: [mockAuth], collections: [collection] }),
         {},
-        mockAdapter
+        errorAdapter
       );
 
-      // Create a request to a URL that would typically fail
-      const request = createTestRequestItem({
-        url: 'https://invalid-domain-that-should-not-exist-12345.com/test'
-      });
+      const request = createTestRequestItem({ id: 'err-1' });
       const settings: RunSettings = { concurrentCalls: 1, delayBetweenCalls: 0 };
 
       await act(async () => {
@@ -459,13 +483,14 @@ describe('useCollectionRunner', () => {
 
   describe('environment and auth handling', () => {
     it('should accept environmentId for variable resolution', async () => {
+      const collection = createCollectionWithRequests(['env-req']);
       const { result } = renderHookWithAdapter(
-        () => useCollectionRunner({ environments: [mockEnv], auths: [mockAuth] }),
+        () => useCollectionRunner({ environments: [mockEnv], auths: [mockAuth], collections: [collection] }),
         {},
         mockAdapter
       );
 
-      const request = createTestRequestItem();
+      const request = createTestRequestItem({ id: 'env-req' });
       const settings: RunSettings = { concurrentCalls: 1, delayBetweenCalls: 0 };
 
       await act(async () => {
@@ -477,13 +502,14 @@ describe('useCollectionRunner', () => {
     });
 
     it('should accept defaultAuthId', async () => {
+      const collection = createCollectionWithRequests(['auth-req']);
       const { result } = renderHookWithAdapter(
-        () => useCollectionRunner({ environments: [mockEnv], auths: [mockAuth] }),
+        () => useCollectionRunner({ environments: [mockEnv], auths: [mockAuth], collections: [collection] }),
         {},
         mockAdapter
       );
 
-      const request = createTestRequestItem();
+      const request = createTestRequestItem({ id: 'auth-req' });
       const settings: RunSettings = { concurrentCalls: 1, delayBetweenCalls: 0 };
 
       await act(async () => {
@@ -497,15 +523,15 @@ describe('useCollectionRunner', () => {
 
   describe('concurrent execution', () => {
     it('should respect maximum concurrent calls', async () => {
+      const ids = Array.from({ length: 6 }, (_, i) => `req-${i}`);
+      const collection = createCollectionWithRequests(ids);
       const { result } = renderHookWithAdapter(
-        () => useCollectionRunner({ environments: [mockEnv], auths: [mockAuth] }),
+        () => useCollectionRunner({ environments: [mockEnv], auths: [mockAuth], collections: [collection] }),
         {},
         mockAdapter
       );
 
-      const requests = Array.from({ length: 6 }, (_, i) =>
-        createTestRequestItem({ id: `req-${i}` })
-      );
+      const requests = ids.map((id) => createTestRequestItem({ id }));
       const settings: RunSettings = { concurrentCalls: 2, delayBetweenCalls: 0 };
 
       await act(async () => {
@@ -519,8 +545,9 @@ describe('useCollectionRunner', () => {
 
   describe('multiple runs', () => {
     it('should allow sequential runs', async () => {
+      const collection = createCollectionWithRequests(['req-1', 'req-2']);
       const { result } = renderHookWithAdapter(
-        () => useCollectionRunner({ environments: [mockEnv], auths: [mockAuth] }),
+        () => useCollectionRunner({ environments: [mockEnv], auths: [mockAuth], collections: [collection] }),
         {},
         mockAdapter
       );

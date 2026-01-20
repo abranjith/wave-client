@@ -1,3 +1,5 @@
+// Hook and types
+import { useCollectionRunner, CollectionRunItem, RunStatus, type CollectionRunResult } from '../../hooks/useCollectionRunner';
 import React, { useState, useMemo, useCallback, useId } from 'react';
 import { PlayIcon, StopCircleIcon, ChevronDownIcon, ChevronRightIcon, SearchIcon } from 'lucide-react';
 import { CollectionItem, isRequest } from '../../types/collection';
@@ -10,7 +12,7 @@ import { Label } from '../ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import RunRequestCard, { RunRequestData } from './RunRequestCard';
 import useAppStateStore from '../../hooks/store/useAppStateStore';
-import { useCollectionRunner, RunRequestItem, RunStatus, ValidationStatus } from '../../hooks/useCollectionRunner';
+import { ValidationStatus } from '../../types/execution';
 import { RequestValidation, StatusValidationRule } from '../../types/validation';
 
 // ==================== Types ====================
@@ -60,28 +62,36 @@ const DEFAULT_VALIDATION: RequestValidation = {
 
 /**
  * Recursively flattens all requests from collection items
+ * Returns UI-ready RunRequestData with initial idle statuses.
  */
 function flattenRequests(
   items: CollectionItem[],
   parentPath: string[] = []
-): RunRequestItem[] {
-  const requests: RunRequestItem[] = [];
+): RunRequestData[] {
+  const requests: RunRequestData[] = [];
 
   for (const item of items) {
     if (isRequest(item) && item.request) {
       // Use request validation if defined and enabled, otherwise use default
-      const validation = item.request.validation?.enabled 
-        ? item.request.validation 
+      const validation = item.request.validation?.enabled
+        ? item.request.validation
         : DEFAULT_VALIDATION;
+
+      // Ensure the request object carries the chosen validation
+      const requestWithValidation = { ...item.request, validation };
 
       requests.push({
         id: item.id,
         name: item.name,
         method: item.request.method || 'GET',
         url: urlToString(item.request.url),
-        request: item.request,
+        request: requestWithValidation,
         folderPath: parentPath,
-        validation,
+        runStatus: 'idle',
+        validationStatus: 'idle',
+        responseStatus: undefined,
+        responseTime: undefined,
+        error: undefined,
       });
     }
 
@@ -94,28 +104,20 @@ function flattenRequests(
 }
 
 /**
- * Converts RunRequestItem to RunRequestData for display
+ * Update a RunRequestData with runner result values
  */
-function toRunRequestData(
-  item: RunRequestItem,
-  runStatus: RunStatus = 'idle',
-  validationStatus: ValidationStatus = 'idle',
-  responseStatus?: number,
-  responseTime?: number,
-  error?: string
+function applyRunnerResult(
+  item: RunRequestData,
+  result?: CollectionRunResult
 ): RunRequestData {
+  if (!result) return item;
   return {
-    id: item.id,
-    name: item.name,
-    method: item.method,
-    url: item.url,
-    request: item.request!,
-    folderPath: item.folderPath,
-    runStatus,
-    validationStatus,
-    responseStatus,
-    responseTime,
-    error,
+    ...item,
+    runStatus: result.status,
+    validationStatus: result.validationStatus,
+    responseStatus: result.response?.status,
+    responseTime: result.elapsedTime,
+    error: result.error,
   };
 }
 
@@ -236,11 +238,13 @@ const RunCollectionModal: React.FC<RunCollectionModalProps> = ({
   // Global store
   const environments = useAppStateStore((state) => state.environments);
   const auths = useAppStateStore((state) => state.auths);
+  const collections = useAppStateStore((state) => state.collections);
 
   // Collection runner hook
   const runner = useCollectionRunner({
     environments,
     auths,
+    collections,
   });
 
   // Local state
@@ -297,20 +301,7 @@ const RunCollectionModal: React.FC<RunCollectionModalProps> = ({
 
   // Convert filtered requests to RunRequestData with runner results
   const displayRequests = useMemo<RunRequestData[]>(() => {
-    return filteredRequests.map((req) => {
-      const result = runner.getResult(req.id);
-      if (result) {
-        return toRunRequestData(
-          req,
-          result.status,
-          result.validationStatus,
-          result.response?.status,
-          result.elapsedTime,
-          result.error
-        );
-      }
-      return toRunRequestData(req);
-    });
+    return filteredRequests.map((req) => applyRunnerResult(req, runner.getResult(req.id)));
   }, [filteredRequests, runner]);
 
   // Calculate metrics from runner progress
@@ -357,9 +348,17 @@ const RunCollectionModal: React.FC<RunCollectionModalProps> = ({
   }, []);
 
   const handleRun = useCallback(() => {
-    // Get selected requests as RunRequestItems
-    const selectedRequests = allRequests.filter(r => selectedRequestIds.has(r.id));
-    
+    // Get selected requests and convert to CollectionRunItem for the runner
+    const selectedRequests = allRequests
+      .filter(r => selectedRequestIds.has(r.id))
+      .map<CollectionRunItem>((r) => ({
+        id: r.id,
+        referenceId: r.id, // executor will look up by request id within collections
+        name: r.name,
+        folderPath: r.folderPath,
+        validation: r.request?.validation,
+      }));
+
     runner.runCollection(
       selectedRequests,
       {
