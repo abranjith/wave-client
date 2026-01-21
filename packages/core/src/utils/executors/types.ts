@@ -9,7 +9,7 @@ import type { Environment, Collection, HeaderRow, ParamRow, CollectionRequest } 
 import type { Flow, FlowContext } from '../../types/flow';
 import type { HttpResponseResult, IHttpAdapter } from '../../types/adapters';
 import type { Auth } from '../../hooks/store/createAuthSlice';
-import type { RequestValidation } from '../../types/validation';
+import type { RequestValidation, ValidationResult } from '../../types/validation';
 import type { RequestBody } from '../../types/tab';
 import type { ExecutionStatus, ValidationStatus } from '../../types/execution';
 
@@ -115,6 +115,8 @@ export interface HttpExecutionResult {
     status: ExecutionStatus;
     /** Validation status */
     validationStatus: ValidationStatus;
+    /** Validation result */
+    validationResult?: ValidationResult;
     /** HTTP response if request was executed */
     response?: HttpResponseResult;
     /** Error message if failed */

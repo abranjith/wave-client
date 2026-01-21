@@ -13,7 +13,7 @@
 import { useState, useCallback, useRef, useMemo } from 'react';
 import { Environment, Collection } from '../types/collection';
 import { Auth } from './store/createAuthSlice';
-import { RequestValidation } from '../types/validation';
+import { RequestValidation, ValidationResult } from '../types/validation';
 import { useHttpAdapter } from './useAdapter';
 import { BatchExecutor, BatchItem, ResultStatusExtractor, BatchExecutorCallbacks } from '../utils/batchExecutor';
 import { httpRequestExecutor } from '../utils/executors/httpRequestExecutor';
@@ -74,6 +74,8 @@ export interface CollectionRunResult {
     status: RunStatus;
     /** Validation status */
     validationStatus: ValidationStatus;
+     /** Validation result */
+    validationResult?: ValidationResult;
     /** HTTP response if successful */
     response?: import('../types/adapters').HttpResponseResult;
     /** Error message if failed */
@@ -122,6 +124,7 @@ function convertToRunResult(execResult: HttpExecutionResult): CollectionRunResul
         referenceId: execResult.referenceId,
         status: execResult.status,
         validationStatus: execResult.validationStatus,
+        validationResult: execResult.validationResult,
         response: execResult.response,
         error: execResult.error,
         elapsedTime: execResult.response?.elapsedTime,

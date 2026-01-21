@@ -312,6 +312,7 @@ export class HttpRequestExecutor implements IItemExecutor<HttpExecutionInput, Ht
             referenceId,
             status: determineExecutionStatus(response),
             validationStatus: determineValidationStatus(response.validationResult),
+            validationResult: response.validationResult,
             response,
             startedAt,
             completedAt: new Date().toISOString(),

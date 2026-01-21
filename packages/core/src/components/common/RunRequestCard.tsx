@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { ChevronDownIcon, ChevronRightIcon, LoaderCircle, CheckCircle2, XCircle, Circle } from 'lucide-react';
 import { CollectionRequest } from '../../types/collection';
+import { ValidationResult } from '../../types/validation';
 import { getHttpMethodColor } from '../../utils/common';
 import { Checkbox } from '../ui/checkbox';
 
@@ -21,6 +22,7 @@ export interface RunRequestData {
   responseStatus?: number;
   responseTime?: number;
   validationStatus: ValidationStatus;
+  validationResult?: ValidationResult;
   // Response data
   responseHeaders?: Record<string, string>;
   responseBody?: string;
@@ -239,12 +241,97 @@ const CardTabContent: React.FC<CardTabContentProps> = ({ activeTab, data }) => {
       if (data.validationStatus === 'idle') {
         return <div className="text-slate-500 text-sm italic">Validation not run yet</div>;
       }
+      
+      if (data.validationStatus === 'pending') {
+        return (
+          <div className="flex items-center gap-2">
+            <LoaderCircle className="h-4 w-4 text-blue-400 animate-spin" />
+            <span className="text-slate-600 dark:text-slate-400">Running validation...</span>
+          </div>
+        );
+      }
+      
+      // Display validation results if available
+      if (data.validationResult) {
+        const { passedRules, failedRules, results } = data.validationResult;
+        
+        return (
+          <div className="space-y-2">
+            {/* Summary counts */}
+            <div className="text-sm font-medium text-slate-700 dark:text-slate-300">
+              <span className="text-green-600 dark:text-green-400">{passedRules} passed</span>
+              {failedRules > 0 && (
+                <>
+                  {' · '}
+                  <span className="text-red-600 dark:text-red-400">{failedRules} failed</span>
+                </>
+              )}
+            </div>
+            
+            {/* Rules table */}
+            <div className="border border-slate-200 dark:border-slate-700 rounded-md overflow-hidden">
+              <table className="w-full text-sm">
+                <thead className="bg-slate-100 dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700">
+                  <tr>
+                    <th className="px-3 py-2 text-left font-medium text-slate-700 dark:text-slate-300">Rule</th>
+                    <th className="px-3 py-2 text-center font-medium text-slate-700 dark:text-slate-300 w-20">Status</th>
+                    <th className="px-3 py-2 text-left font-medium text-slate-700 dark:text-slate-300">Result</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-200 dark:divide-slate-700">
+                  {results.map((result) => {
+                    // Determine what to show in Result column for failures
+                    let resultContent = '';
+                    if (!result.passed) {
+                      if (result.expected || result.actual) {
+                        const parts = [];
+                        if (result.expected) parts.push(`Expected: ${result.expected}`);
+                        if (result.actual) parts.push(`Actual: ${result.actual}`);
+                        resultContent = parts.join(' | ');
+                      } else if (result.error) {
+                        resultContent = result.error;
+                      } else {
+                        resultContent = result.message;
+                      }
+                    }
+                    
+                    return (
+                      <tr key={result.ruleId} className="hover:bg-slate-50 dark:hover:bg-slate-800/50">
+                        <td className="px-3 py-2 text-slate-700 dark:text-slate-300">{result.ruleName}</td>
+                        <td className="px-3 py-2 text-center">
+                          {result.passed ? (
+                            <CheckCircle2 className="h-4 w-4 text-green-500 inline-block" />
+                          ) : (
+                            <XCircle className="h-4 w-4 text-red-500 inline-block" />
+                          )}
+                        </td>
+                        <td className="px-3 py-2 text-xs font-mono text-slate-600 dark:text-slate-400 break-all">
+                          {resultContent}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        );
+      }
+      
+      // Fallback for when validation ran but no result data available
       return (
         <div className="flex items-center gap-2">
-          <ValidationIndicator status={data.validationStatus} />
-          <span className={data.validationStatus === 'pass' ? 'text-green-600' : 'text-red-600'}>
-            {data.validationStatus === 'pass' ? 'All validations passed' : 'Validation failed'}
-          </span>
+          {data.validationStatus === 'pass' ? (
+            <>
+              <CheckCircle2 className="h-4 w-4 text-green-500" />
+              <span className="text-green-600 dark:text-green-400">All validations passed</span>
+            </>
+          ) : (
+            <>
+              <XCircle className="h-4 w-4 text-red-500" />
+              <span className="text-red-600 dark:text-red-400">Validation failed</span>
+            </>
+          )}
         </div>
       );
 
@@ -341,7 +428,7 @@ const RunRequestCard: React.FC<RunRequestCardProps> = ({
             responseStatus={data.responseStatus}
             responseTime={data.responseTime}
           />
-          {data.runStatus !== 'running' && <ValidationIndicator status={data.validationStatus} />}
+          {data.runStatus === 'success' && <ValidationIndicator status={data.validationStatus} />}
         </div>
       </div>
 

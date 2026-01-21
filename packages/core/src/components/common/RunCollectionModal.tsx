@@ -1,5 +1,5 @@
 // Hook and types
-import { useCollectionRunner, CollectionRunItem, RunStatus, type CollectionRunResult } from '../../hooks/useCollectionRunner';
+import { useCollectionRunner, CollectionRunItem, type CollectionRunResult } from '../../hooks/useCollectionRunner';
 import React, { useState, useMemo, useCallback, useId } from 'react';
 import { PlayIcon, StopCircleIcon, ChevronDownIcon, ChevronRightIcon, SearchIcon } from 'lucide-react';
 import { CollectionItem, isRequest } from '../../types/collection';
@@ -12,7 +12,6 @@ import { Label } from '../ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import RunRequestCard, { RunRequestData } from './RunRequestCard';
 import useAppStateStore from '../../hooks/store/useAppStateStore';
-import { ValidationStatus } from '../../types/execution';
 import { RequestValidation, StatusValidationRule } from '../../types/validation';
 
 // ==================== Types ====================
