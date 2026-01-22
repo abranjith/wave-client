@@ -152,7 +152,7 @@ function buildRunRequestData(
         validationStatus: toValidationStatus(nodeResult),
         responseHeaders: nodeResult?.response?.headers,
         responseBody: nodeResult?.response?.body,
-        isResponseEncoded: nodeResult?.response?.is_encoded,
+        isResponseEncoded: nodeResult?.response?.isEncoded,
         error: deriveError(nodeResult),
     };
 }

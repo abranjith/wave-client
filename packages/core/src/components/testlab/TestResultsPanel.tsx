@@ -187,7 +187,7 @@ const FlowResultSubPanel: React.FC<FlowResultSubPanelProps> = ({
                 validationStatus,
                 responseHeaders: nodeResult?.response?.headers,
                 responseBody: nodeResult?.response?.body,
-                isResponseEncoded: nodeResult?.response?.is_encoded,
+                isResponseEncoded: nodeResult?.response?.isEncoded,
                 error: nodeResult?.error || (nodeResult?.status === 'skipped' ? 'Skipped (condition not met)' : undefined),
             } as RunRequestData;
         });
@@ -291,7 +291,7 @@ const TestCaseResultCard: React.FC<TestCaseResultCardProps> = ({
                     let displayBody = testCaseResult.response.body;
 
                     // Decode base64 if response is encoded
-                    if (testCaseResult.response.is_encoded && testCaseResult.response.body) {
+                    if (testCaseResult.response.isEncoded && testCaseResult.response.body) {
                         try {
                             displayBody = atob(testCaseResult.response.body);
                         } catch (e) {
@@ -616,7 +616,7 @@ const TestItemCard: React.FC<TestItemCardProps> = ({
             validationStatus: toValidationStatus(itemResult?.validationStatus),
             responseHeaders: requestResult?.response?.headers,
             responseBody: requestResult?.response?.body,
-            isResponseEncoded: requestResult?.response?.is_encoded,
+            isResponseEncoded: requestResult?.response?.isEncoded,
             error: deriveError(itemResult),
         };
 

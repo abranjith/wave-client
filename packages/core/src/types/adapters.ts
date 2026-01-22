@@ -83,7 +83,7 @@ export interface HttpResponseResult {
     size: number;
     body: string;
     headers: Record<string, string>;
-    is_encoded: boolean;
+    isEncoded: boolean;
     cookies?: Cookie[];
     /** Validation results if validation was requested */
     validationResult?: ValidationResult;

@@ -239,7 +239,7 @@ export interface ResponseData {
   body: string;
   headers: Record<string, string>;
   validationResult?: ValidationResult;
-  is_encoded: boolean;
+  isEncoded: boolean;
 }
 
 export type RequestBodyTextType = 'none' | 'json' | 'xml' | 'html' | 'text' | 'csv' | 'unknown';

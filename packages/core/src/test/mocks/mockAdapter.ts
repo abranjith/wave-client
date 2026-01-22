@@ -396,7 +396,7 @@ function createMockHttpAdapter(options: MockHttpOptions = {}): IHttpAdapter {
                     size: 100,
                     body: JSON.stringify({ success: true, mock: true }),
                     headers: { 'content-type': 'application/json' },
-                    is_encoded: false,
+                    isEncoded: false,
                     ...restDefaultResponse,
                 };
 

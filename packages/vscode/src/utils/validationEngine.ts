@@ -400,7 +400,7 @@ function evaluateBodyRule(
     let body = response.body || '';
 
     // Decode base64 body if needed
-    if (response.is_encoded && body) {
+    if (response.isEncoded && body) {
         try {
             body = Buffer.from(body, 'base64').toString('utf-8');
         } catch (e) {

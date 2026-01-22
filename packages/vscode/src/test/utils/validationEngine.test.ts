@@ -49,7 +49,7 @@ function createMockResponse(overrides: Partial<ResponseData> = {}): ResponseData
         body: '{"message":"success","data":{"id":123,"name":"Test"}}',
         elapsedTime: 150,
         size: 0,
-        is_encoded: false,
+        isEncoded: false,
         ...overrides
     };
 }
@@ -950,7 +950,7 @@ describe('Body Validation Rules', () => {
             const encodedBody = Buffer.from('{"message":"success"}').toString('base64');
             const response = createMockResponse({
                 body: encodedBody,
-                is_encoded: true
+                isEncoded: true
             });
             const result = executeValidation(validation, response, globalRules, envVars);
 

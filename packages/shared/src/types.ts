@@ -217,7 +217,7 @@ export interface ResponseData {
     size: number;
     body: string;
     headers: Record<string, string>;
-    is_encoded: boolean;
+    isEncoded: boolean;
     validationResult?: ValidationResult;
 }
 

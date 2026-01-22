@@ -69,7 +69,7 @@ export interface HttpResponseResult {
     size: number;
     headers: Record<string, string>;
     body: string;
-    is_encoded: boolean;
+    isEncoded: boolean;
 }
 
 /**
@@ -310,7 +310,7 @@ export class HttpService {
                                 size: responseSize,
                                 headers: internalResponse.headers as Record<string, string>,
                                 body: bodyBase64,
-                                is_encoded: true,
+                                isEncoded: true,
                             },
                             newCookies,
                         };
@@ -400,7 +400,7 @@ export class HttpService {
                     size: response.data ? response.data.byteLength : 0,
                     headers: response.headers as Record<string, string>,
                     body: bodyBase64,
-                    is_encoded: true,
+                    isEncoded: true,
                 },
                 newCookies
             };
@@ -436,7 +436,7 @@ export class HttpService {
                     size: errorSize,
                     headers: errorHeaders,
                     body: errorBodyBase64,
-                    is_encoded: true,
+                    isEncoded: true,
                 },
                 newCookies: []
             };

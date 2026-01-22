@@ -92,7 +92,7 @@ describe('MessageHandler', () => {
         body: 'response body',
         elapsedTime: 100,
         size: 13,
-        is_encoded: false,
+        isEncoded: false,
       },
       newCookies: [],
     });

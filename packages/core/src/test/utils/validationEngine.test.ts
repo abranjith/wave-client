@@ -26,7 +26,7 @@ describe('validationEngine', () => {
     body: JSON.stringify({ message: 'success', count: 5 }),
     elapsedTime: 150,
     size: 100,
-    is_encoded: false,
+    isEncoded: false,
   };
 
   describe('createGlobalRulesMap', () => {
@@ -392,7 +392,7 @@ describe('validationEngine', () => {
       const encodedResponse: ResponseData = {
         ...mockResponse,
         body: btoa(JSON.stringify({ data: 'test' })),
-        is_encoded: true,
+        isEncoded: true,
       };
 
       const rule: BodyValidationRule = {

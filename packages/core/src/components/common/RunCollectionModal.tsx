@@ -12,7 +12,6 @@ import { Label } from '../ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import RunRequestCard, { RunRequestData } from './RunRequestCard';
 import useAppStateStore from '../../hooks/store/useAppStateStore';
-import { RequestValidation, StatusValidationRule } from '../../types/validation';
 
 // ==================== Types ====================
 
@@ -39,27 +38,6 @@ interface RunMetrics {
 // ==================== Helper Functions ====================
 
 /**
- * Default validation rule: HTTP status is success (2xx)
- */
-const DEFAULT_STATUS_SUCCESS_RULE: StatusValidationRule = {
-  id: 'default-status-success',
-  name: 'Status is Success',
-  description: 'Validates that HTTP response status is 2xx',
-  enabled: true,
-  category: 'status',
-  operator: 'is_success',
-  value: 200, // Not used for is_success, but required by type
-};
-
-/**
- * Default validation configuration using status success rule
- */
-const DEFAULT_VALIDATION: RequestValidation = {
-  enabled: true,
-  rules: [{ rule: DEFAULT_STATUS_SUCCESS_RULE }],
-};
-
-/**
  * Recursively flattens all requests from collection items
  * Returns UI-ready RunRequestData with initial idle statuses.
  */
@@ -74,7 +52,7 @@ function flattenRequests(
       // Use request validation if defined and enabled, otherwise use default
       const validation = item.request.validation?.enabled
         ? item.request.validation
-        : DEFAULT_VALIDATION;
+        : undefined;
 
       // Ensure the request object carries the chosen validation
       const requestWithValidation = { ...item.request, validation };
@@ -114,8 +92,12 @@ function applyRunnerResult(
     ...item,
     runStatus: result.status,
     validationStatus: result.validationStatus,
+    validationResult: result.validationResult,
     responseStatus: result.response?.status,
     responseTime: result.elapsedTime,
+    responseHeaders: result.response?.headers,
+    responseBody: result.response?.body,
+    isResponseEncoded: result.response?.isEncoded,
     error: result.error,
   };
 }

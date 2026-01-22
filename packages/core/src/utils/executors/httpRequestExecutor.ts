@@ -11,7 +11,7 @@
 
 import type { HttpRequestConfig, HttpResponseResult } from '../../types/adapters';
 import type { CollectionRequest } from '../../types/collection';
-import type { FlowContext, FlowNode, Flow } from '../../types/flow';
+import type { FlowNode, Flow } from '../../types/flow';
 import type {
     IItemExecutor,
     ExecutionContext,
@@ -32,6 +32,29 @@ import { determineExecutionStatus, determineValidationStatus, extractErrorMessag
 // Import flow utilities for flow context resolution
 import { flowContextToDynamicEnvVars } from '../flowResolver';
 import { getUpstreamNodeIds } from '../flowUtils';
+import { StatusValidationRule, RequestValidation } from '../../types/validation';
+
+
+/**
+ * Default validation rule: HTTP status is success (2xx)
+ */
+const DEFAULT_STATUS_SUCCESS_RULE: StatusValidationRule = {
+  id: 'default-status-success',
+  name: 'Status is Success',
+  description: 'Validates that HTTP response status is 2xx',
+  enabled: true,
+  category: 'status',
+  operator: 'is_success',
+  value: 200, // Not used for is_success, but required by type
+};
+
+/**
+ * Default validation configuration using status success rule
+ */
+const DEFAULT_VALIDATION: RequestValidation = {
+  enabled: true,
+  rules: [{ rule: DEFAULT_STATUS_SUCCESS_RULE }],
+};
 
 // ============================================================================
 // HTTP Request Executor Class
@@ -279,8 +302,8 @@ export class HttpRequestExecutor implements IItemExecutor<HttpExecutionInput, Ht
             overrides?.variables
         );
         
-        // Determine validation rules: override > item > request
-        const validation = overrides?.validation || itemValidation || request.validation;
+        // Determine validation rules: override > item > request > DEFAULT
+        const validation = overrides?.validation || itemValidation || request.validation || DEFAULT_VALIDATION;
         
         // Build the final HTTP config
         const config: HttpRequestConfig = {

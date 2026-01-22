@@ -34,7 +34,7 @@ function createMockResponse(overrides?: Partial<HttpResponseResult>): HttpRespon
     body: 'Hello',
     size: 5,
     elapsedTime: 100,
-    is_encoded: false,
+    isEncoded: false,
     ...overrides,
   };
 }
