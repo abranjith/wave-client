@@ -185,6 +185,7 @@ const FlowResultSubPanel: React.FC<FlowResultSubPanelProps> = ({
                 responseStatus: nodeResult?.response?.status,
                 responseTime: nodeResult?.response?.elapsedTime,
                 validationStatus,
+                validationResult: nodeResult?.response?.validationResult,
                 responseHeaders: nodeResult?.response?.headers,
                 responseBody: nodeResult?.response?.body,
                 isResponseEncoded: nodeResult?.response?.isEncoded,
@@ -212,264 +213,55 @@ const FlowResultSubPanel: React.FC<FlowResultSubPanelProps> = ({
 
 interface TestCaseResultCardProps {
     testCaseResult: TestCaseResult;
+    request: CollectionRequest;
+}
+
+/**
+ * Converts a TestCaseResult to RunRequestData format for use with RunRequestCard
+ */
+function convertTestCaseToRunRequestData(
+    testCaseResult: TestCaseResult,
+    request: CollectionRequest
+): RunRequestData {
+    // Determine error message
+    let error: string | undefined;
+    if (testCaseResult.error) {
+        error = testCaseResult.error;
+    } else if (testCaseResult.validationStatus === 'fail') {
+        error = 'Validation failed';
+    }
+
+    return {
+        id: testCaseResult.testCaseId,
+        name: testCaseResult.testCaseName,
+        method: (request.method || 'GET').toUpperCase(),
+        url: typeof request.url === 'string' ? request.url : urlToString(request.url),
+        request,
+        folderPath: [], // Test cases don't have folder paths
+        runStatus: toRunStatus(testCaseResult.status),
+        responseStatus: testCaseResult.response?.status,
+        responseTime: testCaseResult.response?.elapsedTime,
+        validationStatus: toValidationStatus(testCaseResult.validationStatus),
+        validationResult: testCaseResult.response?.validationResult,
+        responseHeaders: testCaseResult.response?.headers,
+        responseBody: testCaseResult.response?.body,
+        isResponseEncoded: testCaseResult.response?.isEncoded,
+        error,
+    };
 }
 
 const TestCaseResultCard: React.FC<TestCaseResultCardProps> = ({
     testCaseResult,
+    request,
 }) => {
-    const statusColor = 
-        testCaseResult.status === 'success' ? 'text-green-600' :
-        testCaseResult.status === 'failed' ? 'text-red-600' :
-        testCaseResult.status === 'running' ? 'text-blue-600' :
-        testCaseResult.status === 'skipped' ? 'text-slate-400' :
-        'text-slate-500';
+    const runRequestData = convertTestCaseToRunRequestData(testCaseResult, request);
 
-    const StatusIcon = 
-        testCaseResult.status === 'success' ? CheckCircle2 :
-        testCaseResult.status === 'failed' ? XCircle :
-        Circle;
-    
-    const validationColor = 
-        testCaseResult.validationStatus === 'pass' ? 'text-green-600' :
-        testCaseResult.validationStatus === 'fail' ? 'text-red-600' :
-        'text-slate-400';
-
-        const [isExpanded, setIsExpanded] = useState(false);
-        const [activeTab, setActiveTab] = useState<'Response Headers' | 'Response Body' | 'Validation' | 'Error'>('Response Headers');
-
-        const hasError = !!testCaseResult.error || testCaseResult.validationStatus === 'fail';
-        const hasResponse = !!testCaseResult.response;
-    
-        const tabs: Array<'Error' | 'Response Headers' | 'Response Body' | 'Validation'> = hasError && testCaseResult.error
-            ? ['Error', 'Response Headers', 'Response Body', 'Validation']
-            : ['Response Headers', 'Response Body', 'Validation'];
-
-        // Auto-switch to Error tab when error appears
-        React.useEffect(() => {
-            if (hasError && testCaseResult.error && activeTab !== 'Error') {
-                setActiveTab('Error');
-            }
-        }, [hasError, testCaseResult.error, activeTab]);
-
-        const renderHeaders = (headers: Record<string, string> | undefined) => {
-            if (!headers || Object.keys(headers).length === 0) {
-                return <div className="text-slate-500 text-sm italic">No headers</div>;
-            }
-
-            return (
-                <div className="space-y-1">
-                    {Object.entries(headers).map(([key, value]) => (
-                        <div key={key} className="flex text-sm font-mono">
-                            <span className="text-blue-600 dark:text-blue-400 min-w-40">{key}:</span>
-                            <span className="text-slate-700 dark:text-slate-300 break-all">{value}</span>
-                        </div>
-                    ))}
-                </div>
-            );
-        };
-
-        const renderTabContent = (tab: typeof activeTab) => {
-            switch (tab) {
-                case 'Error':
-                    return (
-                        <div className="flex items-start gap-3 p-3 bg-red-50 dark:bg-red-900/20 rounded-lg border border-red-200 dark:border-red-800">
-                            <XCircle className="h-5 w-5 text-red-500 flex-shrink-0 mt-0.5" />
-                            <div className="text-sm text-red-700 dark:text-red-300 break-all">
-                                {testCaseResult.error || 'Validation failed'}
-                            </div>
-                        </div>
-                    );
-
-                case 'Response Headers':
-                    return renderHeaders(testCaseResult.response?.headers);
-
-                case 'Response Body': {
-                    if (!testCaseResult.response?.body) {
-                        return <div className="text-slate-500 text-sm italic">No response body</div>;
-                    }
-
-                    let displayBody = testCaseResult.response.body;
-
-                    // Decode base64 if response is encoded
-                    if (testCaseResult.response.isEncoded && testCaseResult.response.body) {
-                        try {
-                            displayBody = atob(testCaseResult.response.body);
-                        } catch (e) {
-                            // Keep original if decoding fails
-                            displayBody = testCaseResult.response.body;
-                        }
-                    }
-
-                    return (
-                        <pre className="text-sm font-mono text-slate-700 dark:text-slate-300 whitespace-pre-wrap break-all bg-slate-50 dark:bg-slate-800 p-3 rounded-md max-h-64 overflow-auto">
-                            {displayBody}
-                        </pre>
-                    );
-                }
-
-                case 'Validation': {
-                    const validationResult = testCaseResult.response?.validationResult;
-                
-                    if (!validationResult) {
-                        return <div className="text-slate-500 text-sm italic">No validation rules run</div>;
-                    }
-
-                    return (
-                        <div className="space-y-3">
-                            {/* Validation Summary */}
-                            <div className="flex items-center gap-2 p-2 bg-slate-50 dark:bg-slate-900/50 rounded-md">
-                                {validationResult.allPassed ? (
-                                    <CheckCircle2 className="h-4 w-4 text-green-600" />
-                                ) : (
-                                    <XCircle className="h-4 w-4 text-red-600" />
-                                )}
-                                <span className={cn(
-                                    'text-sm font-medium',
-                                    validationResult.allPassed ? 'text-green-600' : 'text-red-600'
-                                )}>
-                                    {validationResult.passedRules}/{validationResult.totalRules} rules passed
-                                </span>
-                            </div>
-
-                            {/* Validation Rules List */}
-                            {validationResult.results && validationResult.results.length > 0 && (
-                                <div className="space-y-2">
-                                    {validationResult.results.map((result, idx) => (
-                                        <div 
-                                            key={idx}
-                                            className={cn(
-                                                'p-2 rounded-md text-xs border',
-                                                result.passed
-                                                    ? 'bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800'
-                                                    : 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800'
-                                            )}
-                                        >
-                                            <div className="flex items-center gap-2 mb-1">
-                                                {result.passed ? (
-                                                    <CheckCircle2 className="h-3.5 w-3.5 text-green-600 flex-shrink-0" />
-                                                ) : (
-                                                    <XCircle className="h-3.5 w-3.5 text-red-600 flex-shrink-0" />
-                                                )}
-                                                <span className={cn(
-                                                    'font-medium',
-                                                    result.passed ? 'text-green-700 dark:text-green-400' : 'text-red-700 dark:text-red-400'
-                                                )}>
-                                                    {result.ruleName}
-                                                </span>
-                                            </div>
-                                            <div className={cn(
-                                                'text-xs',
-                                                result.passed ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'
-                                            )}>
-                                                {result.message}
-                                            </div>
-                                            {(result.expected || result.actual) && (
-                                                <div className="mt-1 space-y-1 text-xs text-slate-600 dark:text-slate-400">
-                                                    {result.expected && (
-                                                        <div><span className="font-mono">Expected:</span> {result.expected}</div>
-                                                    )}
-                                                    {result.actual && (
-                                                        <div><span className="font-mono">Actual:</span> {result.actual}</div>
-                                                    )}
-                                                </div>
-                                            )}
-                                        </div>
-                                    ))}
-                                </div>
-                            )}
-                        </div>
-                    );
-                }
-
-                default:
-                    return null;
-            }
-        };
-
-        return (
-            <div className="rounded-md border border-slate-100 dark:border-slate-700 bg-white dark:bg-slate-800 overflow-hidden">
-                {/* Header */}
-                <div
-                    className="flex items-center gap-2 p-2 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors"
-                    onClick={() => setIsExpanded(!isExpanded)}
-                >
-                    {/* Expand/collapse icon */}
-                    {hasResponse && (
-                        isExpanded 
-                            ? <ChevronDown className="h-3.5 w-3.5 text-slate-400 flex-shrink-0" />
-                            : <ChevronRight className="h-3.5 w-3.5 text-slate-400 flex-shrink-0" />
-                    )}
-                    {!hasResponse && <div className="w-3.5" />}
-
-                    {/* Status icon */}
-                    <StatusIcon className={cn('h-3.5 w-3.5 flex-shrink-0', statusColor)} />
-
-                    {/* Test case name */}
-                    <span className="flex-1 text-xs font-medium text-slate-700 dark:text-slate-300 truncate">
-                        {testCaseResult.testCaseName}
-                    </span>
-
-                    {/* Response status */}
-                    {testCaseResult.response?.status && (
-                        <span className={cn(
-                            'text-xs font-mono flex-shrink-0',
-                            testCaseResult.response.status >= 200 && testCaseResult.response.status < 300 
-                                ? 'text-green-600' 
-                                : testCaseResult.response.status >= 400 
-                                    ? 'text-red-600' 
-                                    : 'text-yellow-600'
-                        )}>
-                            {testCaseResult.response.status}
-                        </span>
-                    )}
-
-                    {/* Response time */}
-                    {testCaseResult.response?.elapsedTime && (
-                        <span className="text-xs text-slate-400 flex-shrink-0">
-                            {testCaseResult.response.elapsedTime}ms
-                        </span>
-                    )}
-
-                    {/* Validation status */}
-                    {testCaseResult.validationStatus !== 'idle' && (
-                        <span className={cn('text-xs flex-shrink-0', validationColor)}>
-                            {testCaseResult.validationStatus === 'pass' ? '✓' : '✗'}
-                        </span>
-                    )}
-                </div>
-
-                {/* Expanded content */}
-                {isExpanded && hasResponse && (
-                    <div className="border-t border-slate-100 dark:border-slate-700">
-                        {/* Tabs */}
-                        <div className="flex gap-0 bg-slate-100 dark:bg-slate-900 border-b border-slate-200 dark:border-slate-700 overflow-x-auto">
-                            {tabs.map((tab) => (
-                                <button
-                                    key={tab}
-                                    className={`px-3 py-2 text-xs font-medium whitespace-nowrap transition-colors ${
-                                        activeTab === tab
-                                            ? tab === 'Error'
-                                                ? 'bg-red-50 dark:bg-red-900/30 text-red-600 dark:text-red-400 border-b-2 border-red-500'
-                                                : 'bg-white dark:bg-slate-800 text-blue-600 dark:text-blue-400 border-b-2 border-blue-500'
-                                            : tab === 'Error'
-                                                ? 'text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20'
-                                                : 'text-slate-600 dark:text-slate-400 hover:text-blue-600 dark:hover:text-blue-400'
-                                    }`}
-                                    onClick={() => setActiveTab(tab)}
-                                >
-                                    {tab}
-                                </button>
-                            ))}
-                        </div>
-
-                        {/* Tab content */}
-                        <div className="p-3 max-h-64 overflow-auto">
-                            {renderTabContent(activeTab)}
-                        </div>
-                    </div>
-                )}
-            </div>
-        );
+    return (
+        <RunRequestCard
+            data={runRequestData}
+            showSelection={false}
+        />
+    );
 };
 
 // ============================================================================
@@ -594,6 +386,7 @@ const TestItemCard: React.FC<TestItemCardProps> = ({
                                 <TestCaseResultCard
                                     key={tcResult.testCaseId}
                                     testCaseResult={tcResult}
+                                    request={request}
                                 />
                             ))}
                         </div>

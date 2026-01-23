@@ -150,6 +150,7 @@ function buildRunRequestData(
         responseStatus: nodeResult?.response?.status,
         responseTime: nodeResult?.response?.elapsedTime,
         validationStatus: toValidationStatus(nodeResult),
+        validationResult: nodeResult?.response?.validationResult,
         responseHeaders: nodeResult?.response?.headers,
         responseBody: nodeResult?.response?.body,
         isResponseEncoded: nodeResult?.response?.isEncoded,

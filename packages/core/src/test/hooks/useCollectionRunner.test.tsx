@@ -323,22 +323,22 @@ describe('useCollectionRunner', () => {
         mockAdapter
       );
 
-      const requests = Array.from({ length: 5 }, (_, i) =>
+      const requests = Array.from({ length: 10 }, (_, i) =>
         createTestRequestItem({ id: `req-${i}` })
       );
-      const settings: RunSettings = { concurrentCalls: 1, delayBetweenCalls: 0 };
+      const settings: RunSettings = { concurrentCalls: 1, delayBetweenCalls: 50 };
 
       act(() => {
         result.current.runCollection(requests, settings, null, null);
       });
 
       await act(async () => {
-        await new Promise(resolve => setTimeout(resolve, 20));
+        await new Promise(resolve => setTimeout(resolve, 100));
         result.current.cancelRun();
       });
 
-      // Progress should be less than total
-      expect(result.current.progress.completed).toBeLessThan(5);
+      // Progress should be less than total (some requests should be cancelled)
+      expect(result.current.progress.completed).toBeLessThan(10);
       expect(result.current.isRunning).toBe(false);
     });
   });
