@@ -39,6 +39,12 @@ export interface ExecutionContext {
     flowContext?: FlowContext;
     /** Available flows (for flow lookup) */
     flows?: Flow[];
+    /** 
+     * Initial variables from test case data (for flow test cases).
+     * These are merged with env vars at lower priority than flow context outputs.
+     * Precedence: flow context (upstream responses) > initialVariables > env vars > global vars
+     */
+    initialVariables?: Record<string, string>;
 }
 
 // ============================================================================
@@ -149,6 +155,12 @@ export interface FlowExecutionConfig {
     parallel?: boolean;
     /** Default auth ID for requests in the flow */
     defaultAuthId?: string;
+    /** 
+     * Initial variables to inject at the start of flow execution.
+     * Used for test case data-driven testing.
+     * Precedence: flow context (upstream responses) > initialVariables > env vars > global vars
+     */
+    initialVariables?: Record<string, string>;
 }
 
 /**

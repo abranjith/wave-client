@@ -141,6 +141,7 @@ export class FlowExecutor {
             ...context,
             flowContext,
             defaultAuthId: config.defaultAuthId || context.defaultAuthId || flow.defaultAuthId || null,
+            initialVariables: config.initialVariables,
         };
         
         // Execute nodes in order
@@ -243,6 +244,7 @@ export class FlowExecutor {
             ...context,
             flowContext,
             defaultAuthId: config.defaultAuthId || context.defaultAuthId || flow.defaultAuthId || null,
+            initialVariables: config.initialVariables,
         };
         
         // Node tracking

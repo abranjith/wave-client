@@ -48,6 +48,9 @@ const NO_AUTH_OVERRIDE = '__none__';
 // Types
 // ============================================================================
 
+/** Editor mode determines which fields are shown */
+export type TestCaseEditorMode = 'request' | 'flow';
+
 interface TestCaseEditorProps {
     /** Open state of the dialog */
     isOpen: boolean;
@@ -63,6 +66,12 @@ interface TestCaseEditorProps {
     nextOrder: number;
     /** Existing test case names for uniqueness validation */
     existingNames: string[];
+    /** 
+     * Editor mode: 'request' shows all fields (variables, headers, params, body, auth, validation)
+     * 'flow' shows only name, description, enabled, and variables
+     * @default 'request'
+     */
+    mode?: TestCaseEditorMode;
 }
 
 interface JsonEditorSectionProps {
@@ -123,8 +132,10 @@ export const TestCaseEditor: React.FC<TestCaseEditorProps> = ({
     auths,
     nextOrder,
     existingNames,
+    mode = 'request',
 }) => {
     const isEditMode = !!testCase;
+    const isFlowMode = mode === 'flow';
 
     // Form state
     const [name, setName] = useState(testCase?.name || '');
@@ -233,13 +244,21 @@ export const TestCaseEditor: React.FC<TestCaseEditorProps> = ({
         // Validate all fields
         const nameValidation = validateName(name);
         const variablesValidation = validateJson(variablesJson, 'variables');
-        const headersValidation = validateJson(headersJson, 'headers');
-        const paramsValidation = validateJson(paramsJson, 'params');
+        
+        // Only validate headers/params in request mode
+        const headersValidation = isFlowMode 
+            ? { valid: true } 
+            : validateJson(headersJson, 'headers');
+        const paramsValidation = isFlowMode 
+            ? { valid: true } 
+            : validateJson(paramsJson, 'params');
 
         setNameError(nameValidation.error);
         setVariablesError(variablesValidation.error);
-        setHeadersError(headersValidation.error);
-        setParamsError(paramsValidation.error);
+        if (!isFlowMode) {
+            setHeadersError(headersValidation.error);
+            setParamsError(paramsValidation.error);
+        }
 
         if (!nameValidation.valid || !variablesValidation.valid || 
             !headersValidation.valid || !paramsValidation.valid) {
@@ -252,17 +271,21 @@ export const TestCaseEditor: React.FC<TestCaseEditorProps> = ({
         if (variablesJson.trim()) {
             data.variables = JSON.parse(variablesJson);
         }
-        if (headersJson.trim()) {
-            data.headers = JSON.parse(headersJson);
-        }
-        if (paramsJson.trim()) {
-            data.params = JSON.parse(paramsJson);
-        }
-        if (hasBodyOverride) {
-            data.body = bodyOverride;
-        }
-        if (authId && authId !== NO_AUTH_OVERRIDE) {
-            data.authId = authId;
+        
+        // Only include request-specific fields in request mode
+        if (!isFlowMode) {
+            if (headersJson.trim()) {
+                data.headers = JSON.parse(headersJson);
+            }
+            if (paramsJson.trim()) {
+                data.params = JSON.parse(paramsJson);
+            }
+            if (hasBodyOverride) {
+                data.body = bodyOverride;
+            }
+            if (authId && authId !== NO_AUTH_OVERRIDE) {
+                data.authId = authId;
+            }
         }
 
         // Create or update test case
@@ -284,7 +307,7 @@ export const TestCaseEditor: React.FC<TestCaseEditorProps> = ({
         onSave(savedTestCase);
         onClose();
     }, [
-        name, description, enabled, authId,
+        name, description, enabled, authId, isFlowMode,
         variablesJson, headersJson, paramsJson, hasBodyOverride, bodyOverride,
         validateName, validateJson,
         testCase, nextOrder, onSave, onClose,
@@ -301,7 +324,7 @@ export const TestCaseEditor: React.FC<TestCaseEditorProps> = ({
 
                 <div className="flex-1 overflow-y-auto space-y-4 py-4">
                     {/* Basic Info */}
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className={cn('grid gap-4', isFlowMode ? 'grid-cols-1' : 'grid-cols-2')}>
                         <div className="space-y-1.5">
                             <Label htmlFor="tc-name" className="text-sm font-medium">
                                 Name <span className="text-red-500">*</span>
@@ -323,24 +346,27 @@ export const TestCaseEditor: React.FC<TestCaseEditorProps> = ({
                                 </p>
                             )}
                         </div>
-                        <div className="space-y-1.5">
-                            <Label htmlFor="tc-auth" className="text-sm font-medium">
-                                Auth Override
-                            </Label>
-                            <Select value={authId} onValueChange={setAuthId}>
-                                <SelectTrigger id="tc-auth">
-                                    <SelectValue placeholder="Use default" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value={NO_AUTH_OVERRIDE}>Use default</SelectItem>
-                                    {auths.map((auth) => (
-                                        <SelectItem key={auth.id} value={auth.id}>
-                                            {auth.name}
-                                        </SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
-                        </div>
+                        {/* Auth Override - only for request mode */}
+                        {!isFlowMode && (
+                            <div className="space-y-1.5">
+                                <Label htmlFor="tc-auth" className="text-sm font-medium">
+                                    Auth Override
+                                </Label>
+                                <Select value={authId} onValueChange={setAuthId}>
+                                    <SelectTrigger id="tc-auth">
+                                        <SelectValue placeholder="Use default" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value={NO_AUTH_OVERRIDE}>Use default</SelectItem>
+                                        {auths.map((auth) => (
+                                            <SelectItem key={auth.id} value={auth.id}>
+                                                {auth.name}
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                        )}
                     </div>
 
                     <div className="space-y-1.5">
@@ -371,11 +397,20 @@ export const TestCaseEditor: React.FC<TestCaseEditorProps> = ({
                     {/* Data Overrides Section */}
                     <div className="space-y-2">
                         <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-300">
-                            Data Overrides
+                            {isFlowMode ? 'Variable Overrides' : 'Data Overrides'}
                         </h3>
                         <p className="text-xs text-slate-500">
-                            Override request data for this test case. Use <code className="bg-slate-100 dark:bg-slate-800 px-1 rounded">{'{{variableName}}'}</code> syntax for environment variables.
-                            Test case variables override environment variables with the same name.
+                            {isFlowMode ? (
+                                <>
+                                    Define variables for this test case. Use <code className="bg-slate-100 dark:bg-slate-800 px-1 rounded">{'{{variableName}}'}</code> syntax in your flow requests.
+                                    Test case variables override environment variables with the same name but are overridden by flow output variables.
+                                </>
+                            ) : (
+                                <>
+                                    Override request data for this test case. Use <code className="bg-slate-100 dark:bg-slate-800 px-1 rounded">{'{{variableName}}'}</code> syntax for environment variables.
+                                    Test case variables override environment variables with the same name.
+                                </>
+                            )}
                         </p>
                     </div>
 
@@ -388,123 +423,131 @@ export const TestCaseEditor: React.FC<TestCaseEditorProps> = ({
                             setVariablesError(undefined);
                         }}
                         placeholder={`{\n  "userId": "123",\n  "token": "abc-def"\n}`}
-                        helpText="Key-value pairs that override environment variables"
+                        helpText={isFlowMode 
+                            ? "Key-value pairs that override environment variables for all nodes in the flow"
+                            : "Key-value pairs that override environment variables"
+                        }
                         error={variablesError}
                     />
 
-                    {/* Headers */}
-                    <JsonEditorSection
-                        label="Headers Override"
-                        value={headersJson}
-                        onChange={(v) => {
-                            setHeadersJson(v);
-                            setHeadersError(undefined);
-                        }}
-                        placeholder={`[\n  { "key": "Authorization", "value": "Bearer {{token}}" }\n]`}
-                        helpText="Array of header objects to merge with base request"
-                        error={headersError}
-                    />
+                    {/* Request-specific overrides - only for request mode */}
+                    {!isFlowMode && (
+                        <>
+                            {/* Headers */}
+                            <JsonEditorSection
+                                label="Headers Override"
+                                value={headersJson}
+                                onChange={(v) => {
+                                    setHeadersJson(v);
+                                    setHeadersError(undefined);
+                                }}
+                                placeholder={`[\n  { "key": "Authorization", "value": "Bearer {{token}}" }\n]`}
+                                helpText="Array of header objects to merge with base request"
+                                error={headersError}
+                            />
 
-                    {/* Params */}
-                    <JsonEditorSection
-                        label="Query Params Override"
-                        value={paramsJson}
-                        onChange={(v) => {
-                            setParamsJson(v);
-                            setParamsError(undefined);
-                        }}
-                        placeholder={`[\n  { "key": "page", "value": "1" }\n]`}
-                        helpText="Array of param objects to merge with base request"
-                        error={paramsError}
-                    />
+                            {/* Params */}
+                            <JsonEditorSection
+                                label="Query Params Override"
+                                value={paramsJson}
+                                onChange={(v) => {
+                                    setParamsJson(v);
+                                    setParamsError(undefined);
+                                }}
+                                placeholder={`[\n  { "key": "page", "value": "1" }\n]`}
+                                helpText="Array of param objects to merge with base request"
+                                error={paramsError}
+                            />
 
-                    <hr className="border-slate-200 dark:border-slate-700" />
+                            <hr className="border-slate-200 dark:border-slate-700" />
 
-                    {/* Body Override Section */}
-                    <div className="flex items-center gap-2">
-                        <Checkbox
-                            id="tc-body-override"
-                            checked={hasBodyOverride}
-                            onCheckedChange={(checked) => {
-                                setHasBodyOverride(!!checked);
-                                if (!checked) {
-                                    // Reset body to empty when unchecked
-                                    setBodyOverride(createEmptyRequestBody());
-                                }
-                            }}
-                        />
-                        <Label htmlFor="tc-body-override" className="text-sm cursor-pointer font-medium">
-                            Override Request Body
-                        </Label>
-                    </div>
-
-                    {hasBodyOverride && (
-                        <div className="border border-slate-200 dark:border-slate-700 rounded-lg p-4 bg-slate-50 dark:bg-slate-900/30 space-y-3">
-                            <p className="text-xs text-slate-600 dark:text-slate-400">
-                                Configure a custom request body for this test case. This will replace the base request body.
-                            </p>
-                            
-                            {/* Body Type Selector */}
-                            <div className="space-y-1.5">
-                                <Label className="text-sm font-medium">Body Type</Label>
-                                <Select 
-                                    value={bodyOverride.currentBodyType} 
-                                    onValueChange={(value) => {
-                                        setBodyOverride({
-                                            ...bodyOverride,
-                                            currentBodyType: value as RequestBodyType
-                                        });
+                            {/* Body Override Section */}
+                            <div className="flex items-center gap-2">
+                                <Checkbox
+                                    id="tc-body-override"
+                                    checked={hasBodyOverride}
+                                    onCheckedChange={(checked) => {
+                                        setHasBodyOverride(!!checked);
+                                        if (!checked) {
+                                            // Reset body to empty when unchecked
+                                            setBodyOverride(createEmptyRequestBody());
+                                        }
                                     }}
-                                >
-                                    <SelectTrigger className="w-full">
-                                        <SelectValue />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="none">No Body</SelectItem>
-                                        <SelectItem value="text">Text</SelectItem>
-                                        <SelectItem value="binary">Binary</SelectItem>
-                                        <SelectItem value="form">Form</SelectItem>
-                                        <SelectItem value="multipart">Multipart Form</SelectItem>
-                                    </SelectContent>
-                                </Select>
+                                />
+                                <Label htmlFor="tc-body-override" className="text-sm cursor-pointer font-medium">
+                                    Override Request Body
+                                </Label>
                             </div>
 
-                            {/* Body Content */}
-                            {bodyOverride.currentBodyType === 'text' && bodyOverride.textData && (
-                                <div className="space-y-1.5">
-                                    <Label className="text-sm font-medium">Text Content</Label>
-                                    <Textarea
-                                        value={bodyOverride.textData.data || ''}
-                                        onChange={(e) => {
-                                            setBodyOverride({
-                                                ...bodyOverride,
-                                                textData: {
-                                                    ...bodyOverride.textData!,
-                                                    data: e.target.value
-                                                }
-                                            });
-                                        }}
-                                        placeholder='{"key": "value"}'
-                                        className="font-mono text-sm min-h-[100px] resize-y"
-                                    />
-                                </div>
-                            )}
+                            {hasBodyOverride && (
+                                <div className="border border-slate-200 dark:border-slate-700 rounded-lg p-4 bg-slate-50 dark:bg-slate-900/30 space-y-3">
+                                    <p className="text-xs text-slate-600 dark:text-slate-400">
+                                        Configure a custom request body for this test case. This will replace the base request body.
+                                    </p>
+                                    
+                                    {/* Body Type Selector */}
+                                    <div className="space-y-1.5">
+                                        <Label className="text-sm font-medium">Body Type</Label>
+                                        <Select 
+                                            value={bodyOverride.currentBodyType} 
+                                            onValueChange={(value) => {
+                                                setBodyOverride({
+                                                    ...bodyOverride,
+                                                    currentBodyType: value as RequestBodyType
+                                                });
+                                            }}
+                                        >
+                                            <SelectTrigger className="w-full">
+                                                <SelectValue />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                <SelectItem value="none">No Body</SelectItem>
+                                                <SelectItem value="text">Text</SelectItem>
+                                                <SelectItem value="binary">Binary</SelectItem>
+                                                <SelectItem value="form">Form</SelectItem>
+                                                <SelectItem value="multipart">Multipart Form</SelectItem>
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
 
-                            {bodyOverride.currentBodyType === 'none' && (
-                                <div className="p-3 text-center text-sm text-slate-500 bg-white dark:bg-slate-800 rounded border border-dashed">
-                                    No body will be sent
-                                </div>
-                            )}
+                                    {/* Body Content */}
+                                    {bodyOverride.currentBodyType === 'text' && bodyOverride.textData && (
+                                        <div className="space-y-1.5">
+                                            <Label className="text-sm font-medium">Text Content</Label>
+                                            <Textarea
+                                                value={bodyOverride.textData.data || ''}
+                                                onChange={(e) => {
+                                                    setBodyOverride({
+                                                        ...bodyOverride,
+                                                        textData: {
+                                                            ...bodyOverride.textData!,
+                                                            data: e.target.value
+                                                        }
+                                                    });
+                                                }}
+                                                placeholder='{"key": "value"}'
+                                                className="font-mono text-sm min-h-[100px] resize-y"
+                                            />
+                                        </div>
+                                    )}
 
-                            {(bodyOverride.currentBodyType === 'binary' || 
-                              bodyOverride.currentBodyType === 'form' || 
-                              bodyOverride.currentBodyType === 'multipart') && (
-                                <div className="p-3 text-center text-xs text-slate-500 bg-slate-100 dark:bg-slate-800 rounded">
-                                    <p>Advanced body types are currently only editable when creating/editing requests.</p>
-                                    <p className="mt-1">Please use the main request editor to configure {bodyOverride.currentBodyType} bodies.</p>
+                                    {bodyOverride.currentBodyType === 'none' && (
+                                        <div className="p-3 text-center text-sm text-slate-500 bg-white dark:bg-slate-800 rounded border border-dashed">
+                                            No body will be sent
+                                        </div>
+                                    )}
+
+                                    {(bodyOverride.currentBodyType === 'binary' || 
+                                      bodyOverride.currentBodyType === 'form' || 
+                                      bodyOverride.currentBodyType === 'multipart') && (
+                                        <div className="p-3 text-center text-xs text-slate-500 bg-slate-100 dark:bg-slate-800 rounded">
+                                            <p>Advanced body types are currently only editable when creating/editing requests.</p>
+                                            <p className="mt-1">Please use the main request editor to configure {bodyOverride.currentBodyType} bodies.</p>
+                                        </div>
+                                    )}
                                 </div>
                             )}
-                        </div>
+                        </>
                     )}
                 </div>
 

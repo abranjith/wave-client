@@ -130,6 +130,13 @@ export interface FlowTestItem extends TestItemBase {
     type: 'flow';
     /** Reference to flow by ID */
     referenceId: string;
+    /** 
+     * Test cases for data-driven testing
+     * If empty or undefined, the flow runs once with default variables
+     * If populated, the flow runs once per enabled test case with test case variables
+     * Note: Only variables from TestCaseData are used; headers/params/body/auth are ignored for flows
+     */
+    testCases?: TestCase[];
 }
 
 /**
@@ -274,18 +281,48 @@ export interface RequestTestItemResult {
 }
 
 /**
+ * Result of a single test case execution within a flow test item
+ * Contains the full FlowRunResult for this test case run
+ */
+export interface FlowTestCaseResult {
+    /** Test case ID */
+    testCaseId: string;
+    /** Test case name for display */
+    testCaseName: string;
+    /** Execution status */
+    status: TestItemStatus;
+    /** Flow run result containing all node results for this test case */
+    flowResult?: FlowRunResult;
+    /** Error message if failed */
+    error?: string;
+    /** Execution start time */
+    startedAt: string;
+    /** Execution end time */
+    completedAt: string;
+}
+
+/**
  * Result of a single flow test item execution
+ * 
+ * When the item has test cases:
+ * - testCaseResults contains per-case results (each with its own FlowRunResult)
+ * - status is aggregated (failed if any case failed)
+ * - flowResult is from the last executed test case
+ * 
+ * When no test cases (single run):
+ * - testCaseResults is empty or undefined
+ * - status/flowResult reflect the single execution
  */
 export interface FlowTestItemResult {
     /** Test item ID */
     itemId: string;
     /** Item type */
     type: 'flow';
-    /** Execution status */
+    /** Execution status (aggregated: failed if any case failed) */
     status: TestItemStatus;
     /** Validation status (derived from flow node validations) */
     validationStatus: TestValidationStatus;
-    /** Flow run result containing all node results */
+    /** Flow run result containing all node results (last or single result) */
     flowResult?: FlowRunResult;
     /** Error message if failed */
     error?: string;
@@ -293,6 +330,11 @@ export interface FlowTestItemResult {
     startedAt?: string;
     /** Execution end time */
     completedAt?: string;
+    /** 
+     * Results for each test case (keyed by testCaseId)
+     * Only populated when the item has test cases defined
+     */
+    testCaseResults?: Map<string, FlowTestCaseResult>;
 }
 
 /**

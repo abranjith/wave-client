@@ -33,6 +33,7 @@ import type {
     TestValidationStatus,
     TestCase,
     TestCaseResult,
+    FlowTestCaseResult,
 } from '../types/testSuite';
 import { isRequestTestItem, createEmptyTestSuiteRunResult } from '../types/testSuite';
 import { httpRequestExecutor } from '../utils/executors/httpRequestExecutor';
@@ -135,6 +136,23 @@ function testCaseToOverrides(testCase: TestCase): RequestOverrides {
  */
 function isItemPassed(result: TestItemResult): boolean {
     return result.status === 'success' && result.validationStatus !== 'fail';
+}
+
+/**
+ * Derive validation status from a FlowRunResult
+ * Returns 'pass' if all executed nodes with validation passed, 'fail' if any failed, 'idle' if none
+ */
+function deriveFlowValidationStatus(flowResult: import('../types/flow').FlowRunResult): 'idle' | 'pending' | 'pass' | 'fail' {
+    const nodeValidationResults = Array.from(flowResult.nodeResults.values())
+        .filter(r => r.response?.validationResult)
+        .map(r => r.response!.validationResult!);
+    
+    if (nodeValidationResults.length === 0) {
+        return 'idle';
+    }
+    
+    const allPassed = nodeValidationResults.every(v => v.allPassed);
+    return allPassed ? 'pass' : 'fail';
 }
 
 /**
@@ -315,7 +333,11 @@ export function useTestSuiteRunner({
     }, [createContext, httpExecutor]);
     
     /**
-     * Execute a flow test item
+     * Execute a flow test item (with test cases support)
+     * 
+     * For flows, only the `variables` field from test case data is used.
+     * Headers, params, body, and authId overrides are ignored since those
+     * don't apply at the flow level - they would apply to individual requests.
      */
     const executeFlowItem = useCallback(async (
         item: FlowTestItem
@@ -323,28 +345,114 @@ export function useTestSuiteRunner({
         const startedAt = new Date().toISOString();
         const context = createContext();
         
-        const input: FlowExecutionInput = {
-            flowId: item.referenceId,
-            executionId: `${item.id}-${Date.now()}`,
-        };
+        // Get enabled test cases
+        const enabledTestCases = (item.testCases || []).filter(tc => tc.enabled);
         
-        const config: FlowExecutionConfig = {
-            parallel: true, // Could be made configurable
-            defaultAuthId: defaultAuthIdRef.current || undefined,
-        };
+        // If no test cases, run once with defaults
+        if (enabledTestCases.length === 0) {
+            const input: FlowExecutionInput = {
+                flowId: item.referenceId,
+                executionId: `${item.id}-default-${Date.now()}`,
+            };
+            
+            const config: FlowExecutionConfig = {
+                parallel: true,
+                defaultAuthId: defaultAuthIdRef.current || undefined,
+            };
+            
+            const execResult = await flowExec.execute(input, context, config);
+            
+            return {
+                itemId: item.id,
+                type: 'flow',
+                status: execResult.status === 'success' ? 'success' :
+                       execResult.status === 'cancelled' ? 'skipped' : 'failed',
+                validationStatus: toTestValidationStatus(execResult.validationStatus),
+                flowResult: execResult.flowRunResult,
+                error: execResult.error,
+                startedAt,
+                completedAt: new Date().toISOString(),
+            };
+        }
         
-        const execResult = await flowExec.execute(input, context, config);
+        // Execute each test case
+        const testCaseResults = new Map<string, FlowTestCaseResult>();
+        let overallStatus: TestItemStatus = 'success';
+        let lastFlowResult = undefined as FlowTestItemResult['flowResult'];
+        let lastError: string | undefined;
+        
+        for (const testCase of enabledTestCases.sort((a, b) => a.order - b.order)) {
+            if (isCancelledRef.current) {
+                testCaseResults.set(testCase.id, {
+                    testCaseId: testCase.id,
+                    testCaseName: testCase.name,
+                    status: 'skipped',
+                    startedAt: new Date().toISOString(),
+                    completedAt: new Date().toISOString(),
+                });
+                continue;
+            }
+            
+            const caseStartedAt = new Date().toISOString();
+            
+            // Extract only variables from test case data (other overrides don't apply to flows)
+            const initialVariables = testCase.data?.variables;
+            
+            const input: FlowExecutionInput = {
+                flowId: item.referenceId,
+                executionId: `${item.id}-${testCase.id}-${Date.now()}`,
+            };
+            
+            const config: FlowExecutionConfig = {
+                parallel: true,
+                defaultAuthId: defaultAuthIdRef.current || undefined,
+                initialVariables,
+            };
+            
+            const execResult = await flowExec.execute(input, context, config);
+            
+            const caseStatus: TestItemStatus = execResult.status === 'success' ? 'success' :
+                              execResult.status === 'cancelled' ? 'skipped' : 'failed';
+            
+            testCaseResults.set(testCase.id, {
+                testCaseId: testCase.id,
+                testCaseName: testCase.name,
+                status: caseStatus,
+                flowResult: execResult.flowRunResult,
+                error: execResult.error,
+                startedAt: caseStartedAt,
+                completedAt: new Date().toISOString(),
+            });
+            
+            // Track last flow result/error
+            if (execResult.flowRunResult) {
+                lastFlowResult = execResult.flowRunResult;
+            }
+            if (execResult.error) {
+                lastError = execResult.error;
+            }
+            
+            // Aggregate status (any failure = overall failure)
+            if (caseStatus === 'failed') {
+                overallStatus = 'failed';
+            }
+        }
+        
+        // Derive overall validation status from the last flow result
+        const overallValidationStatus = lastFlowResult 
+            ? toTestValidationStatus(deriveFlowValidationStatus(lastFlowResult))
+            : 'idle';
         
         return {
             itemId: item.id,
             type: 'flow',
-            status: execResult.status === 'success' ? 'success' :
-                   execResult.status === 'cancelled' ? 'skipped' : 'failed',
-            validationStatus: toTestValidationStatus(execResult.validationStatus),
-            flowResult: execResult.flowRunResult,
-            error: execResult.error,
+            status: overallStatus,
+            validationStatus: overallValidationStatus,
+            flowResult: lastFlowResult,
+            error: lastError,
             startedAt,
             completedAt: new Date().toISOString(),
+            testCaseResults,
         };
     }, [createContext, flowExec]);
     

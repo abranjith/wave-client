@@ -137,6 +137,8 @@ function MyComponent() {
 - Follow the Testing Strategy guidelines below
 - Keep code self-documenting through clear names and structure
 - Do **not** create or update documentation in the initial version (will be added later)
+- Documentation is essential at granular levels such as functions, classes, and complex logic within the codebase itself. 
+  Make sure to include comments that explain the purpose and functionality of these elements to aid future developers in understanding the code and also write good tests.
 
 ### 8. Before Deleting Files
 

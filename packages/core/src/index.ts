@@ -118,6 +118,10 @@ export type {
     TestItemResult,
     RequestTestItemResult,
     FlowTestItemResult,
+    FlowTestCaseResult,
+    TestCase,
+    TestCaseResult,
+    TestCaseData,
 } from './types/testSuite';
 
 export {

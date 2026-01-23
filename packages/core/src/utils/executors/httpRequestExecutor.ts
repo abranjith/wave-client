@@ -182,15 +182,23 @@ export class HttpRequestExecutor implements IItemExecutor<HttpExecutionInput, Ht
         
         // Get dynamic env vars from flow context
         let dynamicEnvVars: Record<string, string> = {};
+        
+        // First, apply initial variables from test case (lower priority)
+        if (context.initialVariables) {
+            dynamicEnvVars = { ...context.initialVariables };
+        }
+        
+        // Then, apply flow context variables (higher priority - overrides initial variables)
         if (context.flowContext) {
             const upstreamNodeIds = getUpstreamNodeIds(flow, node.id);
             const nodeIdToAliasMap = new Map(flow.nodes.map(n => [n.id, n.alias]));
-            dynamicEnvVars = flowContextToDynamicEnvVars(
+            const flowContextVars = flowContextToDynamicEnvVars(
                 context.flowContext,
                 upstreamNodeIds,
                 nodeIdToAliasMap,
                 request
             );
+            dynamicEnvVars = { ...dynamicEnvVars, ...flowContextVars };
         }
         
         // Build request with flow context variables

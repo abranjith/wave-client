@@ -7,7 +7,7 @@
 
 import React, { useMemo, useState } from 'react';
 import { CheckCircle2, XCircle, Circle, Trash2, ChevronDown, ChevronRight, GitBranchIcon, BeakerIcon } from 'lucide-react';
-import type { TestSuite, TestSuiteRunResult, TestItemResult, TestItem, TestCaseResult, RequestTestItemResult } from '../../types/testSuite';
+import type { TestSuite, TestSuiteRunResult, TestItemResult, TestItem, TestCaseResult, RequestTestItemResult, FlowTestCaseResult, FlowTestItemResult } from '../../types/testSuite';
 import type { FlowRunResult, FlowNodeResult, FlowNode, Flow } from '../../types/flow';
 import type { Collection, CollectionItem, CollectionRequest } from '../../types/collection';
 import { isRequest } from '../../types/collection';
@@ -265,6 +265,94 @@ const TestCaseResultCard: React.FC<TestCaseResultCardProps> = ({
 };
 
 // ============================================================================
+// Flow Test Case Result Card (for flow data-driven testing)
+// ============================================================================
+
+interface FlowTestCaseResultCardProps {
+    testCaseResult: FlowTestCaseResult;
+    flow: Flow;
+    collections: Collection[];
+}
+
+/**
+ * Expandable card showing a single flow test case result
+ * When expanded, shows the FlowResultSubPanel for that test case's flow run
+ */
+const FlowTestCaseResultCard: React.FC<FlowTestCaseResultCardProps> = ({
+    testCaseResult,
+    flow,
+    collections,
+}) => {
+    const [isExpanded, setIsExpanded] = useState(false);
+    
+    const statusColor = 
+        testCaseResult.status === 'success' ? 'text-green-600' :
+        testCaseResult.status === 'failed' ? 'text-red-600' :
+        testCaseResult.status === 'running' ? 'text-blue-600' :
+        'text-slate-500';
+
+    const StatusIcon = 
+        testCaseResult.status === 'success' ? CheckCircle2 :
+        testCaseResult.status === 'failed' ? XCircle :
+        Circle;
+
+    const hasFlowResult = !!testCaseResult.flowResult;
+    
+    // Calculate progress from flow result
+    const progress = testCaseResult.flowResult?.progress;
+
+    return (
+        <div className="rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800">
+            <div
+                className={cn(
+                    'flex items-center gap-2 p-2 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700/50',
+                    hasFlowResult && 'cursor-pointer'
+                )}
+                onClick={() => hasFlowResult && setIsExpanded(!isExpanded)}
+            >
+                {/* Expand/collapse icon */}
+                {hasFlowResult ? (
+                    isExpanded 
+                        ? <ChevronDown className="h-3.5 w-3.5 text-slate-400" />
+                        : <ChevronRight className="h-3.5 w-3.5 text-slate-400" />
+                ) : (
+                    <div className="w-3.5" />
+                )}
+                
+                {/* Test case badge */}
+                <BeakerIcon className="h-3.5 w-3.5 text-purple-500 flex-shrink-0" />
+
+                {/* Name */}
+                <span className="flex-1 text-sm font-medium text-slate-800 dark:text-slate-200 truncate">
+                    {testCaseResult.testCaseName}
+                </span>
+
+                {/* Progress indicator */}
+                {progress && (
+                    <span className="text-xs text-slate-500">
+                        {progress.succeeded}/{progress.total}
+                    </span>
+                )}
+
+                {/* Status */}
+                <StatusIcon className={cn('h-3.5 w-3.5 flex-shrink-0', statusColor)} />
+            </div>
+
+            {/* Flow results expansion */}
+            {isExpanded && testCaseResult.flowResult && (
+                <div className="border-t border-slate-100 dark:border-slate-700 p-2 bg-slate-50 dark:bg-slate-900/50">
+                    <FlowResultSubPanel
+                        flowResult={testCaseResult.flowResult}
+                        flow={flow}
+                        collections={collections}
+                    />
+                </div>
+            )}
+        </div>
+    );
+};
+
+// ============================================================================
 // Test Item Card
 // ============================================================================
 
@@ -423,9 +511,19 @@ const TestItemCard: React.FC<TestItemCardProps> = ({
     }
 
     // Flow item - show expandable card with flow results
-    const flowItem = item as typeof item & { type: 'flow' };
+    const flowItem = item as typeof item & { type: 'flow'; testCases?: import('../../types/testSuite').TestCase[] };
     const flow = flows.find(f => f.id === flowItem.referenceId);
     const flowResult = itemResult && isFlowTestItemResult(itemResult) ? itemResult : undefined;
+    
+    // Check if this flow item has test case results
+    const hasTestCases = flowResult?.testCaseResults && flowResult.testCaseResults.size > 0;
+    const testCaseResultsArray = hasTestCases 
+        ? Array.from(flowResult!.testCaseResults!.values()) 
+        : [];
+    
+    // Calculate test case summary for flows
+    const passedCases = testCaseResultsArray.filter(r => r.status === 'success').length;
+    const failedCases = testCaseResultsArray.filter(r => r.status === 'failed').length;
 
     const statusColor = 
         itemResult?.status === 'success' ? 'text-green-600' :
@@ -437,6 +535,9 @@ const TestItemCard: React.FC<TestItemCardProps> = ({
         itemResult?.status === 'success' ? CheckCircle2 :
         itemResult?.status === 'failed' ? XCircle :
         Circle;
+    
+    // Determine if expandable (has test cases or has flow result)
+    const isExpandable = hasTestCases || flowResult?.flowResult;
 
     return (
         <div className={cn(
@@ -448,14 +549,14 @@ const TestItemCard: React.FC<TestItemCardProps> = ({
             <div
                 className="flex items-center gap-2 p-3 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700/50"
                 onClick={() => {
-                    if (flowResult?.flowResult) {
+                    if (isExpandable) {
                         setIsExpanded(!isExpanded);
                     }
                     onClick?.();
                 }}
             >
                 {/* Expand/collapse icon for flows */}
-                {flowResult?.flowResult ? (
+                {isExpandable ? (
                     isExpanded 
                         ? <ChevronDown className="h-4 w-4 text-slate-400" />
                         : <ChevronRight className="h-4 w-4 text-slate-400" />
@@ -471,19 +572,50 @@ const TestItemCard: React.FC<TestItemCardProps> = ({
                     {item.name || flow?.name || 'Unknown Flow'}
                 </span>
 
+                {/* Test case badge for flows with test cases */}
+                {hasTestCases && (
+                    <span className="inline-flex items-center gap-1 px-1.5 py-0.5 text-xs font-medium rounded-full bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400">
+                        <BeakerIcon className="h-3 w-3" />
+                        {passedCases}/{testCaseResultsArray.length}
+                    </span>
+                )}
+
                 {/* Status */}
                 <StatusIcon className={cn('h-4 w-4', statusColor)} />
 
-                {/* Progress for flows */}
-                {flowResult?.flowResult && (
+                {/* Progress for flows without test cases */}
+                {!hasTestCases && flowResult?.flowResult && (
                     <span className="text-xs text-slate-500">
                         {flowResult.flowResult.progress.succeeded}/{flowResult.flowResult.progress.total}
                     </span>
                 )}
             </div>
 
-            {/* Flow nodes sub-panel */}
-            {isExpanded && flowResult?.flowResult && flow && (
+            {/* Flow test case results expansion */}
+            {isExpanded && hasTestCases && flow && (
+                <div className="border-t border-slate-100 dark:border-slate-700 p-2 space-y-1 bg-slate-50 dark:bg-slate-900/50">
+                    <div className="flex items-center gap-2 mb-2">
+                        <span className="text-xs font-medium text-slate-600 dark:text-slate-400">
+                            Test Cases
+                        </span>
+                        <span className="text-xs text-green-600">{passedCases} passed</span>
+                        {failedCases > 0 && (
+                            <span className="text-xs text-red-600">{failedCases} failed</span>
+                        )}
+                    </div>
+                    {testCaseResultsArray.map((tcResult) => (
+                        <FlowTestCaseResultCard
+                            key={tcResult.testCaseId}
+                            testCaseResult={tcResult}
+                            flow={flow}
+                            collections={collections}
+                        />
+                    ))}
+                </div>
+            )}
+
+            {/* Flow nodes sub-panel (for flows without test cases) */}
+            {isExpanded && !hasTestCases && flowResult?.flowResult && flow && (
                 <div className="border-t border-slate-200 dark:border-slate-700 p-3">
                     <FlowResultSubPanel
                         flowResult={flowResult.flowResult}
