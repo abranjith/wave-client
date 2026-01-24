@@ -1,5 +1,5 @@
 import { StateCreator } from 'zustand';
-import { TestSuite, TestItem, TestSuiteRunState, TestCase, RequestTestItem, isRequestTestItem } from '../../types/testSuite';
+import { TestSuite, TestItem, TestSuiteRunState, TestCase, RequestTestItem, FlowTestItem, isRequestTestItem, isFlowTestItem } from '../../types/testSuite';
 
 interface TestSuitesSlice {
     testSuites: TestSuite[];
@@ -226,12 +226,12 @@ const createTestSuitesSlice: StateCreator<TestSuitesSlice> = (set, get) => ({
                     ...suite,
                     updatedAt: new Date().toISOString(),
                     items: suite.items.map((item) => {
-                        if (item.id !== itemId || !isRequestTestItem(item)) return item;
+                        if (item.id !== itemId || (!isRequestTestItem(item) && !isFlowTestItem(item))) return item;
                         const existingCases = item.testCases || [];
                         return {
                             ...item,
                             testCases: [...existingCases, testCase],
-                        } as RequestTestItem;
+                        } as RequestTestItem | FlowTestItem;
                     }),
                 };
             }),
@@ -247,13 +247,13 @@ const createTestSuitesSlice: StateCreator<TestSuitesSlice> = (set, get) => ({
                     ...suite,
                     updatedAt: new Date().toISOString(),
                     items: suite.items.map((item) => {
-                        if (item.id !== itemId || !isRequestTestItem(item)) return item;
+                        if (item.id !== itemId || (!isRequestTestItem(item) && !isFlowTestItem(item))) return item;
                         return {
                             ...item,
                             testCases: (item.testCases || []).map((tc) =>
                                 tc.id === testCaseId ? { ...tc, ...updates } : tc
                             ),
-                        } as RequestTestItem;
+                        } as RequestTestItem | FlowTestItem;
                     }),
                 };
             }),
@@ -269,11 +269,11 @@ const createTestSuitesSlice: StateCreator<TestSuitesSlice> = (set, get) => ({
                     ...suite,
                     updatedAt: new Date().toISOString(),
                     items: suite.items.map((item) => {
-                        if (item.id !== itemId || !isRequestTestItem(item)) return item;
+                        if (item.id !== itemId || (!isRequestTestItem(item) && !isFlowTestItem(item))) return item;
                         return {
                             ...item,
                             testCases: (item.testCases || []).filter((tc) => tc.id !== testCaseId),
-                        } as RequestTestItem;
+                        } as RequestTestItem | FlowTestItem;
                     }),
                 };
             }),
@@ -289,11 +289,11 @@ const createTestSuitesSlice: StateCreator<TestSuitesSlice> = (set, get) => ({
                     ...suite,
                     updatedAt: new Date().toISOString(),
                     items: suite.items.map((item) => {
-                        if (item.id !== itemId || !isRequestTestItem(item)) return item;
+                        if (item.id !== itemId || (!isRequestTestItem(item) && !isFlowTestItem(item))) return item;
                         return {
                             ...item,
                             testCases,
-                        } as RequestTestItem;
+                        } as RequestTestItem | FlowTestItem;
                     }),
                 };
             }),
@@ -304,7 +304,7 @@ const createTestSuitesSlice: StateCreator<TestSuitesSlice> = (set, get) => ({
         const suite = get().testSuites.find((s) => s.id === suiteId);
         if (!suite) return [];
         const item = suite.items.find((i) => i.id === itemId);
-        if (!item || !isRequestTestItem(item)) return [];
+        if (!item || (!isRequestTestItem(item) && !isFlowTestItem(item))) return [];
         return item.testCases || [];
     },
 });

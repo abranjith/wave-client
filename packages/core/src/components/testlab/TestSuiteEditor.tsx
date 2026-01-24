@@ -467,9 +467,9 @@ const TestItemRow: React.FC<TestItemRowProps> = ({
     let subtitle = '';
     let icon: React.ReactNode;
     
-    // Test case count (only for request items)
-    const testCaseCount = isRequestTestItem(item) ? (item.testCases?.length || 0) : 0;
-    const testCases = isRequestTestItem(item) ? (item.testCases || []) : [];
+    // Test case count
+    const testCases = item.testCases || [];
+    const testCaseCount = testCases.length;
     const existingTestCaseNames = testCases.map(tc => tc.name);
 
     if (isRequestTestItem(item)) {
@@ -558,8 +558,8 @@ const TestItemRow: React.FC<TestItemRowProps> = ({
                         <span className="text-sm font-medium text-slate-800 dark:text-slate-200 truncate">
                             {name}
                         </span>
-                        {/* Test case count badge (request items only) */}
-                        {isRequestTestItem(item) && testCaseCount > 0 && (
+                        {/* Test case count badge */}
+                        {testCaseCount > 0 && (
                             <span className="inline-flex items-center gap-1 px-1.5 py-0.5 text-xs font-medium rounded-full bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400">
                                 <BeakerIcon className="h-3 w-3" />
                                 {testCaseCount}
@@ -571,8 +571,8 @@ const TestItemRow: React.FC<TestItemRowProps> = ({
                     </div>
                 </div>
 
-                {/* Test Cases toggle (request items only) */}
-                {isRequestTestItem(item) && !isRunning && (
+                {/* Test Cases toggle */}
+                {!isRunning && (
                     <Tooltip>
                         <TooltipTrigger asChild>
                             <Button
@@ -607,8 +607,8 @@ const TestItemRow: React.FC<TestItemRowProps> = ({
                 )}
             </div>
 
-            {/* Test Cases Expansion Panel (request items only) */}
-            {isRequestTestItem(item) && isExpanded && (
+            {/* Test Cases Expansion Panel */}
+            {isExpanded && (
                 <div className="border-t border-slate-100 dark:border-slate-700 p-2 space-y-2 bg-slate-50 dark:bg-slate-900/50">
                     <div className="flex items-center justify-between">
                         <span className="text-xs font-medium text-slate-600 dark:text-slate-400">
@@ -697,6 +697,7 @@ const TestItemRow: React.FC<TestItemRowProps> = ({
                 auths={auths}
                 nextOrder={testCases.length}
                 existingNames={existingTestCaseNames}
+                mode={isRequestTestItem(item) ? 'request' : 'flow'}
             />
         </div>
     );

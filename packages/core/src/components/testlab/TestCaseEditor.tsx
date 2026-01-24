@@ -2,16 +2,15 @@
  * Test Case Editor Component
  * 
  * Modal for creating and editing test cases for data-driven testing.
- * Features:
- * - Name and description inputs
- * - JSON editor for data overrides (headers, params, body, variables)
- * - Auth profile selector
- * - Validation rules configuration
+ * 
+ * Two modes:
+ * - Request Mode: For single request test cases with full data overrides (headers, params, body, auth, variables)
+ * - Flow Mode: For flow test cases with only variable overrides (simpler, avoids confusion with multi-request flows)
  * 
  * Initial version uses JSON editor; future enhancements will add form-based editors.
  */
 
-import React, { useState, useCallback, useMemo, useEffect } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { 
     SaveIcon, 
     AlertCircleIcon,
@@ -137,78 +136,93 @@ export const TestCaseEditor: React.FC<TestCaseEditorProps> = ({
     const isEditMode = !!testCase;
     const isFlowMode = mode === 'flow';
 
-    // Form state
+    // ========================================================================
+    // Common State (both modes)
+    // ========================================================================
     const [name, setName] = useState(testCase?.name || '');
     const [description, setDescription] = useState(testCase?.description || '');
     const [enabled, setEnabled] = useState(testCase?.enabled ?? true);
-    const [authId, setAuthId] = useState(testCase?.data.authId || NO_AUTH_OVERRIDE);
-
-    // JSON data state (stored as strings for editing)
     const [variablesJson, setVariablesJson] = useState('');
+
+    // Common validation errors
+    const [nameError, setNameError] = useState<string | undefined>();
+    const [variablesError, setVariablesError] = useState<string | undefined>();
+
+    // ========================================================================
+    // Request Mode Only State
+    // ========================================================================
+    const [authId, setAuthId] = useState(testCase?.data.authId || NO_AUTH_OVERRIDE);
     const [headersJson, setHeadersJson] = useState('');
     const [paramsJson, setParamsJson] = useState('');
-    
-    // Body override state - now using RequestBody type
     const [hasBodyOverride, setHasBodyOverride] = useState(!!testCase?.data.body);
     const [bodyOverride, setBodyOverride] = useState<RequestBody>(createEmptyRequestBody());
 
-    // Validation errors
-    const [nameError, setNameError] = useState<string | undefined>();
-    const [variablesError, setVariablesError] = useState<string | undefined>();
+    // Request mode validation errors
     const [headersError, setHeadersError] = useState<string | undefined>();
     const [paramsError, setParamsError] = useState<string | undefined>();
 
+    // ========================================================================
     // Initialize form state when testCase changes
+    // ========================================================================
     useEffect(() => {
         if (testCase) {
+            // Common fields (both modes)
             setName(testCase.name);
             setDescription(testCase.description || '');
             setEnabled(testCase.enabled);
-            setAuthId(testCase.data.authId || NO_AUTH_OVERRIDE);
-            
-            // Serialize data to JSON strings for editing
             setVariablesJson(
                 testCase.data.variables 
                     ? JSON.stringify(testCase.data.variables, null, 2) 
                     : ''
             );
-            setHeadersJson(
-                testCase.data.headers 
-                    ? JSON.stringify(testCase.data.headers, null, 2) 
-                    : ''
-            );
-            setParamsJson(
-                testCase.data.params 
-                    ? JSON.stringify(testCase.data.params, null, 2) 
-                    : ''
-            );
             
-            // Initialize body override
-            if (testCase.data.body) {
-                setHasBodyOverride(true);
-                setBodyOverride(testCase.data.body);
-            } else {
-                setHasBodyOverride(false);
-                setBodyOverride(createEmptyRequestBody());
+            // Request mode only fields
+            if (!isFlowMode) {
+                setAuthId(testCase.data.authId || NO_AUTH_OVERRIDE);
+                setHeadersJson(
+                    testCase.data.headers 
+                        ? JSON.stringify(testCase.data.headers, null, 2) 
+                        : ''
+                );
+                setParamsJson(
+                    testCase.data.params 
+                        ? JSON.stringify(testCase.data.params, null, 2) 
+                        : ''
+                );
+                
+                if (testCase.data.body) {
+                    setHasBodyOverride(true);
+                    setBodyOverride(testCase.data.body);
+                } else {
+                    setHasBodyOverride(false);
+                    setBodyOverride(createEmptyRequestBody());
+                }
             }
         } else {
-            // Reset for new test case
+            // Reset for new test case - common fields
             setName('');
             setDescription('');
             setEnabled(true);
-            setAuthId(NO_AUTH_OVERRIDE);
             setVariablesJson('');
-            setHeadersJson('');
-            setParamsJson('');
-            setHasBodyOverride(false);
-            setBodyOverride(createEmptyRequestBody());
+            
+            // Reset request mode fields
+            if (!isFlowMode) {
+                setAuthId(NO_AUTH_OVERRIDE);
+                setHeadersJson('');
+                setParamsJson('');
+                setHasBodyOverride(false);
+                setBodyOverride(createEmptyRequestBody());
+            }
         }
+        
         // Clear errors
         setNameError(undefined);
         setVariablesError(undefined);
-        setHeadersError(undefined);
-        setParamsError(undefined);
-    }, [testCase, isOpen]);
+        if (!isFlowMode) {
+            setHeadersError(undefined);
+            setParamsError(undefined);
+        }
+    }, [testCase, isOpen, isFlowMode]);
 
     // Validate JSON
     const validateJson = useCallback((json: string, fieldName: string): { valid: boolean; error?: string } => {
@@ -239,56 +253,80 @@ export const TestCaseEditor: React.FC<TestCaseEditorProps> = ({
         return { valid: true };
     }, [existingNames, testCase]);
 
-    // Handle save
+    // ========================================================================
+    // Handle Save
+    // ========================================================================
     const handleSave = useCallback(() => {
-        // Validate all fields
+        // Validate common fields
         const nameValidation = validateName(name);
         const variablesValidation = validateJson(variablesJson, 'variables');
-        
-        // Only validate headers/params in request mode
-        const headersValidation = isFlowMode 
-            ? { valid: true } 
-            : validateJson(headersJson, 'headers');
-        const paramsValidation = isFlowMode 
-            ? { valid: true } 
-            : validateJson(paramsJson, 'params');
 
         setNameError(nameValidation.error);
         setVariablesError(variablesValidation.error);
-        if (!isFlowMode) {
-            setHeadersError(headersValidation.error);
-            setParamsError(paramsValidation.error);
+
+        // Flow mode: only validate name and variables
+        if (isFlowMode) {
+            if (!nameValidation.valid || !variablesValidation.valid) {
+                return;
+            }
+
+            // Build flow test case data (variables only)
+            const data: TestCaseData = {};
+            if (variablesJson.trim()) {
+                data.variables = JSON.parse(variablesJson);
+            }
+
+            const savedTestCase: TestCase = testCase
+                ? {
+                    ...testCase,
+                    name: name.trim(),
+                    description: description.trim() || undefined,
+                    enabled,
+                    data,
+                }
+                : {
+                    ...createTestCase(name.trim(), nextOrder),
+                    description: description.trim() || undefined,
+                    enabled,
+                    data,
+                };
+
+            onSave(savedTestCase);
+            onClose();
+            return;
         }
+
+        // Request mode: validate all fields
+        const headersValidation = validateJson(headersJson, 'headers');
+        const paramsValidation = validateJson(paramsJson, 'params');
+
+        setHeadersError(headersValidation.error);
+        setParamsError(paramsValidation.error);
 
         if (!nameValidation.valid || !variablesValidation.valid || 
             !headersValidation.valid || !paramsValidation.valid) {
             return;
         }
 
-        // Build test case data
+        // Build request test case data (all overrides)
         const data: TestCaseData = {};
         
         if (variablesJson.trim()) {
             data.variables = JSON.parse(variablesJson);
         }
-        
-        // Only include request-specific fields in request mode
-        if (!isFlowMode) {
-            if (headersJson.trim()) {
-                data.headers = JSON.parse(headersJson);
-            }
-            if (paramsJson.trim()) {
-                data.params = JSON.parse(paramsJson);
-            }
-            if (hasBodyOverride) {
-                data.body = bodyOverride;
-            }
-            if (authId && authId !== NO_AUTH_OVERRIDE) {
-                data.authId = authId;
-            }
+        if (headersJson.trim()) {
+            data.headers = JSON.parse(headersJson);
+        }
+        if (paramsJson.trim()) {
+            data.params = JSON.parse(paramsJson);
+        }
+        if (hasBodyOverride) {
+            data.body = bodyOverride;
+        }
+        if (authId && authId !== NO_AUTH_OVERRIDE) {
+            data.authId = authId;
         }
 
-        // Create or update test case
         const savedTestCase: TestCase = testCase
             ? {
                 ...testCase,
@@ -307,8 +345,10 @@ export const TestCaseEditor: React.FC<TestCaseEditorProps> = ({
         onSave(savedTestCase);
         onClose();
     }, [
-        name, description, enabled, authId, isFlowMode,
-        variablesJson, headersJson, paramsJson, hasBodyOverride, bodyOverride,
+        name, description, enabled, isFlowMode, variablesJson,
+        // Request mode dependencies
+        authId, headersJson, paramsJson, hasBodyOverride, bodyOverride,
+        // Functions
         validateName, validateJson,
         testCase, nextOrder, onSave, onClose,
     ]);
@@ -323,31 +363,105 @@ export const TestCaseEditor: React.FC<TestCaseEditorProps> = ({
                 </DialogHeader>
 
                 <div className="flex-1 overflow-y-auto space-y-4 py-4">
-                    {/* Basic Info */}
-                    <div className={cn('grid gap-4', isFlowMode ? 'grid-cols-1' : 'grid-cols-2')}>
-                        <div className="space-y-1.5">
-                            <Label htmlFor="tc-name" className="text-sm font-medium">
-                                Name <span className="text-red-500">*</span>
-                            </Label>
-                            <Input
-                                id="tc-name"
-                                value={name}
-                                onChange={(e) => {
-                                    setName(e.target.value);
-                                    setNameError(undefined);
-                                }}
-                                placeholder="e.g., Valid user login"
-                                className={cn(nameError && 'border-red-500')}
-                            />
-                            {nameError && (
-                                <p className="text-xs text-red-500 flex items-center gap-1">
-                                    <AlertCircleIcon className="h-3 w-3" />
-                                    {nameError}
+                    {/* ========================================================================
+                        COMMON FIELDS (both flow and request modes)
+                        ======================================================================== */}
+                    
+                    {/* Name Input */}
+                    <div className="space-y-1.5">
+                        <Label htmlFor="tc-name" className="text-sm font-medium">
+                            Name <span className="text-red-500">*</span>
+                        </Label>
+                        <Input
+                            id="tc-name"
+                            value={name}
+                            onChange={(e) => {
+                                setName(e.target.value);
+                                setNameError(undefined);
+                            }}
+                            placeholder={isFlowMode ? "e.g., Happy path with valid data" : "e.g., Valid user login"}
+                            className={cn(nameError && 'border-red-500')}
+                        />
+                        {nameError && (
+                            <p className="text-xs text-red-500 flex items-center gap-1">
+                                <AlertCircleIcon className="h-3 w-3" />
+                                {nameError}
+                            </p>
+                        )}
+                    </div>
+
+                    {/* Description Input */}
+                    <div className="space-y-1.5">
+                        <Label htmlFor="tc-description" className="text-sm font-medium">
+                            Description
+                        </Label>
+                        <Input
+                            id="tc-description"
+                            value={description}
+                            onChange={(e) => setDescription(e.target.value)}
+                            placeholder="What does this test case verify?"
+                        />
+                    </div>
+
+                    {/* Enabled Checkbox */}
+                    <div className="flex items-center gap-2">
+                        <Checkbox
+                            id="tc-enabled"
+                            checked={enabled}
+                            onCheckedChange={(checked) => setEnabled(!!checked)}
+                        />
+                        <Label htmlFor="tc-enabled" className="text-sm cursor-pointer">
+                            Enabled
+                        </Label>
+                    </div>
+
+                    <hr className="border-slate-200 dark:border-slate-700" />
+
+                    {/* ========================================================================
+                        FLOW MODE: Variables Only
+                        ======================================================================== */}
+                    {isFlowMode && (
+                        <div className="space-y-4">
+                            <div className="space-y-2">
+                                <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-300">
+                                    Variable Overrides
+                                </h3>
+                                <p className="text-xs text-slate-500">
+                                    Define variables for this test case. Use <code className="bg-slate-100 dark:bg-slate-800 px-1 rounded">{'{{variableName}}'}</code> syntax in your flow requests.
+                                    Test case variables override environment variables with the same name but are overridden by flow output variables.
                                 </p>
-                            )}
+                            </div>
+
+                            <JsonEditorSection
+                                label="Variables"
+                                value={variablesJson}
+                                onChange={(v) => {
+                                    setVariablesJson(v);
+                                    setVariablesError(undefined);
+                                }}
+                                placeholder={`{\n  "userId": "123",\n  "apiKey": "test-key-xyz"\n}`}
+                                helpText="Key-value pairs that override environment variables for all nodes in the flow"
+                                error={variablesError}
+                            />
                         </div>
-                        {/* Auth Override - only for request mode */}
-                        {!isFlowMode && (
+                    )}
+
+                    {/* ========================================================================
+                        REQUEST MODE: Full Data Overrides
+                        ======================================================================== */}
+                    {!isFlowMode && (
+                        <div className="space-y-4">
+                            <div className="space-y-2">
+                                <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-300">
+                                    Data Overrides
+                                </h3>
+                                <p className="text-xs text-slate-500">
+                                    Override request data for this test case. Use <code className="bg-slate-100 dark:bg-slate-800 px-1 rounded">{'{{variableName}}'}</code> syntax for environment variables.
+                                    Test case variables override environment variables with the same name.
+                                </p>
+                            </div>
+
+                            {/* Auth Override */}
                             <div className="space-y-1.5">
                                 <Label htmlFor="tc-auth" className="text-sm font-medium">
                                     Auth Override
@@ -366,73 +480,20 @@ export const TestCaseEditor: React.FC<TestCaseEditorProps> = ({
                                     </SelectContent>
                                 </Select>
                             </div>
-                        )}
-                    </div>
 
-                    <div className="space-y-1.5">
-                        <Label htmlFor="tc-description" className="text-sm font-medium">
-                            Description
-                        </Label>
-                        <Input
-                            id="tc-description"
-                            value={description}
-                            onChange={(e) => setDescription(e.target.value)}
-                            placeholder="What does this test case verify?"
-                        />
-                    </div>
+                            {/* Variables */}
+                            <JsonEditorSection
+                                label="Variables"
+                                value={variablesJson}
+                                onChange={(v) => {
+                                    setVariablesJson(v);
+                                    setVariablesError(undefined);
+                                }}
+                                placeholder={`{\n  "userId": "123",\n  "token": "abc-def"\n}`}
+                                helpText="Key-value pairs that override environment variables"
+                                error={variablesError}
+                            />
 
-                    <div className="flex items-center gap-2">
-                        <Checkbox
-                            id="tc-enabled"
-                            checked={enabled}
-                            onCheckedChange={(checked) => setEnabled(!!checked)}
-                        />
-                        <Label htmlFor="tc-enabled" className="text-sm cursor-pointer">
-                            Enabled
-                        </Label>
-                    </div>
-
-                    <hr className="border-slate-200 dark:border-slate-700" />
-
-                    {/* Data Overrides Section */}
-                    <div className="space-y-2">
-                        <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-300">
-                            {isFlowMode ? 'Variable Overrides' : 'Data Overrides'}
-                        </h3>
-                        <p className="text-xs text-slate-500">
-                            {isFlowMode ? (
-                                <>
-                                    Define variables for this test case. Use <code className="bg-slate-100 dark:bg-slate-800 px-1 rounded">{'{{variableName}}'}</code> syntax in your flow requests.
-                                    Test case variables override environment variables with the same name but are overridden by flow output variables.
-                                </>
-                            ) : (
-                                <>
-                                    Override request data for this test case. Use <code className="bg-slate-100 dark:bg-slate-800 px-1 rounded">{'{{variableName}}'}</code> syntax for environment variables.
-                                    Test case variables override environment variables with the same name.
-                                </>
-                            )}
-                        </p>
-                    </div>
-
-                    {/* Variables */}
-                    <JsonEditorSection
-                        label="Variables"
-                        value={variablesJson}
-                        onChange={(v) => {
-                            setVariablesJson(v);
-                            setVariablesError(undefined);
-                        }}
-                        placeholder={`{\n  "userId": "123",\n  "token": "abc-def"\n}`}
-                        helpText={isFlowMode 
-                            ? "Key-value pairs that override environment variables for all nodes in the flow"
-                            : "Key-value pairs that override environment variables"
-                        }
-                        error={variablesError}
-                    />
-
-                    {/* Request-specific overrides - only for request mode */}
-                    {!isFlowMode && (
-                        <>
                             {/* Headers */}
                             <JsonEditorSection
                                 label="Headers Override"
@@ -446,7 +507,7 @@ export const TestCaseEditor: React.FC<TestCaseEditorProps> = ({
                                 error={headersError}
                             />
 
-                            {/* Params */}
+                            {/* Query Params */}
                             <JsonEditorSection
                                 label="Query Params Override"
                                 value={paramsJson}
@@ -469,7 +530,6 @@ export const TestCaseEditor: React.FC<TestCaseEditorProps> = ({
                                     onCheckedChange={(checked) => {
                                         setHasBodyOverride(!!checked);
                                         if (!checked) {
-                                            // Reset body to empty when unchecked
                                             setBodyOverride(createEmptyRequestBody());
                                         }
                                     }}
@@ -547,7 +607,7 @@ export const TestCaseEditor: React.FC<TestCaseEditorProps> = ({
                                     )}
                                 </div>
                             )}
-                        </>
+                        </div>
                     )}
                 </div>
 

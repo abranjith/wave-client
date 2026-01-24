@@ -253,6 +253,8 @@ export class FlowExecutor {
         const completedNodes = new Set<string>();
         const activePromises = new Map<string, Promise<{ nodeId: string; result: FlowNodeResult }>>();
         const inFlightNodeIds = new Set<string>();
+
+        console.log('Starting flow execution with nodes :', Array.from(pendingNodes));
         
         // Process nodes
         while (pendingNodes.size > 0 || activePromises.size > 0) {
@@ -267,7 +269,7 @@ export class FlowExecutor {
                     continue;
                 }
                 
-                const { canExecute, activeConns, skippedConns } = this.checkDependencies(
+                const { canExecute, activeConns } = this.checkDependencies(
                     flow, nodeId, nodeResults
                 );
                 
@@ -303,6 +305,8 @@ export class FlowExecutor {
                     }
                 }
             }
+
+            console.log('Ready nodes for execution :', readyNodes.map(n => n.id));
             
             // Start execution for ready nodes
             for (const node of readyNodes) {
