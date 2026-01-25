@@ -408,9 +408,8 @@ export const FlowCanvas: React.FC<FlowCanvasProps> = ({
     
     // Get node status from run result
     const getNodeStatus = useCallback((nodeId: string) => {
-        if (flowRunner.runningNodeIds.has(nodeId)) return 'running';
         return flowRunner.result?.nodeResults.get(nodeId)?.status || 'idle';
-    }, [flowRunner.result, flowRunner.runningNodeIds]);
+    }, [flowRunner.result]);
     
     // Get selected connector for popover
     const selectedConnector = selectedConnectorId 

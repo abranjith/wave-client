@@ -151,7 +151,6 @@ describe('useFlowRunner', () => {
 
       expect(result.current.isRunning).toBe(false);
       expect(result.current.result).toBeNull();
-      expect(result.current.runningNodeIds.size).toBe(0);
     });
 
     it('should have required methods', () => {
@@ -421,7 +420,6 @@ describe('useFlowRunner', () => {
 
       expect(result.current.isRunning).toBe(false);
       expect(result.current.result).toBeNull();
-      expect(result.current.runningNodeIds.size).toBe(0);
     });
   });
 

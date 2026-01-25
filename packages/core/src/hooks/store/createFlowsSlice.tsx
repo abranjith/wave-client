@@ -101,7 +101,6 @@ const createFlowsSlice: StateCreator<FlowsSlice> = (set, get) => ({
         return get().flowRunStates[flowId] || {
             isRunning: false,
             result: null,
-            runningNodeIds: new Set(),
         };
     },
     

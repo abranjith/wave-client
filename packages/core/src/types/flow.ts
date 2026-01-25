@@ -176,8 +176,6 @@ export interface FlowRunState {
     isRunning: boolean;
     /** Current run result (updated as flow progresses) */
     result: FlowRunResult | null;
-    /** Currently running node IDs */
-    runningNodeIds: Set<string>;
 }
 
 // ============================================================================

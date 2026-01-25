@@ -306,8 +306,6 @@ export class FlowExecutor {
                 }
             }
 
-            console.log('Ready nodes for execution :', readyNodes.map(n => n.id));
-            
             // Start execution for ready nodes
             for (const node of readyNodes) {
                 pendingNodes.delete(node.id);
@@ -361,7 +359,19 @@ export class FlowExecutor {
                 
                 // Stop on failure
                 if (result.status === 'failed') {
-                    // Cancel remaining and mark as skipped
+                    // Mark remaining in-flight nodes as skipped (they're still executing but we're stopping)
+                    for (const nodeId of inFlightNodeIds) {
+                        nodeResults.set(nodeId, {
+                            nodeId,
+                            requestId: nodeMap.get(nodeId)?.requestId || '',
+                            alias: nodeMap.get(nodeId)?.alias || '',
+                            status: 'skipped',
+                        });
+                    }
+                    inFlightNodeIds.clear();
+                    activePromises.clear();
+                    
+                    // Mark pending nodes as skipped
                     for (const pendingId of pendingNodes) {
                         nodeResults.set(pendingId, {
                             nodeId: pendingId,
@@ -375,6 +385,16 @@ export class FlowExecutor {
                 }
             } else if (pendingNodes.size > 0) {
                 // No ready nodes and no active promises - deadlock or all skipped
+                // Mark remaining pending nodes with final status to prevent stuck states
+                for (const pendingId of pendingNodes) {
+                    const result = nodeResults.get(pendingId);
+                    if (result && (result.status === 'idle' || result.status === 'running')) {
+                        nodeResults.set(pendingId, {
+                            ...result,
+                            status: 'skipped',
+                        });
+                    }
+                }
                 break;
             }
         }

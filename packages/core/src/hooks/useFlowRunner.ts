@@ -57,7 +57,6 @@ export interface RunFlowOptions {
 const DEFAULT_FLOW_RUN_STATE: FlowRunState = {
     isRunning: false,
     result: null,
-    runningNodeIds: new Set(),
 };
 
 // ============================================================================
@@ -144,7 +143,6 @@ export function useFlowRunner({
                     skipped: 0,
                 },
             },
-            runningNodeIds: new Set(),
         });
         
         // Create execution context
@@ -202,7 +200,6 @@ export function useFlowRunner({
             setFlowRunState(flowId, {
                 isRunning: false,
                 result: flowRunResult,
-                runningNodeIds: new Set(),
             });
             
             return flowRunResult;
@@ -228,7 +225,6 @@ export function useFlowRunner({
             setFlowRunState(flowId, {
                 isRunning: false,
                 result: errorResult,
-                runningNodeIds: new Set(),
             });
             
             return errorResult;
@@ -265,7 +261,6 @@ export function useFlowRunner({
             setFlowRunState(flowId, {
                 isRunning: false,
                 result: errorResult,
-                runningNodeIds: new Set(),
             });
             
             return errorResult;
@@ -284,7 +279,6 @@ export function useFlowRunner({
         setFlowRunState(flowId, {
             ...(currentState || DEFAULT_FLOW_RUN_STATE),
             isRunning: false,
-            runningNodeIds: new Set(),
             result: currentState?.result ? {
                 ...currentState.result,
                 status: 'cancelled',
