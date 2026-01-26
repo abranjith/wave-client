@@ -1,6 +1,7 @@
 {
   "name": "@wave-client/server",
   "version": "0.0.1",
+  "license": "SEE LICENSE IN LICENSE",
   "description": "Fastify server for Wave Client web app - handles all I/O operations",
   "type": "module",
   "main": "dist/index.js",

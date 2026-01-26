@@ -1,6 +1,7 @@
 {
   "name": "@wave-client/shared",
   "version": "0.0.1",
+  "license": "SEE LICENSE IN LICENSE",
   "description": "Shared services for Wave Client - used by both VS Code extension and server",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

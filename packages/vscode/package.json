@@ -3,6 +3,7 @@
   "displayName": "Wave Client",
   "description": "A modern, intuitive REST client for VS Code using React and Tailwind CSS",
   "version": "0.0.1",
+  "license": "SEE LICENSE IN LICENSE",
   "publisher": "wave-client",
   "engines": {
     "vscode": "^1.103.0"

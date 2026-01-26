@@ -1,6 +1,7 @@
 {
   "name": "@wave-client/web",
   "version": "0.0.1",
+  "license": "SEE LICENSE IN LICENSE",
   "description": "Standalone web application for Wave Client REST API tool",
   "type": "module",
   "scripts": {

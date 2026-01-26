@@ -1,6 +1,7 @@
 {
   "name": "@wave-client/core",
   "version": "0.0.1",
+  "license": "SEE LICENSE IN LICENSE",
   "description": "Platform-agnostic React UI components and state management for Wave Client",
   "type": "module",
   "main": "./dist/index.cjs",

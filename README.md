@@ -73,4 +73,4 @@ Wave Client is built as a **monorepo** designed for maximum code reuse. It uses 
 
 ## 📄 License
 
-TBD
+See the [LICENSE](LICENSE) file for details.
