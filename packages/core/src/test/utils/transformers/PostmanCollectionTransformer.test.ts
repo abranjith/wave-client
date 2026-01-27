@@ -281,6 +281,8 @@ describe('PostmanCollectionTransformer', () => {
             id: 'req-1',
             name: 'Get Data',
             request: {
+              id: 'req-1',
+              name: 'Get Data',
               method: 'GET',
               url: 'https://api.example.com/data',
             },
@@ -331,6 +333,8 @@ describe('PostmanCollectionTransformer', () => {
                 id: 'req-1',
                 name: 'Get User',
                 request: {
+                  id: 'req-1',
+                  name: 'Get User',
                   method: 'GET',
                   url: 'https://api.com/users/1',
                 },
@@ -460,7 +464,9 @@ describe('PostmanCollectionTransformer', () => {
         const body = result.value.item[0].request?.body;
         expect(body).toBeDefined();
         expect(body?.mode).toBe('raw');
-        expect(body?.raw).toBe('{"name": "John"}');
+        if (body?.mode === 'raw') {
+          expect(body.raw).toBe('{"name": "John"}');
+        }
       }
     });
 
@@ -494,7 +500,9 @@ describe('PostmanCollectionTransformer', () => {
       if (result.isOk) {
         const body = result.value.item[0].request?.body;
         expect(body?.mode).toBe('urlencoded');
-        expect(body?.urlencoded).toHaveLength(2);
+        if (body?.mode === 'urlencoded') {
+          expect(body.urlencoded).toHaveLength(2);
+        }
       }
     });
 
@@ -528,7 +536,9 @@ describe('PostmanCollectionTransformer', () => {
       if (result.isOk) {
         const body = result.value.item[0].request?.body;
         expect(body?.mode).toBe('formdata');
-        expect(body?.formdata).toHaveLength(2);
+        if (body?.mode === 'formdata') {
+          expect(body.formdata).toHaveLength(2);
+        }
       }
     });
 
@@ -711,6 +721,8 @@ describe('PostmanCollectionTransformer', () => {
             id: 'req-1',
             name: 'Request with headers',
             request: {
+              id: 'req-1',
+              name: 'Request with headers',
               method: 'POST',
               url: 'https://api.com',
               header: [
@@ -739,6 +751,8 @@ describe('PostmanCollectionTransformer', () => {
             id: 'req-1',
             name: 'Request with body',
             request: {
+              id: 'req-1',
+              name: 'Request with body',
               method: 'POST',
               url: 'https://api.com',
               body: {
@@ -774,7 +788,7 @@ describe('PostmanCollectionTransformer', () => {
                   {
                     id: 'req-1',
                     name: 'Deep Request',
-                    request: { method: 'GET', url: 'https://api.com' },
+                    request: { id: 'req-1', name: 'Deep Request', method: 'GET', url: 'https://api.com' },
                   },
                 ],
               },

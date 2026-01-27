@@ -21,7 +21,7 @@ export async function registerEnvironmentRoutes(fastify: FastifyInstance): Promi
     // Save single environment
     fastify.post('/api/environments', async (request: FastifyRequest<{ Body: Environment }>, reply: FastifyReply) => {
         try {
-            const environment = request.body;
+            const environment = request.body as Environment;
             await environmentService.save(environment);
             emitStateChange('environments');
             emitBanner('success', `Environment "${environment.name}" saved`);

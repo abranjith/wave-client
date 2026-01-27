@@ -7,57 +7,13 @@ import {
     HeaderRow, 
     ParamRow, 
     ResponseData, 
-    RequestBodyType, 
-    RequestBodyTextType, 
     FormField, 
     MultiPartFormField,
-    CollectionReference
+    CollectionReference,
+    CollectionBody,
+    BodyMode,
 } from './collection';
 import { RequestValidation, ValidationRuleRef } from './validation';
-
-// ==================== File Upload Types (duplicated from useFileUpload for core independence) ====================
-
-export type FileMetadata = {
-  name: string;
-  size: number;
-  type: string;
-  url: string;
-  id: string;
-};
-
-export type FileWithPreview = {
-  file: File | FileMetadata;
-  id: string;
-  preview?: string;
-};
-
-// ==================== Request Body Types ====================
-
-export interface RequestTextBody {
-    data: string | null;
-    textType: RequestBodyTextType | null;
-}
-
-export interface RequestBinaryBody {
-    data: FileWithPreview | null;
-    fileName: string | null;
-}
-
-export interface RequestFormBody {
-    data: FormField[] | null;
-}
-
-export interface RequestMultiPartFormBody {
-    data: MultiPartFormField[] | null;
-}
-
-export interface RequestBody {
-    textData: RequestTextBody | null;
-    binaryData: RequestBinaryBody | null;
-    formData: RequestFormBody | null;
-    multiPartFormData: RequestMultiPartFormBody | null;
-    currentBodyType: RequestBodyType;
-}
 
 // ==================== Tab UI State ====================
 
@@ -87,7 +43,8 @@ export interface TabData {
     url: string;
     params: ParamRow[];
     headers: HeaderRow[];
-    body: RequestBody;
+    /** Request body using unified CollectionBody discriminated union */
+    body: CollectionBody;
     
     // Collection reference (for save functionality)
     folderPath: string[];
@@ -141,7 +98,7 @@ export function createEmptyTab(): TabData {
         url: '',
         params: [createEmptyParamRow()],
         headers: [createEmptyHeaderRow()],
-        body: createEmptyRequestBody(),
+        body: createEmptyBody(),
         folderPath: [],
         collectionRef: null,
         environmentId: null,
@@ -208,16 +165,48 @@ export function createEmptyMultiPartFormField(): MultiPartFormField {
 }
 
 /**
- * Creates an empty request body with default values
+ * Creates an empty body (mode: 'none')
  */
-export function createEmptyRequestBody(): RequestBody {
-    return {
-        textData: null,
-        binaryData: null,
-        formData: { data: [createEmptyFormField()] },
-        multiPartFormData: { data: [createEmptyMultiPartFormField()] },
-        currentBodyType: 'none',
+export function createEmptyBody(): CollectionBody {
+    return { mode: 'none' };
+}
+
+/**
+ * Creates an empty urlencoded body with one empty field
+ */
+export function createEmptyUrlencodedBody(): CollectionBody {
+    return { 
+        mode: 'urlencoded', 
+        urlencoded: [createEmptyFormField()] 
     };
+}
+
+/**
+ * Creates an empty formdata body with one empty field
+ */
+export function createEmptyFormdataBody(): CollectionBody {
+    return { 
+        mode: 'formdata', 
+        formdata: [createEmptyMultiPartFormField()] 
+    };
+}
+
+/**
+ * Creates an empty raw body
+ */
+export function createEmptyRawBody(language?: 'json' | 'xml' | 'html' | 'text' | 'csv'): CollectionBody {
+    return { 
+        mode: 'raw', 
+        raw: '',
+        options: language ? { raw: { language } } : undefined
+    };
+}
+
+/**
+ * Gets the body mode from a CollectionBody
+ */
+export function getBodyMode(body: CollectionBody | undefined): BodyMode {
+    return body?.mode ?? 'none';
 }
 
 /**

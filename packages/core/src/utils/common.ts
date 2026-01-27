@@ -1,4 +1,4 @@
-import {RequestBodyTextType, RequestBodyType} from "../types/collection";
+import { BodyMode, CollectionBody } from "../types/collection";
 import { clsx, type ClassValue } from "clsx";
 import { twMerge } from "tailwind-merge";
 import { ResponseContentType } from '../types/collection';
@@ -392,11 +392,12 @@ export function parseUrlQueryParams(url: string): { id: string; key: string; val
  * @param fileName - Optional file name to determine MIME type from extension
  * @param textType - Optional specific text type for raw body content
  * @returns Content-Type header value or null if no body
+ * @deprecated Use getContentTypeFromBodyMode instead
  */
 export function getContentTypeFromBody(
-  bodyType: RequestBodyType,
+  bodyType: string,
   fileName?: string | null,
-  textType?: RequestBodyTextType | null
+  textType?: string | null
 ): string | null {
   // If body type is 'none', return null
   if (bodyType === 'none') {
@@ -423,15 +424,53 @@ export function getContentTypeFromBody(
   // Use reasonable defaults based on body type
   switch (bodyType) {
     case 'text':
+    case 'raw':
       return 'text/plain';
     case 'multipart':
+    case 'formdata':
       return 'multipart/form-data';
     case 'form':
+    case 'urlencoded':
       return 'application/x-www-form-urlencoded';
     case 'binary':
+    case 'file':
       return 'application/octet-stream';
     default:
       return 'application/octet-stream';
+  }
+}
+
+/**
+ * Determines the Content-Type header value based on CollectionBody mode
+ * @param body - The CollectionBody to get content type for
+ * @returns Content-Type header value or null if no body
+ */
+export function getContentTypeFromBodyMode(body: CollectionBody | undefined): string | null {
+  if (!body || body.mode === 'none') {
+    return null;
+  }
+
+  switch (body.mode) {
+    case 'raw': {
+      const language = body.options?.raw?.language;
+      const langMap: Record<string, string> = {
+        'json': 'application/json',
+        'xml': 'application/xml',
+        'html': 'text/html',
+        'text': 'text/plain',
+        'csv': 'text/csv',
+      };
+      return language ? langMap[language] || 'text/plain' : 'text/plain';
+    }
+    case 'urlencoded':
+      return 'application/x-www-form-urlencoded';
+    case 'formdata':
+      // Let the browser set this with the boundary
+      return null;
+    case 'file':
+      return body.file?.contentType || 'application/octet-stream';
+    default:
+      return null;
   }
 }
 

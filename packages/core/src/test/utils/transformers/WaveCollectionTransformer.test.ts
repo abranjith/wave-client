@@ -136,6 +136,8 @@ describe('WaveCollectionTransformer', () => {
             id: 'req-1',
             name: 'Test Request',
             request: {
+              id: 'req-1',
+              name: 'Test Request',
               method: 'GET',
               url: 'https://api.example.com',
             },
@@ -187,7 +189,7 @@ describe('WaveCollectionTransformer', () => {
         item: [
           {
             name: 'Request without ID',
-            request: { method: 'GET', url: 'https://api.com' },
+            request: { id: 'tmp-1', name: 'Request without ID', method: 'GET', url: 'https://api.com' },
           },
         ],
       };
@@ -207,7 +209,7 @@ describe('WaveCollectionTransformer', () => {
           {
             id: 'existing-id',
             name: 'Request',
-            request: { method: 'GET', url: 'https://api.com' },
+            request: { id: 'existing-req', name: 'Request', method: 'GET', url: 'https://api.com' },
           },
         ],
       };
@@ -231,7 +233,7 @@ describe('WaveCollectionTransformer', () => {
               {
                 id: 'nested-1',
                 name: 'Nested Request',
-                request: { method: 'POST', url: 'https://api.com' },
+                request: { id: 'nested-1', name: 'Nested Request', method: 'POST', url: 'https://api.com' },
               },
             ],
           },
@@ -276,6 +278,8 @@ describe('WaveCollectionTransformer', () => {
             id: 'req-1',
             name: 'Test Request',
             request: {
+              id: 'req-1',
+              name: 'Test Request',
               method: 'GET',
               url: 'https://api.example.com',
             },

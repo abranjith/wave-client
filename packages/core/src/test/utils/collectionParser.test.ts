@@ -10,8 +10,6 @@ import {
   countRequests,
   getFolderPathOptions,
   ensureItemIds,
-  formDataToCollectionRequest,
-  type RequestFormData,
 } from '../../utils/collectionParser';
 import type {
   Collection,
@@ -145,7 +143,7 @@ describe('collectionParser', () => {
       {
         id: 'req-1',
         name: 'Get Users',
-        request: { method: 'GET', url: 'https://api.example.com/users' },
+        request: { id: 'req-1', name: 'Get Users', method: 'GET', url: 'https://api.example.com/users' },
       },
       {
         id: 'folder-1',
@@ -154,7 +152,7 @@ describe('collectionParser', () => {
           {
             id: 'req-2',
             name: 'Login',
-            request: { method: 'POST', url: 'https://api.example.com/login' },
+            request: { id: 'req-2', name: 'Login', method: 'POST', url: 'https://api.example.com/login' },
           },
         ],
       },
@@ -194,7 +192,7 @@ describe('collectionParser', () => {
               {
                 id: 'req-1',
                 name: 'Get User',
-                request: { method: 'GET', url: 'https://api.example.com/users/1' },
+                request: { id: 'req-1', name: 'Get User', method: 'GET', url: 'https://api.example.com/users/1' },
               },
             ],
           },
@@ -227,7 +225,7 @@ describe('collectionParser', () => {
       {
         id: 'req-1',
         name: 'Request 1',
-        request: { method: 'GET', url: 'https://api.example.com' },
+        request: { id: 'req-1', name: 'Request 1', method: 'GET', url: 'https://api.example.com' },
       },
       {
         id: 'folder-1',
@@ -236,7 +234,7 @@ describe('collectionParser', () => {
           {
             id: 'req-2',
             name: 'Request 2',
-            request: { method: 'POST', url: 'https://api.example.com' },
+            request: { id: 'req-2', name: 'Request 2', method: 'POST', url: 'https://api.example.com' },
           },
           {
             id: 'subfolder',
@@ -245,7 +243,7 @@ describe('collectionParser', () => {
               {
                 id: 'req-3',
                 name: 'Request 3',
-                request: { method: 'DELETE', url: 'https://api.example.com' },
+                request: { id: 'req-3', name: 'Request 3', method: 'DELETE', url: 'https://api.example.com' },
               },
             ],
           },
@@ -276,7 +274,7 @@ describe('collectionParser', () => {
         {
           id: 'req-1',
           name: 'Request 1',
-          request: { method: 'GET', url: 'https://api.example.com' },
+          request: { id: 'req-1', name: 'Request 1', method: 'GET', url: 'https://api.example.com' },
         },
         {
           id: 'folder-1',
@@ -285,7 +283,7 @@ describe('collectionParser', () => {
             {
               id: 'req-2',
               name: 'Request 2',
-              request: { method: 'POST', url: 'https://api.example.com' },
+              request: { id: 'req-2', name: 'Request 2', method: 'POST', url: 'https://api.example.com' },
             },
           ],
         },
@@ -400,8 +398,8 @@ describe('collectionParser', () => {
   describe('ensureItemIds', () => {
     it('should add IDs to items without IDs', () => {
       const items: any[] = [
-        { name: 'Request 1', request: { method: 'GET', url: 'https://api.com' } },
-        { name: 'Folder 1', item: [{ name: 'Request 2', request: { method: 'POST', url: 'https://api.com' } }] },
+        { name: 'Request 1', request: { id: 'tmp-1', name: 'Request 1', method: 'GET', url: 'https://api.com' } },
+        { name: 'Folder 1', item: [{ name: 'Request 2', request: { id: 'tmp-2', name: 'Request 2', method: 'POST', url: 'https://api.com' } }] },
       ];
       ensureItemIds(items);
       expect(items[0].id).toBeDefined();
@@ -411,53 +409,10 @@ describe('collectionParser', () => {
 
     it('should preserve existing IDs', () => {
       const items: any[] = [
-        { id: 'existing-id', name: 'Request', request: { method: 'GET', url: 'https://api.com' } },
+        { id: 'existing-id', name: 'Request', request: { id: 'existing-req', name: 'Request', method: 'GET', url: 'https://api.com' } },
       ];
       ensureItemIds(items);
       expect(items[0].id).toBe('existing-id');
-    });
-  });
-
-  describe('formDataToCollectionRequest', () => {
-    it('should convert form data to collection request', () => {
-      const formData: RequestFormData = {
-        id: 'req-1',
-        name: 'Test Request',
-        method: 'POST',
-        url: 'https://api.com/users',
-        headers: [
-          { id: '1', key: 'Content-Type', value: 'application/json', disabled: false },
-        ],
-        params: [
-          { id: '2', key: 'page', value: '1', disabled: false },
-        ],
-        body: '{"test":true}',
-        sourceRef: { collectionFilename: 'test.json', collectionName: 'Test Collection', itemPath: [] },
-      };
-      
-      const result = formDataToCollectionRequest(formData);
-      
-      expect(result.method).toBe('POST');
-      expect(result.url).toBeDefined();
-      expect(result.header).toHaveLength(1);
-    });
-
-    it('should handle request without body', () => {
-      const formData: RequestFormData = {
-        id: 'req-1',
-        name: 'Test Request',
-        method: 'GET',
-        url: 'https://api.com/users',
-        headers: [],
-        params: [],
-        body: null,
-        sourceRef: { collectionFilename: 'test.json', collectionName: 'Test Collection', itemPath: [] },
-      };
-      
-      const result = formDataToCollectionRequest(formData);
-      
-      expect(result.method).toBe('GET');
-      expect(result.body).toBeUndefined();
     });
   });
 });

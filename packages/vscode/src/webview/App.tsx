@@ -15,7 +15,6 @@ import {
   DialogHeader,
   DialogTitle,
   useAppStateStore,
-  formDataToCollectionRequest,
   useStorageAdapter,
   useHttpAdapter,
   useFileAdapter,
@@ -33,8 +32,8 @@ import {
   type BannerEvent,
   type Flow,
   type TestSuite,
+  type CollectionRequest,
 } from '@wave-client/core';
-import type { RequestFormData } from '@wave-client/core';
 
 const App: React.FC = () => {
   const [selectedEnvironment, setSelectedEnvironment] = useState<Environment | null>(null);
@@ -266,7 +265,7 @@ const App: React.FC = () => {
     setIsTestSuitesLoading(false);
   };
 
-  const handleRequestSelect = (request: RequestFormData) => {
+  const handleRequestSelect = (request: CollectionRequest) => {
     loadRequestIntoTab(request);
     setSelectedEnvironment(null); // Clear environment selection when selecting a request
     setSelectedStore(null); // Clear store selection when selecting a request
@@ -385,7 +384,7 @@ const App: React.FC = () => {
     }
   };
 
-  const handleSaveRequest = async (request: RequestFormData, saveToCollectionName: string | undefined, folderPath: string[] = [], tabId?: string) => {
+  const handleSaveRequest = async (request: CollectionRequest, saveToCollectionName: string | undefined, folderPath: string[] = [], tabId?: string) => {
     if (tabId) {
       pendingSaveInfo.current = {
         tabId,
@@ -395,7 +394,6 @@ const App: React.FC = () => {
       };
     }
 
-    const collectionRequest = formDataToCollectionRequest(request);
     //if saveToCollectionName exists in collections, we are updating an existing collection - use filename & collection name from there
     const currentCollections = useAppStateStore.getState().collections;
     const existingCollection = saveToCollectionName && currentCollections.find((collection) => collection.info.name === saveToCollectionName);
@@ -416,8 +414,8 @@ const App: React.FC = () => {
       }
     }
 
-    const collectionFileName = existingCollection ? existingCollection.filename : request.sourceRef.collectionFilename;
-    const itemPath = folderPath.length > 0 ? folderPath : request.sourceRef.itemPath;
+    const collectionFileName = existingCollection ? existingCollection.filename : request.sourceRef?.collectionFilename;
+    const itemPath = folderPath.length > 0 ? folderPath : request.sourceRef?.itemPath || [];
 
     if (!collectionFileName) {
       notification.showNotification('error', 'Invalid collection filename');
@@ -428,7 +426,7 @@ const App: React.FC = () => {
     const collectionItem: any = {
       id: request.id || crypto.randomUUID(),
       name: request.name,
-      request: collectionRequest
+      request: request
     };
 
     const result = await storage.saveRequestToCollection(collectionFileName, itemPath, collectionItem);

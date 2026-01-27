@@ -14,8 +14,8 @@ import { Result, Ok, Err } from '../utils/result';
 import type {
     Collection,
     CollectionItem,
+    CollectionRequest,
     Environment,
-    ParsedRequest,
     Cookie,
     Proxy,
     Cert,
@@ -160,8 +160,8 @@ export interface IStorageAdapter {
     exportEnvironments(): Promise<Result<{ filePath: string; fileName: string }, string>>;
 
     // History
-    loadHistory(): Promise<Result<ParsedRequest[], string>>;
-    saveRequestToHistory(request: ParsedRequest): Promise<Result<void, string>>;
+    loadHistory(): Promise<Result<CollectionRequest[], string>>;
+    saveRequestToHistory(request: CollectionRequest): Promise<Result<void, string>>;
     clearHistory(): Promise<Result<void, string>>;
 
     // Cookies

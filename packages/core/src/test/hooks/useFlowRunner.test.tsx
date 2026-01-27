@@ -59,10 +59,14 @@ function createTestFlow(overrides?: Partial<Flow>): Flow {
 }
 
 function createTestCollectionItem(overrides?: Partial<CollectionItem>): CollectionItem {
+  const id = overrides?.id || generateUniqueId();
+  const name = overrides?.name || 'Test Request';
   return {
-    id: generateUniqueId(),
-    name: 'Test Request',
+    id,
+    name,
     request: {
+      id,
+      name,
       method: 'GET',
       url: 'https://api.example.com/test',
       header: [],

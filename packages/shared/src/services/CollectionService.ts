@@ -157,7 +157,7 @@ export class CollectionService extends BaseStorageService {
         // Navigate to the correct folder, creating it if necessary
         let items = collection.item;
         for (const folderName of folderPath) {
-            let folder = items.find(i => i.name === folderName && i.item);
+            let folder = items.find((i: CollectionItem) => i.name === folderName && i.item);
             if (!folder) {
                 // Create the folder if it doesn't exist
                 folder = {
@@ -171,7 +171,7 @@ export class CollectionService extends BaseStorageService {
         }
 
         // Check if a request with the same name exists in the target folder
-        const existingRequestIndex = items.findIndex(i => i.name === requestName && i.request);
+        const existingRequestIndex = items.findIndex((i: CollectionItem) => i.name === requestName && i.request);
         if (existingRequestIndex !== -1) {
             // Overwrite existing request
             items[existingRequestIndex].request = request;
@@ -233,7 +233,7 @@ export class CollectionService extends BaseStorageService {
         }
         
         // Ensure all items have IDs
-        collection.item = collection.item.map(item => ensureItemIds(item));
+        collection.item = collection.item.map((item: CollectionItem) => ensureItemIds(item));
         
         // Generate a JSON filename for saving
         const jsonFileName = fileName.replace(/\.[^.]*$/, '.json');

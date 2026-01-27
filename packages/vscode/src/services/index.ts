@@ -79,8 +79,10 @@ export type {
     Cookie,
     Proxy,
     Cert,
-    ParsedRequest,
 } from '@wave-client/shared';
+
+// Type alias for backwards compatibility
+export type { ParsedRequest } from './types';
 
 // CertType is an enum, so export it as a value
 export { CertType } from '@wave-client/shared';

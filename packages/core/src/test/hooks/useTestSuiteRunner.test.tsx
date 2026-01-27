@@ -80,10 +80,14 @@ function createTestSuite(overrides?: Partial<TestSuite>): TestSuite {
 }
 
 function createTestCollectionItem(overrides?: Partial<CollectionItem>): CollectionItem {
+  const id = overrides?.id || generateUniqueId();
+  const name = overrides?.name || 'Test Request';
   return {
-    id: generateUniqueId(),
-    name: 'Test Request',
+    id,
+    name,
     request: {
+      id,
+      name,
       method: 'GET',
       url: 'https://api.example.com/test',
       header: [],
@@ -660,9 +664,9 @@ describe('useTestSuiteRunner', () => {
         http: { errorUrls: new Set(['https://api.example.com/fail']) },
       });
 
-      const req1 = createTestCollectionItem({ id: 'req-1', request: { method: 'GET', url: 'https://api.example.com/success' } });
-      const req2 = createTestCollectionItem({ id: 'req-2', request: { method: 'GET', url: 'https://api.example.com/fail' } });
-      const req3 = createTestCollectionItem({ id: 'req-3', request: { method: 'GET', url: 'https://api.example.com/success' } });
+      const req1 = createTestCollectionItem({ id: 'req-1', request: { id: 'req-1', name: 'Request 1', method: 'GET', url: 'https://api.example.com/success' } });
+      const req2 = createTestCollectionItem({ id: 'req-2', request: { id: 'req-2', name: 'Request 2', method: 'GET', url: 'https://api.example.com/fail' } });
+      const req3 = createTestCollectionItem({ id: 'req-3', request: { id: 'req-3', name: 'Request 3', method: 'GET', url: 'https://api.example.com/success' } });
       const collection = createTestCollection([req1, req2, req3]);
       
       const item1 = createTestRequestItem({ id: 'item-1', referenceId: 'req-1', order: 0 });
@@ -1030,7 +1034,7 @@ describe('useTestSuiteRunner', () => {
 
       const requestItem = createTestCollectionItem({
         id: 'req-1',
-        request: { method: 'GET', url: 'https://api.example.com/fail' },
+        request: { id: 'req-1', name: 'Fail Request', method: 'GET', url: 'https://api.example.com/fail' },
       });
       const collection = createTestCollection([requestItem]);
       

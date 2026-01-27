@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { ChevronRightIcon, ChevronDownIcon, FolderIcon, LayoutGridIcon, ImportIcon, DownloadIcon, MoreVertical } from 'lucide-react';
-import { Collection, CollectionItem } from '../../types/collection';
-import { collectionItemToFormData, countRequests } from '../../utils/collectionParser';
+import { Collection, CollectionItem, CollectionRequest } from '../../types/collection';
+import { extractRequestFromItem, countRequests } from '../../utils/collectionParser';
 import useAppStateStore from '../../hooks/store/useAppStateStore';
 import { Button } from '../ui/button';
 import { Tooltip, TooltipTrigger, TooltipContent } from '../ui/tooltip';
@@ -15,12 +15,11 @@ import CollectionsImportWizard from './CollectionsImportWizard';
 import CollectionExportWizard from './CollectionExportWizard';
 import CollectionTreeItem from './CollectionTreeItem';
 import RunCollectionModal from './RunCollectionModal';
-import { RequestFormData } from '../../utils/collectionParser';
 import { Input } from '../ui/input';
 import { SecondaryButton } from '../ui';
 
 interface CollectionsPaneProps {
-  onRequestSelect: (request: RequestFormData) => void;
+  onRequestSelect: (request: CollectionRequest) => void;
   onImportCollection: (fileName: string, fileContent: string, collectionType: string) => void;
   onExportCollection: (collectionName: string, exportFormat: string) => void;
   onRetry?: () => void;
@@ -213,8 +212,8 @@ const CollectionsPane: React.FC<CollectionsPaneProps> = ({
     collectionName: string,
     itemPath: string[]
   ) => {
-    const formData = collectionItemToFormData(item, collectionFilename, collectionName, itemPath);
-    onRequestSelect(formData);
+    const request = extractRequestFromItem(item, collectionFilename, collectionName, itemPath);
+    onRequestSelect(request);
   }, [onRequestSelect]);
 
   const handleRunCollection = useCallback((

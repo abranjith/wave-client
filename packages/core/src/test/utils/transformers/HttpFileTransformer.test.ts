@@ -232,6 +232,8 @@ DELETE https://api.example.com/users/1`;
             id: 'req-1',
             name: 'Get Users',
             request: {
+              id: 'req-1',
+              name: 'Get Users',
               method: 'GET',
               url: 'https://api.example.com/users',
             },
@@ -259,6 +261,8 @@ DELETE https://api.example.com/users/1`;
             id: 'req-1',
             name: 'Create User',
             request: {
+              id: 'req-1',
+              name: 'Create User',
               method: 'POST',
               url: 'https://api.example.com/users',
               header: [
@@ -290,6 +294,8 @@ DELETE https://api.example.com/users/1`;
             id: 'req-1',
             name: 'Request',
             request: {
+              id: 'req-1',
+              name: 'Request',
               method: 'GET',
               url: 'https://api.com',
               header: [
@@ -320,12 +326,12 @@ DELETE https://api.example.com/users/1`;
           {
             id: 'req-1',
             name: 'Request 1',
-            request: { method: 'GET', url: 'https://api.com/1' },
+            request: { id: 'req-1', name: 'Request 1', method: 'GET', url: 'https://api.com/1' },
           },
           {
             id: 'req-2',
             name: 'Request 2',
-            request: { method: 'POST', url: 'https://api.com/2' },
+            request: { id: 'req-2', name: 'Request 2', method: 'POST', url: 'https://api.com/2' },
           },
         ],
       };
@@ -354,7 +360,7 @@ DELETE https://api.example.com/users/1`;
               {
                 id: 'req-1',
                 name: 'Login',
-                request: { method: 'POST', url: 'https://api.com/login' },
+                request: { id: 'req-1', name: 'Login', method: 'POST', url: 'https://api.com/login' },
               },
             ],
           },

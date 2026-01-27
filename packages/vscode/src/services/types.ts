@@ -5,6 +5,9 @@
  * Some types are kept locally for VS Code-specific functionality.
  */
 
+// Import CollectionRequest for the type alias
+import type { CollectionRequest } from '@wave-client/shared';
+
 // Re-export all types from shared
 export {
     type Collection,
@@ -15,7 +18,6 @@ export {
     type CollectionVariable,
     type CollectionAuth,
     type CollectionBody,
-    type BinaryBodyData,
     type HeaderRow,
     type ParamRow,
     type FormField,
@@ -27,10 +29,12 @@ export {
     type CACert,
     type SelfSignedCert,
     CertType,
-    type ParsedRequest,
     type ResponseData,
     type ValidationResult,
     type ValidationRuleResult,
     isFolder,
     isRequest,
 } from '@wave-client/shared';
+
+// Type alias for backwards compatibility
+export type ParsedRequest = CollectionRequest;

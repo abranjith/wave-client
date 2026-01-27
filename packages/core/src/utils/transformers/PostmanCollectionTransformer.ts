@@ -150,7 +150,11 @@ export class PostmanCollectionTransformer extends BaseCollectionTransformer<Post
 
         // If it's a request
         if (item.request) {
-            collectionItem.request = this.transformRequest(item.request);
+            collectionItem.request = this.transformRequest(
+                item.request, 
+                collectionItem.id, 
+                collectionItem.name
+            );
         }
 
         // Transform responses if present
@@ -164,8 +168,10 @@ export class PostmanCollectionTransformer extends BaseCollectionTransformer<Post
     /**
      * Transforms a Postman request to internal CollectionRequest
      */
-    private transformRequest(request: PostmanRequest): CollectionRequest {
+    private transformRequest(request: PostmanRequest, id: string, name: string): CollectionRequest {
         return {
+            id,
+            name,
             method: request.method?.toUpperCase() || 'GET',
             url: this.transformUrl(request.url),
             header: this.transformHeaders(request.header),
@@ -270,46 +276,52 @@ export class PostmanCollectionTransformer extends BaseCollectionTransformer<Post
             return undefined;
         }
 
-        const collectionBody: CollectionBody = {
-            mode: this.mapBodyMode(body.mode),
-        };
-
         switch (body.mode) {
-            case 'raw':
-                collectionBody.raw = body.raw;
-                if (body.options?.raw?.language) {
-                    collectionBody.options = {
-                        raw: { language: this.mapRawLanguage(body.options.raw.language) },
-                    };
-                }
-                break;
+            case 'raw': {
+                return {
+                    mode: 'raw' as const,
+                    raw: body.raw || '',
+                    options: body.options?.raw?.language 
+                        ? { raw: { language: this.mapRawLanguage(body.options.raw.language) } }
+                        : undefined,
+                };
+            }
 
-            case 'urlencoded':
-                collectionBody.urlencoded = body.urlencoded?.map(p => ({
-                    id: this.generateId(),
-                    key: p.key,
-                    value: p.value || null,
-                    disabled: p.disabled || false,
-                })) as FormField[];
-                break;
+            case 'urlencoded': {
+                return {
+                    mode: 'urlencoded',
+                    urlencoded: body.urlencoded?.map(p => ({
+                        id: this.generateId(),
+                        key: p.key,
+                        value: p.value || null,
+                        disabled: p.disabled || false,
+                    })) as FormField[],
+                };
+            }
 
-            case 'formdata':
-                collectionBody.formdata = body.formdata?.map(p => ({
-                    id: this.generateId(),
-                    key: p.key,
-                    value: p.value || null,
-                    disabled: p.disabled || false,
-                    fieldType: p.type === 'file' ? 'file' : 'text',
-                })) as MultiPartFormField[];
-                break;
+            case 'formdata': {
+                return {
+                    mode: 'formdata',
+                    formdata: body.formdata?.map(p => ({
+                        id: this.generateId(),
+                        key: p.key,
+                        value: p.value || null,
+                        disabled: p.disabled || false,
+                        fieldType: p.type === 'file' ? 'file' : 'text',
+                    })) as MultiPartFormField[],
+                };
+            }
 
-            case 'file':
+            case 'file': {
                 // File mode - would need actual file data
-                collectionBody.mode = 'file';
-                break;
-        }
+                return {
+                    mode: 'file',
+                };
+            }
 
-        return collectionBody;
+            default:
+                return { mode: 'none' };
+        }
     }
 
     /**
@@ -346,7 +358,11 @@ export class PostmanCollectionTransformer extends BaseCollectionTransformer<Post
             id: response.id || this.generateId(),
             name: response.status || 'Response',
             originalRequest: response.originalRequest 
-                ? this.transformRequest(response.originalRequest) 
+                ? this.transformRequest(
+                    response.originalRequest, 
+                    this.generateId(), 
+                    'Original Request'
+                ) 
                 : undefined,
             status: response.status || '',
             code: response.code || 0,

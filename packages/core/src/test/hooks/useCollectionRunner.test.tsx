@@ -66,6 +66,8 @@ function createCollectionWithRequests(ids: string[], baseUrl = 'https://api.exam
       id,
       name: `Request ${id}`,
       request: {
+        id,
+        name: `Request ${id}`,
         method: 'GET',
         url: `${baseUrl}/items/${id}`,
       },

@@ -25,7 +25,6 @@ import {
   FlowCanvas,
   TestSuiteEditor,
   useAppStateStore,
-  formDataToCollectionRequest,
   useStorageAdapter,
   useHttpAdapter,
   useFileAdapter,
@@ -39,7 +38,7 @@ import {
   type GlobalValidationRule,
   type HttpRequestConfig,
   type BannerEvent,
-  type RequestFormData,
+  type CollectionRequest,
   type Flow,
   type TestSuite,
 } from '@wave-client/core';
@@ -339,7 +338,7 @@ function WaveClientUI() {
     setIsEnvironmentsLoading(false);
   };
 
-  const handleRequestSelect = (request: RequestFormData) => {
+  const handleRequestSelect = (request: CollectionRequest) => {
     loadRequestIntoTab(request);
     setSelectedEnvironment(null);
     setSelectedStore(null);
@@ -467,7 +466,7 @@ const handleFlowSave = useCallback(async (flow: Flow) => {
   };
 
   const handleSaveRequest = async (
-    request: RequestFormData,
+    request: CollectionRequest,
     saveToCollectionName: string | undefined,
     folderPath: string[] = [],
     tabId?: string
@@ -481,7 +480,6 @@ const handleFlowSave = useCallback(async (flow: Flow) => {
       };
     }
 
-    const collectionRequest = formDataToCollectionRequest(request);
     const currentCollections = useAppStateStore.getState().collections;
     const existingCollection =
       saveToCollectionName &&
@@ -507,8 +505,8 @@ const handleFlowSave = useCallback(async (flow: Flow) => {
 
     const collectionFileName = existingCollection
       ? existingCollection.filename
-      : request.sourceRef.collectionFilename;
-    const itemPath = folderPath.length > 0 ? folderPath : request.sourceRef.itemPath;
+      : request.sourceRef?.collectionFilename;
+    const itemPath = folderPath.length > 0 ? folderPath : request.sourceRef?.itemPath || [];
 
     if (!collectionFileName) {
       notification.showNotification('error', 'Invalid collection filename');
@@ -519,7 +517,7 @@ const handleFlowSave = useCallback(async (flow: Flow) => {
     const collectionItem: any = {
       id: request.id || crypto.randomUUID(),
       name: request.name,
-      request: collectionRequest,
+      request: request,
     };
 
     const result = await storage.saveRequestToCollection(

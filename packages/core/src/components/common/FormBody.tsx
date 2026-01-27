@@ -16,7 +16,7 @@ interface FormBodyProps {
 
 const FormBody: React.FC<FormBodyProps> = ({ dropdownElement }) => {
   const activeTab = useAppStateStore((state) => state.getActiveTab());
-  const updateBody = useAppStateStore((state) => state.updateFormBody);
+  const updateBody = useAppStateStore((state) => state.updateUrlencodedBody);
   const toggleFormFieldEnabled = useAppStateStore((state) => state.toggleFormFieldEnabled);
   const body = activeTab?.body;
   const getActiveEnvVariableKeys = useAppStateStore((state) => state.getActiveEnvVariableKeys);
@@ -28,8 +28,11 @@ const FormBody: React.FC<FormBodyProps> = ({ dropdownElement }) => {
   
   // Get form fields from store - use useMemo to prevent creating new array reference
   const formFields: FormField[] = useMemo(() => {
-    return body?.formData?.data || [{ id: crypto.randomUUID(), key: '', value: '', disabled: false }];
-  }, [body?.formData?.data]);
+    if (body?.mode === 'urlencoded' && body.urlencoded) {
+      return body.urlencoded;
+    }
+    return [{ id: crypto.randomUUID(), key: '', value: '', disabled: false }];
+  }, [body]);
   
   const [localFields, setLocalFields] = useState<{ [id: string]: { key: string; value: string | null, disabled: boolean } }>({});
   const [styledLocalFields, setStyledLocalFields] = useState<{ [id: string]: { key: JSX.Element; value: JSX.Element } }>({});

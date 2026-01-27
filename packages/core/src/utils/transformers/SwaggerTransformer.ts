@@ -383,7 +383,12 @@ export class SwaggerTransformer extends BaseCollectionTransformer<OpenAPISpec> {
             }
         }
 
+        const requestId = this.generateId();
+        const requestName = operation.summary || operation.operationId || `${method.toUpperCase()} ${path}`;
+
         const request: CollectionRequest = {
+            id: requestId,
+            name: requestName,
             method: method.toUpperCase(),
             url: urlObj,
             header: headers.length > 0 ? headers : undefined,
@@ -392,7 +397,7 @@ export class SwaggerTransformer extends BaseCollectionTransformer<OpenAPISpec> {
 
         return {
             id: this.generateId(),
-            name: operation.summary || operation.operationId || `${method.toUpperCase()} ${path}`,
+            name: requestName,
             description: operation.description,
             request
         };

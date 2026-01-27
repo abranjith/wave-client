@@ -3,13 +3,10 @@ import {
   buildEnvVarsMap,
   getDictFromHeaderRows,
   getURLSearchParamsFromParamRows,
-  convertBodyToRequestBody,
   getAuthForRequest,
   buildHttpRequest,
-  type CollectionRequestInput,
 } from '../../utils/requestBuilder';
-import type { Environment, HeaderRow, ParamRow, MultiPartFormField, CollectionRequest } from '../../types/collection';
-import type { RequestBody } from '../../types/tab';
+import type { Environment, HeaderRow, ParamRow, MultiPartFormField, CollectionRequest, CollectionBody } from '../../types/collection';
 import { type Auth, AuthType } from '../../types/auth';
 import { generateUniqueId } from '../../utils/collectionParser';
 
@@ -302,317 +299,6 @@ describe('requestBuilder', () => {
     });
   });
 
-  describe('convertBodyToRequestBody', () => {
-    it('should return null for "none" body type', async () => {
-      const body: RequestBody = {
-        textData: null,
-        binaryData: null,
-        formData: null,
-        multiPartFormData: null,
-        currentBodyType: 'none',
-      };
-      const result = await convertBodyToRequestBody(body, 'none', new Map(), new Set());
-
-      expect(result).toBeNull();
-    });
-
-    it('should return text body as string', async () => {
-      const body: RequestBody = {
-        textData: { data: 'Hello, World!', textType: 'text' },
-        binaryData: null,
-        formData: null,
-        multiPartFormData: null,
-        currentBodyType: 'text',
-      };
-
-      const result = await convertBodyToRequestBody(body, 'text', new Map(), new Set());
-
-      expect(result).toBe('Hello, World!');
-    });
-
-    it('should resolve variables in text body', async () => {
-      const body: RequestBody = {
-        textData: { data: 'User ID: {{USER_ID}}', textType: 'text' },
-        binaryData: null,
-        formData: null,
-        multiPartFormData: null,
-        currentBodyType: 'text',
-      };
-
-      const envVars = new Map([['USER_ID', '12345']]);
-      const result = await convertBodyToRequestBody(body, 'text', envVars, new Set());
-
-      expect(result).toBe('User ID: 12345');
-    });
-
-    it('should return null for text body with no data', async () => {
-      const body: RequestBody = {
-        textData: { data: '', textType: 'text' },
-        binaryData: null,
-        formData: null,
-        multiPartFormData: null,
-        currentBodyType: 'text',
-      };
-
-      const result = await convertBodyToRequestBody(body, 'text', new Map(), new Set());
-
-      expect(result).toBeNull();
-    });
-
-    it.skip('should handle binary body with File', async () => {
-      // Skip: File.arrayBuffer() not available in jsdom
-      const file = new File(['binary content'], 'test.bin', {
-        type: 'application/octet-stream',
-      });
-      const body: RequestBody = {
-        textData: null,
-        binaryData: { data: { file, id: generateUniqueId() }, fileName: 'test.bin' },
-        formData: null,
-        multiPartFormData: null,
-        currentBodyType: 'binary',
-      };
-
-      const result = await convertBodyToRequestBody(body, 'binary', new Map(), new Set());
-
-      expect(result).toBeInstanceOf(ArrayBuffer);
-    });
-
-    it('should return null for binary body without file', async () => {
-      const body: RequestBody = {
-        textData: null,
-        binaryData: null,
-        formData: null,
-        multiPartFormData: null,
-        currentBodyType: 'binary',
-      };
-
-      const result = await convertBodyToRequestBody(body, 'binary', new Map(), new Set());
-
-      expect(result).toBeNull();
-    });
-
-    it('should handle multipart form data with text fields', async () => {
-      const body: RequestBody = {
-        textData: null,
-        binaryData: null,
-        formData: null,
-        multiPartFormData: {
-          data: [
-            multiPartField('name', 'John'),
-            multiPartField('email', 'john@example.com'),
-          ],
-        },
-        currentBodyType: 'multipart',
-      };
-
-      const result = await convertBodyToRequestBody(
-        body,
-        'multipart',
-        new Map(),
-        new Set()
-      );
-
-      expect(result).toBeInstanceOf(FormData);
-      const formData = result as FormData;
-      expect(formData.get('name')).toBe('John');
-      expect(formData.get('email')).toBe('john@example.com');
-    });
-
-    it('should skip disabled multipart fields', async () => {
-      const body: RequestBody = {
-        textData: null,
-        binaryData: null,
-        formData: null,
-        multiPartFormData: {
-          data: [
-            multiPartField('enabled', 'yes', false),
-            multiPartField('disabled', 'no', true),
-          ],
-        },
-        currentBodyType: 'multipart',
-      };
-
-      const result = await convertBodyToRequestBody(
-        body,
-        'multipart',
-        new Map(),
-        new Set()
-      );
-
-      const formData = result as FormData;
-      expect(formData.has('enabled')).toBe(true);
-      expect(formData.has('disabled')).toBe(false);
-    });
-
-    it('should resolve variables in multipart fields', async () => {
-      const body: RequestBody = {
-        textData: null,
-        binaryData: null,
-        formData: null,
-        multiPartFormData: {
-          data: [multiPartField('userId', '{{USER_ID}}')],
-        },
-        currentBodyType: 'multipart',
-      };
-
-      const envVars = new Map([['USER_ID', '12345']]);
-      const result = await convertBodyToRequestBody(body, 'multipart', envVars, new Set());
-
-      const formData = result as FormData;
-      expect(formData.get('userId')).toBe('12345');
-    });
-
-    it('should track unresolved variables in text body', async () => {
-      const body: RequestBody = {
-        textData: { data: '{{MISSING}}', textType: 'text' },
-        binaryData: null,
-        formData: null,
-        multiPartFormData: null,
-        currentBodyType: 'text',
-      };
-
-      const unresolved = new Set<string>();
-      await convertBodyToRequestBody(body, 'text', new Map(), unresolved);
-
-      expect(unresolved.has('MISSING')).toBe(true);
-    });
-
-    it('should track unresolved variables in multipart body', async () => {
-      const body: RequestBody = {
-        textData: null,
-        binaryData: null,
-        formData: null,
-        multiPartFormData: {
-          data: [multiPartField('field', '{{MISSING}}')],
-        },
-        currentBodyType: 'multipart',
-      };
-
-      const unresolved = new Set<string>();
-      await convertBodyToRequestBody(body, 'multipart', new Map(), unresolved);
-
-      expect(unresolved.has('MISSING')).toBe(true);
-    });
-
-    it('should handle multipart with disabled fields', async () => {
-      const formFields = [
-        multiPartField('enabled', 'value1'),
-        { ...multiPartField('disabled', 'value2'), disabled: true },
-      ];
-      const body: RequestBody = {
-        currentBodyType: 'multipart',
-        multiPartFormData: { data: formFields },
-        textData: null,
-        binaryData: null,
-        formData: null,
-      };
-      const envVars = new Map<string, string>();
-      const unresolved = new Set<string>();
-
-      const result = await convertBodyToRequestBody(body, 'multipart', envVars, unresolved);
-
-      expect(result).toBeInstanceOf(FormData);
-      const formData = result as FormData;
-      expect(formData.has('enabled')).toBe(true);
-      expect(formData.has('disabled')).toBe(false);
-    });
-
-    it('should handle multipart with file value', async () => {
-      const file = new File(['content'], 'upload.pdf', { type: 'application/pdf' });
-      const formFields = [
-        { id: generateUniqueId(), key: 'file', value: file, fieldType: 'file' as const, disabled: false },
-      ];
-      const body: RequestBody = {
-        currentBodyType: 'multipart',
-        multiPartFormData: { data: formFields },
-        textData: null,
-        binaryData: null,
-        formData: null,
-      };
-      const envVars = new Map<string, string>();
-      const unresolved = new Set<string>();
-
-      const result = await convertBodyToRequestBody(body, 'multipart', envVars, unresolved);
-
-      expect(result).toBeInstanceOf(FormData);
-    });
-
-    it('should handle form urlencoded body', async () => {
-      const formFields = [
-        { id: '1', key: 'username', value: 'john', enabled: true, disabled: false },
-        { id: '2', key: 'password', value: 'secret', enabled: true, disabled: false },
-      ];
-      const body: RequestBody = {
-        currentBodyType: 'form',
-        formData: { data: formFields },
-        textData: null,
-        binaryData: null,
-        multiPartFormData: null,
-      };
-      const envVars = new Map<string, string>();
-      const unresolved = new Set<string>();
-
-      const result = await convertBodyToRequestBody(body, 'form', envVars, unresolved);
-
-      expect(result).toEqual({ username: 'john', password: 'secret' });
-    });
-
-    it('should handle form urlencoded with disabled fields', async () => {
-      const formFields = [
-        { id: '1', key: 'enabled', value: 'yes', enabled: true, disabled: false },
-        { id: '2', key: 'disabled', value: 'no', enabled: false, disabled: true },
-      ];
-      const body: RequestBody = {
-        currentBodyType: 'form',
-        formData: { data: formFields },
-        textData: null,
-        binaryData: null,
-        multiPartFormData: null,
-      };
-      const envVars = new Map<string, string>();
-      const unresolved = new Set<string>();
-
-      const result = await convertBodyToRequestBody(body, 'form', envVars, unresolved);
-
-      expect(result).toEqual({ enabled: 'yes' });
-    });
-
-    it('should handle form urlencoded with env vars', async () => {
-      const formFields = [
-        { id: '1', key: 'api_key', value: '{{API_KEY}}', enabled: true, disabled: false },
-      ];
-      const body: RequestBody = {
-        currentBodyType: 'form',
-        formData: { data: formFields },
-        textData: null,
-        binaryData: null,
-        multiPartFormData: null,
-      };
-      const envVars = new Map([['API_KEY', 'secret123']]);
-      const unresolved = new Set<string>();
-
-      const result = await convertBodyToRequestBody(body, 'form', envVars, unresolved);
-
-      expect(result).toEqual({ api_key: 'secret123' });
-    });
-
-    it('should handle default body type fallback', async () => {
-      const body: RequestBody = {
-        currentBodyType: 'text',
-        textData: { data: 'default text', textType: 'text' },
-        binaryData: null,
-        formData: null,
-        multiPartFormData: null,
-      };
-      const envVars = new Map<string, string>();
-      const unresolved = new Set<string>();
-
-      const result = await convertBodyToRequestBody(body, 'text', envVars, unresolved);
-
-      expect(result).toBe('default text');
-    });
-  });
-
   describe('getAuthForRequest', () => {
     it('should return null for disabled auth', () => {
       const auth: Auth = {
@@ -717,13 +403,13 @@ describe('requestBuilder', () => {
 
   describe('buildHttpRequest', () => {
     it('should build basic GET request', async () => {
-      const input: CollectionRequestInput = {
+      const input: CollectionRequest = {
         id: '1',
         name: 'Test Request',
         method: 'GET',
         url: 'https://api.example.com/users',
-        headers: [headerRow('Accept', 'application/json')],
-        params: [paramRow('page', '1')],
+        header: [headerRow('Accept', 'application/json')],
+        query: [paramRow('page', '1')],
       };
 
       const result = await buildHttpRequest(input, null, [], [], null);
@@ -737,7 +423,7 @@ describe('requestBuilder', () => {
     });
 
     it('should resolve environment variables in URL', async () => {
-      const input: CollectionRequestInput = {
+      const input: CollectionRequest = {
         id: '1',
         name: 'Test Request',
         method: 'GET',
@@ -757,7 +443,7 @@ describe('requestBuilder', () => {
     });
 
     it('should add default protocol when missing', async () => {
-      const input: CollectionRequestInput = {
+      const input: CollectionRequest = {
         id: '1',
         name: 'Test Request',
         method: 'GET',
@@ -769,13 +455,12 @@ describe('requestBuilder', () => {
       expect(result.request?.url).toBe('https://api.example.com/users');
     });
 
-    it('should use custom protocol', async () => {
-      const input: CollectionRequestInput = {
+    it('should use http protocol when URL starts with http://', async () => {
+      const input: CollectionRequest = {
         id: '1',
         name: 'Test Request',
         method: 'GET',
-        url: 'api.example.com/users',
-        protocol: 'http',
+        url: 'http://api.example.com/users',
       };
 
       const result = await buildHttpRequest(input, null, [], [], null);
@@ -806,7 +491,7 @@ describe('requestBuilder', () => {
         domainFilters: [],
         base64Encode: false,
       };
-      const input: CollectionRequestInput = {
+      const input: CollectionRequest = {
         id: '1',
         name: 'Test Request',
         method: 'GET',
@@ -831,7 +516,7 @@ describe('requestBuilder', () => {
         domainFilters: [],
         base64Encode: false,
       };
-      const input: CollectionRequestInput = {
+      const input: CollectionRequest = {
         id: '1',
         name: 'Test Request',
         method: 'GET',
@@ -844,7 +529,7 @@ describe('requestBuilder', () => {
     });
 
     it('should return error for unresolved placeholders', async () => {
-      const input: CollectionRequestInput = {
+      const input: CollectionRequest = {
         id: '1',
         name: 'Test Request',
         method: 'GET',
@@ -857,18 +542,20 @@ describe('requestBuilder', () => {
       expect(result.unresolved).toContain('MISSING_VAR');
     });
 
-    it('should build request with text body', async () => {
-      const input: CollectionRequestInput = {
+    it('should build request with raw body', async () => {
+      const input: CollectionRequest = {
         id: '1',
         name: 'Test Request',
         method: 'POST',
         url: 'https://api.example.com/users',
         body: {
-          currentBodyType: 'text',
-          textData: { data: '{"name":"John"}', textType: 'json' },
-          binaryData: null,
-          formData: null,
-          multiPartFormData: null,
+          mode: 'raw',
+          raw: '{"name":"John"}',
+          options: {
+            raw: {
+              language: 'json',
+            },
+          },
         },
       };
 
@@ -878,61 +565,12 @@ describe('requestBuilder', () => {
       expect(result.request?.headers).toHaveProperty('Content-Type', 'application/json');
     });
 
-    it.skip('should build request with binary body', async () => {
-      const file = new File(['binary content'], 'data.bin', { type: 'application/octet-stream' });
-      const input: CollectionRequestInput = {
-        id: '1',
-        name: 'Test Request',
-        method: 'POST',
-        url: 'https://api.example.com/upload',
-        body: {
-          currentBodyType: 'binary',
-          binaryData: { data: { id: '1', file }, fileName: 'data.bin' },
-          textData: null,
-          formData: null,
-          multiPartFormData: null,
-        },
-      };
-
-      const result = await buildHttpRequest(input, null, [], [], null);
-
-      expect(result.request?.body).toBeInstanceOf(ArrayBuffer);
-    });
-
-    it('should build request with collection request format', async () => {
-      const collectionReq: CollectionRequest = {
-        url: 'https://api.example.com/test',
-        method: 'POST',
-        header: [],
-        body: {
-          mode: 'raw',
-          raw: '{"test":true}',
-          options: {
-            raw: {
-              language: 'json',
-            },
-          },
-        },
-      };
-      const input: CollectionRequestInput = {
+    it('should build request with urlencoded body', async () => {
+      const input: CollectionRequest = {
         id: '1',
         name: 'Test Request',
         method: 'POST',
         url: 'https://api.example.com/test',
-        request: collectionReq,
-      };
-
-      const result = await buildHttpRequest(input, null, [], [], null);
-
-      expect(result.request?.body).toBe('{"test":true}');
-      expect(result.request?.headers).toHaveProperty('Content-Type', 'application/json');
-    });
-
-    it('should build request with urlencoded collection body', async () => {
-      const collectionReq: CollectionRequest = {
-        url: 'https://api.example.com/test',
-        method: 'POST',
-        header: [],
         body: {
           mode: 'urlencoded',
           urlencoded: [
@@ -941,47 +579,27 @@ describe('requestBuilder', () => {
           ],
         },
       };
-      const input: CollectionRequestInput = {
-        id: '1',
-        name: 'Test Request',
-        method: 'POST',
-        url: 'https://api.example.com/test',
-        request: collectionReq,
-      };
 
       const result = await buildHttpRequest(input, null, [], [], null);
 
-      expect(result.request?.body).toBe('field1=value1&field2=value2');
+      // urlencoded body is returned as an object for the HTTP adapter to serialize
+      expect(result.request?.body).toEqual({ field1: 'value1', field2: 'value2' });
       expect(result.request?.headers).toHaveProperty('Content-Type', 'application/x-www-form-urlencoded');
     });
 
-    it('should build request with simple string body', async () => {
-      const input: CollectionRequestInput = {
-        id: '1',
-        name: 'Test Request',
-        method: 'POST',
-        url: 'https://api.example.com/test',
-        body: 'plain text body',
-      };
-
-      const result = await buildHttpRequest(input, null, [], [], null);
-
-      expect(result.request?.body).toBe('plain text body');
-    });
-
-    it('should remove query params from URL', async () => {
-      const input: CollectionRequestInput = {
+    it('should handle query params from URL', async () => {
+      const input: CollectionRequest = {
         id: '1',
         name: 'Test Request',
         method: 'GET',
-        url: 'https://api.example.com/users?existing=param',
-        params: [paramRow('page', '1')],
+        url: 'https://api.example.com/users',
+        query: [paramRow('page', '1')],
       };
 
       const result = await buildHttpRequest(input, null, [], [], null);
 
       expect(result.request?.url).toBe('https://api.example.com/users');
-      expect(result.request?.params).toContain('page=1');
+      expect(result.request?.params).toBe('page=1');
     });
 
     it('should handle global and environment variable override', async () => {
@@ -997,12 +615,12 @@ describe('requestBuilder', () => {
           values: [envVar('API_KEY', 'dev-key')],
         },
       ];
-      const input: CollectionRequestInput = {
+      const input: CollectionRequest = {
         id: '1',
         name: 'Test Request',
         method: 'GET',
         url: 'https://api.example.com',
-        headers: [headerRow('X-API-Key', '{{API_KEY}}')],
+        header: [headerRow('X-API-Key', '{{API_KEY}}')],
       };
 
       const result = await buildHttpRequest(input, 'env1', environments, [], null);
@@ -1011,7 +629,7 @@ describe('requestBuilder', () => {
     });
 
     it('should handle invalid URL gracefully', async () => {
-      const input: CollectionRequestInput = {
+      const input: CollectionRequest = {
         id: '1',
         name: 'Test Request',
         method: 'GET',

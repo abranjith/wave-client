@@ -5,12 +5,11 @@
  * the execution context that provides dependencies and configuration.
  */
 
-import type { Environment, Collection, HeaderRow, ParamRow, CollectionRequest } from '../../types/collection';
+import type { Environment, Collection, HeaderRow, ParamRow, CollectionRequest, CollectionBody } from '../../types/collection';
 import type { Flow, FlowContext } from '../../types/flow';
 import type { HttpResponseResult, IHttpAdapter } from '../../types/adapters';
 import type { Auth } from '../../hooks/store/createAuthSlice';
 import type { RequestValidation, ValidationResult } from '../../types/validation';
-import type { RequestBody } from '../../types/tab';
 import type { ExecutionStatus, ValidationStatus } from '../../types/execution';
 
 // ============================================================================
@@ -61,7 +60,7 @@ export interface RequestOverrides {
     /** Query param overrides (merged with base request params) */
     params?: ParamRow[];
     /** Body override (replaces entire body) */
-    body?: RequestBody;
+    body?: CollectionBody;
     /** Variable substitutions for {{variable}} syntax */
     variables?: Record<string, string>;
     /** Auth profile override */

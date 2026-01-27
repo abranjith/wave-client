@@ -345,18 +345,20 @@ function extractVariablesFromRequest(request: CollectionRequest): Set<string> {
         }
     }
     
-    // Extract from body
-    if (request.body?.raw) {
-        extractVariables(request.body.raw).forEach(v => variables.add(v));
-    }
-    
-    if (request.body?.urlencoded) {
-        for (const field of request.body.urlencoded) {
-            if (field.key) {
-                extractVariables(field.key).forEach(v => variables.add(v));
-            }
-            if (field.value) {
-                extractVariables(field.value).forEach(v => variables.add(v));
+    // Extract from body based on body mode
+    if (request.body) {
+        if (request.body.mode === 'raw' && request.body.raw) {
+            extractVariables(request.body.raw).forEach(v => variables.add(v));
+        }
+        
+        if (request.body.mode === 'urlencoded' && request.body.urlencoded) {
+            for (const field of request.body.urlencoded) {
+                if (field.key) {
+                    extractVariables(field.key).forEach(v => variables.add(v));
+                }
+                if (field.value) {
+                    extractVariables(field.value).forEach(v => variables.add(v));
+                }
             }
         }
     }

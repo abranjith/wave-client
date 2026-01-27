@@ -239,7 +239,11 @@ export class HttpFileTransformer extends BaseCollectionTransformer<string> {
             path: this.extractPath(parsed.url)
         };
 
+        const requestId = this.generateId();
+
         const request: CollectionRequest = {
+            id: requestId,
+            name: parsed.name,
             method: parsed.method,
             url: urlObj,
             header: parsed.headers
@@ -251,19 +255,23 @@ export class HttpFileTransformer extends BaseCollectionTransformer<string> {
                 h.key.toLowerCase() === 'content-type'
             )?.value || 'text/plain';
 
-            request.body = {
-                mode: this.detectBodyMode(contentType),
-                raw: parsed.body
-            };
+            // Create proper BodyRaw type
+            const bodyMode = this.detectBodyMode(contentType);
+            if (bodyMode === 'raw') {
+                // Determine language from content type
+                let language: 'json' | 'xml' | 'html' | 'text' | undefined = undefined;
+                if (contentType.includes('json')) {
+                    language = 'json';
+                } else if (contentType.includes('xml')) {
+                    language = 'xml';
+                } else if (contentType.includes('html')) {
+                    language = 'html';
+                }
 
-            // Add language hint for raw body
-            if (contentType.includes('json')) {
-                request.body.options = {
-                    raw: { language: 'json' }
-                };
-            } else if (contentType.includes('xml')) {
-                request.body.options = {
-                    raw: { language: 'xml' }
+                request.body = {
+                    mode: 'raw',
+                    raw: parsed.body,
+                    options: language ? { raw: { language } } : undefined
                 };
             }
         }
@@ -348,7 +356,7 @@ export class HttpFileTransformer extends BaseCollectionTransformer<string> {
                 }
 
                 // Add body
-                if (item.request.body?.raw) {
+                if (item.request.body?.mode === 'raw' && item.request.body.raw) {
                     lines.push('');
                     lines.push(item.request.body.raw);
                 }

@@ -132,7 +132,9 @@ function buildRunRequestData(
     collections: Collection[]
 ): RunRequestData {
     const lookup = findRequestMeta(node.requestId, collections);
-    const request = lookup?.request ?? {
+    const request: CollectionRequest = lookup?.request ?? {
+        id: node.id,
+        name: node.alias || node.name,
         method: node.method,
         url: lookup?.url || 'Unknown URL',
     };

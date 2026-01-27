@@ -51,10 +51,18 @@ export type {
     CollectionBody,
     CollectionUrl,
     CollectionReference,
-    BinaryBodyData,
+    FileReference,
+    FileStorageType,
+    FilePathType,
+    BodyNone,
+    BodyRaw,
+    BodyUrlEncoded,
+    BodyFormData,
+    BodyFile,
+    BodyMode,
+    RawBodyLanguage,
     Environment,
     EnvironmentVariable,
-    ParsedRequest,
     HeaderRow,
     ParamRow,
     FormField,
@@ -66,12 +74,11 @@ export type {
     CACert,
     SelfSignedCert,
     FolderPathOption,
-    RequestBodyTextType,
-    RequestBodyType,
     ResponseContentType,
+    ParsedRequest,  // Backwards compatibility alias for CollectionRequest
 } from './types/collection';
 
-export { isFolder, isRequest, CertType } from './types/collection';
+export { isFolder, isRequest, CertType, isCollectionUrl, getRawUrl } from './types/collection';
 
 // Flow types
 export type {
@@ -185,18 +192,25 @@ export {
 // Tab types
 export type {
     TabData,
-    RequestTextBody,
-    RequestBinaryBody,
-    RequestFormBody,
-    RequestMultiPartFormBody,
-    RequestBody as RequestBodyData,  // Renamed to avoid conflict with RequestBody component
-    FileWithPreview,
-    FileMetadata,
     RequestSectionTab,
     ResponseSectionTab,
 } from './types/tab';
 
-export { TAB_CONSTANTS, createEmptyTab } from './types/tab';
+export { 
+    TAB_CONSTANTS, 
+    createEmptyTab,
+    createEmptyBody,
+    createEmptyUrlencodedBody,
+    createEmptyFormdataBody,
+    createEmptyRawBody,
+    createEmptyParamRow,
+    createEmptyHeaderRow,
+    createEmptyFormField,
+    createEmptyMultiPartFormField,
+    createEmptyValidation,
+    getBodyMode,
+    getTabDisplayName,
+} from './types/tab';
 
 // ============================================================================
 // Hooks & Context
@@ -226,7 +240,7 @@ export {
     createMinimalMockAdapter,
     createMockCollection,
     createMockEnvironment,
-    createMockParsedRequest,
+    createMockCollectionRequest,
 } from './test/mocks/mockAdapter';
 export type {
     MockDataStore,

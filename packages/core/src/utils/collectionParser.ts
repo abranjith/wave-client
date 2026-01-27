@@ -14,16 +14,9 @@ import {
   HeaderRow,
   ParamRow,
   FolderPathOption,
-  ParsedRequest,
   isFolder,
   isRequest,
 } from '../types/collection';
-
-// Re-export ParsedRequest for backward compatibility
-export type { ParsedRequest };
-
-// Alias for clarity
-export type RequestFormData = ParsedRequest;
 
 // ============================================================================
 // ID Generation
@@ -306,51 +299,20 @@ export function prepareCollection(collection: Collection, filename: string): Col
 }
 
 // ============================================================================
-// Request Building Utilities (for UI -> Collection)
+// Request Conversion Utilities
 // ============================================================================
 
 /**
- * Converts UI request form data to CollectionRequest format
+ * Extracts a CollectionRequest from a CollectionItem with full metadata.
+ * This creates a standalone request that includes the source reference
+ * for save operations back to the collection.
  */
-export function formDataToCollectionRequest(formData: RequestFormData): CollectionRequest {
-  const collectionRequest: CollectionRequest = {
-    method: formData.method,
-    url: stringToCollectionUrl(formData.url, formData.params),
-    header: formData.headers,
-    validation: formData.validation,
-    authId: formData.authId,
-  };
-
-  // Add body if present
-  if (formData.binaryBody) {
-    collectionRequest.body = {
-      mode: 'file',
-      binary: {
-        data: formData.binaryBody.data,
-        fileName: formData.binaryBody.fileName,
-        contentType: formData.binaryBody.contentType,
-      },
-    };
-  } else if (formData.body) {
-    collectionRequest.body = {
-      mode: formData.bodyMode || 'raw',
-      raw: formData.body,
-      options: formData.bodyOptions,
-    };
-  }
-
-  return collectionRequest;
-}
-
-/**
- * Converts a CollectionItem (request) to UI form data format
- */
-export function collectionItemToFormData(
+export function extractRequestFromItem(
   item: CollectionItem,
   collectionFilename: string,
   collectionName: string,
   itemPath: string[]
-): RequestFormData {
+): CollectionRequest {
   const request = item.request;
   
   if (!request) {
@@ -358,23 +320,31 @@ export function collectionItemToFormData(
   }
   
   return {
+    ...request,
     id: item.id,
     name: item.name,
-    method: request.method?.toUpperCase() || 'GET',
-    url: urlToString(request.url),
-    headers: request.header || [],
-    params: extractUrlParams(request.url),
-    body: request.body?.raw || null,
-    bodyMode: request.body?.mode,
-    bodyOptions: request.body?.options,
-    binaryBody: request.body?.binary,
-    validation: request.validation,
-    authId: request.authId,
+    // Ensure URL is a string for easier handling
+    url: typeof request.url === 'string' ? request.url : urlToString(request.url),
     sourceRef: {
       collectionFilename,
       collectionName,
       itemPath,
     },
+  };
+}
+
+/**
+ * Converts a CollectionRequest back to CollectionItem format for saving.
+ * Strips runtime-only fields (id, name are kept on the item level).
+ */
+export function requestToCollectionItem(request: CollectionRequest): CollectionItem {
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const { id, name, sourceRef, ...requestData } = request;
+  
+  return {
+    id,
+    name,
+    request: requestData as CollectionRequest,
   };
 }
 
@@ -388,12 +358,4 @@ export function collectionItemToFormData(
  */
 export function parseCollection(collectionJson: Collection & { filename?: string }, filename: string): Collection {
   return prepareCollection(collectionJson, filename);
-}
-
-/**
- * @deprecated Use formDataToCollectionRequest instead
- * Legacy function for backward compatibility during migration
- */
-export function transformToCollectionRequest(formData: RequestFormData): CollectionRequest {
-  return formDataToCollectionRequest(formData);
 }

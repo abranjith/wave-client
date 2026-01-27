@@ -5,53 +5,51 @@ import BinaryBody from './BinaryBody';
 import FormBody from './FormBody';
 import MultiPartFormBody from './MultiPartFormBody';
 import useAppStateStore from '../../hooks/store/useAppStateStore';
-import { RequestBodyType } from '../../types/collection';
+import { BodyMode } from '../../types/collection';
 
-type BodyType = 'none' | 'text' | 'binary' | 'form' | 'multipart';
+// Map between UI display names and BodyMode values
+type DisplayLabel = 'No Body' | 'Raw' | 'File' | 'URL Encoded' | 'Form Data';
+
+const DISPLAY_LABELS: DisplayLabel[] = [
+  'No Body', 'Raw', 'File', 'URL Encoded', 'Form Data'
+];
+
+const displayToMode: Record<DisplayLabel, BodyMode> = {
+  'No Body': 'none',
+  'Raw': 'raw',
+  'File': 'file',
+  'URL Encoded': 'urlencoded',
+  'Form Data': 'formdata'
+};
+
+const modeToDisplay: Record<BodyMode, DisplayLabel> = {
+  'none': 'No Body',
+  'raw': 'Raw',
+  'file': 'File',
+  'urlencoded': 'URL Encoded',
+  'formdata': 'Form Data'
+};
 
 const RequestBody: React.FC = () => {
-  const BODY_TYPES = [
-  'No Body', 'Text', 'Binary', 'Form', 'Multipart Form'
-  ];
-
   const activeTab = useAppStateStore((state) => state.getActiveTab());
-  const updateBodyType = useAppStateStore((state) => state.updateCurrentBodyType);
-  const currentBodyType: RequestBodyType = activeTab?.body?.currentBodyType || 'none';
+  const updateBodyMode = useAppStateStore((state) => state.updateBodyMode);
+  const bodyMode: BodyMode = activeTab?.body?.mode || 'none';
   const bodyTypeSelectId = useId();
 
-  const handleBodyTypeChange = (str: string) => {
-    const typeMap: Record<string, BodyType> = {
-      'No Body': 'none',
-      'Text': 'text',
-      'Binary': 'binary',
-      'Form': 'form',
-      'Multipart Form': 'multipart'
-    };
-    const newType = typeMap[str] || 'none';
-    updateBodyType(newType);
-  };
-
-  // Convert body type to display label
-  const getDisplayLabel = (type: BodyType): string => {
-    const labelMap: Record<BodyType, string> = {
-      'none': 'No Body',
-      'text': 'Text',
-      'binary': 'Binary',
-      'form': 'Form',
-      'multipart': 'Multipart Form'
-    };
-    return labelMap[type];
+  const handleBodyTypeChange = (displayLabel: string) => {
+    const mode = displayToMode[displayLabel as DisplayLabel] || 'none';
+    updateBodyMode(mode);
   };
 
   const renderDropdown = () => (
-    <Select value={getDisplayLabel(currentBodyType)} onValueChange={handleBodyTypeChange}>
+    <Select value={modeToDisplay[bodyMode]} onValueChange={handleBodyTypeChange}>
       <SelectTrigger id={bodyTypeSelectId} className="w-auto max-w-full min-w-48 bg-white border-slate-300 text-slate-900 hover:bg-slate-50 dark:bg-slate-800 dark:border-slate-600 dark:text-slate-100 dark:hover:bg-slate-700">
         <SelectValue placeholder="Select Type" />
       </SelectTrigger>
       <SelectContent>
-        {BODY_TYPES.map(m => (
-          <SelectItem key={m} value={m} className="hover:bg-slate-100 dark:hover:bg-slate-700">
-            {m}
+        {DISPLAY_LABELS.map(label => (
+          <SelectItem key={label} value={label} className="hover:bg-slate-100 dark:hover:bg-slate-700">
+            {label}
           </SelectItem>
         ))}
       </SelectContent>
@@ -62,23 +60,23 @@ const RequestBody: React.FC = () => {
     <div className="flex flex-col h-full">
       {/* Conditional Body Content - Takes remaining space */}
       <div className="flex-1 min-h-0">
-        {currentBodyType === 'text' && (
+        {bodyMode === 'raw' && (
           <TextBody dropdownElement={renderDropdown()} />
         )}
 
-        {currentBodyType === 'binary' && (
+        {bodyMode === 'file' && (
           <BinaryBody dropdownElement={renderDropdown()} />
         )}
 
-        {currentBodyType === 'form' && (
+        {bodyMode === 'urlencoded' && (
           <FormBody dropdownElement={renderDropdown()} />
         )}
 
-        {currentBodyType === 'multipart' && (
+        {bodyMode === 'formdata' && (
           <MultiPartFormBody dropdownElement={renderDropdown()} />
         )}
 
-        {currentBodyType === 'none' && (
+        {bodyMode === 'none' && (
           <>
             <div className="flex-shrink-0 mb-4">{renderDropdown()}</div>
             <div className="p-8 text-center border-2 border-dashed rounded-lg bg-slate-50 dark:bg-slate-900/50">

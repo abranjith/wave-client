@@ -6,35 +6,43 @@
 
 import { StateCreator } from 'zustand';
 import { 
-    ParsedRequest, 
+    CollectionRequest, 
+    CollectionBody,
+    CollectionReference,
+    CollectionUrl,
     HeaderRow, 
     ParamRow, 
     ResponseData, 
-    RequestBodyType, 
-    RequestBodyTextType, 
     FormField, 
     MultiPartFormField, 
-    CollectionReference, 
-    Environment
+    Environment,
+    BodyMode,
+    FileReference,
+    getRawUrl,
+    isCollectionUrl,
 } from '../../types/collection';
 import { 
     TabData, 
-    RequestBody,
     TAB_CONSTANTS,
     createEmptyTab,
     createEmptyParamRow,
     createEmptyHeaderRow,
     createEmptyFormField,
     createEmptyMultiPartFormField,
-    createEmptyRequestBody,
+    createEmptyBody,
+    createEmptyUrlencodedBody,
+    createEmptyFormdataBody,
+    createEmptyRawBody,
     createEmptyValidation,
     RequestSectionTab,
     ResponseSectionTab
 } from '../../types/tab';
 import { ValidationRuleRef, RequestValidation } from '../../types/validation';
-import { parseUrlQueryParams, getContentTypeFromBody, resolveParameterizedValue, isUrlInDomains } from '../../utils/common';
-import { FileWithPreview } from '../useFileUpload';
+import { parseUrlQueryParams, getContentTypeFromBodyMode, resolveParameterizedValue, isUrlInDomains } from '../../utils/common';
 import { Auth } from './createAuthSlice';
+
+// Type alias for backwards compatibility during migration
+type RawBodyLanguage = 'json' | 'xml' | 'html' | 'text' | 'csv' | undefined;
 
 // ==================== Slice Interface ====================
 
@@ -52,15 +60,15 @@ export interface RequestTabsSlice {
     canAddTab: () => boolean;
     
     // Load request into tab (from collection, history, etc.)
-    loadRequestIntoTab: (request: ParsedRequest, targetTabId?: string) => void;
-    loadRequestIntoNewTab: (request: ParsedRequest) => TabData | null;
+    loadRequestIntoTab: (request: CollectionRequest, targetTabId?: string) => void;
+    loadRequestIntoNewTab: (request: CollectionRequest) => TabData | null;
     
     // Clear/Reset tab
     clearActiveTab: () => void;
     clearTab: (tabId: string) => void;
     
-    // Get parsed request for saving/history
-    getParsedRequest: (tabId?: string) => ParsedRequest;
+    // Get request for saving/history (converts TabData to CollectionRequest)
+    getCollectionRequest: (tabId?: string) => CollectionRequest;
     
     // Update tab metadata (name, folder path, collection ref) and mark clean
     updateTabMetadata: (tabId: string, metadata: { name?: string, folderPath?: string[], collectionRef?: CollectionReference }) => void;
@@ -72,12 +80,12 @@ export interface RequestTabsSlice {
     updateName: (name: string) => void;
     updateFolderPath: (folderPath: string[]) => void;
     
-    // Body updaters
-    updateTextBody: (data: string | null, bodyTextType: RequestBodyTextType) => void;
-    updateBinaryBody: (data: FileWithPreview | null) => void;
-    updateFormBody: (data: FormField[] | null) => void;
-    updateMultiPartFormBody: (data: MultiPartFormField[] | null) => void;
-    updateCurrentBodyType: (bodyType: RequestBodyType) => void;
+    // Body updaters - work with CollectionBody discriminated union
+    updateBodyMode: (mode: BodyMode) => void;
+    updateRawBody: (data: string | null, language?: RawBodyLanguage) => void;
+    updateFileBody: (file: FileReference | null) => void;
+    updateUrlencodedBody: (data: FormField[] | null) => void;
+    updateFormdataBody: (data: MultiPartFormField[] | null) => void;
     
     // Form fields management
     toggleFormFieldEnabled: (id: string, currentDisabled: boolean) => void;
@@ -237,44 +245,41 @@ const getURLSearchParamsFromParamRows = (
 };
 
 /**
- * Converts the body data to the appropriate format for the HTTP request
+ * Converts the CollectionBody to the appropriate format for the HTTP request
  */
-async function convertBodyToRequestBody(
-    body: RequestBody,
-    bodyType: RequestBodyType,
+async function convertBodyToRequestPayload(
+    body: CollectionBody,
     envVarsMap: Map<string, string>,
     unresolved: Set<string>
 ): Promise<string | FormData | Record<string, string> | ArrayBuffer | null> {
-    if (!body) {
+    if (!body || body.mode === 'none') {
         return null;
     }
     
-    switch (bodyType) {
-        case 'none':
-            return null;
-            
-        case 'text':
-            let txtBody = body.textData?.data || null;
-            if (txtBody) {
-                const bodyResult = resolveParameterizedValue(txtBody, envVarsMap);
+    switch (body.mode) {
+        case 'raw': {
+            let rawBody = body.raw || null;
+            if (rawBody) {
+                const bodyResult = resolveParameterizedValue(rawBody, envVarsMap);
                 bodyResult.unresolved.forEach(u => unresolved.add(u));
-                txtBody = bodyResult.resolved;
+                rawBody = bodyResult.resolved;
             }
-            return txtBody;
+            return rawBody;
+        }
             
-        case 'binary':
-            const binaryData = body.binaryData?.data;
-            if (binaryData && binaryData.file instanceof File) {
-                return await binaryData.file.arrayBuffer();
+        case 'file': {
+            // File body - return null for now, actual resolution happens in requestBuilder
+            // The file content should be read by the adapter at execution time
+            if (body.file) {
+                // TODO: File content resolution should be handled by the HTTP adapter
+                // For now, return a placeholder that the adapter can use
+                return null;
             }
             return null;
+        }
             
-        case 'multipart':
-            const multiPartData = body.multiPartFormData?.data;
-            
-            if (multiPartData instanceof FormData) {
-                return multiPartData;
-            }
+        case 'formdata': {
+            const multiPartData = body.formdata;
             if (Array.isArray(multiPartData)) {
                 const formData = new FormData();
                 for (const field of multiPartData) {
@@ -283,10 +288,13 @@ async function convertBodyToRequestBody(
                         keyResult.unresolved.forEach(u => unresolved.add(u));
                         const resolvedKey = keyResult.resolved;
 
-                        if (field.value instanceof File) {
-                            formData.append(resolvedKey, field.value, field.value.name);
-                        } else if (field.value !== undefined) {
-                            const valueResult = resolveParameterizedValue(field.value || '', envVarsMap);
+                        if (typeof field.value === 'object' && field.value !== null && 'path' in field.value) {
+                            // FileReference - will be resolved by adapter
+                            const fileRef = field.value as FileReference;
+                            // Create a blob placeholder with the file info
+                            formData.append(resolvedKey, new Blob(), fileRef.fileName || 'file');
+                        } else if (field.value !== undefined && field.value !== null) {
+                            const valueResult = resolveParameterizedValue(String(field.value), envVarsMap);
                             valueResult.unresolved.forEach(u => unresolved.add(u));
                             formData.append(resolvedKey, valueResult.resolved);
                         }
@@ -295,13 +303,13 @@ async function convertBodyToRequestBody(
                 return formData;
             }
             return null;
+        }
             
-        case 'form':
-            const urlEncodedFormData = body.formData?.data;
-            if (urlEncodedFormData) {
-                const formFields = Array.isArray(urlEncodedFormData) ? urlEncodedFormData as FormField[] : [];
+        case 'urlencoded': {
+            const urlEncodedData = body.urlencoded;
+            if (Array.isArray(urlEncodedData)) {
                 const dataRecord: Record<string, string> = {};
-                for (const field of formFields) {
+                for (const field of urlEncodedData) {
                     if (field.key && field.key.trim() && field.value !== undefined && !field.disabled) {
                         const keyResult = resolveParameterizedValue(field.key, envVarsMap);
                         keyResult.unresolved.forEach(u => unresolved.add(u));
@@ -316,22 +324,17 @@ async function convertBodyToRequestBody(
                 return dataRecord;
             }
             return null;
+        }
             
         default:
-            let defaultTxtBody = body.textData?.data || null;
-            if (defaultTxtBody) {
-                const bodyResult = resolveParameterizedValue(defaultTxtBody, envVarsMap);
-                bodyResult.unresolved.forEach(u => unresolved.add(u));
-                defaultTxtBody = bodyResult.resolved;
-            }
-            return defaultTxtBody;
+            return null;
     }
 }
 
 /**
- * Gets the folder path from a parsed request
+ * Gets the folder path from a collection request
  */
-function getRequestFolderPath(request: ParsedRequest | null): string[] {
+function getRequestFolderPath(request: CollectionRequest | null): string[] {
     const fullFolderPath: string[] = [];
     if (request?.sourceRef) {
         if (request.sourceRef.collectionName) {
@@ -511,7 +514,7 @@ const createRequestTabsSlice: StateCreator<RequestTabsSlice> = (set, get) => {
         
         // ==================== Load Request ====================
         
-        loadRequestIntoTab: (request: ParsedRequest, targetTabId?: string) => {
+        loadRequestIntoTab: (request: CollectionRequest, targetTabId?: string) => {
             const state = get();
             
             // Determine the tab ID to use
@@ -531,24 +534,43 @@ const createRequestTabsSlice: StateCreator<RequestTabsSlice> = (set, get) => {
                 set({ tabs: newTabs });
             }
             
+            // Convert request headers to HeaderRow format (ensure IDs exist)
+            const headerRows: HeaderRow[] = (request.header && request.header.length > 0)
+                ? request.header.map(h => ({
+                    id: h.id || `header-${crypto.randomUUID()}`,
+                    key: h.key,
+                    value: h.value,
+                    disabled: h.disabled || false,
+                }))
+                : [createEmptyHeaderRow()];
+            
+            // Convert request query params to ParamRow format
+            // Query params can come from request.query or from url.query if URL is a CollectionUrl
+            const urlQueryParams = isCollectionUrl(request.url) ? request.url.query : undefined;
+            const queryParams = request.query || urlQueryParams;
+            const paramRows: ParamRow[] = (queryParams && queryParams.length > 0)
+                ? queryParams.map((p: ParamRow) => ({
+                    id: p.id || `param-${crypto.randomUUID()}`,
+                    key: p.key,
+                    value: p.value,
+                    disabled: p.disabled || false,
+                }))
+                : [createEmptyParamRow()];
+            
+            // Extract raw URL string from CollectionUrl or use string directly
+            const rawUrl = getRawUrl(request.url);
+            
+            // Use the body directly (it's already CollectionBody)
+            const body: CollectionBody = request.body || createEmptyBody();
+            
             const updatedTabData: Partial<TabData> = {
                 id: tabId, // Use request ID as tab ID for proper matching
                 name: request.name || TAB_CONSTANTS.DEFAULT_NAME,
                 method: request.method || TAB_CONSTANTS.DEFAULT_METHOD,
-                url: request.url || '',
-                params: (request.params && request.params.length > 0) 
-                    ? request.params 
-                    : [createEmptyParamRow()],
-                headers: (request.headers && request.headers.length > 0) 
-                    ? request.headers 
-                    : [createEmptyHeaderRow()],
-                body: request.body ? {
-                    textData: { data: typeof request.body === 'string' ? request.body : null, textType: 'none' },
-                    binaryData: null,
-                    formData: { data: [createEmptyFormField()] },
-                    multiPartFormData: { data: [createEmptyMultiPartFormField()] },
-                    currentBodyType: 'text'
-                } : createEmptyRequestBody(),
+                url: rawUrl,
+                params: paramRows,
+                headers: headerRows,
+                body,
                 folderPath: getRequestFolderPath(request),
                 collectionRef: request.sourceRef || null,
                 validation: request.validation || createEmptyValidation(),
@@ -581,7 +603,7 @@ const createRequestTabsSlice: StateCreator<RequestTabsSlice> = (set, get) => {
             set({ activeTabId: tabId });
         },
         
-        loadRequestIntoNewTab: (request: ParsedRequest) => {
+        loadRequestIntoNewTab: (request: CollectionRequest) => {
             const state = get();
             
             // Check if a tab with this request ID already exists
@@ -600,26 +622,42 @@ const createRequestTabsSlice: StateCreator<RequestTabsSlice> = (set, get) => {
                 return getActiveTabInternal() || null;
             }
             
+            // Convert request headers to HeaderRow format (ensure IDs exist)
+            const headerRows: HeaderRow[] = (request.header && request.header.length > 0)
+                ? request.header.map(h => ({
+                    id: h.id || `header-${crypto.randomUUID()}`,
+                    key: h.key,
+                    value: h.value,
+                    disabled: h.disabled || false,
+                }))
+                : [createEmptyHeaderRow()];
+            
+            // Convert request query params to ParamRow format
+            // Query params can come from request.query or from url.query if URL is a CollectionUrl
+            const urlQueryParams = isCollectionUrl(request.url) ? request.url.query : undefined;
+            const queryParams = request.query || urlQueryParams;
+            const paramRows: ParamRow[] = (queryParams && queryParams.length > 0)
+                ? queryParams.map((p: ParamRow) => ({
+                    id: p.id || `param-${crypto.randomUUID()}`,
+                    key: p.key,
+                    value: p.value,
+                    disabled: p.disabled || false,
+                }))
+                : [createEmptyParamRow()];
+            
+            // Extract raw URL string from CollectionUrl or use string directly
+            const rawUrl = getRawUrl(request.url);
+            
             const newTab = createEmptyTab();
             const updatedTab: TabData = {
                 ...newTab,
                 id: request.id || newTab.id, // Use request ID as tab ID
                 name: request.name || TAB_CONSTANTS.DEFAULT_NAME,
                 method: request.method || TAB_CONSTANTS.DEFAULT_METHOD,
-                url: request.url || '',
-                params: (request.params && request.params.length > 0) 
-                    ? request.params 
-                    : [createEmptyParamRow()],
-                headers: (request.headers && request.headers.length > 0) 
-                    ? request.headers 
-                    : [createEmptyHeaderRow()],
-                body: request.body ? {
-                    textData: { data: typeof request.body === 'string' ? request.body : null, textType: 'none' },
-                    binaryData: null,
-                    formData: { data: [createEmptyFormField()] },
-                    multiPartFormData: { data: [createEmptyMultiPartFormField()] },
-                    currentBodyType: 'text'
-                } : createEmptyRequestBody(),
+                url: rawUrl,
+                params: paramRows,
+                headers: headerRows,
+                body: request.body || createEmptyBody(),
                 folderPath: getRequestFolderPath(request),
                 collectionRef: request.sourceRef || null,
                 validation: request.validation || createEmptyValidation(),
@@ -653,9 +691,9 @@ const createRequestTabsSlice: StateCreator<RequestTabsSlice> = (set, get) => {
             });
         },
         
-        // ==================== Get Parsed Request ====================
+        // ==================== Get Collection Request ====================
         
-        getParsedRequest: (tabId?: string) => {
+        getCollectionRequest: (tabId?: string): CollectionRequest => {
             const state = get();
             const tab = tabId 
                 ? state.tabs.find(t => t.id === tabId) 
@@ -668,26 +706,28 @@ const createRequestTabsSlice: StateCreator<RequestTabsSlice> = (set, get) => {
                     name: '',
                     method: 'GET',
                     url: '',
-                    headers: [],
-                    params: [],
-                    body: null,
+                    header: [],
+                    query: [],
+                    body: createEmptyBody(),
                     sourceRef: { collectionFilename: '', collectionName: '', itemPath: [] },
                     validation: createEmptyValidation(),
                     authId: undefined
                 };
             }
             
-            const nonEmptyHeaders = tab.headers?.filter(header => header.key && header.value) || [];
-            const nonEmptyParams = tab.params?.filter(param => param.key && param.value) || [];
+            // Filter out empty headers
+            const nonEmptyHeaders = tab.headers?.filter(header => header.key || header.value) || [];
+            // Filter out empty params
+            const nonEmptyParams = tab.params?.filter(param => param.key || param.value) || [];
             
             return {
                 id: tab.id,
                 name: tab.name || '',
                 method: tab.method || 'GET',
                 url: tab.url || '',
-                headers: nonEmptyHeaders,
-                params: nonEmptyParams,
-                body: tab.body?.textData?.data || null,
+                header: nonEmptyHeaders,
+                query: nonEmptyParams,
+                body: tab.body || createEmptyBody(),
                 validation: tab.validation,
                 authId: tab.authId || undefined,
                 sourceRef: tab.collectionRef || { 
@@ -778,91 +818,118 @@ const createRequestTabsSlice: StateCreator<RequestTabsSlice> = (set, get) => {
         
         // ==================== Body Updaters ====================
         
-        updateTextBody: (data: string | null, bodyTextType: RequestBodyTextType) => {
+        updateBodyMode: (mode: BodyMode) => {
             const tab = getActiveTabInternal();
             if (!tab) return;
             
-            updateActiveTab({
-                body: {
-                    ...tab.body,
-                    textData: { data, textType: bodyTextType }
-                },
-                isDirty: true
-            });
+            // When changing mode, preserve data for the selected mode if it exists
+            let newBody: CollectionBody;
+            
+            switch (mode) {
+                case 'none':
+                    newBody = { mode: 'none' };
+                    break;
+                case 'raw':
+                    // Preserve existing raw content and language if available
+                    newBody = tab.body.mode === 'raw' 
+                        ? tab.body 
+                        : createEmptyRawBody();
+                    break;
+                case 'urlencoded':
+                    // Preserve existing urlencoded data if available
+                    newBody = tab.body.mode === 'urlencoded' 
+                        ? tab.body 
+                        : createEmptyUrlencodedBody();
+                    break;
+                case 'formdata':
+                    // Preserve existing formdata if available
+                    newBody = tab.body.mode === 'formdata' 
+                        ? tab.body 
+                        : createEmptyFormdataBody();
+                    break;
+                case 'file':
+                    // Preserve existing file reference if available
+                    newBody = tab.body.mode === 'file' 
+                        ? tab.body 
+                        : { mode: 'file', file: undefined };
+                    break;
+                default:
+                    newBody = { mode: 'none' };
+            }
+            
+            updateActiveTab({ body: newBody, isDirty: true });
         },
         
-        updateBinaryBody: (data: FileWithPreview | null) => {
+        updateRawBody: (data: string | null, language?: RawBodyLanguage) => {
             const tab = getActiveTabInternal();
             if (!tab) return;
             
-            updateActiveTab({
-                body: {
-                    ...tab.body,
-                    binaryData: { data, fileName: data ? data.file.name : null }
-                },
-                isDirty: true
-            });
+            // Preserve existing language if not provided
+            const currentLanguage = tab.body.mode === 'raw' 
+                ? tab.body.options?.raw?.language 
+                : undefined;
+            
+            const newBody: CollectionBody = {
+                mode: 'raw',
+                raw: data || '',
+                options: (language || currentLanguage) 
+                    ? { raw: { language: language || currentLanguage } } 
+                    : undefined
+            };
+            
+            updateActiveTab({ body: newBody, isDirty: true });
         },
         
-        updateFormBody: (data: FormField[] | null) => {
-            const tab = getActiveTabInternal();
-            if (!tab) return;
+        updateFileBody: (file: FileReference | null) => {
+            const newBody: CollectionBody = {
+                mode: 'file',
+                file: file || undefined
+            };
             
-            const formData = data && data.length > 0 
+            updateActiveTab({ body: newBody, isDirty: true });
+        },
+        
+        updateUrlencodedBody: (data: FormField[] | null) => {
+            const urlencoded = data && data.length > 0 
                 ? data 
                 : [createEmptyFormField()];
             
-            updateActiveTab({
-                body: {
-                    ...tab.body,
-                    formData: { data: formData }
-                },
-                isDirty: true
-            });
+            const newBody: CollectionBody = {
+                mode: 'urlencoded',
+                urlencoded
+            };
+            
+            updateActiveTab({ body: newBody, isDirty: true });
         },
         
-        updateMultiPartFormBody: (data: MultiPartFormField[] | null) => {
-            const tab = getActiveTabInternal();
-            if (!tab) return;
-            
-            const multiPartFormData = data && data.length > 0 
+        updateFormdataBody: (data: MultiPartFormField[] | null) => {
+            const formdata = data && data.length > 0 
                 ? data 
                 : [createEmptyMultiPartFormField()];
             
-            updateActiveTab({
-                body: {
-                    ...tab.body,
-                    multiPartFormData: { data: multiPartFormData }
-                },
-                isDirty: true
-            });
-        },
-        
-        updateCurrentBodyType: (bodyType: RequestBodyType) => {
-            const tab = getActiveTabInternal();
-            if (!tab) return;
+            const newBody: CollectionBody = {
+                mode: 'formdata',
+                formdata
+            };
             
-            updateActiveTab({
-                body: { ...tab.body, currentBodyType: bodyType },
-                isDirty: true
-            });
+            updateActiveTab({ body: newBody, isDirty: true });
         },
         
         // ==================== Form Fields Management ====================
         
         toggleFormFieldEnabled: (id: string, currentDisabled: boolean) => {
             const tab = getActiveTabInternal();
-            if (!tab) return;
+            if (!tab || tab.body.mode !== 'urlencoded') return;
             
-            const currentFormData = tab.body.formData?.data || [];
+            const currentFormData = tab.body.urlencoded || [];
             const updatedFormData = currentFormData.map(field =>
                 field.id === id ? { ...field, disabled: !currentDisabled } : field
             );
             
             updateActiveTab({
                 body: {
-                    ...tab.body,
-                    formData: { data: updatedFormData }
+                    mode: 'urlencoded',
+                    urlencoded: updatedFormData
                 },
                 isDirty: true
             });
@@ -870,17 +937,17 @@ const createRequestTabsSlice: StateCreator<RequestTabsSlice> = (set, get) => {
         
         toggleMultiPartFormFieldEnabled: (id: string, currentDisabled: boolean) => {
             const tab = getActiveTabInternal();
-            if (!tab) return;
+            if (!tab || tab.body.mode !== 'formdata') return;
             
-            const currentData = tab.body.multiPartFormData?.data || [];
+            const currentData = tab.body.formdata || [];
             const updatedData = currentData.map(field =>
                 field.id === id ? { ...field, disabled: !currentDisabled } : field
             );
             
             updateActiveTab({
                 body: {
-                    ...tab.body,
-                    multiPartFormData: { data: updatedData }
+                    mode: 'formdata',
+                    formdata: updatedData
                 },
                 isDirty: true
             });
@@ -1198,15 +1265,11 @@ const createRequestTabsSlice: StateCreator<RequestTabsSlice> = (set, get) => {
                 : null;
             const requestAuth = getAuthForRequest(activeAuth, finalUrl);
 
-            // Set content-type if not present
-            if (tab.body && tab.body.currentBodyType !== 'none') {
+            // Set content-type if not present based on body mode
+            if (tab.body && tab.body.mode !== 'none') {
                 const contentTypeKey = Object.keys(headers).find(key => key.toLowerCase() === 'content-type');
                 if (!contentTypeKey) {
-                    const contentType = getContentTypeFromBody(
-                        tab.body.currentBodyType, 
-                        tab.body?.binaryData?.fileName, 
-                        tab.body?.textData?.textType
-                    );
+                    const contentType = getContentTypeFromBodyMode(tab.body);
                     if (contentType) {
                         headers['Content-Type'] = contentType;
                     }
@@ -1221,8 +1284,8 @@ const createRequestTabsSlice: StateCreator<RequestTabsSlice> = (set, get) => {
             
             // Prepare body
             let requestBody: string | ArrayBuffer | FormData | Record<string, string> | null = null;
-            if (tab.body && tab.body.currentBodyType !== 'none') {
-                requestBody = await convertBodyToRequestBody(tab.body, tab.body.currentBodyType, envVarsMap, allUnresolved);
+            if (tab.body && tab.body.mode !== 'none') {
+                requestBody = await convertBodyToRequestPayload(tab.body, envVarsMap, allUnresolved);
             }
 
             // Check for unresolved placeholders

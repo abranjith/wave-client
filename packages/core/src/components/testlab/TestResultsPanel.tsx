@@ -378,7 +378,12 @@ const TestItemCard: React.FC<TestItemCardProps> = ({
     if (isRequestTestItem(item)) {
         // Request item handling
         const lookup = findRequestMeta(item.referenceId, collections);
-        const request = lookup?.request ?? { method: 'GET', url: 'Unknown URL' };
+        const request: CollectionRequest = lookup?.request ?? { 
+            id: item.id, 
+            name: item.name || 'Unknown Request',
+            method: 'GET', 
+            url: 'Unknown URL' 
+        };
         const url = lookup?.url || (typeof request.url === 'string' ? request.url : urlToString(request.url));
 
         const requestResult = itemResult && isRequestTestItemResult(itemResult) ? itemResult : undefined;

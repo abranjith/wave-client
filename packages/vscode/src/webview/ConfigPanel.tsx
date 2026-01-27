@@ -17,14 +17,14 @@ import {
   FlowsPane,
   TestLabPane,
   type Environment,
-  type RequestFormData,
+  type CollectionRequest,
   type Flow,
   type TestSuite,
 } from '@wave-client/core';
 import { useTheme } from './AppWithAdapter';
 
 interface ConfigPanelProps {
-  onRequestSelect: ((request: RequestFormData) => void)
+  onRequestSelect: ((request: CollectionRequest) => void)
   onEnvSelect: ((environment: Environment) => void)
   onStoreSelect: ((storeType: 'cookie' | 'auth' | 'proxy' | 'cert' | 'validation') => void)
   onFlowSelect: ((flow: Flow) => void)

@@ -26,7 +26,7 @@ import {
     extractUrlParts,
 } from './types';
 import { findRequestById } from '../collectionLookup';
-import { buildHttpRequest, CollectionRequestInput } from '../requestBuilder';
+import { buildHttpRequest } from '../requestBuilder';
 import { determineExecutionStatus, determineValidationStatus, extractErrorMessage } from '../../types/execution';
 
 // Import flow utilities for flow context resolution
@@ -273,26 +273,25 @@ export class HttpRequestExecutor implements IItemExecutor<HttpExecutionInput, Ht
         const finalAuthId = overrides?.authId || request.authId;
         const dynamicVars = overrides?.variables || {};
         
-        // Build the collection request input
-        const input: CollectionRequestInput = {
+        // Build a CollectionRequest with all overrides applied
+        const requestWithOverrides: CollectionRequest = {
+            ...request,
             id: executionId,
             name,
-            method: request.method,
             url: urlString,
-            headers: finalHeaders,
-            params: finalParams,
+            header: finalHeaders,
+            query: finalParams,
             authId: finalAuthId,
-            request,
         };
         
         // Apply body override if provided
         if (overrides?.body !== undefined) {
-            input.body = overrides.body;
+            requestWithOverrides.body = overrides.body;
         }
         
         // Build the prepared request
         const buildResult = await buildHttpRequest(
-            input,
+            requestWithOverrides,
             context.environmentId,
             context.environments,
             context.auths,

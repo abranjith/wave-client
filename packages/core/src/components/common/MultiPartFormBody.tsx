@@ -6,7 +6,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '.
 import { Switch } from '../ui/switch';
 import StyledInput from '../ui/styled-input';
 import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from '../ui/select';
-import {MultiPartFormField} from '../../types/collection';
+import {MultiPartFormField, FileReference} from '../../types/collection';
 import useAppStateStore from '../../hooks/store/useAppStateStore';
 import { renderParameterizedText } from '../../utils/styling';
 
@@ -16,9 +16,39 @@ interface MultiPartFormBodyProps {
   dropdownElement?: React.ReactNode;
 }
 
+/**
+ * Type guard to check if a value is a FileReference
+ */
+function isFileReference(value: unknown): value is FileReference {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    'path' in value &&
+    'fileName' in value
+  );
+}
+
+/**
+ * Converts a File object to a FileReference for storage
+ */
+function fileToReference(file: File): FileReference {
+  return {
+    path: '', // Will be populated if/when file is uploaded
+    fileName: file.name,
+    contentType: file.type || 'application/octet-stream',
+    size: file.size,
+    pathType: 'absolute',
+    storageType: 'local',
+  };
+}
+
+interface MultiPartFormBodyProps {
+  dropdownElement?: React.ReactNode;
+}
+
 const MultiPartFormBody: React.FC<MultiPartFormBodyProps> = ({ dropdownElement }) => {
   const activeTab = useAppStateStore((state) => state.getActiveTab());
-  const updateBody = useAppStateStore((state) => state.updateMultiPartFormBody);
+  const updateBody = useAppStateStore((state) => state.updateFormdataBody);
   const toggleMultiPartFormFieldEnabled = useAppStateStore((state) => state.toggleMultiPartFormFieldEnabled);
   const body = activeTab?.body;
   const getActiveEnvVariableKeys = useAppStateStore((state) => state.getActiveEnvVariableKeys);
@@ -30,20 +60,23 @@ const MultiPartFormBody: React.FC<MultiPartFormBodyProps> = ({ dropdownElement }
 
   // Get form fields from store - use useMemo to prevent creating new array reference
   const formFields: MultiPartFormField[] = useMemo(() => {
-    return body?.multiPartFormData?.data || [{ id: crypto.randomUUID(), key: '', value: '', fieldType: 'text' as const, disabled: false }];
-  }, [body?.multiPartFormData?.data]);
+    if (body?.mode === 'formdata' && body.formdata) {
+      return body.formdata;
+    }
+    return [{ id: crypto.randomUUID(), key: '', value: '', fieldType: 'text' as const, disabled: false }];
+  }, [body]);
 
-  const [localFields, setLocalFields] = useState<{ [id: string]: { key: string; value: string | File | null, disabled: boolean } }>({});
+  const [localFields, setLocalFields] = useState<{ [id: string]: { key: string; value: string | FileReference | null, disabled: boolean } }>({});
   const [styledLocalFields, setStyledLocalFields] = useState<{ [id: string]: { key: JSX.Element; value: JSX.Element } }>({});
   const [pendingFileCommit, setPendingFileCommit] = useState<string | null>(null);
   const [fileInputKeys, setFileInputKeys] = useState<{ [id: string]: number }>({});
 
   // Initialize local fields only when formFields structure changes (new fields added/removed)
   useEffect(() => {
-    const newLocalFields: { [id: string]: { key: string; value: string | File | null, disabled: boolean } } = {};
+    const newLocalFields: { [id: string]: { key: string; value: string | FileReference | null, disabled: boolean } } = {};
     
     formFields.forEach((field: MultiPartFormField) => {
-      // Preserve existing local values (which may contain File objects), or initialize from formFields
+      // Preserve existing local values, or initialize from formFields
       if (localFields[field.id]) {
         newLocalFields[field.id] = localFields[field.id];
       } else {
@@ -87,7 +120,7 @@ const MultiPartFormBody: React.FC<MultiPartFormBodyProps> = ({ dropdownElement }
     }
   }, [localFields, pendingFileCommit]);
 
-  const updateLocalField = (id: string, field: 'key' | 'value', newValue: string | File | null) => {
+  const updateLocalField = (id: string, field: 'key' | 'value', newValue: string | FileReference | null) => {
     setLocalFields(prev => ({
       ...prev,
       [id]: {
@@ -111,7 +144,7 @@ const MultiPartFormBody: React.FC<MultiPartFormBodyProps> = ({ dropdownElement }
       const hasKey = localField.key.trim();
       const hasValue = typeof localField.value === 'string' 
         ? localField.value.trim() 
-        : localField.value instanceof File;
+        : isFileReference(localField.value);
 
       if (hasKey && hasValue) {
         const isLastRow = updatedFields[updatedFields.length - 1].id === id;
@@ -162,7 +195,9 @@ const MultiPartFormBody: React.FC<MultiPartFormBodyProps> = ({ dropdownElement }
 
   const handleFileChange = (id: string, file: File | null) => {
     if (file) {
-      updateLocalField(id, 'value', file);
+      // Convert File to FileReference for serializable storage
+      const fileRef = fileToReference(file);
+      updateLocalField(id, 'value', fileRef);
       // Queue the commit to run after state update
       setPendingFileCommit(id);
     }
@@ -210,7 +245,7 @@ const MultiPartFormBody: React.FC<MultiPartFormBodyProps> = ({ dropdownElement }
     const hasKey = field.key.trim();
     const hasValue = typeof field.value === 'string' 
       ? field.value.trim() 
-      : field.value instanceof File;
+      : isFileReference(field.value);
     return hasKey || hasValue;
   });
 
@@ -218,7 +253,7 @@ const MultiPartFormBody: React.FC<MultiPartFormBodyProps> = ({ dropdownElement }
     const hasKey = field.key.trim();
     const hasValue = typeof field.value === 'string' 
       ? field.value.trim() 
-      : field.value instanceof File;
+      : isFileReference(field.value);
     return hasKey && hasValue && !field.disabled;
   }).length;
 
@@ -229,9 +264,10 @@ const MultiPartFormBody: React.FC<MultiPartFormBodyProps> = ({ dropdownElement }
   //TODO - need better file input component here
   const renderValueInput = (field: MultiPartFormField) => {
     if (field.fieldType === 'file') {
-      const currentFile = localFields[field.id]?.value instanceof File 
-        ? localFields[field.id].value as File
-        : field.value instanceof File 
+      const localValue = localFields[field.id]?.value;
+      const currentFileRef = isFileReference(localValue) 
+        ? localValue
+        : isFileReference(field.value) 
           ? field.value 
           : null;
 
@@ -246,13 +282,13 @@ const MultiPartFormBody: React.FC<MultiPartFormBodyProps> = ({ dropdownElement }
             }}
             className="w-full text-sm rounded bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-200 focus:outline-none file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:text-xs file:bg-slate-100 dark:file:bg-slate-800 file:text-slate-700 dark:file:text-slate-300 hover:file:bg-slate-200 dark:hover:file:bg-slate-700"
           />
-          {currentFile && (
+          {currentFileRef && (
             <div className="flex items-center gap-1 px-2 py-1 bg-blue-50 dark:bg-blue-900/20 rounded text-xs text-blue-600 dark:text-blue-400 whitespace-nowrap">
               <PaperclipIcon
                 className="text-blue-600 dark:text-blue-400 size-4 shrink-0 opacity-60"
                 aria-hidden="true"
               />
-              <span className="max-w-[100px] truncate">{currentFile.name}</span>
+              <span className="max-w-[100px] truncate">{currentFileRef.fileName}</span>
             </div>
           )}
         </div>
@@ -362,7 +398,7 @@ const MultiPartFormBody: React.FC<MultiPartFormBodyProps> = ({ dropdownElement }
                 </TableCell>
                 <TableCell>
                   <div className="flex items-center gap-2">
-                    {field.fieldType === 'file' && field.value instanceof File && (
+                    {field.fieldType === 'file' && isFileReference(field.value) && (
                       <SecondaryButton
                         size="sm"
                         onClick={() => clearFile(field.id)}

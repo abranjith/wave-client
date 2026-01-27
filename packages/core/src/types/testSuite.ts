@@ -16,8 +16,7 @@
 import type { HttpResponseResult } from './adapters';
 import type { FlowRunResult, FlowNodeResult } from './flow';
 import type { RequestValidation, ValidationResult } from './validation';
-import type { HeaderRow, ParamRow } from './collection';
-import type { RequestBody } from './tab';
+import type { HeaderRow, ParamRow, CollectionBody } from './collection';
 
 // ============================================================================
 // Test Case Types (Data-Driven Testing)
@@ -45,10 +44,10 @@ export interface TestCaseData {
     params?: ParamRow[];
     /** 
      * Body override (replaces entire body)
-     * Can be any RequestBody type: none, text, binary, form, multipart
+     * Uses CollectionBody discriminated union: none, raw, file, urlencoded, formdata
      * If not set, uses the base request body
      */
-    body?: RequestBody;
+    body?: CollectionBody;
     /** 
      * Auth profile override for this test case
      * If not set, uses test item's auth or suite's defaultAuthId

@@ -1,11 +1,11 @@
 import { StateCreator } from 'zustand'
-import { ParsedRequest } from '../../types/collection';
+import { CollectionRequest } from '../../types/collection';
 
 interface HistorySlice {
-    history: ParsedRequest[];
+    history: CollectionRequest[];
     isHistoryLoading: boolean;
     historyLoadError: string | null;
-    setHistory: (history: ParsedRequest[]) => void;
+    setHistory: (history: CollectionRequest[]) => void;
     setIsHistoryLoading: (isLoading: boolean) => void;
     setHistoryLoadError: (error: string | null) => void;
 }

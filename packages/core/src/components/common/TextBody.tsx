@@ -5,12 +5,15 @@ import { Textarea } from '../ui/textarea';
 import { Tooltip, TooltipTrigger, TooltipContent } from '../ui/tooltip';
 import { CopyIcon, ClipboardPasteIcon, InfoIcon, FileTextIcon } from 'lucide-react';
 import useAppStateStore from '../../hooks/store/useAppStateStore';
-import {RequestBodyTextType, RequestBodyType} from '../../types/collection';
+import { RawBodyLanguage } from '../../types/collection';
 import { renderParameterizedText } from '../../utils/styling'; 
 
 interface TextBodyProps {
   dropdownElement?: React.ReactNode;
 }
+
+/** Detected content type for display purposes */
+type DetectedContentType = 'json' | 'xml' | 'html' | 'text' | 'unknown';
 
 const isHTML = (content: string): boolean => {
   const trimmed = content.trim().toLowerCase();
@@ -31,7 +34,7 @@ const isHTML = (content: string): boolean => {
   return hasHtmlTags && !hasXmlDeclaration;
 };
 
-const getBodyType = (content: string): RequestBodyTextType => {
+const getBodyType = (content: string): DetectedContentType => {
    //if body is not string, set to unknown
     if (typeof content !== 'string') {
       return 'unknown';
@@ -105,26 +108,29 @@ const getTypeInfo = (bodyType : string): { label: string; color: string; descrip
 
 const TextBody: React.FC<TextBodyProps> = ({ dropdownElement }) => {
   const activeTab = useAppStateStore((state) => state.getActiveTab());
-  const updateBody = useAppStateStore((state) => state.updateTextBody);
+  const updateBody = useAppStateStore((state) => state.updateRawBody);
   const body = activeTab?.body;
   const [showExamples, setShowExamples] = useState(false);
-  const [bodyContent, setBodyContent] = useState(body?.textData?.data || '');
+  
+  // Get raw content from the new body structure
+  const rawContent = body?.mode === 'raw' ? (body.raw || '') : '';
+  const rawLanguage = body?.mode === 'raw' ? body.options?.raw?.language : undefined;
+  
+  const [bodyContent, setBodyContent] = useState(rawContent);
   const [bodyTypeInfo, setBodyTypeInfo] = useState<{ label: string; color: string; description: string }>({ label: '', color: '', description: '' });
 
   // Only sync from global state when it changes from external sources (not from this component)
   useEffect(() => {
-    const globalContent = body?.textData?.data || '';
+    const globalContent = rawContent;
     // Only update local state if content is different (prevents interference while typing)
     if (globalContent !== bodyContent) {
       setBodyContent(globalContent);
     }
     
-    let bodyType = body?.textData?.textType || 'unknown';
-    if(bodyType === 'none' || bodyType === 'unknown') {
-      bodyType = getBodyType(globalContent);
-    }
-    setBodyTypeInfo(getTypeInfo(bodyType));
-  }, [body?.textData?.data, body?.textData?.textType]); // More specific dependencies
+    // Use the stored language or detect from content
+    const detectedType = rawLanguage || getBodyType(globalContent);
+    setBodyTypeInfo(getTypeInfo(detectedType));
+  }, [rawContent, rawLanguage]); // More specific dependencies
 
   // Update local state immediately for responsive typing
   const handleBodyChange = (newValue: string) => {
@@ -134,7 +140,12 @@ const TextBody: React.FC<TextBodyProps> = ({ dropdownElement }) => {
 
   // Sync to global state on blur
   const handleBlur = () => {
-    updateBody(bodyContent, getBodyType(bodyContent));
+    const detectedType = getBodyType(bodyContent);
+    // Map detected type to RawBodyLanguage if applicable
+    const language = detectedType !== 'unknown' && detectedType !== 'text' 
+      ? detectedType as RawBodyLanguage
+      : undefined;
+    updateBody(bodyContent, language);
   };
 
   const formatContent = () => {
@@ -166,7 +177,10 @@ const TextBody: React.FC<TextBodyProps> = ({ dropdownElement }) => {
       }
       
       setBodyContent(formattedContent);
-      updateBody(formattedContent, detectedType);
+      const language = detectedType !== 'unknown' && detectedType !== 'text' 
+        ? detectedType as RawBodyLanguage
+        : undefined;
+      updateBody(formattedContent, language);
     } catch (e) {
       console.warn('Failed to format content:', e);
     }
@@ -211,7 +225,7 @@ const TextBody: React.FC<TextBodyProps> = ({ dropdownElement }) => {
 
   const copyToClipboard = async () => {
     try {
-      await navigator.clipboard.writeText(body?.textData?.data || '');
+      await navigator.clipboard.writeText(rawContent);
     } catch (err) {
       console.error('Failed to copy:', err);
     }
@@ -223,13 +237,16 @@ const TextBody: React.FC<TextBodyProps> = ({ dropdownElement }) => {
       const detectedType = getBodyType(text);
       setBodyContent(text);
       setBodyTypeInfo(getTypeInfo(detectedType));
-      updateBody(text, detectedType);
+      const language = detectedType !== 'unknown' && detectedType !== 'text' 
+        ? detectedType as RawBodyLanguage
+        : undefined;
+      updateBody(text, language);
     } catch (err) {
       console.error('Failed to paste:', err);
     }
   };
 
-  const loadExample = (type: RequestBodyType | string) => {
+  const loadExample = (type: string) => {
     const examples: Record<string, string> = {
       json: '{\n  "name": "John Doe",\n  "email": "john@example.com",\n  "age": 30,\n  "active": true\n}',
       xml: '<?xml version="1.0" encoding="UTF-8"?>\n<root>\n  <item id="1">\n    <name>Example Item</name>\n    <value>100</value>\n  </item>\n</root>',
@@ -242,7 +259,10 @@ const TextBody: React.FC<TextBodyProps> = ({ dropdownElement }) => {
     const detectedType = getBodyType(exampleContent);
     setBodyContent(exampleContent);
     setBodyTypeInfo(getTypeInfo(detectedType));
-    updateBody(exampleContent, detectedType);
+    const language = detectedType !== 'unknown' && detectedType !== 'text' 
+      ? detectedType as RawBodyLanguage
+      : undefined;
+    updateBody(exampleContent, language);
     setShowExamples(false);
   };
 
@@ -326,12 +346,12 @@ const TextBody: React.FC<TextBodyProps> = ({ dropdownElement }) => {
           </Tooltip>
 
           {/* Divider */}
-          {(bodyContent && body?.currentBodyType as string !== 'unknown') && (
+          {(bodyContent && bodyTypeInfo.label !== 'Unknown') && (
             <div className="h-6 w-px bg-slate-300 dark:bg-slate-600 mx-1" />
           )}
 
           {/* Format & Clear Buttons */}
-          {bodyContent && body?.currentBodyType as string !== 'unknown' && (
+          {bodyContent && bodyTypeInfo.label !== 'Unknown' && (
             <Button
               variant="outline"
               size="sm"
@@ -346,7 +366,7 @@ const TextBody: React.FC<TextBodyProps> = ({ dropdownElement }) => {
               onClick={() => {
                 setBodyContent('');
                 setBodyTypeInfo(getTypeInfo('unknown'));
-                updateBody('', 'unknown');
+                updateBody('', undefined);
               }}
               colorTheme="error"
               text="Clear"

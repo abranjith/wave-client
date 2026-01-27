@@ -21,28 +21,72 @@ export interface CollectionUrl {
   query?: ParamRow[];
 }
 
-// ============================================================================
-// Request Body Types
-// ============================================================================
-
 /**
- * Binary file data for request body
+ * Type guard to check if a URL is a CollectionUrl object
  */
-export interface BinaryBodyData {
-  data: ArrayBuffer;
-  fileName: string;
-  contentType: string;
+export function isCollectionUrl(url: CollectionUrl | string | undefined): url is CollectionUrl {
+  return typeof url === 'object' && url !== null && 'raw' in url;
 }
 
 /**
- * Request body with multiple modes
+ * Extract the raw URL string from CollectionUrl or return string as-is
  */
-export interface CollectionBody {
-  mode: 'none' | 'raw' | 'urlencoded' | 'formdata' | 'file';
-  raw?: string;
-  urlencoded?: FormField[];
-  formdata?: MultiPartFormField[];
-  binary?: BinaryBodyData;
+export function getRawUrl(url: CollectionUrl | string | undefined): string {
+  if (!url) return '';
+  return isCollectionUrl(url) ? url.raw : url;
+}
+
+// ============================================================================
+// File Reference Types
+// ============================================================================
+
+/**
+ * Storage type for file references - extensible for future cloud/network support
+ */
+export type FileStorageType = 'local' | 'cloud' | 'network';
+
+/**
+ * Path type indicating how the file path should be resolved
+ */
+export type FilePathType = 'absolute' | 'relative';
+
+/**
+ * Reference to a file for request bodies and multipart form fields.
+ * Stores metadata only - content is resolved at execution time.
+ * This approach keeps types serializable and allows for deferred loading.
+ */
+export interface FileReference {
+  /** File path (absolute or relative based on pathType) */
+  path: string;
+  /** Original file name for display and Content-Disposition */
+  fileName: string;
+  /** MIME type of the file */
+  contentType: string;
+  /** File size in bytes */
+  size: number;
+  /** Whether path is absolute or relative to app/workspace */
+  pathType: FilePathType;
+  /** Storage location type - allows future extension to cloud/network */
+  storageType: FileStorageType;
+}
+
+// ============================================================================
+// Request Body Types (Discriminated Union)
+// ============================================================================
+
+/**
+ * Body type for no content
+ */
+export interface BodyNone {
+  mode: 'none';
+}
+
+/**
+ * Body type for raw text content (JSON, XML, HTML, plain text, CSV)
+ */
+export interface BodyRaw {
+  mode: 'raw';
+  raw: string;
   options?: {
     raw?: {
       language?: 'json' | 'xml' | 'html' | 'text' | 'csv';
@@ -50,21 +94,92 @@ export interface CollectionBody {
   };
 }
 
+/**
+ * Body type for URL-encoded form data
+ */
+export interface BodyUrlEncoded {
+  mode: 'urlencoded';
+  urlencoded: FormField[];
+}
+
+/**
+ * Body type for multipart form data (supports file uploads)
+ */
+export interface BodyFormData {
+  mode: 'formdata';
+  formdata: MultiPartFormField[];
+}
+
+/**
+ * Body type for binary file upload
+ * file is optional to support selecting file mode before choosing a file
+ */
+export interface BodyFile {
+  mode: 'file';
+  file?: FileReference;
+}
+
+/**
+ * Discriminated union for all request body types.
+ * Use the 'mode' field to determine the body structure.
+ */
+export type CollectionBody = BodyNone | BodyRaw | BodyUrlEncoded | BodyFormData | BodyFile;
+
+/**
+ * Helper to get body mode type
+ */
+export type BodyMode = CollectionBody['mode'];
+
+/**
+ * Helper to get raw body language options
+ */
+export type RawBodyLanguage = NonNullable<NonNullable<BodyRaw['options']>['raw']>['language'];
+
 // ============================================================================
 // Request Types
 // ============================================================================
 
 /**
- * HTTP Request definition
+ * Reference to original location in collection structure.
+ * Used to track where a request came from for save operations.
+ */
+export interface CollectionReference {
+  collectionFilename: string;
+  collectionName: string;
+  itemPath: string[]; // Path through folders to reach the item, e.g., ['Folder1', 'Subfolder']
+}
+
+/**
+ * HTTP Request definition - THE unified request type.
+ * Used for:
+ * - Collection storage (persisted to disk)
+ * - Tab state (active editing)
+ * - History entries
+ * - Request execution
  */
 export interface CollectionRequest {
+  /** Unique identifier for runtime tracking */
+  id: string;
+  /** Display name for the request */
+  name: string;
+  /** HTTP method (GET, POST, PUT, DELETE, etc.) */
   method: string;
+  /** Request URL - can be string or parsed URL object */
   url: CollectionUrl | string;
+  /** Query parameters (extracted from URL or explicitly set) */
+  query?: ParamRow[];
+  /** HTTP headers */
   header?: HeaderRow[];
+  /** Request body */
   body?: CollectionBody;
+  /** Optional description/documentation */
   description?: string;
+  /** Response validation rules */
   validation?: RequestValidation;
-  authId?: string; // Reference to auth configuration
+  /** Reference to auth configuration by ID */
+  authId?: string;
+  /** Reference to source collection (for collection-linked requests) */
+  sourceRef?: CollectionReference;
 }
 
 // ============================================================================
@@ -88,15 +203,6 @@ export interface CollectionResponse {
 // ============================================================================
 // Collection Item Types
 // ============================================================================
-
-/**
- * Reference to original location in collection structure
- */
-export interface CollectionReference {
-  collectionFilename: string;
-  collectionName: string;
-  itemPath: string[]; // Path through folders to reach the item, e.g., ['Folder1', 'Subfolder']
-}
 
 /**
  * A collection item - can be a request or a folder containing other items
@@ -160,30 +266,6 @@ export interface FolderPathOption {
 }
 
 // ============================================================================
-// UI Request Types (for forms and tabs)
-// ============================================================================
-
-/**
- * Request data format used in UI forms and tabs
- * This is the "unpacked" version of a request for easy editing
- */
-export interface ParsedRequest {
-  id: string;
-  name: string;
-  method: string;
-  url: string;
-  headers: HeaderRow[];
-  params: ParamRow[];
-  body: string | null;
-  bodyMode?: CollectionBody['mode'];
-  bodyOptions?: CollectionBody['options'];
-  binaryBody?: BinaryBodyData;
-  validation?: RequestValidation;
-  authId?: string;
-  sourceRef: CollectionReference;
-}
-
-// ============================================================================
 // Environment Types
 // ============================================================================
 
@@ -222,10 +304,16 @@ export interface FormField {
   disabled: boolean;
 }
 
+/**
+ * Multipart form field - supports both text values and file references.
+ * For file fields, value contains a FileReference (not the actual File object)
+ * to ensure serializability. File content is resolved at execution time.
+ */
 export interface MultiPartFormField {
   id: string;
   key: string;
-  value: string | File | null;
+  /** Text value or FileReference for file fields */
+  value: string | FileReference | null;
   disabled: boolean;
   fieldType: 'text' | 'file';
 }
@@ -242,10 +330,6 @@ export interface ResponseData {
   isEncoded: boolean;
 }
 
-export type RequestBodyTextType = 'none' | 'json' | 'xml' | 'html' | 'text' | 'csv' | 'unknown';
-
-export type RequestBodyType = 'none' | 'text' | 'binary' | 'form' | 'multipart';
-
 export type ResponseContentType = 'none' | 'json' | 'xml' | 'html' | 'text' | 'csv' | 'binary';
 
 // Cookie types
@@ -258,6 +342,7 @@ export interface Cookie {
   expires?: string; // ISO date string or empty for session cookies
   httpOnly: boolean;
   secure: boolean;
+  sameSite?: 'Strict' | 'Lax' | 'None';
   enabled: boolean;
 }
 
@@ -306,3 +391,14 @@ export interface SelfSignedCert extends BaseCert {
 
 // Union type for all cert types - makes it easy to add more types
 export type Cert = CACert | SelfSignedCert;
+
+// ============================================================================
+// Type Aliases for Backwards Compatibility
+// ============================================================================
+
+/**
+ * @deprecated Use CollectionRequest instead
+ * ParsedRequest was renamed to CollectionRequest in the unified type system.
+ * This alias is kept for backwards compatibility.
+ */
+export type ParsedRequest = CollectionRequest;

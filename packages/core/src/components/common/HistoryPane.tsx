@@ -1,12 +1,12 @@
 import React from 'react';
 import { ClockIcon } from 'lucide-react';
-import { ParsedRequest } from '../../types/collection';
+import { CollectionRequest, getRawUrl } from '../../types/collection';
 import useAppStateStore from '../../hooks/store/useAppStateStore';
 import { getHttpMethodColor } from '../../utils/common';
 import { Button } from '../ui/button';
 
 interface HistoryPaneProps {
-  onRequestSelect: (request: ParsedRequest) => void;
+  onRequestSelect: (request: CollectionRequest) => void;
   onRetry?: () => void;
 }
 
@@ -17,17 +17,17 @@ const HistoryPane: React.FC<HistoryPaneProps> = ({ onRequestSelect, onRetry }) =
   const activeTab = useAppStateStore((state) => state.getActiveTab());
   const currentRequestId = activeTab?.id;
 
-  const handleRequestClick = (request: ParsedRequest) => {
+  const handleRequestClick = (request: CollectionRequest) => {
     if (onRequestSelect) {
       onRequestSelect(request);
     }
   };
 
-  const getDisplayName = (request: ParsedRequest): string => {
+  const getDisplayName = (request: CollectionRequest): string => {
     if (request.name && request.name !== 'Untitled Request') {
       return request.name;
     }
-    return request.url || 'Untitled Request';
+    return getRawUrl(request.url) || 'Untitled Request';
   };
 
   if (isLoading) {

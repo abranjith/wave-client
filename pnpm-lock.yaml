@@ -347,6 +347,9 @@ importers:
 
   packages/shared:
     dependencies:
+      '@wave-client/core':
+        specifier: workspace:*
+        version: link:../core
       axios:
         specifier: ^1.7.9
         version: 1.13.2

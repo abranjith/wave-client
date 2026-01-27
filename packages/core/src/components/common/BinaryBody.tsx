@@ -1,37 +1,69 @@
 import React from 'react';
 import { FileInput } from '../ui/fileinput';
 import { FileWithPreview } from '../../hooks/useFileUpload';
+import { FileReference } from '../../types/collection';
 import useAppStateStore from '../../hooks/store/useAppStateStore';
 
 interface BinaryBodyProps {
   dropdownElement?: React.ReactNode;
 }
 
+/**
+ * Converts a FileWithPreview to a FileReference for storage.
+ * FileReference stores only metadata (serializable), not the actual file content.
+ */
+function fileToReference(fileWithPreview: FileWithPreview): FileReference {
+  const file = fileWithPreview.file;
+  return {
+    path: fileWithPreview.preview || '', // Use preview URL as path placeholder
+    fileName: file.name,
+    contentType: file.type || 'application/octet-stream',
+    size: file.size,
+    pathType: 'absolute',
+    storageType: 'local',
+  };
+}
+
 //TODO - error handling to the user
 const BinaryBody: React.FC<BinaryBodyProps> = ({ dropdownElement }) => {
   const activeTab = useAppStateStore((state) => state.getActiveTab());
-  const updateBody = useAppStateStore((state) => state.updateBinaryBody);
+  const updateFileBody = useAppStateStore((state) => state.updateFileBody);
   const body = activeTab?.body;
   
-  //enhance function to accept array of files
   const handleFileSelect = async (addedFiles: FileWithPreview[]) => {
     const fileWithPreview = addedFiles[0];
     if (!fileWithPreview || !fileWithPreview.file) return;
     
-    // Check if file is a File object (not FileMetadata)
     const file = fileWithPreview.file;
     if (!(file instanceof File)) return;
 
-    updateBody(fileWithPreview); // Clear existing body before setting new binary body
+    // Convert to FileReference for storage
+    const fileRef = fileToReference(fileWithPreview);
+    updateFileBody(fileRef);
   };
 
-  const handleRemoveFile = (removedFile: FileWithPreview) => {
-    updateBody(null);
+  const handleRemoveFile = (_removedFile: FileWithPreview) => {
+    updateFileBody(null);
   };
 
   const getInitialFiles = (): FileWithPreview[] => {
-    if (body?.binaryData?.data && 'file' in body.binaryData.data) {
-      return [body.binaryData.data as FileWithPreview];
+    // In the new design, we only store FileReference (metadata)
+    // We can't recreate the actual File from metadata alone
+    // This is a limitation - files need to be re-selected after reload
+    if (body?.mode === 'file' && body.file) {
+      // Return a placeholder that shows the file info
+      const fileRef = body.file;
+      // Note: We can't create a real File from FileReference
+      // This is for display purposes only - using FileMetadata format
+      return [{
+        id: `file-${fileRef.fileName}-${fileRef.size}`,
+        file: {
+          name: fileRef.fileName || 'Selected file',
+          size: fileRef.size || 0,
+          type: fileRef.contentType || 'application/octet-stream',
+        } as File,
+        preview: fileRef.path || '',
+      }];
     }
     return [];
   };

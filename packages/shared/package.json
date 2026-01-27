@@ -23,6 +23,7 @@
     "test:coverage": "vitest run --coverage"
   },
   "dependencies": {
+    "@wave-client/core": "workspace:*",
     "axios": "^1.7.9"
   },
   "devDependencies": {

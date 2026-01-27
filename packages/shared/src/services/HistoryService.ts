@@ -2,7 +2,7 @@ import * as path from 'path';
 import * as crypto from 'crypto';
 
 import { BaseStorageService } from './BaseStorageService';
-import type { ParsedRequest } from '../types';
+import type { CollectionRequest } from '../types';
 
 /**
  * Service for managing request history.
@@ -29,19 +29,19 @@ export class HistoryService extends BaseStorageService {
 
     /**
      * Loads all history items, sorted by most recent first.
-     * @returns Array of parsed requests from history
+     * @returns Array of collection requests from history
      */
-    async loadAll(): Promise<ParsedRequest[]> {
+    async loadAll(): Promise<CollectionRequest[]> {
         const historyDir = await this.getHistoryDir();
         this.ensureDirectoryExists(historyDir);
 
-        const history: (ParsedRequest & { baseFileName: string })[] = [];
+        const history: (CollectionRequest & { baseFileName: string })[] = [];
         const files = this.listJsonFiles(historyDir);
 
         for (const file of files) {
             try {
                 const filePath = path.join(historyDir, file);
-                const requestData = await this.readJsonFileSecure<ParsedRequest | null>(filePath, null);
+                const requestData = await this.readJsonFileSecure<CollectionRequest | null>(filePath, null);
                 if (requestData) {
                     const baseFileName = path.basename(file, '.json');
                     history.push({ ...requestData, baseFileName });
@@ -70,7 +70,7 @@ export class HistoryService extends BaseStorageService {
      * @param requestContent The JSON content of the request to save
      */
     async save(requestContent: string): Promise<void> {
-        const request = JSON.parse(requestContent) as ParsedRequest;
+        const request = JSON.parse(requestContent) as CollectionRequest;
         const historyDir = await this.getHistoryDir();
         const maxHistoryItems = await this.getMaxHistoryItems();
         this.ensureDirectoryExists(historyDir);
@@ -91,7 +91,7 @@ export class HistoryService extends BaseStorageService {
         for (let i = 0; i < files.length; i++) {
             try {
                 const filePath = path.join(historyDir, files[i].file);
-                const existingRequest = await this.readJsonFileSecure<ParsedRequest | null>(filePath, null);
+                const existingRequest = await this.readJsonFileSecure<CollectionRequest | null>(filePath, null);
                 if (existingRequest) {
                     const existingContent = this.getRequestSignature(existingRequest);
                     if (incomingContent === existingContent) {
@@ -149,12 +149,12 @@ export class HistoryService extends BaseStorageService {
      * @param request The request to create a signature for
      * @returns A JSON string representing the request's unique content
      */
-    private getRequestSignature(request: ParsedRequest): string {
+    private getRequestSignature(request: CollectionRequest): string {
         return JSON.stringify({
             method: request.method,
             url: request.url,
-            params: request.params,
-            headers: request.headers,
+            query: request.query,
+            headers: request.header,
             body: request.body
         });
     }

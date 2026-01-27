@@ -17,10 +17,9 @@ import {
 } from 'lucide-react';
 import type { TestCase, TestCaseData } from '../../types/testSuite';
 import type { Auth } from '../../hooks/store/createAuthSlice';
-import type { RequestBody } from '../../types/tab';
-import type { RequestBodyType } from '../../types/collection';
+import type { CollectionBody, BodyMode } from '../../types/collection';
 import { createTestCase } from '../../types/testSuite';
-import { createEmptyRequestBody } from '../../types/tab';
+import { createEmptyBody } from '../../types/tab';
 import { Input } from '../ui/input';
 import { Label } from '../ui/label';
 import { Textarea } from '../ui/textarea';
@@ -155,7 +154,7 @@ export const TestCaseEditor: React.FC<TestCaseEditorProps> = ({
     const [headersJson, setHeadersJson] = useState('');
     const [paramsJson, setParamsJson] = useState('');
     const [hasBodyOverride, setHasBodyOverride] = useState(!!testCase?.data.body);
-    const [bodyOverride, setBodyOverride] = useState<RequestBody>(createEmptyRequestBody());
+    const [bodyOverride, setBodyOverride] = useState<CollectionBody>(createEmptyBody());
 
     // Request mode validation errors
     const [headersError, setHeadersError] = useState<string | undefined>();
@@ -195,7 +194,7 @@ export const TestCaseEditor: React.FC<TestCaseEditorProps> = ({
                     setBodyOverride(testCase.data.body);
                 } else {
                     setHasBodyOverride(false);
-                    setBodyOverride(createEmptyRequestBody());
+                    setBodyOverride(createEmptyBody());
                 }
             }
         } else {
@@ -211,7 +210,7 @@ export const TestCaseEditor: React.FC<TestCaseEditorProps> = ({
                 setHeadersJson('');
                 setParamsJson('');
                 setHasBodyOverride(false);
-                setBodyOverride(createEmptyRequestBody());
+                setBodyOverride(createEmptyBody());
             }
         }
         
@@ -530,7 +529,7 @@ export const TestCaseEditor: React.FC<TestCaseEditorProps> = ({
                                     onCheckedChange={(checked) => {
                                         setHasBodyOverride(!!checked);
                                         if (!checked) {
-                                            setBodyOverride(createEmptyRequestBody());
+                                            setBodyOverride(createEmptyBody());
                                         }
                                     }}
                                 />
@@ -549,12 +548,21 @@ export const TestCaseEditor: React.FC<TestCaseEditorProps> = ({
                                     <div className="space-y-1.5">
                                         <Label className="text-sm font-medium">Body Type</Label>
                                         <Select 
-                                            value={bodyOverride.currentBodyType} 
+                                            value={bodyOverride.mode} 
                                             onValueChange={(value) => {
-                                                setBodyOverride({
-                                                    ...bodyOverride,
-                                                    currentBodyType: value as RequestBodyType
-                                                });
+                                                const mode = value as BodyMode;
+                                                // Create appropriate body based on mode
+                                                if (mode === 'none') {
+                                                    setBodyOverride({ mode: 'none' });
+                                                } else if (mode === 'raw') {
+                                                    setBodyOverride({ mode: 'raw', raw: '' });
+                                                } else if (mode === 'urlencoded') {
+                                                    setBodyOverride({ mode: 'urlencoded', urlencoded: [] });
+                                                } else if (mode === 'formdata') {
+                                                    setBodyOverride({ mode: 'formdata', formdata: [] });
+                                                } else if (mode === 'file') {
+                                                    setBodyOverride({ mode: 'file', file: undefined });
+                                                }
                                             }}
                                         >
                                             <SelectTrigger className="w-full">
@@ -562,27 +570,25 @@ export const TestCaseEditor: React.FC<TestCaseEditorProps> = ({
                                             </SelectTrigger>
                                             <SelectContent>
                                                 <SelectItem value="none">No Body</SelectItem>
-                                                <SelectItem value="text">Text</SelectItem>
-                                                <SelectItem value="binary">Binary</SelectItem>
-                                                <SelectItem value="form">Form</SelectItem>
-                                                <SelectItem value="multipart">Multipart Form</SelectItem>
+                                                <SelectItem value="raw">Raw Text</SelectItem>
+                                                <SelectItem value="urlencoded">URL Encoded</SelectItem>
+                                                <SelectItem value="formdata">Form Data</SelectItem>
+                                                <SelectItem value="file">File</SelectItem>
                                             </SelectContent>
                                         </Select>
                                     </div>
 
                                     {/* Body Content */}
-                                    {bodyOverride.currentBodyType === 'text' && bodyOverride.textData && (
+                                    {bodyOverride.mode === 'raw' && (
                                         <div className="space-y-1.5">
                                             <Label className="text-sm font-medium">Text Content</Label>
                                             <Textarea
-                                                value={bodyOverride.textData.data || ''}
+                                                value={bodyOverride.raw || ''}
                                                 onChange={(e) => {
                                                     setBodyOverride({
                                                         ...bodyOverride,
-                                                        textData: {
-                                                            ...bodyOverride.textData!,
-                                                            data: e.target.value
-                                                        }
+                                                        mode: 'raw',
+                                                        raw: e.target.value
                                                     });
                                                 }}
                                                 placeholder='{"key": "value"}'
@@ -591,18 +597,18 @@ export const TestCaseEditor: React.FC<TestCaseEditorProps> = ({
                                         </div>
                                     )}
 
-                                    {bodyOverride.currentBodyType === 'none' && (
+                                    {bodyOverride.mode === 'none' && (
                                         <div className="p-3 text-center text-sm text-slate-500 bg-white dark:bg-slate-800 rounded border border-dashed">
                                             No body will be sent
                                         </div>
                                     )}
 
-                                    {(bodyOverride.currentBodyType === 'binary' || 
-                                      bodyOverride.currentBodyType === 'form' || 
-                                      bodyOverride.currentBodyType === 'multipart') && (
+                                    {(bodyOverride.mode === 'file' || 
+                                      bodyOverride.mode === 'urlencoded' || 
+                                      bodyOverride.mode === 'formdata') && (
                                         <div className="p-3 text-center text-xs text-slate-500 bg-slate-100 dark:bg-slate-800 rounded">
                                             <p>Advanced body types are currently only editable when creating/editing requests.</p>
-                                            <p className="mt-1">Please use the main request editor to configure {bodyOverride.currentBodyType} bodies.</p>
+                                            <p className="mt-1">Please use the main request editor to configure {bodyOverride.mode} bodies.</p>
                                         </div>
                                     )}
                                 </div>

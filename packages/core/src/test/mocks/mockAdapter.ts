@@ -45,7 +45,7 @@ import type {
     Collection,
     CollectionItem,
     Environment,
-    ParsedRequest,
+    CollectionRequest,
     Cookie,
     Proxy,
     Cert,
@@ -62,7 +62,7 @@ import type { TestSuite } from '../../types/testSuite';
 export interface MockDataStore {
     collections: Collection[];
     environments: Environment[];
-    history: ParsedRequest[];
+    history: CollectionRequest[];
     cookies: Cookie[];
     auths: Auth[];
     proxies: Proxy[];
@@ -681,17 +681,17 @@ export function createMockEnvironment(overrides: Partial<Environment> = {}): Env
 }
 
 /**
- * Creates a mock parsed request for testing
+ * Creates a mock collection request for testing
  */
-export function createMockParsedRequest(overrides: Partial<ParsedRequest> = {}): ParsedRequest {
+export function createMockCollectionRequest(overrides: Partial<CollectionRequest> = {}): CollectionRequest {
     return {
         id: `mock-req-${Date.now()}`,
         name: 'Mock Request',
         method: 'GET',
         url: 'https://api.example.com/test',
-        headers: [],
-        params: [],
-        body: null,
+        header: [],
+        query: [],
+        body: { mode: 'none' },
         sourceRef: {
             collectionFilename: 'mock.json',
             collectionName: 'Mock Collection',
