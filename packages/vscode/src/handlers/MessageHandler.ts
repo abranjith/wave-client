@@ -11,7 +11,8 @@ import {
     settingsService,
     securityService,
     flowService,
-    testSuiteService
+    testSuiteService,
+    fileService
 } from '../services';
 import { executeValidation, createGlobalRulesMap, createEnvVarsMap } from '../utils/validationEngine';
 import { RequestValidation } from '../types/validation';
@@ -154,6 +155,28 @@ export class MessageHandler {
                 break;
             case 'deleteTestSuite':
                 await this.handleDeleteTestSuite(message);
+                break;
+            // File handlers
+            case 'readFile':
+                await this.handleReadFile(message);
+                break;
+            case 'readFileAsBinary':
+                await this.handleReadFileAsBinary(message);
+                break;
+            case 'writeFile':
+                await this.handleWriteFile(message);
+                break;
+            case 'writeBinaryFile':
+                await this.handleWriteBinaryFile(message);
+                break;
+            case 'showSaveDialog':
+                await this.handleShowSaveDialog(message);
+                break;
+            case 'showOpenDialog':
+                await this.handleShowOpenDialog(message);
+                break;
+            case 'importFile':
+                await this.handleImportFile(message);
                 break;
         }
     }
@@ -1140,6 +1163,266 @@ export class MessageHandler {
             this.postMessage({
                 type: 'testSuiteDeleted',
                 requestId,
+                error: error.message
+            });
+        }
+    }
+
+    // ==================== File Handlers ====================
+
+    /**
+     * Reads a file as text content.
+     */
+    private async handleReadFile(message: any): Promise<void> {
+        const requestId = message.requestId;
+        const filePath = message.path;
+        
+        try {
+            const result = await fileService.readFile(filePath, 'absolute');
+            this.postMessage({
+                type: 'fileRead',
+                requestId,
+                isOk: result.isOk,
+                value: result.value,
+                error: result.error
+            });
+        } catch (error: any) {
+            this.postMessage({
+                type: 'fileRead',
+                requestId,
+                isOk: false,
+                error: error.message
+            });
+        }
+    }
+
+    /**
+     * Reads a file as binary data (returns base64 encoded).
+     */
+    private async handleReadFileAsBinary(message: any): Promise<void> {
+        const requestId = message.requestId;
+        const filePath = message.path;
+        
+        try {
+            const result = await fileService.readFileAsBinary(filePath, 'absolute');
+            if (result.isOk && result.value) {
+                // Convert Uint8Array to base64 for transport
+                const base64 = Buffer.from(result.value).toString('base64');
+                this.postMessage({
+                    type: 'fileBinaryRead',
+                    requestId,
+                    isOk: true,
+                    value: { data: base64, encoding: 'base64' }
+                });
+            } else {
+                this.postMessage({
+                    type: 'fileBinaryRead',
+                    requestId,
+                    isOk: false,
+                    error: result.error
+                });
+            }
+        } catch (error: any) {
+            this.postMessage({
+                type: 'fileBinaryRead',
+                requestId,
+                isOk: false,
+                error: error.message
+            });
+        }
+    }
+
+    /**
+     * Writes text content to a file.
+     */
+    private async handleWriteFile(message: any): Promise<void> {
+        const requestId = message.requestId;
+        const { path: filePath, content } = message;
+        
+        try {
+            const result = await fileService.writeFile(filePath, content, 'absolute');
+            this.postMessage({
+                type: 'fileWritten',
+                requestId,
+                isOk: result.isOk,
+                error: result.error
+            });
+        } catch (error: any) {
+            this.postMessage({
+                type: 'fileWritten',
+                requestId,
+                isOk: false,
+                error: error.message
+            });
+        }
+    }
+
+    /**
+     * Writes binary data to a file (accepts base64 encoded data).
+     */
+    private async handleWriteBinaryFile(message: any): Promise<void> {
+        const requestId = message.requestId;
+        const { path: filePath, data: base64Data } = message;
+        
+        try {
+            // Decode base64 to Uint8Array
+            const buffer = Buffer.from(base64Data, 'base64');
+            const uint8Array = new Uint8Array(buffer);
+            
+            const result = await fileService.writeBinaryFile(filePath, uint8Array, 'absolute');
+            this.postMessage({
+                type: 'fileBinaryWritten',
+                requestId,
+                isOk: result.isOk,
+                error: result.error
+            });
+        } catch (error: any) {
+            this.postMessage({
+                type: 'fileBinaryWritten',
+                requestId,
+                isOk: false,
+                error: error.message
+            });
+        }
+    }
+
+    /**
+     * Shows a save file dialog and returns the selected path.
+     */
+    private async handleShowSaveDialog(message: any): Promise<void> {
+        const requestId = message.requestId;
+        const options = message.options || {};
+        
+        try {
+            const filters: Record<string, string[]> = {};
+            if (options.filters) {
+                for (const filter of options.filters) {
+                    filters[filter.name] = filter.extensions;
+                }
+            }
+            
+            const uri = await vscode.window.showSaveDialog({
+                defaultUri: options.defaultFileName 
+                    ? vscode.Uri.file(path.join(os.homedir(), options.defaultFileName))
+                    : undefined,
+                filters: Object.keys(filters).length > 0 ? filters : undefined,
+                title: options.title
+            });
+            
+            this.postMessage({
+                type: 'saveDialogResult',
+                requestId,
+                isOk: true,
+                value: uri ? uri.fsPath : null
+            });
+        } catch (error: any) {
+            this.postMessage({
+                type: 'saveDialogResult',
+                requestId,
+                isOk: false,
+                error: error.message
+            });
+        }
+    }
+
+    /**
+     * Shows an open file dialog and returns selected paths.
+     */
+    private async handleShowOpenDialog(message: any): Promise<void> {
+        const requestId = message.requestId;
+        const options = message.options || {};
+        
+        try {
+            const filters: Record<string, string[]> = {};
+            if (options.filters) {
+                for (const filter of options.filters) {
+                    filters[filter.name] = filter.extensions;
+                }
+            }
+            
+            const uris = await vscode.window.showOpenDialog({
+                canSelectFiles: !options.canSelectFolders,
+                canSelectFolders: options.canSelectFolders || false,
+                canSelectMany: options.canSelectMany || false,
+                filters: Object.keys(filters).length > 0 ? filters : undefined,
+                title: options.title
+            });
+            
+            this.postMessage({
+                type: 'openDialogResult',
+                requestId,
+                isOk: true,
+                value: uris ? uris.map(uri => uri.fsPath) : null
+            });
+        } catch (error: any) {
+            this.postMessage({
+                type: 'openDialogResult',
+                requestId,
+                isOk: false,
+                error: error.message
+            });
+        }
+    }
+
+    /**
+     * Shows an open file dialog and returns file content.
+     */
+    private async handleImportFile(message: any): Promise<void> {
+        const requestId = message.requestId;
+        const options = message.options || {};
+        
+        try {
+            const filters: Record<string, string[]> = {};
+            if (options.filters) {
+                for (const filter of options.filters) {
+                    filters[filter.name] = filter.extensions;
+                }
+            }
+            
+            const uris = await vscode.window.showOpenDialog({
+                canSelectFiles: true,
+                canSelectFolders: false,
+                canSelectMany: false,
+                filters: Object.keys(filters).length > 0 ? filters : undefined,
+                title: options.title
+            });
+            
+            if (!uris || uris.length === 0) {
+                this.postMessage({
+                    type: 'importFileResult',
+                    requestId,
+                    isOk: true,
+                    value: null
+                });
+                return;
+            }
+            
+            const filePath = uris[0].fsPath;
+            const result = await fileService.readFile(filePath, 'absolute');
+            
+            if (result.isOk) {
+                this.postMessage({
+                    type: 'importFileResult',
+                    requestId,
+                    isOk: true,
+                    value: {
+                        content: result.value,
+                        filename: path.basename(filePath)
+                    }
+                });
+            } else {
+                this.postMessage({
+                    type: 'importFileResult',
+                    requestId,
+                    isOk: false,
+                    error: result.error
+                });
+            }
+        } catch (error: any) {
+            this.postMessage({
+                type: 'importFileResult',
+                requestId,
+                isOk: false,
                 error: error.message
             });
         }

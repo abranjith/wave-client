@@ -175,7 +175,6 @@ const MultiPartFormBody: React.FC<MultiPartFormBodyProps> = ({ dropdownElement }
   };
 
   const handleFieldTypeChange = (id: string, newType: FieldType) => {
-    console.log(`Field ${id} type changed to ${newType}`);
     const updatedFields = formFields.map((field: MultiPartFormField) =>
       field.id === id
         ? { ...field, fieldType: newType, value: null }

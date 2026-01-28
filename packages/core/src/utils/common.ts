@@ -280,19 +280,24 @@ export function getResponseContentType(headers: Record<string, string>): string 
 export function getResponseLanguage(headers: Record<string, string>): ResponseContentType {
   const contentTypeHeader = getResponseContentType(headers).toLowerCase();
 
-  if (contentTypeHeader.includes('/json')) {
+  // Check for JSON (handles both /json and +json suffixes like application/problem+json)
+  if (contentTypeHeader.includes('/json') || contentTypeHeader.includes('+json')) {
     return 'json';
   }
-  if (contentTypeHeader.includes('/xml')) {
+  // Check for XML (handles both /xml and +xml suffixes)
+  if (contentTypeHeader.includes('/xml') || contentTypeHeader.includes('+xml')) {
     return 'xml';
   }
-  if (contentTypeHeader.includes('/html')) {
+  // Check for HTML (handles both /html and +html suffixes)
+  if (contentTypeHeader.includes('/html') || contentTypeHeader.includes('+html')) {
     return 'html';
   }
-  if (contentTypeHeader.includes('/csv')) {
+  // Check for CSV (handles both /csv and +csv suffixes)
+  if (contentTypeHeader.includes('/csv') || contentTypeHeader.includes('+csv')) {
     return 'csv';
   }
-  if (contentTypeHeader.includes('/text')) {
+  // Check for text (handles both /text and +text suffixes)
+  if (contentTypeHeader.includes('/text') || contentTypeHeader.includes('+text')) {
     return 'text';
   }
 

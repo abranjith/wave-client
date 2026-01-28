@@ -727,6 +727,7 @@ class WebHttpAdapter implements IHttpAdapter {
 
 /**
  * File adapter for browser file operations
+ * Uses server API for file system access
  */
 class WebFileAdapter implements IFileAdapter {
   async showSaveDialog(options: SaveDialogOptions): Promise<string | null> {
@@ -762,39 +763,98 @@ class WebFileAdapter implements IFileAdapter {
     });
   }
 
-  async readFile(_path: string): Promise<Result<string, string>> {
-    // In browser, we can't read files by path. Use file input instead.
-    return err('Use importFile() to read files in browser');
+  async readFile(path: string): Promise<Result<string, string>> {
+    try {
+      const response = await api.post('/api/files/read', { path, pathType: 'absolute' });
+      if (response.data.isOk) {
+        return ok(response.data.value);
+      }
+      return err(response.data.error || 'Failed to read file');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      return err(`Server error: ${message}`);
+    }
   }
 
-  async readFileAsBinary(_path: string): Promise<Result<Uint8Array, string>> {
-    return err('Use importFile() to read files in browser');
+  async readFileAsBinary(path: string): Promise<Result<Uint8Array, string>> {
+    try {
+      const response = await api.post('/api/files/read-binary', { path, pathType: 'absolute' });
+      if (response.data.isOk && response.data.value) {
+        // Decode base64 to Uint8Array
+        const binaryString = atob(response.data.value);
+        const bytes = new Uint8Array(binaryString.length);
+        for (let i = 0; i < binaryString.length; i++) {
+          bytes[i] = binaryString.charCodeAt(i);
+        }
+        return ok(bytes);
+      }
+      return err(response.data.error || 'Failed to read file');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      return err(`Server error: ${message}`);
+    }
   }
 
-  async writeFile(_path: string, content: string): Promise<Result<void, string>> {
-    // Trigger browser download
-    const blob = new Blob([content], { type: 'text/plain' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = _path.split('/').pop() || 'file.txt';
-    a.click();
-    URL.revokeObjectURL(url);
-    return ok(undefined);
+  async writeFile(path: string, content: string): Promise<Result<void, string>> {
+    // For browser paths starting with download://, trigger browser download
+    if (path.startsWith('download://')) {
+      const blob = new Blob([content], { type: 'text/plain' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = path.replace('download://', '') || 'file.txt';
+      a.click();
+      URL.revokeObjectURL(url);
+      return ok(undefined);
+    }
+    
+    // Otherwise write via server
+    try {
+      const response = await api.post('/api/files/write', { path, content, pathType: 'absolute' });
+      if (response.data.isOk) {
+        return ok(undefined);
+      }
+      return err(response.data.error || 'Failed to write file');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      return err(`Server error: ${message}`);
+    }
   }
 
   async writeBinaryFile(
-    _path: string,
+    path: string,
     data: Uint8Array
   ): Promise<Result<void, string>> {
-    const blob = new Blob([new Uint8Array(data)]);
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = _path.split('/').pop() || 'file';
-    a.click();
-    URL.revokeObjectURL(url);
-    return ok(undefined);
+    // For browser paths starting with download://, trigger browser download
+    if (path.startsWith('download://')) {
+      const blob = new Blob([new Uint8Array(data)]);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = path.replace('download://', '') || 'file';
+      a.click();
+      URL.revokeObjectURL(url);
+      return ok(undefined);
+    }
+
+    // Otherwise write via server
+    try {
+      // Convert Uint8Array to base64 for transport
+      const base64 = btoa(String.fromCharCode(...data));
+      const response = await api.post('/api/files/write-binary', { 
+        path, 
+        data: base64, 
+        encoding: 'base64',
+        pathType: 'absolute' 
+      });
+      if (response.data.isOk) {
+        return ok(undefined);
+      }
+      return err(response.data.error || 'Failed to write file');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      return err(`Server error: ${message}`);
+    }
   }
 
   async downloadResponse(

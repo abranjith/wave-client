@@ -549,45 +549,109 @@ function createVSCodeHttpAdapter(
 // VS Code File Adapter
 // ============================================================================
 
-function createVSCodeFileAdapter(vsCodeApi: VSCodeAPI): IFileAdapter {
+function createVSCodeFileAdapter(
+    vsCodeApi: VSCodeAPI,
+    pendingRequests: Map<string, PendingRequest<unknown>>,
+    defaultTimeout: number
+): IFileAdapter {
+    /**
+     * Sends a file request and waits for the response using requestId correlation.
+     * Returns Result<T, string> where error comes from response.error field.
+     */
+    function sendAndWait<T>(
+        type: string,
+        data?: Record<string, unknown>,
+        timeout: number = defaultTimeout
+    ): Promise<Result<T, string>> {
+        return new Promise((resolve) => {
+            const requestId = generateRequestId();
+            
+            const timeoutHandle = setTimeout(() => {
+                pendingRequests.delete(requestId);
+                resolve(err(`Request timed out: ${type}`));
+            }, timeout);
+
+            pendingRequests.set(requestId, {
+                resolve: (value) => {
+                    const response = value as any;
+                    if (response && response.error) {
+                        resolve(err(response.error));
+                    } else if (response && response.isOk !== undefined) {
+                        // Response is already in Result format
+                        if (response.isOk) {
+                            resolve(ok(response.value as T));
+                        } else {
+                            resolve(err(response.error || 'Unknown error'));
+                        }
+                    } else {
+                        resolve(ok(response as T));
+                    }
+                },
+                reject: (error) => resolve(err(error.message)),
+                timeout: timeoutHandle,
+            });
+
+            vsCodeApi.postMessage({
+                type,
+                requestId,
+                ...data,
+            });
+        });
+    }
+
     return {
         async showSaveDialog(options): Promise<string | null> {
-            // VS Code handles this in the extension, returns via message
-            // This is a simplified version - in practice we'd use request/response pattern
-            return null;
+            const result = await sendAndWait<string | null>('showSaveDialog', { options });
+            return result.isOk ? result.value : null;
         },
 
         async showOpenDialog(options): Promise<string[] | null> {
-            return null;
+            const result = await sendAndWait<string[] | null>('showOpenDialog', { options });
+            return result.isOk ? result.value : null;
         },
 
         async readFile(path): Promise<Result<string, string>> {
-            return err('File reading not supported in webview - use extension');
+            return sendAndWait<string>('readFile', { path });
         },
 
         async readFileAsBinary(path): Promise<Result<Uint8Array, string>> {
-            return err('Binary file reading not supported in webview - use extension');
+            const result = await sendAndWait<{ data: string; encoding: string }>('readFileAsBinary', { path });
+            if (result.isOk && result.value) {
+                // Decode base64 to Uint8Array
+                const binaryString = atob(result.value.data);
+                const bytes = new Uint8Array(binaryString.length);
+                for (let i = 0; i < binaryString.length; i++) {
+                    bytes[i] = binaryString.charCodeAt(i);
+                }
+                return ok(bytes);
+            }
+            return err(result.isOk ? 'No data received' : result.error);
         },
 
         async writeFile(path, content): Promise<Result<void, string>> {
-            return err('File writing not supported in webview - use extension');
+            return sendAndWait<void>('writeFile', { path, content });
         },
 
         async writeBinaryFile(path, data): Promise<Result<void, string>> {
-            return err('Binary file writing not supported in webview - use extension');
+            // Convert Uint8Array to base64 for transport
+            const base64 = btoa(String.fromCharCode(...data));
+            return sendAndWait<void>('writeBinaryFile', { path, data: base64, encoding: 'base64' });
         },
 
         async downloadResponse(data, filename, contentType): Promise<Result<void, string>> {
+            // Convert Uint8Array to base64 for transport
+            const base64 = btoa(String.fromCharCode(...data));
             vsCodeApi.postMessage({
                 type: 'downloadResponse',
-                data: Array.from(data).map(b => String.fromCharCode(b)).join(''),
+                data: base64,
+                filename,
+                contentType,
             });
             return ok(undefined);
         },
 
         async importFile(options): Promise<Result<{ content: string; filename: string } | null, string>> {
-            // Handled via message pattern in current implementation
-            return ok(null);
+            return sendAndWait<{ content: string; filename: string } | null>('importFile', { options });
         },
     };
 }
@@ -735,7 +799,7 @@ export function createVSCodeAdapter(
     // Create adapters
     const storage = createVSCodeStorageAdapter(vsCodeApi, pendingRequests, defaultTimeout);
     const http = createVSCodeHttpAdapter(vsCodeApi, pendingRequests, defaultTimeout);
-    const file = createVSCodeFileAdapter(vsCodeApi);
+    const file = createVSCodeFileAdapter(vsCodeApi, pendingRequests, defaultTimeout);
     const secret = createVSCodeSecretAdapter(vsCodeApi);
     const security = createVSCodeSecurityAdapter(vsCodeApi);
     const notification = createVSCodeNotificationAdapter();

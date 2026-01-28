@@ -70,7 +70,7 @@ const App: React.FC = () => {
   const setValidationRules = useAppStateStore((state) => state.setValidationRules);
   const settings = useAppStateStore((state) => state.settings);
   const setSettings = useAppStateStore((state) => state.setSettings);
-  const getParsedRequest = useAppStateStore((state) => state.getParsedRequest);
+  const getCollectionRequest = useAppStateStore((state) => state.getCollectionRequest);
   const setIsHistoryLoading = useAppStateStore((state) => state.setIsHistoryLoading);
   const setHistory = useAppStateStore((state) => state.setHistory);
   const setHistoryLoadError = useAppStateStore((state) => state.setHistoryLoadError);
@@ -335,14 +335,14 @@ const App: React.FC = () => {
 
   // Handle sending request for a specific tab
   const handleSendRequest = async (tabId: string) => {
-    const parsedRequest = getParsedRequest(tabId);
+    const tabRequest = getCollectionRequest(tabId);
     
     // Save to history
-    await storage.saveRequestToHistory(parsedRequest);
+    await storage.saveRequestToHistory(tabRequest);
 
     // Build HTTP request using core slice helper
     setTabProcessingState(tabId, true);
-    const buildResult = await buildHttpRequest(environments, auths, tabId);
+    const buildResult = await buildHttpRequest(environments, auths, tabId, file);
 
     if (!buildResult.success) {
       setErrorMessage(buildResult.error, tabId);

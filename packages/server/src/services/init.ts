@@ -6,8 +6,12 @@
 import { 
     settingsService, 
     setSecurityServiceInstance,
+    fileService as sharedFileService,
     type ISecurityService
 } from '@wave-client/shared';
+
+// Re-export fileService for use by routes
+export const fileService = sharedFileService;
 
 /**
  * Simple security service implementation for server.

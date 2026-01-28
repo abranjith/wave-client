@@ -38,7 +38,9 @@ import {
     ResponseSectionTab
 } from '../../types/tab';
 import { ValidationRuleRef, RequestValidation } from '../../types/validation';
-import { parseUrlQueryParams, getContentTypeFromBodyMode, resolveParameterizedValue, isUrlInDomains } from '../../utils/common';
+import { IFileAdapter } from '../../types/adapters';
+import { parseUrlQueryParams } from '../../utils/common';
+import { buildHttpRequest as buildHttpRequestFromCollection } from '../../utils/requestBuilder';
 import { Auth } from './createAuthSlice';
 
 // Type alias for backwards compatibility during migration
@@ -141,7 +143,8 @@ export interface RequestTabsSlice {
     buildHttpRequest: (
         environments: Environment[],
         auths: Auth[],
-        tabId?: string
+        tabId?: string,
+        fileAdapter?: IFileAdapter
     ) => Promise<{ success: true; tabId: string; request: any; validation?: RequestValidation } | { success: false; error: string }>;
     
     // Set processing state for a tab
@@ -181,157 +184,6 @@ const updateUrlWithParams = (currentUrl: string, paramRows: ParamRow[]): string 
 };
 
 /**
- * Resolves header rows to a dictionary, resolving environment variables
- */
-const getDictFromHeaderRows = (
-    headerRows: HeaderRow[], 
-    envVarsMap: Map<string, string>, 
-    unresolved: Set<string>
-): Record<string, string | string[]> => {
-    const headers: Record<string, string | string[]> = {};
-    
-    for (const header of headerRows) {
-        if (header.key && header.key.trim() && !header.disabled) {
-            const keyResult = resolveParameterizedValue(header.key, envVarsMap);
-            keyResult.unresolved.forEach(u => unresolved.add(u));
-            const resolvedKey = keyResult.resolved.trim();
-
-            const valueResult = resolveParameterizedValue(header.value, envVarsMap);
-            valueResult.unresolved.forEach(u => unresolved.add(u));
-            const resolvedValue = valueResult.resolved;
-
-            if (headers[resolvedKey]) {
-                if (Array.isArray(headers[resolvedKey])) {
-                    (headers[resolvedKey] as string[]).push(resolvedValue);
-                } else {
-                    headers[resolvedKey] = [headers[resolvedKey] as string, resolvedValue];
-                }
-            } else {
-                headers[resolvedKey] = resolvedValue;
-            }
-        }
-    }
-
-    return headers;
-};
-
-/**
- * Converts param rows to URLSearchParams, resolving environment variables
- */
-const getURLSearchParamsFromParamRows = (
-    paramRows: ParamRow[], 
-    envVarsMap: Map<string, string>, 
-    unresolved: Set<string>
-): URLSearchParams => {
-    const resolvedParams: Array<{key: string, value: string}> = [];
-    for (const param of paramRows) {
-        if (param.key && param.key.trim() && !param.disabled) {
-            const keyResult = resolveParameterizedValue(param.key, envVarsMap);
-            keyResult.unresolved.forEach(u => unresolved.add(u));
-            const resolvedKey = keyResult.resolved.trim();
-
-            const valueResult = resolveParameterizedValue(param.value, envVarsMap);
-            valueResult.unresolved.forEach(u => unresolved.add(u));
-            const resolvedValue = valueResult.resolved;
-
-            resolvedParams.push({ key: resolvedKey, value: resolvedValue });
-        }
-    }
-    const urlParams = new URLSearchParams();
-    resolvedParams.forEach(param => {
-        urlParams.append(param.key, param.value);
-    });
-    return urlParams;
-};
-
-/**
- * Converts the CollectionBody to the appropriate format for the HTTP request
- */
-async function convertBodyToRequestPayload(
-    body: CollectionBody,
-    envVarsMap: Map<string, string>,
-    unresolved: Set<string>
-): Promise<string | FormData | Record<string, string> | ArrayBuffer | null> {
-    if (!body || body.mode === 'none') {
-        return null;
-    }
-    
-    switch (body.mode) {
-        case 'raw': {
-            let rawBody = body.raw || null;
-            if (rawBody) {
-                const bodyResult = resolveParameterizedValue(rawBody, envVarsMap);
-                bodyResult.unresolved.forEach(u => unresolved.add(u));
-                rawBody = bodyResult.resolved;
-            }
-            return rawBody;
-        }
-            
-        case 'file': {
-            // File body - return null for now, actual resolution happens in requestBuilder
-            // The file content should be read by the adapter at execution time
-            if (body.file) {
-                // TODO: File content resolution should be handled by the HTTP adapter
-                // For now, return a placeholder that the adapter can use
-                return null;
-            }
-            return null;
-        }
-            
-        case 'formdata': {
-            const multiPartData = body.formdata;
-            if (Array.isArray(multiPartData)) {
-                const formData = new FormData();
-                for (const field of multiPartData) {
-                    if (field.key && field.key.trim() && !field.disabled) {
-                        const keyResult = resolveParameterizedValue(field.key, envVarsMap);
-                        keyResult.unresolved.forEach(u => unresolved.add(u));
-                        const resolvedKey = keyResult.resolved;
-
-                        if (typeof field.value === 'object' && field.value !== null && 'path' in field.value) {
-                            // FileReference - will be resolved by adapter
-                            const fileRef = field.value as FileReference;
-                            // Create a blob placeholder with the file info
-                            formData.append(resolvedKey, new Blob(), fileRef.fileName || 'file');
-                        } else if (field.value !== undefined && field.value !== null) {
-                            const valueResult = resolveParameterizedValue(String(field.value), envVarsMap);
-                            valueResult.unresolved.forEach(u => unresolved.add(u));
-                            formData.append(resolvedKey, valueResult.resolved);
-                        }
-                    }
-                }
-                return formData;
-            }
-            return null;
-        }
-            
-        case 'urlencoded': {
-            const urlEncodedData = body.urlencoded;
-            if (Array.isArray(urlEncodedData)) {
-                const dataRecord: Record<string, string> = {};
-                for (const field of urlEncodedData) {
-                    if (field.key && field.key.trim() && field.value !== undefined && !field.disabled) {
-                        const keyResult = resolveParameterizedValue(field.key, envVarsMap);
-                        keyResult.unresolved.forEach(u => unresolved.add(u));
-                        const resolvedKey = keyResult.resolved;
-
-                        const valueResult = resolveParameterizedValue(field.value || '', envVarsMap);
-                        valueResult.unresolved.forEach(u => unresolved.add(u));
-
-                        dataRecord[resolvedKey] = valueResult.resolved;
-                    }
-                }
-                return dataRecord;
-            }
-            return null;
-        }
-            
-        default:
-            return null;
-    }
-}
-
-/**
  * Gets the folder path from a collection request
  */
 function getRequestFolderPath(request: CollectionRequest | null): string[] {
@@ -345,65 +197,6 @@ function getRequestFolderPath(request: CollectionRequest | null): string[] {
         }
     }
     return fullFolderPath;
-}
-
-/**
- * Validates auth for the request (checks domain, expiry)
- */
-function getAuthForRequest(activeAuth: Auth | null | undefined, requestUrl: string): Auth | null {
-    if (!activeAuth || !activeAuth.enabled) {
-        return null;
-    }
-    
-    // Check if auth is expired
-    if (activeAuth.expiryDate) {
-        const expiryTime = new Date(activeAuth.expiryDate).getTime();
-        const now = Date.now();
-        if (expiryTime <= now) {
-            console.warn(`Auth ${activeAuth.name} is expired.`);
-            return null;
-        }
-    }
-
-    // Check domain filters
-    if (activeAuth.domainFilters && activeAuth.domainFilters.length > 0) {
-        if (!isUrlInDomains(requestUrl, activeAuth.domainFilters)) {
-            return null;
-        }
-    }
-    
-    return activeAuth;
-}
-
-/**
- * Creates environment variables map from global and active environment
- */
-function buildEnvVarsMap(environments: Environment[], environmentId: string | null): Map<string, string> {
-    const envVarsMap = new Map<string, string>();
-    
-    // First add global environment variables
-    const globalEnv = environments.find(e => e.name.toLowerCase() === 'global');
-    if (globalEnv) {
-        globalEnv.values.forEach(variable => {
-            if (variable.enabled) {
-                envVarsMap.set(variable.key, variable.value);
-            }
-        });
-    }
-    
-    // Then add/override with active environment variables
-    if (environmentId) {
-        const activeEnv = environments.find(e => e.id === environmentId);
-        if (activeEnv) {
-            activeEnv.values.forEach(variable => {
-                if (variable.enabled) {
-                    envVarsMap.set(variable.key, variable.value);
-                }
-            });
-        }
-    }
-    
-    return envVarsMap;
 }
 
 // ==================== Slice Creator ====================
@@ -1225,7 +1018,7 @@ const createRequestTabsSlice: StateCreator<RequestTabsSlice> = (set, get) => {
         
         // ==================== Build HTTP Request ====================
         
-        buildHttpRequest: async (environments, auths, tabId?) => {
+        buildHttpRequest: async (environments, auths, tabId?, fileAdapter?) => {
             const state = get();
             const tab = tabId 
                 ? state.tabs.find(t => t.id === tabId) 
@@ -1240,94 +1033,49 @@ const createRequestTabsSlice: StateCreator<RequestTabsSlice> = (set, get) => {
                 return { success: false, error: 'Method and URL are required' };
             }
 
-            // Build environment variables map from tab's selected environment
-            const envVarsMap = buildEnvVarsMap(environments, tab.environmentId);
-
-            // Track all unresolved placeholders
-            const allUnresolved: Set<string> = new Set();
+            // Convert tab data to CollectionRequest
+            const collectionRequest = state.getCollectionRequest(tab.id);
             
-            // Resolve URL
-            const urlResult = resolveParameterizedValue(tab.url, envVarsMap);
-            urlResult.unresolved.forEach(u => allUnresolved.add(u));
-            let finalUrl = urlResult.resolved;
-            
-            // Add protocol if missing
-            if (!finalUrl.startsWith('http://') && !finalUrl.startsWith('https://')) {
-                finalUrl = tab.protocol ? `${tab.protocol}://${finalUrl}` : `https://${finalUrl}`;
+            // Handle protocol prefix if URL doesn't have one
+            let urlWithProtocol = tab.url;
+            if (!urlWithProtocol.startsWith('http://') && !urlWithProtocol.startsWith('https://')) {
+                urlWithProtocol = tab.protocol ? `${tab.protocol}://${urlWithProtocol}` : urlWithProtocol;
             }
+            collectionRequest.url = urlWithProtocol;
 
-            // Resolve headers
-            const headers = getDictFromHeaderRows(tab.headers || [], envVarsMap, allUnresolved);
+            // Use the shared buildHttpRequest from requestBuilder
+            // Pass fileAdapter for resolving file references in request body
+            const buildResult = await buildHttpRequestFromCollection(
+                collectionRequest,
+                tab.environmentId,
+                environments,
+                auths,
+                null, // defaultAuthId - tab already has authId
+                undefined, // dynamicEnvVars
+                fileAdapter
+            );
 
-            // Get auth for request
-            const activeAuth = tab.authId 
-                ? auths.find(a => a.id === tab.authId) || null 
-                : null;
-            const requestAuth = getAuthForRequest(activeAuth, finalUrl);
-
-            // Set content-type if not present based on body mode
-            if (tab.body && tab.body.mode !== 'none') {
-                const contentTypeKey = Object.keys(headers).find(key => key.toLowerCase() === 'content-type');
-                if (!contentTypeKey) {
-                    const contentType = getContentTypeFromBodyMode(tab.body);
-                    if (contentType) {
-                        headers['Content-Type'] = contentType;
-                    }
+            // Handle build errors
+            if (buildResult.error || !buildResult.request) {
+                const errorMsg = buildResult.error || 'Failed to build request';
+                
+                // Check for unresolved placeholders
+                if (buildResult.unresolved && buildResult.unresolved.length > 0) {
+                    const unresolvedList = buildResult.unresolved.slice(0, 3).join(', ') + 
+                        (buildResult.unresolved.length > 3 ? '...' : '');
+                    const unresolvedMsg = `Request has unresolved placeholders: ${unresolvedList}. Please resolve them and try again.`;
+                    updateTab(tab.id, { errorMessage: unresolvedMsg });
+                    return { success: false, error: unresolvedMsg };
                 }
-            }
-
-            // Resolve params
-            const urlParamsObj = tab.params 
-                ? getURLSearchParamsFromParamRows(tab.params, envVarsMap, allUnresolved) 
-                : new URLSearchParams();
-            const urlParams = urlParamsObj.toString();
-            
-            // Prepare body
-            let requestBody: string | ArrayBuffer | FormData | Record<string, string> | null = null;
-            if (tab.body && tab.body.mode !== 'none') {
-                requestBody = await convertBodyToRequestPayload(tab.body, envVarsMap, allUnresolved);
-            }
-
-            // Check for unresolved placeholders
-            if (allUnresolved.size > 0) {
-                const unresolvedList = Array.from(allUnresolved).slice(0, 3).join(', ') + 
-                    (allUnresolved.size > 3 ? '...' : '');
-                const errorMsg = `Request has unresolved placeholders: ${unresolvedList}. Please resolve them and try again.`;
-                updateTab(tab.id, { 
-                    errorMessage: errorMsg
-                });
+                
+                updateTab(tab.id, { errorMessage: errorMsg });
                 return { success: false, error: errorMsg };
             }
-            
-            // Serialize FormData
-            let serializableBody = requestBody;
-            if (requestBody instanceof FormData) {
-                const formDataEntries: Array<{ key: string; value: string | File }> = [];
-                requestBody.forEach((value, key) => {
-                    formDataEntries.push({ key, value });
-                });
-                serializableBody = { type: 'formdata', entries: formDataEntries } as any;
-            }
-
-            // Remove params from URL (sent separately)
-            const urlObj = new URL(finalUrl);
-            urlObj.search = '';
-            finalUrl = urlObj.toString();
-
-            const request = { 
-                method: tab.method, 
-                url: finalUrl, 
-                params: urlParams || undefined, 
-                headers, 
-                body: serializableBody,
-                auth: requestAuth || undefined,
-                envVars: Object.fromEntries(envVarsMap)
-            };
             
             return { 
                 success: true, 
                 tabId: tab.id, 
-                request, 
+                request: buildResult.request, 
                 validation: tab.validation 
             };
         },
