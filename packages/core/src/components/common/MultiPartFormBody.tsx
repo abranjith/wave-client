@@ -29,16 +29,29 @@ function isFileReference(value: unknown): value is FileReference {
 }
 
 /**
- * Converts a File object to a FileReference for storage
+ * Converts a File object to a FileReference for storage.
+ * Reads the file content and stores it as base64 for browser files.
  */
-function fileToReference(file: File): FileReference {
+async function fileToReference(file: File): Promise<FileReference> {
+  // Read file as ArrayBuffer
+  const arrayBuffer = await file.arrayBuffer();
+  const uint8Array = new Uint8Array(arrayBuffer);
+  
+  // Convert to base64
+  const base64 = btoa(
+    Array.from(uint8Array)
+      .map(byte => String.fromCharCode(byte))
+      .join('')
+  );
+  
   return {
-    path: '', // Will be populated if/when file is uploaded
+    path: '', // Not needed for browser files
     fileName: file.name,
     contentType: file.type || 'application/octet-stream',
     size: file.size,
-    pathType: 'absolute',
+    pathType: 'browser',
     storageType: 'local',
+    fileData: base64,
   };
 }
 
@@ -192,10 +205,10 @@ const MultiPartFormBody: React.FC<MultiPartFormBodyProps> = ({ dropdownElement }
     }));
   };
 
-  const handleFileChange = (id: string, file: File | null) => {
+  const handleFileChange = async (id: string, file: File | null) => {
     if (file) {
       // Convert File to FileReference for serializable storage
-      const fileRef = fileToReference(file);
+      const fileRef = await fileToReference(file);
       updateLocalField(id, 'value', fileRef);
       // Queue the commit to run after state update
       setPendingFileCommit(id);

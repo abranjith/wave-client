@@ -22,13 +22,60 @@ import { IFileAdapter } from '../types/adapters';
 
 // ==================== Types ====================
 
+/**
+ * Serializable form data entry for transport between client and server.
+ * File values are base64 encoded, text values are plain strings.
+ */
+export interface SerializedFormDataEntry {
+    key: string;
+    value: string;  // For text fields: the text value; for files: base64 encoded data
+    fieldType: 'text' | 'file';
+    /** Only present for file fields */
+    fileName?: string;
+    /** Only present for file fields */
+    contentType?: string;
+}
+
+/**
+ * Serialized form data body for transport.
+ */
+export interface SerializedFormDataBody {
+    type: 'formdata';
+    entries: SerializedFormDataEntry[];
+}
+
+/**
+ * Serialized binary/file body for transport.
+ */
+export interface SerializedFileBody {
+    type: 'file';
+    data: string;  // base64 encoded
+    fileName: string;
+    contentType: string;
+}
+
+/**
+ * All possible body types that can be sent in an HTTP request.
+ * - string: raw text body (JSON, XML, plain text, etc.)
+ * - Record<string, string>: URL-encoded form data
+ * - SerializedFormDataBody: multipart form data with file support
+ * - SerializedFileBody: binary file body
+ * - null: no body
+ */
+export type HttpRequestBody = 
+    | string 
+    | Record<string, string> 
+    | SerializedFormDataBody 
+    | SerializedFileBody 
+    | null;
+
 export interface PreparedHttpRequest {
     id: string;
     method: string;
     url: string;
     params?: string;
     headers: Record<string, string | string[]>;
-    body: unknown;
+    body: HttpRequestBody;
     auth?: Auth;
     envVars: Record<string, string>;
 }
@@ -151,26 +198,46 @@ export function getURLSearchParamsFromParamRows(
 // ==================== File Resolution ====================
 
 /**
- * Resolves a FileReference to its binary content.
+ * Converts a Uint8Array to a base64 string.
+ */
+function uint8ArrayToBase64(bytes: Uint8Array): string {
+    let binary = '';
+    const len = bytes.byteLength;
+    for (let i = 0; i < len; i++) {
+        binary += String.fromCharCode(bytes[i]);
+    }
+    return btoa(binary);
+}
+
+/**
+ * Resolves a FileReference to its base64-encoded content.
  * This is called at execution time to load file content.
+ * For browser files (pathType='browser'), returns the embedded base64 data directly.
+ * For file system files, reads via the file adapter and converts to base64.
  * @param ref The file reference containing path and metadata
- * @param fileAdapter The file adapter for reading files
- * @returns Result with ArrayBuffer on success, error message on failure
+ * @param fileAdapter The file adapter for reading files (not needed for browser files)
+ * @returns Result with base64 string on success, error message on failure
  */
 export async function resolveFileReference(
     ref: FileReference,
-    fileAdapter: IFileAdapter
-): Promise<Result<ArrayBuffer, string>> {
+    fileAdapter?: IFileAdapter
+): Promise<Result<string, string>> {
     try {
+        // Handle browser files with embedded base64 data - return as-is
+        if (ref.fileData) {
+            return Ok(ref.fileData);
+        }
+        
+        // Handle file system files via adapter
+        if (!fileAdapter) {
+            return Err(`No file adapter provided for file: ${ref.fileName}`);
+        }
+        
         const result = await fileAdapter.readFileAsBinary(ref.path);
         if (result.isOk) {
-            // Convert Uint8Array to ArrayBuffer if needed
-            const data = result.value;
-            // Create a new ArrayBuffer from the Uint8Array to avoid SharedArrayBuffer issues
-            const arrayBuffer = new ArrayBuffer(data.length);
-            const view = new Uint8Array(arrayBuffer);
-            view.set(data);
-            return Ok(arrayBuffer);
+            // Convert Uint8Array to base64
+            const base64 = uint8ArrayToBase64(result.value);
+            return Ok(base64);
         }
         return Err(`File not found: ${ref.fileName} at ${ref.path}. Please re-upload the file.`);
     } catch (error) {
@@ -183,14 +250,15 @@ export async function resolveFileReference(
 /**
  * Converts a CollectionBody to the appropriate HTTP payload format.
  * Handles all body modes: none, raw, urlencoded, formdata, file.
- * File content is resolved at execution time via the fileAdapter.
+ * Returns serializable types that can be safely transported between client and server.
+ * File content is resolved at execution time and encoded as base64.
  */
 export async function convertCollectionBodyToHttpPayload(
     body: CollectionBody | undefined,
     envVarsMap: Map<string, string>,
     unresolved: Set<string>,
     fileAdapter?: IFileAdapter
-): Promise<string | FormData | Record<string, string> | ArrayBuffer | null> {
+): Promise<HttpRequestBody> {
     if (!body || body.mode === 'none') {
         return null;
     }
@@ -220,7 +288,8 @@ export async function convertCollectionBodyToHttpPayload(
         }
             
         case 'formdata': {
-            const formData = new FormData();
+            const entries: SerializedFormDataEntry[] = [];
+            
             for (const field of body.formdata) {
                 if (field.key && field.key.trim() && !field.disabled) {
                     const keyResult = resolveParameterizedValue(field.key, envVarsMap);
@@ -228,32 +297,45 @@ export async function convertCollectionBodyToHttpPayload(
                     const resolvedKey = keyResult.resolved;
 
                     if (field.fieldType === 'file' && field.value && typeof field.value === 'object') {
-                        // FileReference - resolve to content
+                        // FileReference - resolve to base64 content
                         const fileRef = field.value as FileReference;
-                        if (fileAdapter) {
-                            const fileResult = await resolveFileReference(fileRef, fileAdapter);
-                            if (fileResult.isOk) {
-                                const blob = new Blob([fileResult.value], { type: fileRef.contentType });
-                                formData.append(resolvedKey, blob, fileRef.fileName);
-                            } else {
-                                console.warn(`Failed to resolve file ${fileRef.fileName}: ${fileResult.error}`);
-                            }
+                        const fileResult = await resolveFileReference(fileRef, fileAdapter);
+                        if (fileResult.isOk) {
+                            entries.push({
+                                key: resolvedKey,
+                                value: fileResult.value,  // base64 encoded
+                                fieldType: 'file',
+                                fileName: fileRef.fileName,
+                                contentType: fileRef.contentType,
+                            });
+                        } else {
+                            console.warn(`Failed to resolve file ${fileRef.fileName}: ${fileResult.error}`);
                         }
                     } else if (field.fieldType === 'text' && typeof field.value === 'string') {
                         const valueResult = resolveParameterizedValue(field.value, envVarsMap);
                         valueResult.unresolved.forEach(u => unresolved.add(u));
-                        formData.append(resolvedKey, valueResult.resolved);
+                        entries.push({
+                            key: resolvedKey,
+                            value: valueResult.resolved,
+                            fieldType: 'text',
+                        });
                     }
                 }
             }
-            return formData;
+            
+            return { type: 'formdata', entries };
         }
             
         case 'file': {
-            if (fileAdapter && body.file) {
+            if (body.file) {
                 const fileResult = await resolveFileReference(body.file, fileAdapter);
                 if (fileResult.isOk) {
-                    return fileResult.value;
+                    return {
+                        type: 'file',
+                        data: fileResult.value,  // base64 encoded
+                        fileName: body.file.fileName,
+                        contentType: body.file.contentType,
+                    };
                 }
                 console.warn(`Failed to resolve file: ${fileResult.error}`);
             }
@@ -438,16 +520,6 @@ export async function buildHttpRequest(
         };
     }
 
-    // Serialize FormData if needed (for postMessage communication)
-    let serializableBody: string | Record<string, string> | ArrayBuffer | FormData | { type: 'formdata'; entries: Array<{ key: string; value: string | File }> } | null = requestBody;
-    if (requestBody instanceof FormData) {
-        const formDataEntries: Array<{ key: string; value: string | File }> = [];
-        requestBody.forEach((value, key) => {
-            formDataEntries.push({ key, value });
-        });
-        serializableBody = { type: 'formdata', entries: formDataEntries };
-    }
-
     // Remove params from URL (sent separately)
     try {
         const urlObj = new URL(finalUrl);
@@ -464,7 +536,7 @@ export async function buildHttpRequest(
             url: finalUrl,
             params: urlParams || undefined,
             headers,
-            body: serializableBody,
+            body: requestBody,
             auth: requestAuth || undefined,
             envVars: Object.fromEntries(envVarsMap)
         }

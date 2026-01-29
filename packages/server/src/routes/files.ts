@@ -67,46 +67,6 @@ export async function registerFileRoutes(fastify: FastifyInstance): Promise<void
     });
 
     /**
-     * Read FileReference (combines path resolution with binary read)
-     * POST /api/files/read-reference
-     */
-    fastify.post<{
-        Body: {
-            path: string;
-            fileName: string;
-            contentType: string;
-            size: number;
-            pathType: PathType;
-            storageType: 'local' | 'cloud' | 'network';
-        };
-    }>('/api/files/read-reference', async (request, reply) => {
-        const fileRef = request.body;
-        
-        if (!fileRef.path) {
-            return reply.status(400).send({ 
-                isOk: false, 
-                error: 'File path is required' 
-            });
-        }
-
-        const result = await fileService.readFileReference(fileRef);
-        
-        if (result.isOk && result.value) {
-            // Convert Uint8Array to base64 for JSON transport
-            const base64 = Buffer.from(result.value).toString('base64');
-            return {
-                isOk: true,
-                value: base64,
-                encoding: 'base64',
-                fileName: fileRef.fileName,
-                contentType: fileRef.contentType
-            };
-        }
-        
-        return result;
-    });
-
-    /**
      * Check if file exists
      * POST /api/files/exists
      */

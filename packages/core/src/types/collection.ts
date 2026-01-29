@@ -48,12 +48,14 @@ export type FileStorageType = 'local' | 'cloud' | 'network';
 /**
  * Path type indicating how the file path should be resolved
  */
-export type FilePathType = 'absolute' | 'relative';
+export type FilePathType = 'absolute' | 'relative' | 'browser';
 
 /**
  * Reference to a file for request bodies and multipart form fields.
  * Stores metadata only - content is resolved at execution time.
  * This approach keeps types serializable and allows for deferred loading.
+ * For browser-selected files (pathType='browser'), the actual file content
+ * is stored as base64 in fileData to avoid server round trips.
  */
 export interface FileReference {
   /** File path (absolute or relative based on pathType) */
@@ -64,10 +66,12 @@ export interface FileReference {
   contentType: string;
   /** File size in bytes */
   size: number;
-  /** Whether path is absolute or relative to app/workspace */
+  /** Whether path is absolute, relative, or browser-based */
   pathType: FilePathType;
   /** Storage location type - allows future extension to cloud/network */
   storageType: FileStorageType;
+  /** Base64-encoded file data for browser files (pathType='browser' only) */
+  fileData?: string;
 }
 
 // ============================================================================

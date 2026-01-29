@@ -33,11 +33,15 @@ export class FileService extends BaseStorageService {
     /**
      * Resolves a file path based on its path type.
      * Relative paths are resolved against the app's files directory.
+     * Browser paths are not resolved (they use embedded data).
      * @param filePath The file path to resolve
-     * @param pathType Whether the path is absolute or relative
+     * @param pathType Whether the path is absolute, relative, or browser
      * @returns The resolved absolute path
      */
-    async resolvePath(filePath: string, pathType: 'absolute' | 'relative'): Promise<string> {
+    async resolvePath(filePath: string, pathType: 'absolute' | 'relative' | 'browser'): Promise<string> {
+        if (pathType === 'browser') {
+            throw new Error('Browser files do not have file system paths');
+        }
         if (pathType === 'absolute') {
             return filePath;
         }
@@ -63,7 +67,7 @@ export class FileService extends BaseStorageService {
     async readFile(filePath: string, pathType: 'absolute' | 'relative' = 'absolute'): Promise<FileResult<string>> {
         try {
             const resolvedPath = await this.resolvePath(filePath, pathType);
-            
+
             if (!fs.existsSync(resolvedPath)) {
                 return {
                     isOk: false,
@@ -88,13 +92,38 @@ export class FileService extends BaseStorageService {
     /**
      * Reads a file as binary data.
      * @param filePath The file path (absolute or relative)
-     * @param pathType Whether the path is absolute or relative
+     * @param pathType Whether the path is absolute, relative, or browser
      * @returns Result with file contents as Uint8Array or error message
      */
-    async readFileAsBinary(filePath: string, pathType: 'absolute' | 'relative' = 'absolute'): Promise<FileResult<Uint8Array>> {
+    async readFileAsBinary(filePath: string, pathType: 'absolute' | 'relative' | 'browser' = 'absolute', fileData: string | null = null): Promise<FileResult<Uint8Array>> {
         try {
+            // For browser files, filePath is ignored as data comes from fileData field
+            if (pathType === 'browser') {
+                if (!fileData) {
+                    return {
+                        isOk: false,
+                        error: 'Browser pathType is missing fileData'
+                    };
+                }
+
+                try {
+                    // Decode base64 to binary
+                    const binaryString = Buffer.from(fileData, 'base64');
+                    return {
+                        isOk: true,
+                        value: new Uint8Array(binaryString)
+                    };
+                } catch (error: unknown) {
+                    const message = error instanceof Error ? error.message : 'Unknown error';
+                    return {
+                        isOk: false,
+                        error: `Failed to decode file data: ${message}`
+                    };
+                }
+            }
+
             const resolvedPath = await this.resolvePath(filePath, pathType);
-            
+
             if (!fs.existsSync(resolvedPath)) {
                 return {
                     isOk: false,
@@ -117,16 +146,6 @@ export class FileService extends BaseStorageService {
     }
 
     /**
-     * Reads a FileReference and returns its binary content.
-     * This is the primary method used by request execution.
-     * @param ref The FileReference to read
-     * @returns Result with file contents as Uint8Array or error message
-     */
-    async readFileReference(ref: FileReference): Promise<FileResult<Uint8Array>> {
-        return this.readFileAsBinary(ref.path, ref.pathType);
-    }
-
-    /**
      * Writes binary data to a file.
      * @param filePath The file path (absolute or relative)
      * @param data The binary data to write
@@ -134,17 +153,17 @@ export class FileService extends BaseStorageService {
      * @returns Result indicating success or error
      */
     async writeBinaryFile(
-        filePath: string, 
-        data: Uint8Array, 
+        filePath: string,
+        data: Uint8Array,
         pathType: 'absolute' | 'relative' = 'absolute'
     ): Promise<FileResult<void>> {
         try {
             const resolvedPath = await this.resolvePath(filePath, pathType);
             const dir = path.dirname(resolvedPath);
-            
+
             this.ensureDirectoryExists(dir);
             fs.writeFileSync(resolvedPath, Buffer.from(data));
-            
+
             return {
                 isOk: true,
                 value: undefined
@@ -166,17 +185,17 @@ export class FileService extends BaseStorageService {
      * @returns Result indicating success or error
      */
     async writeFile(
-        filePath: string, 
-        content: string, 
+        filePath: string,
+        content: string,
         pathType: 'absolute' | 'relative' = 'absolute'
     ): Promise<FileResult<void>> {
         try {
             const resolvedPath = await this.resolvePath(filePath, pathType);
             const dir = path.dirname(resolvedPath);
-            
+
             this.ensureDirectoryExists(dir);
             fs.writeFileSync(resolvedPath, content, 'utf8');
-            
+
             return {
                 isOk: true,
                 value: undefined
@@ -212,12 +231,12 @@ export class FileService extends BaseStorageService {
      * @returns Result with file stats or error
      */
     async getFileStats(
-        filePath: string, 
+        filePath: string,
         pathType: 'absolute' | 'relative' = 'absolute'
     ): Promise<FileResult<{ size: number; modifiedTime: Date; isDirectory: boolean }>> {
         try {
             const resolvedPath = await this.resolvePath(filePath, pathType);
-            
+
             if (!fs.existsSync(resolvedPath)) {
                 return {
                     isOk: false,
@@ -250,12 +269,12 @@ export class FileService extends BaseStorageService {
      * @returns Result indicating success or error
      */
     async deleteFile(
-        filePath: string, 
+        filePath: string,
         pathType: 'absolute' | 'relative' = 'absolute'
     ): Promise<FileResult<void>> {
         try {
             const resolvedPath = await this.resolvePath(filePath, pathType);
-            
+
             if (!fs.existsSync(resolvedPath)) {
                 // File doesn't exist, consider it a success
                 return {

@@ -10,17 +10,35 @@ interface BinaryBodyProps {
 
 /**
  * Converts a FileWithPreview to a FileReference for storage.
- * FileReference stores only metadata (serializable), not the actual file content.
+ * Reads the file content and stores it as base64 for browser files.
  */
-function fileToReference(fileWithPreview: FileWithPreview): FileReference {
+async function fileToReference(fileWithPreview: FileWithPreview): Promise<FileReference> {
   const file = fileWithPreview.file;
+  
+  // Ensure it's a real File object (not FileMetadata)
+  if (!(file instanceof File)) {
+    throw new Error('Cannot convert FileMetadata to FileReference - must be a File object');
+  }
+  
+  // Read file as ArrayBuffer
+  const arrayBuffer = await file.arrayBuffer();
+  const uint8Array = new Uint8Array(arrayBuffer);
+  
+  // Convert to base64
+  const base64 = btoa(
+    Array.from(uint8Array)
+      .map(byte => String.fromCharCode(byte))
+      .join('')
+  );
+  
   return {
-    path: fileWithPreview.preview || '', // Use preview URL as path placeholder
+    path: '', // Not needed for browser files
     fileName: file.name,
     contentType: file.type || 'application/octet-stream',
     size: file.size,
-    pathType: 'absolute',
+    pathType: 'browser',
     storageType: 'local',
+    fileData: base64,
   };
 }
 
@@ -38,7 +56,7 @@ const BinaryBody: React.FC<BinaryBodyProps> = ({ dropdownElement }) => {
     if (!(file instanceof File)) return;
 
     // Convert to FileReference for storage
-    const fileRef = fileToReference(fileWithPreview);
+    const fileRef = await fileToReference(fileWithPreview);
     updateFileBody(fileRef);
   };
 

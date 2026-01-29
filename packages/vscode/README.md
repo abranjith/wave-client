@@ -45,6 +45,30 @@ Deliver the full Wave Client experience directly in VS Code, leveraging native c
 └─────────────────────────────────────────────────────────────┘
 ```
 
+## HTTP Execution Flow
+
+Client (webview)                           Server (extension)
+─────────────────                           ─────────────────
+File selected                               
+    ↓                                       
+Read as base64 (fileToReference)            
+    ↓                                       
+Build request body:                         
+  - formdata → SerializedFormDataBody       
+  - file → SerializedFileBody               
+    ↓                                       
+postMessage (JSON serializable)  ────────→  HttpService.execute()
+                                               ↓
+                                           Detect body type
+                                               ↓
+                                           Decode base64:
+                                             - formdata → Blob → FormData
+                                             - file → Buffer
+                                               ↓
+                                           axios request
+
+```
+
 ## Design Highlights
 
 - **Adapter Pattern**: Webview uses `vsCodeAdapter` to access VS Code capabilities while keeping core UI platform-agnostic.

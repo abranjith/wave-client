@@ -44,6 +44,49 @@ export interface HttpAuth {
     [key: string]: unknown;
 }
 
+// ==================== Serialized Body Types ====================
+// These types match the serializable body types from @wave-client/core
+
+/**
+ * Serializable form data entry for transport between client and server.
+ */
+export interface SerializedFormDataEntry {
+    key: string;
+    value: string;  // For text: the value; for files: base64 encoded data
+    fieldType: 'text' | 'file';
+    fileName?: string;
+    contentType?: string;
+}
+
+/**
+ * Serialized form data body.
+ */
+export interface SerializedFormDataBody {
+    type: 'formdata';
+    entries: SerializedFormDataEntry[];
+}
+
+/**
+ * Serialized binary/file body.
+ */
+export interface SerializedFileBody {
+    type: 'file';
+    data: string;  // base64 encoded
+    fileName: string;
+    contentType: string;
+}
+
+/**
+ * All possible body types that can be received in an HTTP request config.
+ */
+export type HttpRequestBody = 
+    | string 
+    | Record<string, string> 
+    | SerializedFormDataBody 
+    | SerializedFileBody 
+    | null 
+    | undefined;
+
 /**
  * HTTP request configuration
  */
@@ -52,8 +95,8 @@ export interface HttpRequestConfig {
     method: string;
     url: string;
     headers: Record<string, string>;
-    params?: string | Record<string, string>; // Can be string or object
-    body?: unknown;
+    params?: string | Record<string, string>;
+    body?: HttpRequestBody;
     auth?: HttpAuth;
     envVars?: EnvVarsMap;
 }
@@ -365,11 +408,58 @@ export class HttpService {
                 requestUrl = `${fullUrl}${separator}${paramsString}`;
             }
 
+            // Handle custom formdata serialization for VS Code extension communication
+            let requestBody: unknown = request.body;
+            
+            // Check for serialized formdata: { type: 'formdata', entries: [...] }
+            if (this.isSerializedFormDataBody(request.body)) {
+                try {
+                    const formData = new FormData();
+                    
+                    for (const entry of request.body.entries) {
+                        if (entry.fieldType === 'file') {
+                            // Reconstruct Blob from base64
+                            const blob = this.base64ToBlob(entry.value, entry.contentType || 'application/octet-stream');
+                            formData.append(entry.key, blob, entry.fileName || 'file');
+                        } else {
+                            formData.append(entry.key, entry.value);
+                        }
+                    }
+                    
+                    requestBody = formData;
+                    
+                    // Remove Content-Type header to let axios/browser set it with boundary
+                    const contentTypeKey = Object.keys(headers).find(k => k.toLowerCase() === 'content-type');
+                    if (contentTypeKey) {
+                        delete headers[contentTypeKey];
+                    }
+                } catch (e) {
+                    console.error('Failed to reconstruct FormData:', e);
+                    // Fallback to original body if reconstruction fails
+                }
+            } 
+            // Check for serialized file/binary body: { type: 'file', data: '...', fileName: '...', contentType: '...' }
+            else if (this.isSerializedFileBody(request.body)) {
+                try {
+                    // Convert base64 to Buffer for axios
+                    requestBody = this.base64ToBuffer(request.body.data);
+                    
+                    // Ensure Content-Type is set from the file body's contentType
+                    const contentTypeKey = Object.keys(headers).find(k => k.toLowerCase() === 'content-type');
+                    if (!contentTypeKey) {
+                        headers['Content-Type'] = request.body.contentType;
+                    }
+                } catch (e) {
+                    console.error('Failed to reconstruct file body:', e);
+                    // Fallback to original body if reconstruction fails
+                }
+            }
+
             const response = await axios({
                 method: request.method,
                 url: requestUrl,
                 headers: headers,
-                data: request.body,
+                data: requestBody,
                 responseType: 'arraybuffer',
                 proxy: proxy || undefined,
                 httpsAgent: httpsAgent,
@@ -492,6 +582,54 @@ export class HttpService {
         }
 
         return newCookies;
+    }
+
+    // ==================== Helper Methods for Body Type Handling ====================
+
+    /**
+     * Type guard to check if body is a SerializedFormDataBody.
+     */
+    private isSerializedFormDataBody(body: HttpRequestBody): body is SerializedFormDataBody {
+        return body !== null && 
+               body !== undefined && 
+               typeof body === 'object' && 
+               'type' in body && 
+               body.type === 'formdata' && 
+               'entries' in body && 
+               Array.isArray(body.entries);
+    }
+
+    /**
+     * Type guard to check if body is a SerializedFileBody.
+     */
+    private isSerializedFileBody(body: HttpRequestBody): body is SerializedFileBody {
+        return body !== null && 
+               body !== undefined && 
+               typeof body === 'object' && 
+               'type' in body && 
+               body.type === 'file' && 
+               'data' in body && 
+               typeof body.data === 'string';
+    }
+
+    /**
+     * Convert base64 string to Blob.
+     */
+    private base64ToBlob(base64: string, contentType: string): Blob {
+        const byteCharacters = atob(base64);
+        const byteNumbers = new Array(byteCharacters.length);
+        for (let i = 0; i < byteCharacters.length; i++) {
+            byteNumbers[i] = byteCharacters.charCodeAt(i);
+        }
+        const byteArray = new Uint8Array(byteNumbers);
+        return new Blob([byteArray], { type: contentType });
+    }
+
+    /**
+     * Convert base64 string to Buffer (for Node.js axios requests).
+     */
+    private base64ToBuffer(base64: string): Buffer {
+        return Buffer.from(base64, 'base64');
     }
 }
 

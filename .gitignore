@@ -426,3 +426,7 @@ node_modules
 .plan.ignore
 
 TODO.md
+
+.specify
+.github/agents
+.github/prompts

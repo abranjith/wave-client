@@ -548,6 +548,11 @@ export class MessageHandler {
     private async handleSaveRequestToHistory(message: any): Promise<void> {
         try {
             const { requestContent } = message.data;
+            
+            if (!requestContent) {
+                throw new Error('requestContent is required to save to history');
+            }
+            
             await historyService.save(requestContent);
 
             // Reload full history

@@ -360,7 +360,7 @@ function createVSCodeStorageAdapter(
         async saveRequestToHistory(request): Promise<Result<void, string>> {
             vsCodeApi.postMessage({
                 type: 'saveRequestToHistory',
-                data: { request }
+                data: { requestContent: JSON.stringify(request) }
             });
             return ok(undefined);
         },

@@ -59,8 +59,8 @@ This platform independence is achieved through the **Adapter Pattern**, which ab
         │ • Node.js APIs │          │  • fetch API    │
         │ • SecretStore  │          │  • Web Crypto   │
         └────────────────┘          └─────────────────┘
-```
 
+```
 ### Package Structure
 
 ```
