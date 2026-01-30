@@ -138,7 +138,7 @@ function WaveClientUI() {
   const setValidationRules = useAppStateStore((state) => state.setValidationRules);
   const settings = useAppStateStore((state) => state.settings);
   const setSettings = useAppStateStore((state) => state.setSettings);
-  const getParsedRequest = useAppStateStore((state) => state.getParsedRequest);
+  const getCollectionRequest = useAppStateStore((state) => state.getCollectionRequest);
   const setIsHistoryLoading = useAppStateStore((state) => state.setIsHistoryLoading);
   const setHistory = useAppStateStore((state) => state.setHistory);
   const setHistoryLoadError = useAppStateStore((state) => state.setHistoryLoadError);
@@ -416,7 +416,7 @@ const handleFlowSave = useCallback(async (flow: Flow) => {
 
   // Handle sending request for a specific tab
   const handleSendRequest = async (tabId: string) => {
-    const parsedRequest = getParsedRequest(tabId);
+    const parsedRequest = getCollectionRequest(tabId);
 
     // Save to history
     await storage.saveRequestToHistory(parsedRequest);

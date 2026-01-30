@@ -14,6 +14,7 @@ export async function registerHttpRoutes(fastify: FastifyInstance): Promise<void
             return reply.send({ isOk: true, value: result });
         } catch (error) {
             const message = error instanceof Error ? error.message : 'Unknown error';
+            console.error('[Server HTTP Route] Error:', message);
             return reply.status(500).send({ isOk: false, error: message });
         }
     });

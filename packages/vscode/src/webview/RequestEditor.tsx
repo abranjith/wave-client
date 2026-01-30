@@ -87,7 +87,7 @@ const RequestEditor: React.FC<RequestEditorProps> = ({
     const setTabEnvironment = useAppStateStore((state) => state.setTabEnvironment);
     const setTabAuth = useAppStateStore((state) => state.setTabAuth);
     const setErrorMessage = useAppStateStore((state) => state.setErrorMessage);
-    const getParsedRequest = useAppStateStore((state) => state.getParsedRequest);
+    const getCollectionRequest = useAppStateStore((state) => state.getCollectionRequest);
     const getActiveEnvVariableKeys = useAppStateStore((state) => state.getActiveEnvVariableKeys);
     
     // Global data (shared across tabs)
@@ -123,10 +123,10 @@ const RequestEditor: React.FC<RequestEditorProps> = ({
         if (!activeTab?.folderPath || activeTab.folderPath.length === 0) {
             setIsRequestSaveWizardOpen(true);
         } else {
-            const currentRequest = getParsedRequest();
+            const currentRequest = getCollectionRequest();
             onSaveRequest(currentRequest, undefined, undefined, activeTabId);
         }
-    }, [activeTab?.folderPath, activeTabId, getParsedRequest, onSaveRequest, setActiveTab]);
+    }, [activeTab?.folderPath, activeTabId, getCollectionRequest, onSaveRequest, setActiveTab]);
 
     const handleEnvironmentChange = useCallback((value: string) => {
         if (value === 'none') {
@@ -147,12 +147,12 @@ const RequestEditor: React.FC<RequestEditorProps> = ({
     // Handle save wizard completion
     useEffect(() => {
         if (collectionInfoToSave) {
-            const currentRequest = getParsedRequest();
+            const currentRequest = getCollectionRequest();
             currentRequest.name = collectionInfoToSave.requestName || currentRequest.name;
             onSaveRequest(currentRequest, collectionInfoToSave.collectionName, collectionInfoToSave.folderPath, activeTabId);
             setCollectionInfoToSave(undefined);
         }
-    }, [collectionInfoToSave, getParsedRequest, onSaveRequest, activeTabId]);
+    }, [collectionInfoToSave, getCollectionRequest, onSaveRequest, activeTabId]);
 
     // ==================== Early Return ====================
     

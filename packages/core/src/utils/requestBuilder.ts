@@ -290,6 +290,8 @@ export async function convertCollectionBodyToHttpPayload(
         case 'formdata': {
             const entries: SerializedFormDataEntry[] = [];
             
+            console.log('[requestBuilder] Converting formdata body, field count:', body.formdata.length);
+            
             for (const field of body.formdata) {
                 if (field.key && field.key.trim() && !field.disabled) {
                     const keyResult = resolveParameterizedValue(field.key, envVarsMap);
@@ -309,7 +311,7 @@ export async function convertCollectionBodyToHttpPayload(
                                 contentType: fileRef.contentType,
                             });
                         } else {
-                            console.warn(`Failed to resolve file ${fileRef.fileName}: ${fileResult.error}`);
+                            console.warn(`[requestBuilder] Failed to resolve file ${fileRef.fileName}: ${fileResult.error}`);
                         }
                     } else if (field.fieldType === 'text' && typeof field.value === 'string') {
                         const valueResult = resolveParameterizedValue(field.value, envVarsMap);

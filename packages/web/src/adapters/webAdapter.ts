@@ -720,6 +720,7 @@ class WebHttpAdapter implements IHttpAdapter {
       return err(response.data.error || 'Request failed');
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unknown error';
+      console.error('[WebHttpAdapter] Server error:', message);
       return err(`Server error: ${message}`);
     }
   }
