@@ -8,7 +8,7 @@ import {
 } from '../../utils/requestBuilder';
 import type { Environment, HeaderRow, ParamRow, MultiPartFormField, CollectionRequest, CollectionBody } from '../../types/collection';
 import { type Auth, AuthType } from '../../types/auth';
-import { generateUniqueId } from '../../utils/collectionParser';
+import { generateUniqueId } from '../../utils/common';
 
 // Helper to create EnvironmentVariable with default type
 const envVar = (key: string, value: string, enabled: boolean = true) => ({

@@ -4,7 +4,7 @@ import { useCollectionRunner, type CollectionRunItem, type RunSettings } from '.
 import { AdapterProvider } from '../../hooks/useAdapter';
 import { createMockAdapter } from '../mocks/mockAdapter';
 import type { IPlatformAdapter, HttpResponseResult } from '../../types/adapters';
-import { generateUniqueId } from '../../utils/collectionParser';
+import { generateUniqueId } from '../../utils/common';
 import type { Environment, Collection } from '../../types/collection';
 import { AuthType } from '../../types/auth';
 import type { Auth } from '../../types/auth';

@@ -1,12 +1,10 @@
 /**
  * Auth types and interfaces.
- * This is the single source of truth for auth-related types, used by both
- * the webview (React) and the extension backend (Node.js).
+ * 
+ * This file contains the core auth data model types used by the UI layer.
+ * Service-layer types (AuthRequestConfig, AuthResult, etc.) are defined in
+ * @wave-client/shared/services/auth/types.ts
  */
-
-import { Result, ok, err } from '../utils/result';
-
-// Note: AppSettings import removed - not needed for auth types in core package
 
 // ==================== Auth Type Enum ====================
 
@@ -87,63 +85,9 @@ export interface OAuth2RefreshAuth extends BaseAuth {
 }
 
 /**
- * Union type for all auth types - makes it easy to add more types.
+ * Union type for all auth types.
  */
 export type Auth = ApiKeyAuth | BasicAuth | DigestAuth | OAuth2RefreshAuth;
-
-// ==================== Auth Request/Response Types ====================
-
-/**
- * Request configuration passed to auth services.
- */
-export interface AuthRequestConfig {
-    method: string;
-    url: string;
-    headers: Record<string, string | string[]>;
-    params?: string;
-    body?: any;
-}
-
-/**
- * Successful auth result data.
- */
-export interface AuthResultData {
-    headers?: Record<string, string>;
-    queryParams?: Record<string, string>;
-    // For auth types that handle the full request internally (like Digest)
-    handledInternally?: boolean;
-    response?: InternalAuthResponse;
-}
-
-/**
- * Response from auth services that handle requests internally.
- */
-export interface InternalAuthResponse {
-    status: number;
-    statusText: string;
-    headers: Record<string, any>;
-    data: Buffer | ArrayBuffer | string | any;
-}
-
-/**
- * Auth Result using the Result pattern.
- * Success contains AuthResultData, Error contains error message string.
- */
-export type AuthResult = Result<AuthResultData, string>;
-
-// Helper functions for creating AuthResult
-export const authOk = (data: AuthResultData): AuthResult => ok(data);
-export const authErr = (error: string): AuthResult => err(error);
-
-// ==================== Cache Types ====================
-
-/**
- * Cached auth data for in-memory caching.
- */
-export interface CachedAuthData {
-    data: any;
-    expiresAt: number;
-}
 
 /**
  * Environment variables map type.

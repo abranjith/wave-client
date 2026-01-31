@@ -8,7 +8,7 @@ import type { Flow, FlowNode, FlowConnector } from '../../types/flow';
 import type { CollectionItem, Collection, Environment } from '../../types/collection';
 import { AuthType } from '../../types/auth';
 import type { Auth } from '../../types/auth';
-import { generateUniqueId } from '../../utils/collectionParser';
+import { generateUniqueId } from '../../utils/common';
 
 // ============================================================================
 // Test Helpers

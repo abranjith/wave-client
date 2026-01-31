@@ -8,26 +8,26 @@ import useAppStateStore from '../../hooks/store/useAppStateStore';
 import { BodyMode } from '../../types/collection';
 
 // Map between UI display names and BodyMode values
-type DisplayLabel = 'No Body' | 'Raw' | 'File' | 'URL Encoded' | 'Form Data';
+type DisplayLabel = 'None' | 'Raw' | 'File' | 'Form URL Encoded' | 'Multipart Form Data';
 
 const DISPLAY_LABELS: DisplayLabel[] = [
-  'No Body', 'Raw', 'File', 'URL Encoded', 'Form Data'
+  'None', 'Raw', 'File', 'Form URL Encoded', 'Multipart Form Data'
 ];
 
 const displayToMode: Record<DisplayLabel, BodyMode> = {
-  'No Body': 'none',
+  'None': 'none',
   'Raw': 'raw',
   'File': 'file',
-  'URL Encoded': 'urlencoded',
-  'Form Data': 'formdata'
+  'Form URL Encoded': 'urlencoded',
+  'Multipart Form Data': 'formdata'
 };
 
 const modeToDisplay: Record<BodyMode, DisplayLabel> = {
-  'none': 'No Body',
+  'none': 'None',
   'raw': 'Raw',
   'file': 'File',
-  'urlencoded': 'URL Encoded',
-  'formdata': 'Form Data'
+  'urlencoded': 'Form URL Encoded',
+  'formdata': 'Multipart Form Data'
 };
 
 const RequestBody: React.FC = () => {

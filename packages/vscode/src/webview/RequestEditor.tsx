@@ -33,7 +33,7 @@ import {
   TAB_CONSTANTS,
   renderParameterizedText,
   getResponseLanguage,
-  type ParsedRequest,
+  CollectionRequest
 } from '@wave-client/core';
 
 // ==================== Helper Functions ====================
@@ -49,13 +49,13 @@ function getStatusColor(status: number) {
 
 const HTTP_METHODS = ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'HEAD', 'OPTIONS'];
 const REQUEST_TABS = ['Params', 'Headers', 'Body', 'Validation'] as const;
-const RESPONSE_TABS = ['Body', 'Headers', 'Validation'] as const;
+const BASE_RESPONSE_TABS = ['Body', 'Headers', 'Validation'] as const;
 
 // ==================== Props ====================
 
 interface RequestEditorProps {
     onSendRequest: (tabId: string) => void;
-    onSaveRequest: (request: ParsedRequest, newCollectionName: string | undefined, folderPath?: string[], tabId?: string) => void;
+    onSaveRequest: (request: CollectionRequest, newCollectionName: string | undefined, folderPath?: string[], tabId?: string) => void;
     onDownloadResponse: (data: string) => void;
 }
 
@@ -182,6 +182,14 @@ const RequestEditor: React.FC<RequestEditorProps> = ({
     } = activeTab;
 
     const contentLang = getResponseLanguage(responseData?.headers || {});
+    
+    // Determine if response is an error (status 0 and statusText 'Error')
+    const isError = responseData?.status === 0 && responseData?.statusText === 'Error';
+    
+    // Conditionally add Error tab when there's an error
+    const RESPONSE_TABS = isError 
+        ? (['Error', ...BASE_RESPONSE_TABS] as const)
+        : BASE_RESPONSE_TABS;
 
     return (
         <div className="w-full h-full flex flex-col overflow-hidden">
@@ -220,58 +228,64 @@ const RequestEditor: React.FC<RequestEditorProps> = ({
                     {/* Environment Selector and Save Button on the right */}
                     <div className="flex items-center gap-3">
                         {/* Auth Dropdown */}
-                        <Select 
-                            value={activeTab.authId || 'none'} 
-                            onValueChange={handleAuthChange}
-                        >
-                            <SelectTrigger 
-                                id={authSelectId} 
-                                className="w-auto max-w-full min-w-40 bg-white border-slate-300 text-slate-900 hover:bg-slate-50 dark:bg-slate-800 dark:border-slate-600 dark:text-slate-100 dark:hover:bg-slate-700"
+                        <div className="flex items-center gap-2">
+                            <span className="text-xs text-slate-500">Auth:</span>
+                            <Select 
+                                value={activeTab.authId || 'none'} 
+                                onValueChange={handleAuthChange}
                             >
-                                <SelectValue placeholder="Select Auth" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="none" className="hover:bg-slate-100 dark:hover:bg-slate-700">
-                                    No Auth
-                                </SelectItem>
-                                {auths && auths.map((auth) => (
-                                    <SelectItem 
-                                        key={auth.id} 
-                                        value={auth.id} 
-                                        className="hover:bg-slate-100 dark:hover:bg-slate-700"
-                                    >
-                                        {auth.name}
+                                <SelectTrigger 
+                                    id={authSelectId} 
+                                    className="w-auto max-w-full min-w-40 bg-white border-slate-300 text-slate-900 hover:bg-slate-50 dark:bg-slate-800 dark:border-slate-600 dark:text-slate-100 dark:hover:bg-slate-700"
+                                >
+                                    <SelectValue placeholder="Select Auth" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="none" className="hover:bg-slate-100 dark:hover:bg-slate-700">
+                                        No Auth
                                     </SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
+                                    {auths && auths.map((auth) => (
+                                        <SelectItem 
+                                            key={auth.id} 
+                                            value={auth.id} 
+                                            className="hover:bg-slate-100 dark:hover:bg-slate-700"
+                                        >
+                                            {auth.name}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
 
                         {/* Environment Dropdown */}
-                        <Select 
-                            value={activeTab.environmentId || 'none'} 
-                            onValueChange={handleEnvironmentChange}
-                        >
-                            <SelectTrigger 
-                                id={environmentSelectId} 
-                                className="w-auto max-w-full min-w-40 bg-white border-slate-300 text-slate-900 hover:bg-slate-50 dark:bg-slate-800 dark:border-slate-600 dark:text-slate-100 dark:hover:bg-slate-700"
+                        <div className="flex items-center gap-2">
+                            <span className="text-xs text-slate-500">Env:</span>
+                            <Select 
+                                value={activeTab.environmentId || 'none'} 
+                                onValueChange={handleEnvironmentChange}
                             >
-                                <SelectValue placeholder="Select Environment" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="none" className="hover:bg-slate-100 dark:hover:bg-slate-700">
-                                    None
-                                </SelectItem>
-                                {environments && environments.filter(env => env.name.toLowerCase() !== 'global').map((env) => (
-                                    <SelectItem 
-                                        key={env.id} 
-                                        value={env.id} 
-                                        className="hover:bg-slate-100 dark:hover:bg-slate-700"
-                                    >
-                                        {env.name}
+                                <SelectTrigger 
+                                    id={environmentSelectId} 
+                                    className="w-auto max-w-full min-w-40 bg-white border-slate-300 text-slate-900 hover:bg-slate-50 dark:bg-slate-800 dark:border-slate-600 dark:text-slate-100 dark:hover:bg-slate-700"
+                                >
+                                    <SelectValue placeholder="Select Environment" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="none" className="hover:bg-slate-100 dark:hover:bg-slate-700">
+                                        None
                                     </SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
+                                    {environments && environments.filter(env => env.name.toLowerCase() !== 'global').map((env) => (
+                                        <SelectItem 
+                                            key={env.id} 
+                                            value={env.id} 
+                                            className="hover:bg-slate-100 dark:hover:bg-slate-700"
+                                        >
+                                            {env.name}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
 
                         {/* Save Button */}
                         <PrimaryButton
@@ -385,10 +399,12 @@ const RequestEditor: React.FC<RequestEditorProps> = ({
                             <>
                                 {/* Response Metadata */}
                                 <div className="flex gap-4 px-6 py-2 border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs font-mono flex-shrink-0">
-                                    <div className={`flex items-center gap-1 ${getStatusColor(responseData.status)}`}>
-                                        <span className="font-bold">Status:</span>
-                                        <span>{responseData.status} {responseData.statusText}</span>
-                                    </div>
+                                    {!isError && (
+                                        <div className={`flex items-center gap-1 ${getStatusColor(responseData.status)}`}>
+                                            <span className="font-bold">Status:</span>
+                                            <span>{responseData.status} {responseData.statusText}</span>
+                                        </div>
+                                    )}
                                     <div className="flex items-center gap-1 text-blue-600 dark:text-blue-400">
                                         <span className="font-bold">Time:</span>
                                         <span>{responseData.elapsedTime} ms</span>
@@ -433,6 +449,37 @@ const RequestEditor: React.FC<RequestEditorProps> = ({
 
                                 {/* Response Tab Content */}
                                 <div className="px-6 py-4 bg-white dark:bg-slate-900 overflow-auto min-h-0 flex-1">
+                                    {activeResponseSection === 'Error' && (
+                                        <div className="space-y-4">
+                                            <div className="p-4 bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-800 rounded-lg">
+                                                <h3 className="text-lg font-semibold text-red-700 dark:text-red-400 mb-2">Request Failed</h3>
+                                                <p className="text-sm text-red-600 dark:text-red-300 mb-4">
+                                                    The request could not be completed. This typically indicates a network error, timeout, or connection issue.
+                                                </p>
+                                                <div className="space-y-2">
+                                                    <div className="flex gap-2">
+                                                        <span className="font-mono font-bold text-slate-500 dark:text-slate-400 w-32 flex-shrink-0">Error Type:</span>
+                                                        <span className="font-mono text-slate-800 dark:text-slate-200">Network/Connection Error</span>
+                                                    </div>
+                                                    <div className="flex gap-2">
+                                                        <span className="font-mono font-bold text-slate-500 dark:text-slate-400 w-32 flex-shrink-0">Status Code:</span>
+                                                        <span className="font-mono text-slate-800 dark:text-slate-200">{responseData.status}</span>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            
+                                            {responseData.body && (
+                                                <div className="space-y-2">
+                                                    <h4 className="text-sm font-semibold text-slate-700 dark:text-slate-300">Error Details</h4>
+                                                    <div className="p-4 bg-slate-50 dark:bg-slate-800 rounded border border-slate-200 dark:border-slate-700">
+                                                        <pre className="text-sm font-mono text-slate-800 dark:text-slate-200 whitespace-pre-wrap break-words">
+                                                            {atob(responseData.body)}
+                                                        </pre>
+                                                    </div>
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
                                     {activeResponseSection === 'Body' && (
                                         <ResponseBody 
                                             body={responseData.body}

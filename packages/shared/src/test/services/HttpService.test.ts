@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { HttpService, setAuthServiceFactory } from '../../services/HttpService.js';
-import type { HttpRequestConfig, SendConfig, HttpAuth } from '../../services/HttpService.js';
+import type { SendConfig, HttpAuth } from '../../services/HttpService.js';
+import type { HttpRequestConfig } from '@wave-client/core';
 import type { AppSettings, Cookie } from '../../types.js';
 
 // Mock axios

@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { HistoryService } from '../../services/HistoryService.js';
 import { MockFileSystem } from '../mocks/fs.js';
 import { setGlobalSettingsProvider, setSecurityServiceInstance } from '../../services/BaseStorageService.js';
-import type { ParsedRequest, AppSettings } from '../../types.js';
+import type { CollectionRequest, AppSettings } from '../../types.js';
 import * as path from 'path';
 
 // Create mock instance
@@ -109,26 +109,24 @@ describe('HistoryService', () => {
 
   describe('loadAll', () => {
     it('should load all history items sorted by most recent first', async () => {
-      const req1: ParsedRequest = {
+      const req1: CollectionRequest = {
         id: 'req-1',
         name: 'Get Users',
         method: 'GET',
         url: 'https://api.example.com/users',
-        headers: [],
-        params: [],
+        header: [],
+        query: [],
         body: { mode: 'none' },
-        timestamp: Date.now(),
       };
 
-      const req2: ParsedRequest = {
+      const req2: CollectionRequest = {
         id: 'req-2',
         name: 'Create Post',
         method: 'POST',
         url: 'https://api.example.com/posts',
-        headers: [],
-        params: [],
+        header: [],
+        query: [],
         body: { mode: 'none' },
-        timestamp: Date.now(),
       };
 
       mockFs.setFile(path.join(testHistoryDir, '1.json'), JSON.stringify(req1));
@@ -148,13 +146,12 @@ describe('HistoryService', () => {
     });
 
     it('should handle corrupted history files gracefully', async () => {
-      const validReq: ParsedRequest = {
+      const validReq: CollectionRequest = {
         id: 'req-1', name: 'Test Request', method: 'GET',
         url: 'https://api.example.com',
-        headers: [],
-        params: [],
+        header: [],
+        query: [],
         body: { mode: 'none' },
-        timestamp: Date.now(),
       };
 
       mockFs.setFile(path.join(testHistoryDir, '1.json'), JSON.stringify(validReq));
@@ -169,13 +166,12 @@ describe('HistoryService', () => {
 
   describe('save', () => {
     it('should save a new request to history', async () => {
-      const request: ParsedRequest = {
+      const request: CollectionRequest = {
         id: 'req-new', name: 'Test Request', method: 'GET',
         url: 'https://api.example.com/data',
-        headers: [],
-        params: [],
+        header: [],
+        query: [],
         body: { mode: 'none' },
-        timestamp: Date.now(),
       };
 
       await service.save(JSON.stringify(request));
@@ -186,13 +182,12 @@ describe('HistoryService', () => {
     });
 
     it('should remove duplicate requests', async () => {
-      const request: ParsedRequest = {
+      const request: CollectionRequest = {
         id: 'req-1', name: 'Test Request', method: 'GET',
         url: 'https://api.example.com/data',
-        headers: [{ key: 'Accept', value: 'application/json' }],
-        params: [],
+        header: [{ key: 'Accept', value: 'application/json', id: 'h-1', disabled: false }],
+        query: [],
         body: { mode: 'none' },
-        timestamp: Date.now(),
       };
 
       // Save initial request
@@ -212,27 +207,25 @@ describe('HistoryService', () => {
     it('should enforce maximum history items limit', async () => {
       // Create history with max items (10)
       for (let i = 1; i <= 10; i++) {
-        const req: ParsedRequest = {
+        const req: CollectionRequest = {
           id: `req-${i}`,
           name: `Request ${i}`,
           method: 'GET',
           url: `https://api.example.com/item${i}`,
-          headers: [],
-          params: [],
+          header: [],
+          query: [],
           body: { mode: 'none' },
-          timestamp: Date.now(),
         };
         mockFs.setFile(path.join(testHistoryDir, `${i}.json`), JSON.stringify(req));
       }
 
       // Add one more (11th item)
-      const newReq: ParsedRequest = {
+      const newReq: CollectionRequest = {
         id: 'req-new', name: 'Test Request', method: 'GET',
         url: 'https://api.example.com/new',
-        headers: [],
-        params: [],
+        header: [],
+        query: [],
         body: { mode: 'none' },
-        timestamp: Date.now(),
       };
 
       await service.save(JSON.stringify(newReq));
@@ -244,27 +237,25 @@ describe('HistoryService', () => {
     it('should renumber files after removing duplicate', async () => {
       // Create files 1.json, 2.json, 3.json
       for (let i = 1; i <= 3; i++) {
-        const req: ParsedRequest = {
+        const req: CollectionRequest = {
           id: `req-${i}`,
           name: `Request ${i}`,
           method: 'GET',
           url: `https://api.example.com/item${i}`,
-          headers: [],
-          params: [],
+          header: [],
+          query: [],
           body: { mode: 'none' },
-          timestamp: Date.now(),
         };
         mockFs.setFile(path.join(testHistoryDir, `${i}.json`), JSON.stringify(req));
       }
 
       // Save duplicate of req-2
-      const duplicate: ParsedRequest = {
+      const duplicate: CollectionRequest = {
         id: 'req-duplicate', name: 'Test Request', method: 'GET',
         url: 'https://api.example.com/item2', // Same as req-2
-        headers: [],
-        params: [],
+        header: [],
+        query: [],
         body: { mode: 'none' },
-        timestamp: Date.now(),
       };
 
       await service.save(JSON.stringify(duplicate));
@@ -274,13 +265,12 @@ describe('HistoryService', () => {
     });
 
     it('should assign new ID to saved request', async () => {
-      const request: ParsedRequest = {
+      const request: CollectionRequest = {
         id: 'original-id', name: 'Test Request', method: 'GET',
         url: 'https://api.example.com',
-        headers: [],
-        params: [],
+        header: [],
+        query: [],
         body: { mode: 'none' },
-        timestamp: Date.now(),
       };
 
       await service.save(JSON.stringify(request));
@@ -297,15 +287,14 @@ describe('HistoryService', () => {
     it('should delete all history files', async () => {
       // Create some history files
       for (let i = 1; i <= 5; i++) {
-        const req: ParsedRequest = {
+        const req: CollectionRequest = {
           id: `req-${i}`,
           name: `Request ${i}`,
           method: 'GET',
           url: `https://api.example.com/item${i}`,
-          headers: [],
-          params: [],
+          header: [],
+          query: [],
           body: { mode: 'none' },
-          timestamp: Date.now(),
         };
         mockFs.setFile(path.join(testHistoryDir, `${i}.json`), JSON.stringify(req));
       }

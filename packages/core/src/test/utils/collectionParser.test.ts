@@ -1,6 +1,5 @@
 import { describe, it, expect } from 'vitest';
 import {
-  generateUniqueId,
   urlToString,
   extractUrlParams,
   stringToCollectionUrl,
@@ -15,25 +14,10 @@ import type {
   Collection,
   CollectionItem,
   CollectionUrl,
-  CollectionRequest,
 } from '../../types/collection';
 
 describe('collectionParser', () => {
-  describe('generateUniqueId', () => {
-    it('should generate a valid UUID', () => {
-      const id = generateUniqueId();
-      const uuidRegex =
-        /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-      expect(id).toMatch(uuidRegex);
-    });
-
-    it('should generate unique IDs', () => {
-      const id1 = generateUniqueId();
-      const id2 = generateUniqueId();
-      expect(id1).not.toBe(id2);
-    });
-  });
-
+  
   describe('urlToString', () => {
     it('should return empty string for undefined', () => {
       expect(urlToString(undefined)).toBe('');

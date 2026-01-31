@@ -79,3 +79,10 @@ export function convertToBase64(data: any): string {
     // Fallback for any other type
     return Buffer.from(String(data), 'utf8').toString('base64');
 }
+
+/**
+ * Decodes a base64 string to a Buffer
+ */
+export function base64ToBuffer(base64: string): Buffer {
+    return Buffer.from(base64, 'base64');
+}

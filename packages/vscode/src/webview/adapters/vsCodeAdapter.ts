@@ -31,15 +31,10 @@ import {
     type IAdapterEvents,
     type HttpRequestConfig,
     type HttpResponseResult,
-    type SaveDialogOptions,
-    type OpenDialogOptions,
-    type NotificationType,
     type EncryptionStatus,
     type AppSettings,
     type Collection,
-    type CollectionItem,
     type Environment,
-    type ParsedRequest,
     type Cookie,
     type Proxy,
     type Cert,
@@ -47,6 +42,7 @@ import {
     type ValidationRule,
     type Flow,
     type TestSuite,
+    type CollectionRequest,
 } from '@wave-client/core';
 
 // ============================================================================
@@ -353,8 +349,8 @@ function createVSCodeStorageAdapter(
         },
 
         // History
-        async loadHistory(): Promise<Result<ParsedRequest[], string>> {
-            return sendAndWait<ParsedRequest[]>('loadHistory');
+        async loadHistory(): Promise<Result<CollectionRequest[], string>> {
+            return sendAndWait<CollectionRequest[]>('loadHistory');
         },
 
         async saveRequestToHistory(request): Promise<Result<void, string>> {
@@ -516,17 +512,7 @@ function createVSCodeHttpAdapter(
             vsCodeApi.postMessage({
                 type: 'httpRequest',
                 requestId,  // For promise correlation
-                id: config.id,  // Tab ID for UI correlation
-                request: {
-                    method: config.method,
-                    url: config.url,
-                    headers: config.headers,
-                    params: config.params,
-                    body: config.body,
-                    auth: config.auth,
-                    envVars: config.envVars,
-                },
-                validation: config.validation,
+                request: config,  // Pass entire config (includes id, validation, etc.)
             });
         });
     }

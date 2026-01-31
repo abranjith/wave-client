@@ -689,3 +689,55 @@ export function getCommonHeaderNames(): string[] {
     'Link',
   ];
 }
+
+
+// ============================================================================
+// ID Generation
+// ============================================================================
+
+/**
+ * Generates a unique ID
+ */
+export function generateUniqueId(): string {
+  if (globalThis.crypto?.randomUUID) {
+    return globalThis.crypto.randomUUID();
+  }
+
+  const browserGetRandomValues = globalThis.crypto?.getRandomValues?.bind(globalThis.crypto);
+  if (browserGetRandomValues) {
+    return bytesToUuid(generateRandomBytes(() => browserGetRandomValues(new Uint8Array(16))));
+  }
+
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const nodeCrypto = typeof require !== 'undefined' ? require('crypto') : undefined;
+    if (nodeCrypto?.randomBytes) {
+      return bytesToUuid(nodeCrypto.randomBytes(16));
+    }
+  } catch (error) {
+    // Ignore and fall back to Math.random-based UUID.
+  }
+
+  return bytesToUuid(generateRandomBytes());
+}
+
+function generateRandomBytes(generator?: () => Uint8Array): Uint8Array {
+  if (generator) {
+    return generator();
+  }
+
+  const bytes = new Uint8Array(16);
+  for (let i = 0; i < bytes.length; i += 1) {
+    bytes[i] = Math.floor(Math.random() * 256);
+  }
+  return bytes;
+}
+
+function bytesToUuid(bytes: Uint8Array): string {
+  const mutable = new Uint8Array(bytes);
+  mutable[6] = (mutable[6] & 0x0f) | 0x40;
+  mutable[8] = (mutable[8] & 0x3f) | 0x80;
+
+  const hex = Array.from(mutable, (value) => value.toString(16).padStart(2, '0'));
+  return `${hex[0]}${hex[1]}${hex[2]}${hex[3]}-${hex[4]}${hex[5]}-${hex[6]}${hex[7]}-${hex[8]}${hex[9]}-${hex[10]}${hex[11]}${hex[12]}${hex[13]}${hex[14]}${hex[15]}`;
+}

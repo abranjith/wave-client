@@ -11,9 +11,6 @@
 // Note: These types are the source of truth from @wave-client/core.
 // Import them from core in new code where possible.
 
-// Import CollectionRequest for use in the type alias below
-import type { CollectionRequest } from '@wave-client/core';
-
 export type {
     Collection,
     CollectionInfo,
@@ -45,13 +42,10 @@ export type {
     Cert,
     CACert,
     SelfSignedCert,
+    HttpResponseResult
 } from '@wave-client/core';
 
 export { isFolder, isRequest, CertType } from '@wave-client/core';
-
-// Type alias for backwards compatibility
-// ParsedRequest was renamed to CollectionRequest in the unified type system
-export type ParsedRequest = CollectionRequest;
 
 // Validation types from core
 export type {
@@ -62,31 +56,11 @@ export type {
     BodyValidationRule,
     TimeValidationRule,
     ValidationRuleRef,
+    RequestValidationData as RequestValidation,  // Rename back for shared package consumers
     ValidationResult,
     ValidationRuleResult,
     GlobalValidationRule,
 } from '@wave-client/core';
-
-// ============================================================================
-// Server-Specific Types
-// ============================================================================
-
-/**
- * Collection variable (Postman compatibility)
- */
-export interface CollectionVariable {
-    key: string;
-    value: string;
-    type?: string;
-}
-
-/**
- * Collection auth (Postman compatibility)
- */
-export interface CollectionAuth {
-    type: string;
-    [key: string]: unknown;
-}
 
 // ============================================================================
 // Settings Types

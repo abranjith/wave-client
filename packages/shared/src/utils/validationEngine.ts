@@ -3,9 +3,8 @@
  * Evaluates validation rules against HTTP responses.
  */
 
-import {
+import type {
     ValidationRule,
-    ValidationRuleRef,
     ValidationResult,
     ValidationRuleResult,
     RequestValidation,
@@ -13,15 +12,38 @@ import {
     HeaderValidationRule,
     BodyValidationRule,
     TimeValidationRule,
-    isStatusRule,
-    isHeaderRule,
-    isBodyRule,
-    isTimeRule,
-    createEmptyValidationResult,
     GlobalValidationRule,
-    ValidationRuleCategory
-} from '../types/validation';
-import { ResponseData } from '../types/collection';
+    ResponseData
+} from '../types';
+
+// Type guards for validation rules
+function isStatusRule(rule: ValidationRule): rule is StatusValidationRule {
+    return rule.category === 'status';
+}
+
+function isHeaderRule(rule: ValidationRule): rule is HeaderValidationRule {
+    return rule.category === 'header';
+}
+
+function isBodyRule(rule: ValidationRule): rule is BodyValidationRule {
+    return rule.category === 'body';
+}
+
+function isTimeRule(rule: ValidationRule): rule is TimeValidationRule {
+    return rule.category === 'time';
+}
+
+function createEmptyValidationResult(): ValidationResult {
+    return {
+        enabled: false,
+        totalRules: 0,
+        passedRules: 0,
+        failedRules: 0,
+        allPassed: true,
+        results: [],
+        executedAt: new Date().toISOString()
+    };
+}
 
 // ============================================================================
 // Global Rule Conversion Helper

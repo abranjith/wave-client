@@ -5,7 +5,7 @@
 
 import * as crypto from 'crypto';
 import type { Auth, AuthResult, AuthRequestConfig, CachedAuthData, EnvVarsMap } from './types';
-import { resolveParameterizedValue, isUrlInDomains } from '../../utils';
+import { resolveParameterizedValue, isUrlInDomains } from '@wave-client/core';
 
 /**
  * Abstract base class for authentication services.

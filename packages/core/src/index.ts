@@ -75,7 +75,6 @@ export type {
     SelfSignedCert,
     FolderPathOption,
     ResponseContentType,
-    ParsedRequest,  // Backwards compatibility alias for CollectionRequest
 } from './types/collection';
 
 export { isFolder, isRequest, CertType, isCollectionUrl, getRawUrl } from './types/collection';
@@ -140,7 +139,7 @@ export {
     DEFAULT_TEST_SUITE_SETTINGS,
 } from './types/testSuite';
 
-// Auth types
+// Auth types (data model only - service types are in @wave-client/shared)
 export type {
     Auth,
     ApiKeyAuth,
@@ -148,15 +147,10 @@ export type {
     DigestAuth,
     OAuth2RefreshAuth,
     BaseAuth,
-    AuthRequestConfig,
-    AuthResultData,
-    AuthResult,
-    InternalAuthResponse,
-    CachedAuthData,
     EnvVarsMap,
 } from './types/auth';
 
-export { AuthType, authOk, authErr } from './types/auth';
+export { AuthType } from './types/auth';
 
 // Validation types
 export type {
@@ -265,6 +259,9 @@ export {
 
 // Common utilities
 export * from './utils/common';
+
+// Encoding utilities
+export * from './utils/encoding';
 
 // Collection parser utilities
 export * from './utils/collectionParser';

@@ -20,7 +20,7 @@ import type {
   Collection,
   CollectionItem,
   Environment,
-  ParsedRequest,
+  CollectionRequest,
   Cookie,
   Proxy,
   Cert,
@@ -421,7 +421,7 @@ class WebStorageAdapter implements IStorageAdapter {
   }
 
   // History
-  async loadHistory(): Promise<Result<ParsedRequest[], string>> {
+  async loadHistory(): Promise<Result<CollectionRequest[], string>> {
     try {
       const response = await api.get('/api/history');
       if (response.data.isOk) {
@@ -434,7 +434,7 @@ class WebStorageAdapter implements IStorageAdapter {
     }
   }
 
-  async saveRequestToHistory(request: ParsedRequest): Promise<Result<void, string>> {
+  async saveRequestToHistory(request: CollectionRequest): Promise<Result<void, string>> {
     try {
       const response = await api.post('/api/history', {
         requestContent: JSON.stringify(request),

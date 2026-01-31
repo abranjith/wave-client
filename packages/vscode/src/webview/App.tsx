@@ -22,6 +22,7 @@ import {
   useAdapterEvent,
   FlowCanvas,
   TestSuiteEditor,
+  generateUniqueId,
   type Environment,
   type Cookie,
   type Proxy,
@@ -424,7 +425,7 @@ const App: React.FC = () => {
 
     // Wrap the collection request as a CollectionItem
     const collectionItem: any = {
-      id: request.id || crypto.randomUUID(),
+      id: request.id || generateUniqueId(),
       name: request.name,
       request: request
     };

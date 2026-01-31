@@ -18,7 +18,7 @@ import { RequestValidation, ValidationRuleRef } from './validation';
 // ==================== Tab UI State ====================
 
 export type RequestSectionTab = 'Params' | 'Headers' | 'Body' | 'Validation';
-export type ResponseSectionTab = 'Body' | 'Headers' | 'Validation';
+export type ResponseSectionTab = 'Error' | 'Body' | 'Headers' | 'Validation';
 
 // ==================== Tab Data ====================
 

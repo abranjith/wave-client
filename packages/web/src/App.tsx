@@ -416,10 +416,10 @@ const handleFlowSave = useCallback(async (flow: Flow) => {
 
   // Handle sending request for a specific tab
   const handleSendRequest = async (tabId: string) => {
-    const parsedRequest = getCollectionRequest(tabId);
+    const request = getCollectionRequest(tabId);
 
     // Save to history
-    await storage.saveRequestToHistory(parsedRequest);
+    await storage.saveRequestToHistory(request);
 
     // Build HTTP request using core slice helper
     setTabProcessingState(tabId, true);

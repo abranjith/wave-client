@@ -107,8 +107,8 @@ interface IStorageAdapter {
   deleteEnvironment(environmentId: string): Promise<Result<void, string>>;
   
   // History
-  loadHistory(): Promise<Result<ParsedRequest[], string>>;
-  saveRequestToHistory(request: ParsedRequest): Promise<Result<void, string>>;
+  loadHistory(): Promise<Result<CollectionRequest[], string>>;
+  saveRequestToHistory(request: CollectionRequest): Promise<Result<void, string>>;
   clearHistory(): Promise<Result<void, string>>;
   
   // Cookies, Auth, Proxy, Certs, Validation Rules, Settings

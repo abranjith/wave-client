@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { createMockAxios } from '../mocks/axios';
-import type { Collection, Environment, ParsedRequest } from '@wave-client/core';
+import type { Collection, Environment, CollectionRequest } from '@wave-client/core';
 
 // Mock axios before importing webAdapter
 const mockAxios = createMockAxios();
@@ -248,15 +248,15 @@ describe('WebAdapter - Storage', () => {
 
   describe('History', () => {
     it('loads history successfully', async () => {
-      const mockHistory: ParsedRequest[] = [
+      const mockHistory: CollectionRequest[] = [
         {
           id: 'req1',
           name: 'Test Request',
           method: 'GET',
           url: 'https://api.example.com',
-          headers: [],
-          params: [],
-          body: null,
+          header: [],
+          query: [],
+          body: undefined,
           sourceRef: {
             collectionFilename: 'test.json',
             collectionName: 'Test',
@@ -279,14 +279,14 @@ describe('WebAdapter - Storage', () => {
     });
 
     it('saves request to history successfully', async () => {
-      const request: ParsedRequest = {
+      const request: CollectionRequest = {
         id: 'req1',
         name: 'Test Request',
         method: 'POST',
         url: 'https://api.example.com',
-        headers: [],
-        params: [],
-        body: null,
+        header: [],
+        query: [],
+        body: undefined,
         sourceRef: {
           collectionFilename: 'test.json',
           collectionName: 'Test',

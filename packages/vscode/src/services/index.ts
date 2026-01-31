@@ -32,12 +32,13 @@ export {
     setAuthServiceFactory 
 } from '@wave-client/shared';
 export type { 
-    HttpRequestConfig, 
-    HttpResponseResult,
     SendConfig,
     SendResult,
     HttpAuth
 } from '@wave-client/shared';
+
+// Note: HttpRequestConfig and HttpResponseResult are available from '@wave-client/core'
+// Import them directly: import type { HttpRequestConfig, HttpResponseResult } from '@wave-client/core';
 
 // Auth services from shared
 export {
@@ -80,10 +81,8 @@ export type {
     Cookie,
     Proxy,
     Cert,
+    GlobalValidationRule,
 } from '@wave-client/shared';
-
-// Type alias for backwards compatibility
-export type { ParsedRequest } from './types';
 
 // CertType is an enum, so export it as a value
 export { CertType } from '@wave-client/shared';

@@ -14,8 +14,7 @@ import {
     testSuiteService,
     fileService
 } from '../services';
-import { executeValidation, createGlobalRulesMap, createEnvVarsMap } from '../utils/validationEngine';
-import { RequestValidation } from '../types/validation';
+import type { RequestValidation } from '@wave-client/shared';
 
 /**
  * Converts a base64 string to a Uint8Array.
@@ -187,43 +186,16 @@ export class MessageHandler {
         // Extract correlation ID for promise resolution
         const correlationId = message.requestId;
         
-        // Extract the request ID (tab ID) from the message
-        // The ID can come from message.id (new format) or message.request.id (legacy)
-        const tabId = message.id || message.request?.id || '';
-        
-        // Ensure the request object has the ID for downstream processing
-        const requestWithId = {
-            ...message.request,
-            id: tabId
-        };
-
-        // Extract validation configuration if present
-        const validation: RequestValidation | undefined = message.validation;
-        const envVars = message.request?.envVars;
-        
         try {
-            const { response, newCookies } = await httpService.execute(requestWithId);
-            
-            // Execute validation if configured
-            let validationResult = undefined;
-            if (validation && validation.enabled) {
-                const globalRules = await storeService.loadValidationRules();
-                const globalRulesMap = createGlobalRulesMap(globalRules);
-                const envVarsMap = createEnvVarsMap(envVars);
-                validationResult = executeValidation(validation, response, globalRulesMap, envVarsMap);
-            }
+            // Execute HTTP request (validation is part of request config)
+            const response = await httpService.execute(message.request);
             
             // Send response with requestId for correlation
+            // Response already includes id, cookies, and validationResult
             this.postMessage({
                 type: 'httpResponse',
                 requestId: correlationId,
-                response: {
-                    ...response,
-                    id: tabId,  // Tab ID for UI correlation
-                    validationResult,
-                    // Include cookies if any were received
-                    ...(newCookies.length > 0 ? { cookies: newCookies } : {})
-                }
+                response: response
             });
         } catch (error: any) {
             this.postMessage({
@@ -231,13 +203,15 @@ export class MessageHandler {
                 requestId: correlationId,
                 error: error.message,
                 response: {
-                    id: tabId,  // Tab ID for UI correlation
+                    id: message.request.id || '',
                     status: 0,
                     statusText: 'Error',
                     elapsedTime: 0,
                     size: 0,
                     headers: {},
                     body: Buffer.from(error.message, 'utf8').toString('base64'),
+                    isEncoded: true,
+                    cookies: []
                 }
             });
         }

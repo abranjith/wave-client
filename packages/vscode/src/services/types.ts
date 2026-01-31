@@ -15,8 +15,6 @@ export {
     type CollectionRequest,
     type CollectionInfo,
     type CollectionUrl,
-    type CollectionVariable,
-    type CollectionAuth,
     type CollectionBody,
     type HeaderRow,
     type ParamRow,
@@ -35,6 +33,3 @@ export {
     isFolder,
     isRequest,
 } from '@wave-client/shared';
-
-// Type alias for backwards compatibility
-export type ParsedRequest = CollectionRequest;

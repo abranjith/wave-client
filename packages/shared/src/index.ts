@@ -8,8 +8,8 @@
 // Export all types
 export * from './types';
 
-// Export all utilities
-export * from './utils';
-
 // Export all services
 export * from './services/index';
+
+// Export validation engine utilities
+export { executeValidation, createGlobalRulesMap, createEnvVarsMap } from './utils/validationEngine';

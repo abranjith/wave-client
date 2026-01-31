@@ -1,7 +1,7 @@
 import * as path from 'path';
 
 import { BaseStorageService } from './BaseStorageService';
-import { generateUniqueId } from '../utils';
+import { generateUniqueId } from '@wave-client/core';
 
 /**
  * Flow type definition for shared package

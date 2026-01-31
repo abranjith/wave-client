@@ -569,10 +569,10 @@ export const TestCaseEditor: React.FC<TestCaseEditorProps> = ({
                                                 <SelectValue />
                                             </SelectTrigger>
                                             <SelectContent>
-                                                <SelectItem value="none">No Body</SelectItem>
-                                                <SelectItem value="raw">Raw Text</SelectItem>
-                                                <SelectItem value="urlencoded">URL Encoded</SelectItem>
-                                                <SelectItem value="formdata">Form Data</SelectItem>
+                                                <SelectItem value="none">None</SelectItem>
+                                                <SelectItem value="raw">Raw</SelectItem>
+                                                <SelectItem value="urlencoded">Form URL Encoded</SelectItem>
+                                                <SelectItem value="formdata">Multipart Form Data</SelectItem>
                                                 <SelectItem value="file">File</SelectItem>
                                             </SelectContent>
                                         </Select>

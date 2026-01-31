@@ -27,8 +27,6 @@ export {
     HttpService, 
     httpService, 
     setAuthServiceFactory,
-    type HttpRequestConfig, 
-    type HttpResponseResult,
     type SendConfig,
     type SendResult,
     type HttpAuth

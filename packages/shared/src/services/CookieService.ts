@@ -2,7 +2,7 @@ import * as path from 'path';
 import * as crypto from 'crypto';
 
 import { BaseStorageService } from './BaseStorageService';
-import { isUrlInDomains } from '../utils';
+import { isUrlInDomains } from '@wave-client/core';
 import type { Cookie } from '../types';
 
 /**

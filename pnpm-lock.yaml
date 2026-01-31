@@ -319,6 +319,9 @@ importers:
       '@fastify/websocket':
         specifier: ^11.0.2
         version: 11.2.0
+      '@wave-client/core':
+        specifier: workspace:*
+        version: link:../core
       '@wave-client/shared':
         specifier: workspace:*
         version: link:../shared

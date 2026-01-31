@@ -891,11 +891,16 @@ const createRequestTabsSlice: StateCreator<RequestTabsSlice> = (set, get) => {
         // ==================== Response Management ====================
         
         handleHttpResponse: (tabId: string, response: ResponseData) => {
+            // Check if response is an error (status 0 and statusText 'Error')
+            const isError = response.status === 0 && response.statusText === 'Error';
+            
             updateTab(tabId, {
                 responseData: response,
                 isRequestProcessing: false,
                 isCancelled: false,
-                requestError: null
+                requestError: null,
+                // Auto-switch to Error tab if response is an error
+                ...(isError && { activeResponseSection: 'Error' as ResponseSectionTab })
             });
         },
         

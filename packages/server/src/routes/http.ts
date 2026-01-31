@@ -3,13 +3,14 @@
  */
 
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
-import { httpService, type HttpRequestConfig } from '@wave-client/shared';
+import { httpService } from '@wave-client/shared';
+import type { HttpRequestConfig } from '@wave-client/core';
 
 export async function registerHttpRoutes(fastify: FastifyInstance): Promise<void> {
     // Execute HTTP request
     fastify.post('/api/http/execute', async (request: FastifyRequest<{ Body: HttpRequestConfig }>, reply: FastifyReply) => {
         try {
-            const config = request.body;
+            const config = request.body as HttpRequestConfig;
             const result = await httpService.execute(config);
             return reply.send({ isOk: true, value: result });
         } catch (error) {

@@ -2,8 +2,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
-import { StoreService, type AuthEntry, type AxiosProxyConfig, CertType, type Proxy, type Cert } from '../../services';
-import type { GlobalValidationRule } from '../../types/validation';
+import { StoreService, type AuthEntry, type AxiosProxyConfig, CertType, type Proxy, type Cert, type GlobalValidationRule } from '../../services';
 import '../../services/SecurityService';
 
 describe('StoreService', () => {

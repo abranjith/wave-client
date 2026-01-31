@@ -19,7 +19,7 @@ import type { Flow, FlowNode, FlowConnector } from '../../types/flow';
 import type { IPlatformAdapter } from '../../types/adapters';
 import { AdapterProvider } from '../../hooks/useAdapter';
 import { createMockAdapter } from '../mocks/mockAdapter';
-import { generateUniqueId } from '../../utils/collectionParser';
+import { generateUniqueId } from '../../utils/common';
 
 // ============================================================================
 // Test Helpers

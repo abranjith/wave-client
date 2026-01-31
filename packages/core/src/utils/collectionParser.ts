@@ -9,25 +9,12 @@ import {
   CollectionItem,
   CollectionRequest,
   CollectionUrl,
-  CollectionBody,
-  CollectionReference,
-  HeaderRow,
   ParamRow,
   FolderPathOption,
   isFolder,
   isRequest,
 } from '../types/collection';
-
-// ============================================================================
-// ID Generation
-// ============================================================================
-
-/**
- * Generates a unique ID
- */
-export function generateUniqueId(): string {
-  return crypto.randomUUID();
-}
+import { generateUniqueId } from './common';
 
 // ============================================================================
 // URL Utilities

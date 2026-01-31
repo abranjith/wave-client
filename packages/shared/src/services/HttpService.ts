@@ -5,8 +5,10 @@ import { URL } from 'url';
 import { cookieService } from './CookieService';
 import { storeService } from './StoreService';
 import { getGlobalSettings } from './BaseStorageService';
-import { convertToBase64 } from '../utils';
-import type { Cookie } from '../types';
+import { convertToBase64, HttpResponseResult } from '@wave-client/core';
+import type { HttpRequestConfig } from '@wave-client/core';
+import { executeValidation, createGlobalRulesMap, createEnvVarsMap } from '../utils/validationEngine';
+import type { Cookie, ValidationResult } from '../types';
 import type { Auth, AuthType, EnvVarsMap, AuthRequestConfig, InternalAuthResponse } from './auth/types';
 import { AuthServiceFactory } from './auth';
 
@@ -79,41 +81,13 @@ export interface SerializedFileBody {
 /**
  * All possible body types that can be received in an HTTP request config.
  */
-export type HttpRequestBody = 
-    | string 
-    | Record<string, string> 
-    | SerializedFormDataBody 
-    | SerializedFileBody 
-    | null 
+export type HttpRequestBody =
+    | string
+    | Record<string, string>
+    | SerializedFormDataBody
+    | SerializedFileBody
+    | null
     | undefined;
-
-/**
- * HTTP request configuration
- */
-export interface HttpRequestConfig {
-    id: string;
-    method: string;
-    url: string;
-    headers: Record<string, string>;
-    params?: string | Record<string, string>;
-    body?: HttpRequestBody;
-    auth?: HttpAuth;
-    envVars?: EnvVarsMap;
-}
-
-/**
- * HTTP response result
- */
-export interface HttpResponseResult {
-    id: string;
-    status: number;
-    statusText: string;
-    elapsedTime: number;
-    size: number;
-    headers: Record<string, string>;
-    body: string;
-    isEncoded: boolean;
-}
 
 /**
  * Auth result from auth service
@@ -164,6 +138,46 @@ export function setAuthServiceFactory(factory: IAuthServiceFactory): void {
  * Handles cookie management, proxy configuration, certificate handling, and authentication.
  */
 export class HttpService {
+    /**
+     * Normalize headers from flexible type (HeaderRow[] or Record) to Record<string, string>
+     */
+    private normalizeHeaders(headers: HttpRequestConfig['headers']): Record<string, string> {
+        if (Array.isArray(headers)) {
+            // Convert HeaderRow[] to Record<string, string>
+            return headers.reduce((acc, row) => {
+                if (!row.disabled && row.key) {
+                    acc[row.key] = row.value || '';
+                }
+                return acc;
+            }, {} as Record<string, string>);
+        }
+        // Already a Record, but might have string[] values - convert to string
+        const result: Record<string, string> = {};
+        for (const [key, value] of Object.entries(headers)) {
+            result[key] = Array.isArray(value) ? value.join(', ') : value;
+        }
+        return result;
+    }
+
+    /**
+     * Normalize params from flexible type (ParamRow[] or string) to string
+     */
+    private normalizeParams(params: HttpRequestConfig['params']): string {
+        if (typeof params === 'string') {
+            return params;
+        }
+        if (Array.isArray(params)) {
+            // Convert ParamRow[] to URLSearchParams string
+            const urlParams = new URLSearchParams();
+            params.forEach(row => {
+                if (!row.disabled && row.key) {
+                    urlParams.append(row.key, row.value || '');
+                }
+            });
+            return urlParams.toString();
+        }
+        return '';
+    }
     /**
      * Low-level send method for making HTTP requests without auth processing.
      * Used by auth services (like Digest) that need to make HTTP calls internally.
@@ -226,7 +240,7 @@ export class HttpService {
             };
         } catch (error: unknown) {
             const axiosError = error as { response?: AxiosResponse; message?: string };
-            
+
             // If we have a response, return it (for non-2xx status codes)
             if (axiosError.response) {
                 return {
@@ -255,14 +269,13 @@ export class HttpService {
 
     /**
      * Executes an HTTP request with all configured middleware (cookies, proxy, certs, auth).
-     * @param request The request configuration
+     * @param request The request configuration (includes optional validation)
      * @returns The response result and any new cookies
      */
-    async execute(request: HttpRequestConfig): Promise<{
-        response: HttpResponseResult;
-        newCookies: Cookie[];
-    }> {
-        
+    async execute(
+        request: HttpRequestConfig
+    ): Promise<HttpResponseResult> {
+
         let start = Date.now();
 
         try {
@@ -271,22 +284,14 @@ export class HttpService {
             const cookies = await cookieService.loadAll();
             const cookieHeader = cookieService.getCookiesForUrl(cookies, request.url);
 
-            // Build headers with cookies
-            const headers: Record<string, string> = { ...request.headers };
+            // Normalize headers from flexible type and add cookies
+            const headers = this.normalizeHeaders(request.headers);
             if (cookieHeader) {
                 headers['Cookie'] = cookieHeader;
             }
 
-            // Build URL with params
-            const fullUrl = request.url;
-            let paramsString = '';
-            if (request.params) {
-                if (typeof request.params === 'string') {
-                    paramsString = request.params;
-                } else if (Object.keys(request.params).length > 0) {
-                    paramsString = new URLSearchParams(request.params).toString();
-                }
-            }
+            // Normalize params from flexible type
+            let paramsString = this.normalizeParams(request.params);
 
             // Handle authentication if provided
             authServiceFactory ??= AuthServiceFactory;
@@ -295,7 +300,7 @@ export class HttpService {
                 if (authService) {
                     const authConfig: AuthRequestConfig = {
                         method: request.method,
-                        url: fullUrl,
+                        url: request.url,
                         headers: headers,
                         params: paramsString,
                         body: request.body
@@ -331,7 +336,7 @@ export class HttpService {
                         }
 
                         const bodyBase64 = convertToBase64(internalResponse.data);
-                        
+
                         // Calculate size from response data
                         let responseSize = 0;
                         if (internalResponse.data) {
@@ -345,17 +350,15 @@ export class HttpService {
                         }
 
                         return {
-                            response: {
-                                id: request.id,
-                                status: internalResponse.status,
-                                statusText: internalResponse.statusText,
-                                elapsedTime,
-                                size: responseSize,
-                                headers: internalResponse.headers as Record<string, string>,
-                                body: bodyBase64,
-                                isEncoded: true,
-                            },
-                            newCookies,
+                            id: request.id,
+                            status: internalResponse.status,
+                            statusText: internalResponse.statusText,
+                            elapsedTime,
+                            size: responseSize,
+                            headers: internalResponse.headers as Record<string, string>,
+                            body: bodyBase64,
+                            isEncoded: true,
+                            cookies: newCookies,
                         };
                     }
 
@@ -402,24 +405,24 @@ export class HttpService {
             start = Date.now();
 
             // Build final URL with params
-            let requestUrl = fullUrl;
+            let requestUrl = request.url;
             if (paramsString) {
-                const separator = fullUrl.includes('?') ? '&' : '?';
-                requestUrl = `${fullUrl}${separator}${paramsString}`;
+                const separator = request.url.includes('?') ? '&' : '?';
+                requestUrl = `${request.url}${separator}${paramsString}`;
             }
 
             // Handle custom formdata serialization for VS Code extension communication
             let requestBody: unknown = request.body;
-            
+
             console.log('[HttpService] Request body type:', typeof request.body);
-           
-            
+
+
             // Check for serialized formdata: { type: 'formdata', entries: [...] }
             if (this.isSerializedFormDataBody(request.body)) {
                 console.log('[HttpService] Detected SerializedFormDataBody, entries:', request.body.entries.length);
                 try {
                     const formData = new FormData();
-                    
+
                     for (const entry of request.body.entries) {
                         if (entry.fieldType === 'file') {
                             // Reconstruct Blob from base64
@@ -429,10 +432,10 @@ export class HttpService {
                             formData.append(entry.key, entry.value);
                         }
                     }
-                    
+
                     requestBody = formData;
                     console.log('[HttpService] FormData reconstructed successfully with', request.body.entries.length, 'entries');
-                    
+
                     // Remove Content-Type header to let axios/browser set it with boundary
                     const contentTypeKey = Object.keys(headers).find(k => k.toLowerCase() === 'content-type');
                     if (contentTypeKey) {
@@ -443,13 +446,13 @@ export class HttpService {
                     console.error('Failed to reconstruct FormData:', e);
                     // Fallback to original body if reconstruction fails
                 }
-            } 
+            }
             // Check for serialized file/binary body: { type: 'file', data: '...', fileName: '...', contentType: '...' }
             else if (this.isSerializedFileBody(request.body)) {
                 try {
                     // Convert base64 to Buffer for axios
                     requestBody = this.base64ToBuffer(request.body.data);
-                    
+
                     // Ensure Content-Type is set from the file body's contentType
                     const contentTypeKey = Object.keys(headers).find(k => k.toLowerCase() === 'content-type');
                     if (!contentTypeKey) {
@@ -487,18 +490,31 @@ export class HttpService {
             // Convert response body to base64
             const bodyBase64 = convertToBase64(response.data);
 
+            // Build response data for validation
+            const responseData = {
+                id: request.id,
+                status: response.status,
+                statusText: response.statusText,
+                elapsedTime,
+                size: response.data ? response.data.byteLength : 0,
+                headers: response.headers as Record<string, string>,
+                body: bodyBase64,
+                isEncoded: true,
+            };
+
+            // Execute validation if configured
+            let validationResult: ValidationResult | undefined;
+            if (request.validation && request.validation.enabled) {
+                const globalRules = await storeService.loadValidationRules();
+                const globalRulesMap = createGlobalRulesMap(globalRules);
+                const envVarsMap = createEnvVarsMap(request.envVars || {});
+                validationResult = executeValidation(request.validation, responseData, globalRulesMap, envVarsMap);
+            }
+
             return {
-                response: {
-                    id: request.id,
-                    status: response.status,
-                    statusText: response.statusText,
-                    elapsedTime,
-                    size: response.data ? response.data.byteLength : 0,
-                    headers: response.headers as Record<string, string>,
-                    body: bodyBase64,
-                    isEncoded: true,
-                },
-                newCookies
+                ...responseData,
+                validationResult,
+                cookies: newCookies
             };
         } catch (error: unknown) {
             const elapsedTime = Date.now() - start;
@@ -524,17 +540,15 @@ export class HttpService {
             }
 
             return {
-                response: {
-                    id: request.id,
-                    status: axiosError?.response?.status || 0,
-                    statusText: axiosError?.response?.statusText || 'Error',
-                    elapsedTime,
-                    size: errorSize,
-                    headers: errorHeaders,
-                    body: errorBodyBase64,
-                    isEncoded: true,
-                },
-                newCookies: []
+                id: request.id,
+                status: axiosError?.response?.status || 0,
+                statusText: axiosError?.response?.statusText || 'Error',
+                elapsedTime,
+                size: errorSize,
+                headers: errorHeaders,
+                body: errorBodyBase64,
+                isEncoded: true,
+                cookies: []
             };
         }
     }
@@ -595,27 +609,27 @@ export class HttpService {
     /**
      * Type guard to check if body is a SerializedFormDataBody.
      */
-    private isSerializedFormDataBody(body: HttpRequestBody): body is SerializedFormDataBody {
-        return body !== null && 
-               body !== undefined && 
-               typeof body === 'object' && 
-               'type' in body && 
-               body.type === 'formdata' && 
-               'entries' in body && 
-               Array.isArray(body.entries);
+    private isSerializedFormDataBody(body: unknown): body is SerializedFormDataBody {
+        return body !== null &&
+            body !== undefined &&
+            typeof body === 'object' &&
+            'type' in body &&
+            body.type === 'formdata' &&
+            'entries' in body &&
+            Array.isArray(body.entries);
     }
 
     /**
      * Type guard to check if body is a SerializedFileBody.
      */
-    private isSerializedFileBody(body: HttpRequestBody): body is SerializedFileBody {
-        return body !== null && 
-               body !== undefined && 
-               typeof body === 'object' && 
-               'type' in body && 
-               body.type === 'file' && 
-               'data' in body && 
-               typeof body.data === 'string';
+    private isSerializedFileBody(body: unknown): body is SerializedFileBody {
+        return body !== null &&
+            body !== undefined &&
+            typeof body === 'object' &&
+            'type' in body &&
+            body.type === 'file' &&
+            'data' in body &&
+            typeof body.data === 'string';
     }
 
     /**

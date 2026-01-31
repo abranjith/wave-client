@@ -11,8 +11,8 @@ import type {
   BodyValidationRule,
   TimeValidationRule,
   GlobalValidationRule,
-} from '../../types/validation';
-import type { ResponseData } from '../../types/collection';
+  ResponseData,
+} from '../../types';
 
 describe('validationEngine', () => {
   const mockResponse: ResponseData = {

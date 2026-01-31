@@ -32,7 +32,9 @@ export function isCollectionUrl(url: CollectionUrl | string | undefined): url is
  * Extract the raw URL string from CollectionUrl or return string as-is
  */
 export function getRawUrl(url: CollectionUrl | string | undefined): string {
-  if (!url) return '';
+  if (!url) { 
+    return ''; 
+  }
   return isCollectionUrl(url) ? url.raw : url;
 }
 
@@ -352,57 +354,46 @@ export interface Cookie {
 
 // Proxy configuration interface
 export interface Proxy {
-    id: string; // Cryptographically unique per record
-    name: string; // User-friendly name (must be unique)
-    enabled: boolean; // Enable/disable flag
-    domainFilters: string[]; // Will be used only for these domains (supports wildcards)
-    excludeDomains: string[]; // Domains to explicitly exclude from proxy (supports wildcards)
-    url: string; // Proxy server URL (e.g., "http://proxy.example.com:8080")
-    userName?: string; // Optional username for proxy authentication
-    password?: string; // Optional password for proxy authentication
+  id: string; // Cryptographically unique per record
+  name: string; // User-friendly name (must be unique)
+  enabled: boolean; // Enable/disable flag
+  domainFilters: string[]; // Will be used only for these domains (supports wildcards)
+  excludeDomains: string[]; // Domains to explicitly exclude from proxy (supports wildcards)
+  url: string; // Proxy server URL (e.g., "http://proxy.example.com:8080")
+  userName?: string; // Optional username for proxy authentication
+  password?: string; // Optional password for proxy authentication
 }
 
 
 // Base interface with common properties for all cert types
 interface BaseCert {
-    id: string; // Cryptographically unique per record
-    name: string; // User-friendly name (must be unique)
-    enabled: boolean; // Enable/disable flag
-    domainFilters: string[]; // Will be sent only for these domains
-    expiryDate?: string; // Optional expiry date (ISO string)
-    passPhrase?: string; // Optional passphrase for encrypted key/pfx
+  id: string; // Cryptographically unique per record
+  name: string; // User-friendly name (must be unique)
+  enabled: boolean; // Enable/disable flag
+  domainFilters: string[]; // Will be sent only for these domains
+  expiryDate?: string; // Optional expiry date (ISO string)
+  passPhrase?: string; // Optional passphrase for encrypted key/pfx
 }
 
 // Cert type enum for type discrimination
 export enum CertType {
-    CA = 'ca',
-    SELF_SIGNED = 'selfSigned',
+  CA = 'ca',
+  SELF_SIGNED = 'selfSigned',
 }
 
 // CA Certificate - only requires cert file
 export interface CACert extends BaseCert {
-    type: CertType.CA;
-    certFile: string; // Path to certificate file
+  type: CertType.CA;
+  certFile: string; // Path to certificate file
 }
 
 // Self-Signed Certificate - can have cert, key, pfx files and passphrase
 export interface SelfSignedCert extends BaseCert {
-    type: CertType.SELF_SIGNED;
-    certFile?: string; // Path to certificate file (optional if using PFX)
-    keyFile?: string; // Path to key file (optional if using PFX)
-    pfxFile?: string; // Path to PFX file (optional if using cert+key)
+  type: CertType.SELF_SIGNED;
+  certFile?: string; // Path to certificate file (optional if using PFX)
+  keyFile?: string; // Path to key file (optional if using PFX)
+  pfxFile?: string; // Path to PFX file (optional if using cert+key)
 }
 
 // Union type for all cert types - makes it easy to add more types
 export type Cert = CACert | SelfSignedCert;
-
-// ============================================================================
-// Type Aliases for Backwards Compatibility
-// ============================================================================
-
-/**
- * @deprecated Use CollectionRequest instead
- * ParsedRequest was renamed to CollectionRequest in the unified type system.
- * This alias is kept for backwards compatibility.
- */
-export type ParsedRequest = CollectionRequest;
