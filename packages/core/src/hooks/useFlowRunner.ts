@@ -38,6 +38,8 @@ export interface UseFlowRunnerOptions {
     collections: Collection[];
     /** Available flows (to look up flow details if running by ID) */
     flows?: Flow[];
+    /** Optional HTTP adapter (if not provided, will use useHttpAdapter from React context) */
+    httpAdapter?: ReturnType<typeof useHttpAdapter>;
 }
 
 export interface RunFlowOptions {
@@ -72,23 +74,25 @@ export function useFlowRunner({
     auths,
     collections,
     flows = [],
+    httpAdapter: providedHttpAdapter,
 }: UseFlowRunnerOptions) {
-    const httpAdapter = useHttpAdapter();
-    
+    // Use provided adapter or fall back to React context adapter
+    const httpAdapter = providedHttpAdapter || useHttpAdapter();
+
     // Global state management
     const state = useAppStateStore(
         (s) => s.flowRunStates[flowId] || DEFAULT_FLOW_RUN_STATE
     ) as FlowRunState;
     const setFlowRunState = useAppStateStore((s) => s.setFlowRunState);
     const clearFlowRunState = useAppStateStore((s) => s.clearFlowRunState);
-    
+
     // Refs for tracking active run
     const isCancelledRef = useRef(false);
     const flowContextRef = useRef<FlowContext>(createEmptyFlowContext());
-    
+
     // Memoize the flow executor instance
     const executor = useMemo(() => flowExecutor, []);
-    
+
     /**
      * Create execution context from current state
      */
@@ -106,7 +110,7 @@ export function useFlowRunner({
         isCancelled: () => isCancelledRef.current,
         flowContext: flowContextRef.current,
     }), [httpAdapter, environments, auths, collections, flows]);
-    
+
     /**
      * Run a flow using the FlowExecutor
      */
@@ -115,11 +119,11 @@ export function useFlowRunner({
         options: RunFlowOptions = {}
     ): Promise<FlowRunResult> => {
         const { environmentId, defaultAuthId, parallel = true } = options;
-        
+
         // Reset refs
         isCancelledRef.current = false;
         flowContextRef.current = createEmptyFlowContext();
-        
+
         // Set initial running state
         setFlowRunState(flowId, {
             isRunning: true,
@@ -144,44 +148,44 @@ export function useFlowRunner({
                 },
             },
         });
-        
+
         // Create execution context
         const context = createContext(
             environmentId || flow.defaultEnvId || null,
             defaultAuthId || flow.defaultAuthId || null
         );
-        
+
         // Build input
         const input: FlowExecutionInput = {
             flowId: flow.id,
             executionId: `flow-${flow.id}-${Date.now()}`,
         };
-        
+
         // Build config
         const config: FlowExecutionConfig = {
             parallel,
             defaultAuthId: defaultAuthId || flow.defaultAuthId || undefined,
         };
-        
+
         // Execute flow using the executor
         // Note: The FlowExecutor looks up the flow by ID from context.flows
         // For direct execution, we need to ensure the flow is in the flows array
         // Alternative: We could add an overload to FlowExecutor that takes a Flow directly
-        
+
         // For now, we'll create a context with the flow included
         const contextWithFlow: ExecutionContext = {
             ...context,
             flows: [flow, ...flows.filter(f => f.id !== flow.id)],
         };
-        
+
         try {
             const execResult = await executor.execute(input, contextWithFlow, config);
-            
+
             // Convert result and update state
             const flowRunResult: FlowRunResult = execResult.flowRunResult || {
                 flowId: flow.id,
                 status: execResult.status === 'success' ? 'success' :
-                       execResult.status === 'cancelled' ? 'cancelled' : 'failed',
+                    execResult.status === 'cancelled' ? 'cancelled' : 'failed',
                 nodeResults: new Map(),
                 activeConnectorIds: [],
                 skippedConnectorIds: [],
@@ -196,12 +200,12 @@ export function useFlowRunner({
                     skipped: 0,
                 },
             };
-            
+
             setFlowRunState(flowId, {
                 isRunning: false,
                 result: flowRunResult,
             });
-            
+
             return flowRunResult;
         } catch (err) {
             const errorResult: FlowRunResult = {
@@ -221,16 +225,16 @@ export function useFlowRunner({
                     skipped: 0,
                 },
             };
-            
+
             setFlowRunState(flowId, {
                 isRunning: false,
                 result: errorResult,
             });
-            
+
             return errorResult;
         }
     }, [flowId, flows, executor, createContext, setFlowRunState]);
-    
+
     /**
      * Run a flow by ID (looks up from available flows)
      */
@@ -257,24 +261,24 @@ export function useFlowRunner({
                     skipped: 0,
                 },
             };
-            
+
             setFlowRunState(flowId, {
                 isRunning: false,
                 result: errorResult,
             });
-            
+
             return errorResult;
         }
-        
+
         return runFlow(flow, options);
     }, [flowId, flows, runFlow, setFlowRunState]);
-    
+
     /**
      * Cancel the current flow run
      */
     const cancelFlow = useCallback(() => {
         isCancelledRef.current = true;
-        
+
         const currentState = useAppStateStore.getState().flowRunStates[flowId];
         setFlowRunState(flowId, {
             ...(currentState || DEFAULT_FLOW_RUN_STATE),
@@ -287,24 +291,24 @@ export function useFlowRunner({
             } : null,
         });
     }, [flowId, setFlowRunState]);
-    
+
     /**
      * Reset the flow runner state
      */
     const resetFlow = useCallback(() => {
         isCancelledRef.current = false;
         flowContextRef.current = createEmptyFlowContext();
-        
+
         clearFlowRunState(flowId);
     }, [flowId, clearFlowRunState]);
-    
+
     /**
      * Get result for a specific node
      */
     const getNodeResult = useCallback((nodeId: string): FlowNodeResult | undefined => {
         return state.result?.nodeResults.get(nodeId);
     }, [state.result]);
-    
+
     return {
         ...state,
         runFlow,

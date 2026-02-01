@@ -31,11 +31,11 @@ import { createEmptyFlowContext } from '../flowResolver';
  */
 export class FlowExecutor {
     private httpExecutor: HttpRequestExecutor;
-    
+
     constructor(httpExecutor: HttpRequestExecutor = httpRequestExecutor) {
         this.httpExecutor = httpExecutor;
     }
-    
+
     /**
      * Executes a flow
      * 
@@ -51,7 +51,7 @@ export class FlowExecutor {
         const startedAt = new Date().toISOString();
         const executionId = input.executionId || `flow-${input.flowId}-${Date.now()}`;
         const parallel = config.parallel !== false; // Default to parallel
-        
+
         // Find the flow
         const flows = context.flows || [];
         const flow = findFlowById(input.flowId, flows);
@@ -63,7 +63,7 @@ export class FlowExecutor {
                 startedAt
             );
         }
-        
+
         // Validate flow structure
         const validationErrors = validateFlow(flow);
         if (validationErrors.length > 0) {
@@ -74,7 +74,7 @@ export class FlowExecutor {
                 startedAt
             );
         }
-        
+
         // Get topological order
         const executionOrder = getTopologicalOrder(flow);
         if (!executionOrder) {
@@ -85,20 +85,20 @@ export class FlowExecutor {
                 startedAt
             );
         }
-        
+
         // Execute based on mode
         const flowRunResult = parallel
             ? await this.executeParallel(flow, executionOrder, context, config)
             : await this.executeSequential(flow, executionOrder, context, config);
-        
+
         // Derive validation status from node validations
         const validationStatus = this.deriveValidationStatus(flowRunResult.nodeResults);
-        
+
         return {
             id: executionId,
             flowId: input.flowId,
-            status: flowRunResult.status === 'success' ? 'success' : 
-                   flowRunResult.status === 'cancelled' ? 'cancelled' : 'failed',
+            status: flowRunResult.status === 'success' ? 'success' :
+                flowRunResult.status === 'cancelled' ? 'cancelled' : 'failed',
             validationStatus,
             flowRunResult,
             error: flowRunResult.error,
@@ -106,11 +106,11 @@ export class FlowExecutor {
             completedAt: flowRunResult.completedAt || new Date().toISOString(),
         };
     }
-    
+
     // ========================================================================
     // Sequential Execution
     // ========================================================================
-    
+
     /**
      * Executes flow nodes sequentially in topological order
      */
@@ -125,7 +125,7 @@ export class FlowExecutor {
         const nodeResults = new Map<string, FlowNodeResult>();
         const activeConnectorIds: string[] = [];
         const skippedConnectorIds: string[] = [];
-        
+
         // Initialize all nodes as idle
         for (const node of flow.nodes) {
             nodeResults.set(node.id, {
@@ -135,7 +135,7 @@ export class FlowExecutor {
                 status: 'idle',
             });
         }
-        
+
         // Create execution context with flow context
         const flowExecutionContext: ExecutionContext = {
             ...context,
@@ -143,20 +143,20 @@ export class FlowExecutor {
             defaultAuthId: config.defaultAuthId || context.defaultAuthId || flow.defaultAuthId || null,
             initialVariables: config.initialVariables,
         };
-        
+
         // Execute nodes in order
         for (const node of executionOrder) {
             if (context.isCancelled()) {
                 break;
             }
-            
+
             // Check if dependencies are satisfied
             const { canExecute, activeConns, skippedConns } = this.checkDependencies(
                 flow, node.id, nodeResults
             );
             activeConnectorIds.push(...activeConns);
             skippedConnectorIds.push(...skippedConns);
-            
+
             if (!canExecute) {
                 nodeResults.set(node.id, {
                     nodeId: node.id,
@@ -166,7 +166,7 @@ export class FlowExecutor {
                 });
                 continue;
             }
-            
+
             // Mark as running
             nodeResults.set(node.id, {
                 nodeId: node.id,
@@ -174,45 +174,45 @@ export class FlowExecutor {
                 alias: node.alias,
                 status: 'running',
             });
-            
+
             // Execute node
             const result = await this.httpExecutor.executeFlowNode(node, flow, flowExecutionContext);
-            
+
             // Convert HTTP result to FlowNodeResult
             const nodeResult: FlowNodeResult = {
                 nodeId: node.id,
                 requestId: node.requestId,
                 alias: node.alias,
-                status: result.status === 'success' ? 'success' : 
-                       result.status === 'cancelled' ? 'skipped' : 'failed',
+                status: result.status === 'success' ? 'success' :
+                    result.status === 'cancelled' ? 'skipped' : 'failed',
                 response: result.response,
                 error: result.error,
                 startedAt: result.startedAt,
                 completedAt: result.completedAt,
             };
             nodeResults.set(node.id, nodeResult);
-            
+
             // Update flow context with response
             if (result.response) {
                 flowContext.responses.set(node.alias, result.response);
                 flowContext.executionOrder.push(node.alias);
             }
-            
+
             // Stop on failure (flows always stop on failure)
             if (nodeResult.status === 'failed') {
                 break;
             }
         }
-        
+
         return this.buildFlowRunResult(
             flow, nodeResults, activeConnectorIds, skippedConnectorIds, startedAt, context.isCancelled()
         );
     }
-    
+
     // ========================================================================
     // Parallel Execution
     // ========================================================================
-    
+
     /**
      * Executes flow nodes in parallel where dependencies allow
      * Uses Promise.race pattern for early completion detection
@@ -228,7 +228,7 @@ export class FlowExecutor {
         const nodeResults = new Map<string, FlowNodeResult>();
         const activeConnectorIds: string[] = [];
         const skippedConnectorIds: string[] = [];
-        
+
         // Initialize all nodes as idle
         for (const node of flow.nodes) {
             nodeResults.set(node.id, {
@@ -238,7 +238,7 @@ export class FlowExecutor {
                 status: 'idle',
             });
         }
-        
+
         // Create execution context with flow context
         const flowExecutionContext: ExecutionContext = {
             ...context,
@@ -246,7 +246,7 @@ export class FlowExecutor {
             defaultAuthId: config.defaultAuthId || context.defaultAuthId || flow.defaultAuthId || null,
             initialVariables: config.initialVariables,
         };
-        
+
         // Node tracking
         const nodeMap = new Map(flow.nodes.map(n => [n.id, n]));
         const pendingNodes = new Set(executionOrder.map(n => n.id));
@@ -254,25 +254,23 @@ export class FlowExecutor {
         const activePromises = new Map<string, Promise<{ nodeId: string; result: FlowNodeResult }>>();
         const inFlightNodeIds = new Set<string>();
 
-        console.log('Starting flow execution with nodes :', Array.from(pendingNodes));
-        
         // Process nodes
         while (pendingNodes.size > 0 || activePromises.size > 0) {
             if (context.isCancelled()) {
                 break;
             }
-            
+
             // Find ready nodes (dependencies satisfied, not in-flight)
             const readyNodes: FlowNode[] = [];
             for (const nodeId of pendingNodes) {
                 if (inFlightNodeIds.has(nodeId)) {
                     continue;
                 }
-                
+
                 const { canExecute, activeConns } = this.checkDependencies(
                     flow, nodeId, nodeResults
                 );
-                
+
                 if (canExecute) {
                     const node = nodeMap.get(nodeId);
                     if (node) {
@@ -285,12 +283,12 @@ export class FlowExecutor {
                     const allSourcesCompleted = incoming.every(conn => {
                         const sourceResult = nodeResults.get(conn.sourceNodeId);
                         return sourceResult && (
-                            sourceResult.status === 'success' || 
-                            sourceResult.status === 'failed' || 
+                            sourceResult.status === 'success' ||
+                            sourceResult.status === 'failed' ||
                             sourceResult.status === 'skipped'
                         );
                     });
-                    
+
                     if (allSourcesCompleted && incoming.length > 0) {
                         // Skip this node - no conditions were satisfied
                         pendingNodes.delete(nodeId);
@@ -310,7 +308,7 @@ export class FlowExecutor {
             for (const node of readyNodes) {
                 pendingNodes.delete(node.id);
                 inFlightNodeIds.add(node.id);
-                
+
                 // Mark as running
                 nodeResults.set(node.id, {
                     nodeId: node.id,
@@ -318,7 +316,7 @@ export class FlowExecutor {
                     alias: node.alias,
                     status: 'running',
                 });
-                
+
                 // Create execution promise
                 const promise = this.httpExecutor.executeFlowNode(node, flow, flowExecutionContext)
                     .then(result => ({
@@ -327,27 +325,27 @@ export class FlowExecutor {
                             nodeId: node.id,
                             requestId: node.requestId,
                             alias: node.alias,
-                            status: result.status === 'success' ? 'success' : 
-                                   result.status === 'cancelled' ? 'skipped' : 'failed',
+                            status: result.status === 'success' ? 'success' :
+                                result.status === 'cancelled' ? 'skipped' : 'failed',
                             response: result.response,
                             error: result.error,
                             startedAt: result.startedAt,
                             completedAt: result.completedAt,
                         } as FlowNodeResult,
                     }));
-                
+
                 activePromises.set(node.id, promise);
             }
-            
+
             // Wait for any promise to complete
             if (activePromises.size > 0) {
                 const { nodeId, result } = await Promise.race(activePromises.values());
-                
+
                 activePromises.delete(nodeId);
                 inFlightNodeIds.delete(nodeId);
                 completedNodes.add(nodeId);
                 nodeResults.set(nodeId, result);
-                
+
                 // Update flow context
                 if (result.response) {
                     const node = nodeMap.get(nodeId);
@@ -356,7 +354,7 @@ export class FlowExecutor {
                         flowContext.executionOrder.push(node.alias);
                     }
                 }
-                
+
                 // Stop on failure
                 if (result.status === 'failed') {
                     // Mark remaining in-flight nodes as skipped (they're still executing but we're stopping)
@@ -370,7 +368,7 @@ export class FlowExecutor {
                     }
                     inFlightNodeIds.clear();
                     activePromises.clear();
-                    
+
                     // Mark pending nodes as skipped
                     for (const pendingId of pendingNodes) {
                         nodeResults.set(pendingId, {
@@ -398,16 +396,16 @@ export class FlowExecutor {
                 break;
             }
         }
-        
+
         return this.buildFlowRunResult(
             flow, nodeResults, activeConnectorIds, skippedConnectorIds, startedAt, context.isCancelled()
         );
     }
-    
+
     // ========================================================================
     // Helper Methods
     // ========================================================================
-    
+
     /**
      * Checks if a node's dependencies are satisfied
      */
@@ -419,23 +417,23 @@ export class FlowExecutor {
         const incoming = getIncomingConnectors(flow, nodeId);
         const activeConns: string[] = [];
         const skippedConns: string[] = [];
-        
+
         // No dependencies - can execute
         if (incoming.length === 0) {
             return { canExecute: true, activeConns, skippedConns };
         }
-        
+
         // Check each incoming connector
         let anyConditionMet = false;
-        
+
         for (const conn of incoming) {
             const sourceResult = nodeResults.get(conn.sourceNodeId);
-            
+
             // Source not completed yet
             if (!sourceResult || sourceResult.status === 'idle' || sourceResult.status === 'running' || sourceResult.status === 'pending') {
                 return { canExecute: false, activeConns, skippedConns };
             }
-            
+
             // Check condition
             if (isConditionSatisfied(conn.condition, sourceResult)) {
                 anyConditionMet = true;
@@ -444,10 +442,10 @@ export class FlowExecutor {
                 skippedConns.push(conn.id);
             }
         }
-        
+
         return { canExecute: anyConditionMet, activeConns, skippedConns };
     }
-    
+
     /**
      * Builds the final FlowRunResult
      */
@@ -462,9 +460,9 @@ export class FlowExecutor {
         const succeeded = Array.from(nodeResults.values()).filter(r => r.status === 'success').length;
         const failed = Array.from(nodeResults.values()).filter(r => r.status === 'failed').length;
         const skipped = Array.from(nodeResults.values()).filter(r => r.status === 'skipped').length;
-        
+
         const hasFailed = failed > 0;
-        
+
         return {
             flowId: flow.id,
             status: hasFailed ? 'failed' : (wasCancelled ? 'cancelled' : 'success'),
@@ -473,7 +471,7 @@ export class FlowExecutor {
             skippedConnectorIds,
             startedAt,
             completedAt: new Date().toISOString(),
-            error: hasFailed 
+            error: hasFailed
                 ? `${failed} node(s) failed`
                 : (wasCancelled ? 'Flow was cancelled' : undefined),
             progress: {
@@ -485,7 +483,7 @@ export class FlowExecutor {
             },
         };
     }
-    
+
     /**
      * Derives validation status from all node results
      */
@@ -495,15 +493,15 @@ export class FlowExecutor {
         const nodeValidationResults = Array.from(nodeResults.values())
             .filter(r => r.response?.validationResult)
             .map(r => r.response!.validationResult!);
-        
+
         if (nodeValidationResults.length === 0) {
             return 'idle';
         }
-        
+
         const allPassed = nodeValidationResults.every(v => v.allPassed);
         return allPassed ? 'pass' : 'fail';
     }
-    
+
     /**
      * Creates an error result
      */
