@@ -6,7 +6,7 @@
  */
 
 import type { Environment, Collection, HeaderRow, ParamRow, CollectionRequest, CollectionBody } from '../../types/collection';
-import type { Flow, FlowContext } from '../../types/flow';
+import type { Flow, FlowContext, FlowRunResult } from '../../types/flow';
 import type { HttpResponseResult, IHttpAdapter } from '../../types/adapters';
 import type { Auth } from '../../hooks/store/createAuthSlice';
 import type { RequestValidation, ValidationResult } from '../../types/validation';
@@ -175,7 +175,7 @@ export interface FlowExecutionResult {
     /** Validation status (derived from node validations) */
     validationStatus: ValidationStatus;
     /** Detailed flow run result */
-    flowRunResult?: import('../../types/flow').FlowRunResult;
+    flowRunResult?: FlowRunResult;
     /** Error message if failed */
     error?: string;
     /** Execution start time */
@@ -198,13 +198,13 @@ export function mergeHeadersWithOverrides(
     if (!overrideHeaders || overrideHeaders.length === 0) {
         return baseHeaders;
     }
-    
+
     // Create a map of base headers by key (lowercase for case-insensitive matching)
     const headerMap = new Map<string, HeaderRow>();
     for (const h of baseHeaders) {
         headerMap.set(h.key.toLowerCase(), h);
     }
-    
+
     // Apply overrides - override existing or add new
     for (const override of overrideHeaders) {
         const key = override.key.toLowerCase();
@@ -217,7 +217,7 @@ export function mergeHeadersWithOverrides(
             headerMap.set(key, override);
         }
     }
-    
+
     return Array.from(headerMap.values());
 }
 
@@ -231,13 +231,13 @@ export function mergeParamsWithOverrides(
     if (!overrideParams || overrideParams.length === 0) {
         return baseParams;
     }
-    
+
     // Create a map of base params by key
     const paramMap = new Map<string, ParamRow>();
     for (const p of baseParams) {
         paramMap.set(p.key, p);
     }
-    
+
     // Apply overrides
     for (const override of overrideParams) {
         if (paramMap.has(override.key)) {
@@ -247,7 +247,7 @@ export function mergeParamsWithOverrides(
             paramMap.set(override.key, override);
         }
     }
-    
+
     return Array.from(paramMap.values());
 }
 

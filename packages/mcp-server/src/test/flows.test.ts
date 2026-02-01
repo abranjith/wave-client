@@ -83,9 +83,21 @@ describe('Flow Tools', () => {
             vi.mocked(flowService.loadAll).mockResolvedValue([mockFlow] as any);
 
             mockExecute.mockResolvedValue({
+                id: 'exec-1',
+                flowId: 'Flow-1',
                 status: 'success',
-                nodeResults: new Map(),
-                startedAt: new Date().toISOString()
+                validationStatus: 'passed',
+                flowRunResult: {
+                    flowId: 'Flow-1',
+                    status: 'success',
+                    nodeResults: new Map(),
+                    activeConnectorIds: [],
+                    skippedConnectorIds: [],
+                    startedAt: new Date().toISOString(),
+                    progress: { total: 0, completed: 0 }
+                },
+                startedAt: new Date().toISOString(),
+                completedAt: new Date().toISOString()
             });
 
             const result = await runFlowHandler({ flowId: 'Flow-1' });
@@ -106,20 +118,40 @@ describe('Flow Tools', () => {
             vi.mocked(flowService.loadAll).mockResolvedValue([mockFlow] as any);
 
             const nodeResultsMap = new Map();
-            nodeResultsMap.set('node-1', { status: 'success', output: 'test-data' });
+            nodeResultsMap.set('node-1', {
+                nodeId: 'node-1',
+                requestId: 'req-1',
+                alias: 'test-node',
+                status: 'success',
+                output: 'test-data'
+            });
 
             mockExecute.mockResolvedValue({
+                id: 'exec-1',
+                flowId: 'Flow-1',
                 status: 'success',
-                nodeResults: nodeResultsMap,
-                startedAt: new Date().toISOString()
+                validationStatus: 'passed',
+                flowRunResult: {
+                    flowId: 'Flow-1',
+                    status: 'success',
+                    nodeResults: nodeResultsMap,
+                    activeConnectorIds: [],
+                    skippedConnectorIds: [],
+                    startedAt: new Date().toISOString(),
+                    progress: { total: 1, completed: 1 }
+                },
+                startedAt: new Date().toISOString(),
+                completedAt: new Date().toISOString()
             });
 
             const result = await runFlowHandler({ flowId: 'Flow-1' });
 
             const content = JSON.parse(result.content[0].text);
             expect(content.nodeResults).toBeDefined();
-            expect(content.nodeResults['node-1']).toBeDefined();
-            expect(content.nodeResults['node-1'].output).toBe('test-data');
+            expect(Array.isArray(content.nodeResults)).toBe(true);
+            expect(content.nodeResults.length).toBe(1);
+            expect(content.nodeResults[0].nodeId).toBe('node-1');
+            expect(content.nodeResults[0].status).toBe('success');
         });
 
         it('should throw if flow not found', async () => {

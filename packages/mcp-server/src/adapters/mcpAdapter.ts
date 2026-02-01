@@ -23,7 +23,19 @@ export class McpHttpAdapter implements IHttpAdapter {
         config: HttpRequestConfig
     ): Promise<Result<HttpResponseResult, string>> {
         try {
+            // HttpService.execute() returns HttpResponseResult directly, not Result<>
             const response = await httpService.execute(config);
+
+            // Check if the response indicates an error (status 0 means network error)
+            if (response.status === 0) {
+                console.error('[McpHttpAdapter] Request failed:', {
+                    url: config.url,
+                    method: config.method,
+                    statusText: response.statusText
+                });
+                return err(response.statusText || 'Network error');
+            }
+
             return ok(response);
         } catch (error) {
             const message = error instanceof Error ? error.message : String(error);

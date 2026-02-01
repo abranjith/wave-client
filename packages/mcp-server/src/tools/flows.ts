@@ -10,7 +10,8 @@ import type {
     FlowExecutionInput,
     FlowExecutionConfig,
     ExecutionContext,
-    Flow as CoreFlow
+    Flow as CoreFlow,
+    FlowNodeResult
 } from "@wave-client/core";
 import { McpHttpAdapter } from "../adapters/mcpAdapter.js";
 
@@ -111,29 +112,86 @@ export async function runFlowHandler(args: RunFlowArgs) {
 
     // 5. Execute
     try {
+        console.error('[run_flow] Starting execution:', {
+            flowId: args.flowId,
+            nodeCount: flow.nodes.length,
+            hasEnvironment: !!context.environmentId,
+            hasAuth: !!context.defaultAuthId
+        });
+
         const result = await flowExecutor.execute(input, context, config);
 
-        // Log to stderr for debugging
+        // Log detailed execution results
         console.error('[run_flow] Execution completed:', {
             flowId: args.flowId,
             status: result.status,
-            nodeCount: result.nodeResults?.size || 0,
-            error: result.error
+            hasFlowRunResult: !!result.flowRunResult,
+            nodeResultsSize: result.flowRunResult?.nodeResults?.size || 0,
+            nodeResultsKeys: result.flowRunResult?.nodeResults ? Array.from(result.flowRunResult.nodeResults.keys()) : [],
+            error: result.error,
         });
 
-        // Convert Map to Object and clean up response
-        const nodeResultsObj = result.nodeResults
-            ? Object.fromEntries(result.nodeResults.entries())
-            : {};
+        // Log individual node results for debugging
+        if (result.flowRunResult?.nodeResults && result.flowRunResult.nodeResults.size > 0) {
+            result.flowRunResult.nodeResults.forEach((nodeResult: any, nodeId: any) => {
+                console.error(`[run_flow] Node ${nodeId}:`, {
+                    status: nodeResult.status,
+                    hasResponse: !!nodeResult.response,
+                    error: nodeResult.error
+                });
+            });
+        } else {
+            console.error('[run_flow] WARNING: No node results generated!');
+        }
+
+        // Convert Map to Array and clean up response
+        const nodeResultsArray = result.flowRunResult?.nodeResults
+            ? Array.from(result.flowRunResult.nodeResults.values()).map((nodeResult: FlowNodeResult) => {
+                // Clean up response: exclude cookies =, statusText etc
+                const cleanedResponse = nodeResult.response ? {
+                    status: nodeResult.response.status,
+                    headers: nodeResult.response.headers,
+                    body: nodeResult.response.body,
+                    isEncoded: nodeResult.response.isEncoded,
+                    elapsedTime: nodeResult.response.elapsedTime,
+                    size: nodeResult.response.size,
+                } : undefined;
+
+                // Clean up validation result: only include enabled rules
+                const cleanedValidationResult = nodeResult.response?.validationResult ? {
+                    status: nodeResult.response.validationResult.status,
+                    rules: nodeResult.response.validationResult.rules
+                        ?.filter((rule: any) => rule.enabled)
+                        .map((rule: any) => {
+                            const { enabled, ...ruleWithoutEnabled } = rule;
+                            return ruleWithoutEnabled;
+                        })
+                } : undefined;
+
+                return {
+                    nodeId: nodeResult.nodeId,
+                    requestId: nodeResult.requestId,
+                    alias: nodeResult.alias,
+                    status: nodeResult.status,
+                    response: cleanedResponse ? {
+                        ...cleanedResponse,
+                        validationResult: cleanedValidationResult
+                    } : undefined,
+                    error: nodeResult.error,
+                    startedAt: nodeResult.startedAt,
+                    completedAt: nodeResult.completedAt,
+                };
+            })
+            : [];
 
         const cleanedResult = {
             flowId: result.flowId,
             status: result.status,
-            nodeResults: nodeResultsObj,
+            nodeResults: nodeResultsArray,
             startedAt: result.startedAt,
             completedAt: result.completedAt,
             error: result.error,
-            progress: result.progress,
+            progress: result.flowRunResult?.progress,
         };
 
         return {

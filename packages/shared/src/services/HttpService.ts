@@ -414,12 +414,9 @@ export class HttpService {
             // Handle custom formdata serialization for VS Code extension communication
             let requestBody: unknown = request.body;
 
-            console.log('[HttpService] Request body type:', typeof request.body);
-
-
             // Check for serialized formdata: { type: 'formdata', entries: [...] }
             if (this.isSerializedFormDataBody(request.body)) {
-                console.log('[HttpService] Detected SerializedFormDataBody, entries:', request.body.entries.length);
+                // SerializedFormDataBody detected
                 try {
                     const formData = new FormData();
 
@@ -434,13 +431,12 @@ export class HttpService {
                     }
 
                     requestBody = formData;
-                    console.log('[HttpService] FormData reconstructed successfully with', request.body.entries.length, 'entries');
+                    // FormData reconstructed successfully
 
                     // Remove Content-Type header to let axios/browser set it with boundary
                     const contentTypeKey = Object.keys(headers).find(k => k.toLowerCase() === 'content-type');
                     if (contentTypeKey) {
                         delete headers[contentTypeKey];
-                        console.log('[HttpService] Removed Content-Type header to let axios set boundary');
                     }
                 } catch (e) {
                     console.error('Failed to reconstruct FormData:', e);
