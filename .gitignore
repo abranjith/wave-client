@@ -301,6 +301,13 @@ FakesAssemblies/
 .ntvs_analysis.dat
 node_modules/
 coverage/
+dist/
+build/
+npm-debug.log*
+pnpm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.env*
 
 # Visual Studio 6 build log
 *.plg
@@ -430,3 +437,4 @@ TODO.md
 .specify
 .github/agents
 .github/prompts
+specs/

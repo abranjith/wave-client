@@ -25,6 +25,12 @@ import {
     RunFlowSchema,
     runFlowHandler
 } from "./tools/flows.js";
+import {
+    ListTestSuitesSchema,
+    listTestSuitesHandler,
+    RunTestSuiteSchema,
+    runTestSuiteHandler
+} from "./tools/test-suites.js";
 
 // Initialize server
 const server = new Server(
@@ -77,6 +83,16 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
                 name: "run_flow",
                 description: "Execute a flow by ID.",
                 inputSchema: zodToJsonSchema(RunFlowSchema),
+            },
+            {
+                name: "list_test_suites",
+                description: "List all available test suites with metadata (supports nameQuery and tagQuery filters).",
+                inputSchema: zodToJsonSchema(ListTestSuitesSchema),
+            },
+            {
+                name: "run_test_suite",
+                description: "Execute a test suite by ID.",
+                inputSchema: zodToJsonSchema(RunTestSuiteSchema),
             }
         ],
     };
@@ -112,6 +128,14 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         if (request.params.name === "run_flow") {
             const args = RunFlowSchema.parse(request.params.arguments);
             return await runFlowHandler(args);
+        }
+        if (request.params.name === "list_test_suites") {
+            const args = ListTestSuitesSchema.parse(request.params.arguments);
+            return await listTestSuitesHandler(args);
+        }
+        if (request.params.name === "run_test_suite") {
+            const args = RunTestSuiteSchema.parse(request.params.arguments);
+            return await runTestSuiteHandler(args);
         }
 
         throw new Error(`Tool not found: ${request.params.name}`);
