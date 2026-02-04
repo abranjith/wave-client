@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { listTestSuitesHandler, runTestSuiteHandler } from "../tools/test-suites";
+import { listTestSuitesHandler, runTestSuiteHandler } from "../tools/testSuites";
 import {
     testSuiteService,
     environmentService,
@@ -150,22 +150,22 @@ describe("Test Suite Tools", () => {
 
             vi.mocked(testSuiteService.loadAll).mockResolvedValue(mockSuites as any);
 
-            const result = await listTestSuitesHandler({ nameQuery: "auth" });
+            const result = await listTestSuitesHandler({ searchQuery: "auth" });
             const content = JSON.parse(result.content[0].text);
 
             expect(content).toHaveLength(1);
             expect(content[0].id).toBe("suite-1");
         });
 
-        it("filters by tag query", async () => {
+        it("filters by description query", async () => {
             const mockSuites = [
-                { id: "suite-1", name: "Auth Tests", tags: ["auth"], items: [], updatedAt: "2026-02-01T12:00:00.000Z" },
-                { id: "suite-2", name: "User Tests", tags: ["user"], items: [], updatedAt: "2026-02-01T12:00:00.000Z" },
+                { id: "suite-1", name: "Suite 1", description: "Authentication tests", items: [], updatedAt: "2026-02-01T12:00:00.000Z" },
+                { id: "suite-2", name: "Suite 2", description: "User management", items: [], updatedAt: "2026-02-01T12:00:00.000Z" },
             ];
 
             vi.mocked(testSuiteService.loadAll).mockResolvedValue(mockSuites as any);
 
-            const result = await listTestSuitesHandler({ tagQuery: "auth" });
+            const result = await listTestSuitesHandler({ searchQuery: "authentication" });
             const content = JSON.parse(result.content[0].text);
 
             expect(content).toHaveLength(1);
@@ -174,30 +174,47 @@ describe("Test Suite Tools", () => {
 
         it("returns empty list when no matches", async () => {
             const mockSuites = [
-                { id: "suite-1", name: "Auth Tests", tags: ["auth"], items: [], updatedAt: "2026-02-01T12:00:00.000Z" },
+                { id: "suite-1", name: "Auth Tests", description: "Authentication tests", items: [], updatedAt: "2026-02-01T12:00:00.000Z" },
             ];
 
             vi.mocked(testSuiteService.loadAll).mockResolvedValue(mockSuites as any);
 
-            const result = await listTestSuitesHandler({ nameQuery: "billing" });
+            const result = await listTestSuitesHandler({ searchQuery: "billing" });
             const content = JSON.parse(result.content[0].text);
 
             expect(content).toEqual([]);
         });
 
-        it("combines name and tag filters", async () => {
+        it("requires all tokens to match", async () => {
             const mockSuites = [
-                { id: "suite-1", name: "Auth Tests", tags: ["auth"], items: [], updatedAt: "2026-02-01T12:00:00.000Z" },
-                { id: "suite-2", name: "Auth Tests", tags: ["user"], items: [], updatedAt: "2026-02-01T12:00:00.000Z" },
+                { id: "suite-1", name: "Auth Tests", description: "User authentication", items: [], updatedAt: "2026-02-01T12:00:00.000Z" },
+                { id: "suite-2", name: "User Tests", description: "General user tests", items: [], updatedAt: "2026-02-01T12:00:00.000Z" },
+                { id: "suite-3", name: "Auth Service", description: "Service layer tests", items: [], updatedAt: "2026-02-01T12:00:00.000Z" },
             ];
 
             vi.mocked(testSuiteService.loadAll).mockResolvedValue(mockSuites as any);
 
-            const result = await listTestSuitesHandler({ nameQuery: "auth", tagQuery: "auth" });
+            const result = await listTestSuitesHandler({ searchQuery: "auth user" });
             const content = JSON.parse(result.content[0].text);
 
             expect(content).toHaveLength(1);
             expect(content[0].id).toBe("suite-1");
+        });
+
+        it("sorts by relevance score (name matches ranked higher)", async () => {
+            const mockSuites = [
+                { id: "suite-1", name: "General Tests", description: "API authentication tests", items: [], updatedAt: "2026-02-01T12:00:00.000Z" },
+                { id: "suite-2", name: "API Tests", description: "General tests", items: [], updatedAt: "2026-02-01T12:00:00.000Z" },
+            ];
+
+            vi.mocked(testSuiteService.loadAll).mockResolvedValue(mockSuites as any);
+
+            const result = await listTestSuitesHandler({ searchQuery: "api" });
+            const content = JSON.parse(result.content[0].text);
+
+            expect(content).toHaveLength(2);
+            expect(content[0].id).toBe("suite-2"); // Name match should rank higher
+            expect(content[1].id).toBe("suite-1"); // Description match should rank lower
         });
     });
 

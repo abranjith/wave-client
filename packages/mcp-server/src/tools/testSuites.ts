@@ -42,6 +42,12 @@ import { McpHttpAdapter } from "../adapters/mcpAdapter.js";
 type TestItemStatus = "idle" | "pending" | "running" | "success" | "failed" | "skipped";
 type TestValidationStatus = "idle" | "pending" | "pass" | "fail";
 
+interface ScoredSuite 
+{
+    score: number;
+    suite: TestSuiteMetadata;
+}
+
 export interface McpTextResponse {
 	content: Array<{
 		type: "text";
@@ -228,8 +234,7 @@ function createExecutionContext(
 export const ListTestSuitesSchema = z.object({
 	limit: z.number().int().positive().optional().describe("Maximum number of test suites to return (pagination)"),
 	offset: z.number().int().min(0).optional().describe("Number of test suites to skip (pagination)"),
-	nameQuery: z.string().trim().optional().describe("Filter test suites by name (case-insensitive partial match)"),
-	tagQuery: z.string().trim().optional().describe("Filter test suites by tag (case-insensitive exact match)"),
+	searchQuery: z.string().trim().optional().describe("Filter test suites by name or description (case-insensitive partial match)"),
 });
 export type ListTestSuitesArgs = z.infer<typeof ListTestSuitesSchema>;
 
@@ -248,30 +253,91 @@ export interface TestSuiteMetadata {
 export async function listTestSuitesHandler(args: ListTestSuitesArgs): Promise<McpTextResponse> {
 	try {
 		const allSuites = await testSuiteService.loadAll();
-		const nameQuery = args.nameQuery?.toLowerCase();
-		const tagQuery = args.tagQuery?.toLowerCase();
 
-		const filteredSuites = allSuites.filter(suite => {
-			const matchesName = nameQuery
-				? suite.name.toLowerCase().includes(nameQuery)
-				: true;
-			const tags = (suite as { tags?: string[] }).tags || [];
-			const matchesTag = tagQuery
-				? tags.some(tag => tag.toLowerCase() === tagQuery)
-				: true;
+		// If no search query, return all suites
+		if (!args.searchQuery || !args.searchQuery.trim()) {
+			let result: TestSuiteMetadata[] = allSuites.map(suite => ({
+				id: suite.id,
+				name: suite.name,
+				description: suite.description,
+				itemCount: suite.items.length,
+				enabledItemCount: suite.items.filter(item => item.enabled).length,
+				updatedAt: suite.updatedAt,
+			}));
 
-			return matchesName && matchesTag;
-		});
+			if (args.offset !== undefined || args.limit !== undefined) {
+				const offset = args.offset || 0;
+				const limit = args.limit ?? result.length;
+				result = result.slice(offset, offset + limit);
+			}
 
-		let result: TestSuiteMetadata[] = filteredSuites.map(suite => ({
-			id: suite.id,
-			name: suite.name,
-			description: suite.description,
-			itemCount: suite.items.length,
-			enabledItemCount: suite.items.filter(item => item.enabled).length,
-			updatedAt: suite.updatedAt,
-		}));
+			return {
+				content: [
+					{
+						type: "text",
+						text: JSON.stringify(result, null, 2)
+					}
+				]
+			};
+		}
 
+		// Normalize query and split into tokens
+		const query = args.searchQuery.toLowerCase().trim();
+		const tokens = query.split(/\s+/).filter(t => t.length > 0);
+		
+		const matchedResults: ScoredSuite[] = [];
+
+		// Score each suite
+		for (const suite of allSuites) {
+			const name = suite.name.toLowerCase();
+			const description = (suite.description || '').toLowerCase();
+
+			let totalScore = 0;
+			let allTokensMatch = true;
+
+			// Check if ALL tokens match at least one field
+			for (const token of tokens) {
+				let tokenScore = 0;
+
+				// Weighting strategy: name has higher priority than description
+				if (name.includes(token)) {
+					tokenScore += 10;
+				}
+				if (description.includes(token)) {
+					tokenScore += 3;
+				}
+
+				if (tokenScore > 0) {
+					totalScore += tokenScore;
+				} else {
+					allTokensMatch = false;
+					break;
+				}
+			}
+
+			// Only include if all tokens matched
+			if (allTokensMatch) {
+				matchedResults.push({
+					score: totalScore,
+					suite: {
+						id: suite.id,
+						name: suite.name,
+						description: suite.description,
+						itemCount: suite.items.length,
+						enabledItemCount: suite.items.filter(item => item.enabled).length,
+						updatedAt: suite.updatedAt,
+					}
+				});
+			}
+		}
+
+		// Sort by score descending
+		matchedResults.sort((a, b) => b.score - a.score);
+
+		// Extract suites from scored results
+		let result = matchedResults.map(r => r.suite);
+
+		// Apply pagination
 		if (args.offset !== undefined || args.limit !== undefined) {
 			const offset = args.offset || 0;
 			const limit = args.limit ?? result.length;
@@ -293,7 +359,8 @@ export async function listTestSuitesHandler(args: ListTestSuitesArgs): Promise<M
 }
 /**
  * Zod schema for run_test_suite tool arguments.
- */export const RunTestSuiteSchema = z.object({
+ */
+export const RunTestSuiteSchema = z.object({
 	suiteId: z.string().min(1).describe("The ID of the test suite to execute"),
     environmentId: z.string().optional().describe("Environment ID for variable resolution (overrides suite.defaultEnvId)"),
     authId: z.string().optional().describe("Auth configuration ID for requests (overrides suite.defaultAuthId)"),
@@ -605,9 +672,9 @@ export async function runTestSuiteHandler(args: RunTestSuiteArgs): Promise<McpTe
 
         const context = createExecutionContext(
             environments,
-            auths as Auth[],
+            auths as any,
             collections,
-            flows as Flow[],
+            flows as any,
             args.environmentId || suite.defaultEnvId || null,
             args.authId || suite.defaultAuthId || null,
             args.variables
@@ -639,3 +706,4 @@ export async function runTestSuiteHandler(args: RunTestSuiteArgs): Promise<McpTe
     } finally {
         runningSuites.delete(args.suiteId);
     }
+}

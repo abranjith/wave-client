@@ -159,12 +159,11 @@ export async function runFlowHandler(args: RunFlowArgs) {
 
                 // Clean up validation result: only include enabled rules
                 const cleanedValidationResult = nodeResult.response?.validationResult ? {
-                    status: nodeResult.response.validationResult.status,
-                    rules: nodeResult.response.validationResult.rules
-                        ?.filter((rule: any) => rule.enabled)
-                        .map((rule: any) => {
-                            const { enabled, ...ruleWithoutEnabled } = rule;
-                            return ruleWithoutEnabled;
+                    ...nodeResult.response.validationResult,
+                    results: nodeResult.response.validationResult.results
+                        .map((result: any) => {
+                            const { enabled, ...resultWithoutEnabled } = result;
+                            return resultWithoutEnabled;
                         })
                 } : undefined;
 

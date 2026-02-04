@@ -366,12 +366,6 @@ importers:
       '@types/ws':
         specifier: ^8.5.13
         version: 8.18.1
-      rimraf:
-        specifier: ^6.0.1
-        version: 6.1.2
-      tsx:
-        specifier: ^4.19.2
-        version: 4.21.0
       typescript:
         specifier: ^5.7.2
         version: 5.9.3
@@ -9244,6 +9238,7 @@ snapshots:
       get-tsconfig: 4.13.0
     optionalDependencies:
       fsevents: 2.3.3
+    optional: true
 
   turbo-darwin-64@2.7.2:
     optional: true

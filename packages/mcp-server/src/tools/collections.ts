@@ -1,6 +1,18 @@
 import { z } from "zod";
 import { collectionService } from "@wave-client/shared";
 
+interface SearchResult {
+    score: number;
+    item: {
+        collection: string;
+        name: string;
+        method: string;
+        url: string;
+        path: string[];
+        description?: string;
+    };
+}
+
 // Schema for list_collections
 export const ListCollectionsSchema = z.object({
     limit: z.number().optional().describe("Limit the number of collections returned"),
@@ -88,18 +100,6 @@ export async function searchRequestsHandler(args: SearchRequestsArgs) {
 
     const tokens = query.split(/\s+/).filter(t => t.length > 0);
     const methodFilter = args.method?.toUpperCase();
-
-    interface SearchResult {
-        score: number;
-        item: {
-            collection: string;
-            name: string;
-            method: string;
-            url: string;
-            path: string[];
-            description?: string;
-        };
-    }
 
     const matchedResults: SearchResult[] = [];
 

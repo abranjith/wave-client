@@ -30,7 +30,7 @@ import {
     listTestSuitesHandler,
     RunTestSuiteSchema,
     runTestSuiteHandler
-} from "./tools/test-suites.js";
+} from "./tools/testSuites.js";
 
 // Initialize server
 const server = new Server(
