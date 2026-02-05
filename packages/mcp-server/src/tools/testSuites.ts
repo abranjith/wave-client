@@ -112,22 +112,6 @@ function deriveFlowValidationStatus(flowResult: FlowRunResult): TestValidationSt
 	return allPassed ? "pass" : "fail";
 }
 
-function cleanValidationResult(validationResult?: ValidationResult) {
-	if (!validationResult) {
-		return undefined;
-	}
-
-	return {
-		enabled: validationResult.enabled,
-		totalRules: validationResult.totalRules,
-		passedRules: validationResult.passedRules,
-		failedRules: validationResult.failedRules,
-		allPassed: validationResult.allPassed,
-		executedAt: validationResult.executedAt,
-		results: validationResult.results,
-	};
-}
-
 function cleanResponse(response?: HttpResponseResult) {
 	if (!response) {
 		return undefined;
@@ -140,7 +124,7 @@ function cleanResponse(response?: HttpResponseResult) {
 		isEncoded: response.isEncoded,
 		elapsedTime: response.elapsedTime,
 		size: response.size,
-		validationResult: cleanValidationResult(response.validationResult),
+		validationResult: response.validationResult,
 	};
 }
 
