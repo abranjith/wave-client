@@ -15,3 +15,6 @@ export * from './flow';
 
 // Test Lab components
 export * from './testlab';
+
+// Arena AI chat components
+export * from './arena';

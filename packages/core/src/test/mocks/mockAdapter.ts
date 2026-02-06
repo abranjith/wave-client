@@ -32,6 +32,7 @@ import {
     type ISecretAdapter,
     type ISecurityAdapter,
     type INotificationAdapter,
+    type IArenaAdapter,
     type IAdapterEvents,
     type HttpRequestConfig,
     type HttpResponseResult,
@@ -41,6 +42,16 @@ import {
     type EncryptionStatus,
     type AppSettings,
 } from '../../types/adapters';
+import type {
+    ArenaSession,
+    ArenaMessage,
+    ArenaDocument,
+    ArenaSettings,
+    ArenaChatRequest,
+    ArenaChatResponse,
+    ArenaChatStreamChunk,
+} from '../../types/arena';
+import { DEFAULT_ARENA_SETTINGS } from '../../types/arena';
 import type {
     Collection,
     CollectionItem,
@@ -73,6 +84,11 @@ export interface MockDataStore {
     settings: AppSettings;
     secrets: Map<string, string>;
     files: Map<string, string | Uint8Array>;
+    // Arena data
+    arenaSessions: ArenaSession[];
+    arenaMessages: ArenaMessage[];
+    arenaDocuments: ArenaDocument[];
+    arenaSettings: ArenaSettings;
 }
 
 function createDefaultMockStore(): MockDataStore {
@@ -94,6 +110,11 @@ function createDefaultMockStore(): MockDataStore {
         },
         secrets: new Map(),
         files: new Map(),
+        // Arena defaults
+        arenaSessions: [],
+        arenaMessages: [],
+        arenaDocuments: [],
+        arenaSettings: DEFAULT_ARENA_SETTINGS,
     };
 }
 
@@ -555,6 +576,139 @@ function createMockSecurityAdapter(store: MockDataStore): ISecurityAdapter {
 }
 
 // ============================================================================
+// Mock Arena Adapter
+// ============================================================================
+
+function createMockArenaAdapter(store: MockDataStore): IArenaAdapter {
+    return {
+        // Session Management
+        async loadSessions(): Promise<Result<ArenaSession[], string>> {
+            return ok([...store.arenaSessions]);
+        },
+
+        async saveSession(session: ArenaSession): Promise<Result<void, string>> {
+            const index = store.arenaSessions.findIndex(s => s.id === session.id);
+            if (index >= 0) {
+                store.arenaSessions[index] = session;
+            } else {
+                store.arenaSessions.push(session);
+            }
+            return ok(undefined);
+        },
+
+        async deleteSession(sessionId: string): Promise<Result<void, string>> {
+            store.arenaSessions = store.arenaSessions.filter(s => s.id !== sessionId);
+            store.arenaMessages = store.arenaMessages.filter(m => m.sessionId !== sessionId);
+            return ok(undefined);
+        },
+
+        // Message Management
+        async loadMessages(sessionId: string): Promise<Result<ArenaMessage[], string>> {
+            const messages = store.arenaMessages.filter(m => m.sessionId === sessionId);
+            return ok([...messages]);
+        },
+
+        async saveMessage(message: ArenaMessage): Promise<Result<void, string>> {
+            const index = store.arenaMessages.findIndex(m => m.id === message.id);
+            if (index >= 0) {
+                store.arenaMessages[index] = message;
+            } else {
+                store.arenaMessages.push(message);
+            }
+            return ok(undefined);
+        },
+
+        async clearSessionMessages(sessionId: string): Promise<Result<void, string>> {
+            store.arenaMessages = store.arenaMessages.filter(m => m.sessionId !== sessionId);
+            return ok(undefined);
+        },
+
+        // Document Management
+        async loadDocuments(): Promise<Result<ArenaDocument[], string>> {
+            return ok([...store.arenaDocuments]);
+        },
+
+        async uploadDocument(file: File, _content: ArrayBuffer): Promise<Result<ArenaDocument, string>> {
+            const document: ArenaDocument = {
+                id: `doc-${Date.now()}`,
+                filename: file.name,
+                mimeType: file.type || 'application/octet-stream',
+                size: file.size,
+                uploadedAt: Date.now(),
+                processed: true,
+                chunkCount: 1,
+            };
+            store.arenaDocuments.push(document);
+            return ok(document);
+        },
+
+        async deleteDocument(documentId: string): Promise<Result<void, string>> {
+            store.arenaDocuments = store.arenaDocuments.filter(d => d.id !== documentId);
+            return ok(undefined);
+        },
+
+        // Chat Operations
+        async sendMessage(request: ArenaChatRequest): Promise<Result<ArenaChatResponse, string>> {
+            // Mock response
+            return ok({
+                messageId: `msg-${Date.now()}`,
+                content: `Mock response to: ${request.message}`,
+                tokenCount: 50,
+            });
+        },
+
+        async streamMessage(
+            request: ArenaChatRequest,
+            onChunk: (chunk: ArenaChatStreamChunk) => void
+        ): Promise<Result<ArenaChatResponse, string>> {
+            // Simulate streaming with chunks
+            const content = `Mock streamed response to: ${request.message}`;
+            const words = content.split(' ');
+            
+            for (let i = 0; i < words.length; i++) {
+                onChunk({
+                    messageId: `msg-${Date.now()}`,
+                    content: words[i] + ' ',
+                    done: false,
+                });
+            }
+            
+            onChunk({
+                messageId: `msg-${Date.now()}`,
+                content: '',
+                done: true,
+                tokenCount: 50,
+            });
+
+            return ok({
+                messageId: `msg-${Date.now()}`,
+                content,
+                tokenCount: 50,
+            });
+        },
+
+        cancelChat(_sessionId: string): void {
+            // Mock cancel - no-op
+        },
+
+        // Settings
+        async loadSettings(): Promise<Result<ArenaSettings, string>> {
+            return ok({ ...store.arenaSettings });
+        },
+
+        async saveSettings(settings: ArenaSettings): Promise<Result<void, string>> {
+            store.arenaSettings = settings;
+            return ok(undefined);
+        },
+
+        async validateApiKey(_provider: string, _apiKey: string): Promise<Result<boolean, string>> {
+            // Mock validation - always succeeds
+            return ok(true);
+        },
+    };
+}
+
+// ============================================================================
 // Mock Notification Adapter
 // ============================================================================
 
@@ -632,6 +786,7 @@ export function createMockAdapter(options: CreateMockAdapterOptions = {}): {
         secret: createMockSecretAdapter(store),
         security: createMockSecurityAdapter(store),
         notification: createMockNotificationAdapter(notificationLog),
+        arena: createMockArenaAdapter(store),
         events: createAdapterEventEmitter(),
     };
 

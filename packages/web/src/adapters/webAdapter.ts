@@ -14,6 +14,7 @@ import type {
   ISecretAdapter,
   ISecurityAdapter,
   INotificationAdapter,
+  IArenaAdapter,
   HttpRequestConfig,
   HttpResponseResult,
   AppSettings,
@@ -34,6 +35,7 @@ import type {
   TestSuite,
 } from '@wave-client/core';
 import { ok, err, Result, createAdapterEventEmitter } from '@wave-client/core';
+import { createWebArenaAdapter } from './webArenaAdapter';
 
 // Server configuration
 const SERVER_URL = 'http://127.0.0.1:3456';
@@ -1050,6 +1052,7 @@ export function createWebAdapter(): IPlatformAdapter {
     secret: new WebSecretAdapter(),
     security: new WebSecurityAdapter(),
     notification: new WebNotificationAdapter(),
+    arena: createWebArenaAdapter(),
     events,
     platform: 'web',
 

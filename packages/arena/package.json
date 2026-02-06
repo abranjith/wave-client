@@ -1,0 +1,44 @@
+{
+  "name": "@wave-client/arena",
+  "version": "0.0.1",
+  "description": "AI agent engine for Wave Client - LangGraph-based multi-agent system",
+  "license": "SEE LICENSE IN LICENSE",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "require": "./dist/index.js",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "clean": "rimraf dist",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage"
+  },
+  "dependencies": {
+    "@langchain/core": "^0.3.0",
+    "@langchain/langgraph": "^0.2.0",
+    "@langchain/google-genai": "^0.1.0",
+    "@langchain/ollama": "^0.1.0",
+    "@wave-client/core": "workspace:*",
+    "@wave-client/shared": "workspace:*",
+    "hnswlib-node": "^3.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "@vitest/coverage-v8": "^4.0.16",
+    "rimraf": "^6.0.1",
+    "typescript": "^5.7.2",
+    "vitest": "^4.0.16"
+  },
+  "files": [
+    "dist",
+    "src"
+  ]
+}

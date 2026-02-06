@@ -1,5 +1,5 @@
 import React from 'react';
-import { SunIcon , MoonIcon, LibraryIcon , HistoryIcon, ShieldCheckIcon, SettingsIcon, LightbulbIcon, GitBranchIcon, FlaskConicalIcon } from 'lucide-react';
+import { SunIcon , MoonIcon, LibraryIcon , HistoryIcon, ShieldCheckIcon, SettingsIcon, LightbulbIcon, GitBranchIcon, FlaskConicalIcon, Sparkles } from 'lucide-react';
 import {
   Tabs,
   TabsContent,
@@ -41,24 +41,33 @@ interface ConfigPanelProps {
   onRetryEnvironments?: () => void;
   onRetryFlows?: () => void;
   onRetryTestSuites?: () => void;
+  onActiveTabChange?: (tab: string) => void;
 }
 
 const TABS = [
   { key: 'collections', label: 'Collections', icon: <LibraryIcon size={20} /> },
   { key: 'flows', label: 'Flows', icon: <GitBranchIcon size={20} /> },
   { key: 'testlab', label: 'Test Lab', icon: <FlaskConicalIcon size={20} /> },
+  { key: 'arena', label: 'Wave Arena', icon: <Sparkles size={20} /> },
   { key: 'history', label: 'History', icon: <HistoryIcon size={20} /> },
   { key: 'environments', label: 'Environments', icon: <SunIcon size={20} /> },
   { key: 'store', label: 'Wave Store', icon: <ShieldCheckIcon size={20} /> },
 ];
 
-const ConfigPanel: React.FC<ConfigPanelProps> = ({ onRequestSelect, onEnvSelect, onStoreSelect, onFlowSelect, onFlowRun, onTestSuiteSelect, onTestSuiteRun, onSettingsSelect, onImportCollection, onExportCollection, onImportEnvironments, onExportEnvironments, onRetryCollections, onRetryHistory, onRetryEnvironments, onRetryFlows, onRetryTestSuites}) => {
+const ConfigPanel: React.FC<ConfigPanelProps> = ({ onRequestSelect, onEnvSelect, onStoreSelect, onFlowSelect, onFlowRun, onTestSuiteSelect, onTestSuiteRun, onSettingsSelect, onImportCollection, onExportCollection, onImportEnvironments, onExportEnvironments, onRetryCollections, onRetryHistory, onRetryEnvironments, onRetryFlows, onRetryTestSuites, onActiveTabChange}) => {
   const { theme, toggleTheme } = useTheme();
+  const [activeTab, setActiveTab] = React.useState('collections');
+
+  const handleTabChange = (value: string) => {
+    setActiveTab(value);
+    onActiveTabChange?.(value);
+  };
 
   return (
     <div className="flex h-full w-full overflow-hidden">
       <Tabs
-        defaultValue="collections"
+        value={activeTab}
+        onValueChange={handleTabChange}
         orientation="vertical"
         className="w-full h-full flex flex-row overflow-hidden"
       >
@@ -126,6 +135,15 @@ const ConfigPanel: React.FC<ConfigPanelProps> = ({ onRequestSelect, onEnvSelect,
                   onRetry={onRetryTestSuites}
               />
             )}
+          </TabsContent>
+          <TabsContent value="arena" className="h-full overflow-hidden">
+            {/* Arena renders in the main right panel for full-width layout */}
+            <div className="flex flex-col items-center justify-center h-full p-6 text-center">
+              <Sparkles size={32} className="text-blue-500 mb-3" />
+              <p className="text-sm text-slate-500 dark:text-slate-400">
+                Wave Arena is open in the main panel
+              </p>
+            </div>
           </TabsContent>
           <TabsContent value="history" className="h-full overflow-hidden">
             <HistoryPane 

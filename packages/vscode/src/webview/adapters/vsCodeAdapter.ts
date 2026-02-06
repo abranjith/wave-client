@@ -28,6 +28,7 @@ import {
     type ISecretAdapter,
     type ISecurityAdapter,
     type INotificationAdapter,
+    type IArenaAdapter,
     type IAdapterEvents,
     type HttpRequestConfig,
     type HttpResponseResult,
@@ -44,6 +45,8 @@ import {
     type TestSuite,
     type CollectionRequest,
 } from '@wave-client/core';
+
+import { createVSCodeArenaAdapter } from './vsCodeArenaAdapter';
 
 // ============================================================================
 // Types for message handling
@@ -789,6 +792,7 @@ export function createVSCodeAdapter(
     const secret = createVSCodeSecretAdapter(vsCodeApi);
     const security = createVSCodeSecurityAdapter(vsCodeApi);
     const notification = createVSCodeNotificationAdapter();
+    const arena = createVSCodeArenaAdapter(vsCodeApi, pendingRequests, events, defaultTimeout);
 
     /**
      * Message handler for both request/response and push events.
@@ -885,6 +889,7 @@ export function createVSCodeAdapter(
         secret,
         security,
         notification,
+        arena,
         events,
 
         initialize: async () => {

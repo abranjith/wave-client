@@ -24,6 +24,7 @@ export type {
     ISecretAdapter,
     ISecurityAdapter,
     INotificationAdapter,
+    IArenaAdapter,
     IAdapterEvents,
     HttpRequestConfig,
     HttpResponseResult,
@@ -40,6 +41,35 @@ export type {
 } from './types/adapters';
 
 export { isAdapterSuccess, isAdapterError, createAdapterEventEmitter } from './types/adapters';
+
+// Arena types
+export type {
+    ArenaAgentId,
+    ArenaCommandId,
+    ArenaCommand,
+    ArenaMessageRole,
+    ArenaMessageStatus,
+    ArenaMessage,
+    ArenaMessageSource,
+    ArenaSession,
+    ArenaSessionWithMessages,
+    ArenaDocument,
+    ArenaProviderType,
+    ArenaSettings,
+    ArenaState,
+    ArenaActions,
+    ArenaSlice,
+    ArenaChatRequest,
+    ArenaChatResponse,
+    ArenaChatStreamChunk,
+} from './types/arena';
+
+export {
+    ARENA_AGENTS,
+    ARENA_COMMANDS,
+    ARENA_COMMAND_DEFINITIONS,
+    DEFAULT_ARENA_SETTINGS,
+} from './types/arena';
 
 // Collection types
 export type {
@@ -220,6 +250,7 @@ export {
     useSecretAdapter,
     useSecurityAdapter,
     useNotificationAdapter,
+    useArenaAdapter,
     usePlatform,
     useAdapterOptional,
     useAdapterEvent,
@@ -321,6 +352,9 @@ export { BatchExecutor } from './utils/batchExecutor';
 
 // Zustand store
 export { default as useAppStateStore } from './hooks/store/useAppStateStore';
+
+// Arena slice helpers
+export { createArenaSession, createArenaMessage } from './hooks/store/createArenaSlice';
 
 // Custom hooks
 export { useCollectionRunner } from './hooks/useCollectionRunner';

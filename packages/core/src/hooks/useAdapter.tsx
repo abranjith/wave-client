@@ -177,6 +177,10 @@ export function useNotificationAdapter() {
     return useAdapter().notification;
 }
 
+export function useArenaAdapter() {
+    return useAdapter().arena;
+}
+
 /**
  * Hook to get the current platform.
  */

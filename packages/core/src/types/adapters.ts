@@ -29,6 +29,15 @@ import type { TestSuite } from './testSuite';
 import type { RequestValidation, ValidationResult } from './validation';
 import type { Auth } from './auth';
 import type { ValidationRule } from './validation';
+import type {
+    ArenaSession,
+    ArenaMessage,
+    ArenaDocument,
+    ArenaSettings,
+    ArenaChatRequest,
+    ArenaChatResponse,
+    ArenaChatStreamChunk,
+} from './arena';
 
 // ============================================================================
 // Common Types
@@ -383,6 +392,105 @@ export interface INotificationAdapter {
 }
 
 // ============================================================================
+// Arena Adapter Interface
+// ============================================================================
+
+/**
+ * Handles Arena AI chat operations including sessions, messages, and documents.
+ * 
+ * VS Code implementation: Uses LangGraph agents via extension backend
+ * Web implementation: Direct API calls to LLM providers or relay server
+ */
+export interface IArenaAdapter {
+    // Session Management
+    /**
+     * Load all chat sessions
+     */
+    loadSessions(): Promise<Result<ArenaSession[], string>>;
+    
+    /**
+     * Save a chat session
+     */
+    saveSession(session: ArenaSession): Promise<Result<void, string>>;
+    
+    /**
+     * Delete a chat session and its messages
+     */
+    deleteSession(sessionId: string): Promise<Result<void, string>>;
+
+    // Message Management
+    /**
+     * Load messages for a session
+     */
+    loadMessages(sessionId: string): Promise<Result<ArenaMessage[], string>>;
+    
+    /**
+     * Save a message to a session
+     */
+    saveMessage(message: ArenaMessage): Promise<Result<void, string>>;
+    
+    /**
+     * Delete all messages for a session
+     */
+    clearSessionMessages(sessionId: string): Promise<Result<void, string>>;
+
+    // Document Management
+    /**
+     * Load all uploaded documents metadata
+     */
+    loadDocuments(): Promise<Result<ArenaDocument[], string>>;
+    
+    /**
+     * Upload and process a document for RAG
+     * Returns the document metadata with processing status
+     */
+    uploadDocument(file: File, content: ArrayBuffer): Promise<Result<ArenaDocument, string>>;
+    
+    /**
+     * Delete a document and its embeddings
+     */
+    deleteDocument(documentId: string): Promise<Result<void, string>>;
+
+    // Chat Operations
+    /**
+     * Send a chat message and get a response
+     * For non-streaming responses
+     */
+    sendMessage(request: ArenaChatRequest): Promise<Result<ArenaChatResponse, string>>;
+    
+    /**
+     * Send a chat message and stream the response
+     * Calls onChunk for each streaming chunk
+     * Returns the final complete response
+     */
+    streamMessage(
+        request: ArenaChatRequest,
+        onChunk: (chunk: ArenaChatStreamChunk) => void
+    ): Promise<Result<ArenaChatResponse, string>>;
+    
+    /**
+     * Cancel an ongoing chat request
+     */
+    cancelChat(sessionId: string): void;
+
+    // Settings
+    /**
+     * Load Arena settings
+     */
+    loadSettings(): Promise<Result<ArenaSettings, string>>;
+    
+    /**
+     * Save Arena settings
+     */
+    saveSettings(settings: ArenaSettings): Promise<Result<void, string>>;
+    
+    /**
+     * Validate API key for a provider
+     */
+    validateApiKey(provider: string, apiKey: string): Promise<Result<boolean, string>>;
+}
+
+// ============================================================================
 // Combined Platform Adapter Interface
 // ============================================================================
 
@@ -397,6 +505,7 @@ export interface IPlatformAdapter {
     secret: ISecretAdapter;
     security: ISecurityAdapter;
     notification: INotificationAdapter;
+    arena: IArenaAdapter;
 
     /**
      * Event emitter for push notifications from the platform.
@@ -499,6 +608,13 @@ export interface AdapterEventMap {
     decryptionComplete: void;
     recoveryKeyExported: { path: string };
     recoveryComplete: void;
+    
+    // Arena events
+    arenaSessionsChanged: void;
+    arenaMessagesChanged: { sessionId: string };
+    arenaDocumentsChanged: void;
+    arenaSettingsChanged: void;
+    arenaStreamChunk: ArenaChatStreamChunk;
 }
 
 /**

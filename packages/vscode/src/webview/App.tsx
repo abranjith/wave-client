@@ -22,6 +22,7 @@ import {
   useAdapterEvent,
   FlowCanvas,
   TestSuiteEditor,
+  ArenaPane,
   generateUniqueId,
   type Environment,
   type Cookie,
@@ -42,6 +43,7 @@ const App: React.FC = () => {
   const [selectedFlow, setSelectedFlow] = useState<Flow | null>(null);
   const [selectedTestSuite, setSelectedTestSuite] = useState<TestSuite | null>(null);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isArenaActive, setIsArenaActive] = useState(false);
 
   // Adapter hooks
   const storage = useStorageAdapter();
@@ -622,11 +624,13 @@ const App: React.FC = () => {
       className="min-h-screen h-screen w-screen bg-background text-foreground grid relative transition-colors"
       style={{
         display: 'grid',
-        gridTemplateColumns: '400px 1fr',
+        gridTemplateColumns: isArenaActive ? '64px 1fr' : '400px 1fr',
         gridTemplateRows: '1fr',
-        gridTemplateAreas: (selectedEnvironment || selectedStore || selectedFlow || selectedTestSuite)
-          ? `"config environment"`
-          : `"config editor"`,
+        gridTemplateAreas: isArenaActive
+          ? `"config arena"`
+          : (selectedEnvironment || selectedStore || selectedFlow || selectedTestSuite)
+            ? `"config environment"`
+            : `"config editor"`,
         height: '100vh',
       }}
     >
@@ -662,10 +666,25 @@ const App: React.FC = () => {
           onRetryEnvironments={handleRetryEnvironments}
           onRetryFlows={handleRetryFlows}
           onRetryTestSuites={handleRetryTestSuites}
+          onActiveTabChange={(tab) => {
+            const arenaActive = tab === 'arena';
+            setIsArenaActive(arenaActive);
+            if (arenaActive) {
+              setSelectedEnvironment(null);
+              setSelectedStore(null);
+              setSelectedFlow(null);
+              setSelectedTestSuite(null);
+            }
+          }}
         />
       </div>
 
-      {selectedTestSuite ? (
+      {isArenaActive ? (
+        /* Arena - Full Height */
+        <div style={{ gridArea: 'arena' }} className="overflow-hidden">
+          <ArenaPane />
+        </div>
+      ) : selectedTestSuite ? (
         /* Test Suite Editor - Full Height */
         <div style={{ gridArea: 'environment' }} className="overflow-hidden">
           <TestSuiteEditor
