@@ -14,6 +14,8 @@ import type {
     ArenaChatRequest,
     ArenaChatResponse,
     ArenaChatStreamChunk,
+    ArenaReference,
+    ArenaProviderSettingsMap,
 } from '@wave-client/core';
 import {
     ok,
@@ -21,6 +23,7 @@ import {
     Result,
     DEFAULT_ARENA_SETTINGS,
     STORAGE_KEYS as CONFIG_STORAGE_KEYS,
+    getDefaultProviderSettings,
     geminiGenerateContentUrl,
     geminiStreamUrl,
     geminiModelsUrl,
@@ -38,6 +41,8 @@ const STORAGE_KEYS = {
     MESSAGES: CONFIG_STORAGE_KEYS.MESSAGES,
     DOCUMENTS: CONFIG_STORAGE_KEYS.DOCUMENTS,
     SETTINGS: CONFIG_STORAGE_KEYS.SETTINGS,
+    REFERENCES: CONFIG_STORAGE_KEYS.REFERENCES,
+    PROVIDER_SETTINGS: CONFIG_STORAGE_KEYS.PROVIDER_SETTINGS,
 } as const;
 
 // ============================================================================
@@ -274,7 +279,13 @@ export class WebArenaAdapter implements IArenaAdapter {
                 return err(`Provider ${settings.provider} is not supported yet. Please use Gemini.`);
             }
 
-            if (!settings.apiKey) {
+            // Resolve API key from provider settings
+            const providerSettings = loadFromStorage<ArenaProviderSettingsMap>(
+                STORAGE_KEYS.PROVIDER_SETTINGS,
+                getDefaultProviderSettings(),
+            );
+            const apiKey = providerSettings['gemini']?.apiKey;
+            if (!apiKey) {
                 return err('API key is required. Please configure your Gemini API key in Arena settings.');
             }
 
@@ -306,7 +317,13 @@ export class WebArenaAdapter implements IArenaAdapter {
                 return err(`Provider ${settings.provider} is not supported yet. Please use Gemini.`);
             }
 
-            if (!settings.apiKey) {
+            // Resolve API key from provider settings
+            const providerSettings = loadFromStorage<ArenaProviderSettingsMap>(
+                STORAGE_KEYS.PROVIDER_SETTINGS,
+                getDefaultProviderSettings(),
+            );
+            const apiKey = providerSettings['gemini']?.apiKey;
+            if (!apiKey) {
                 return err('API key is required. Please configure your Gemini API key in Arena settings.');
             }
 
@@ -380,6 +397,50 @@ export class WebArenaAdapter implements IArenaAdapter {
         return ok(getModelsForProvider(provider as any).map(m => ({ id: m.id, label: m.label })));
     }
 
+    // References (stored in localStorage)
+    async loadReferences(): Promise<Result<ArenaReference[], string>> {
+        try {
+            const refs = loadFromStorage<ArenaReference[]>(STORAGE_KEYS.REFERENCES, []);
+            return ok(refs);
+        } catch (error) {
+            return err(`Failed to load references: ${error}`);
+        }
+    }
+
+    async saveReferences(references: ArenaReference[]): Promise<Result<void, string>> {
+        try {
+            saveToStorage(STORAGE_KEYS.REFERENCES, references);
+            return ok(undefined);
+        } catch (error) {
+            return err(`Failed to save references: ${error}`);
+        }
+    }
+
+    // ========================================================================
+    // Provider Settings
+    // ========================================================================
+
+    async loadProviderSettings(): Promise<Result<ArenaProviderSettingsMap, string>> {
+        try {
+            const settings = loadFromStorage<ArenaProviderSettingsMap>(
+                STORAGE_KEYS.PROVIDER_SETTINGS,
+                getDefaultProviderSettings(),
+            );
+            return ok(settings);
+        } catch (error) {
+            return err(`Failed to load provider settings: ${error}`);
+        }
+    }
+
+    async saveProviderSettings(settings: ArenaProviderSettingsMap): Promise<Result<void, string>> {
+        try {
+            saveToStorage(STORAGE_KEYS.PROVIDER_SETTINGS, settings);
+            return ok(undefined);
+        } catch (error) {
+            return err(`Failed to save provider settings: ${error}`);
+        }
+    }
+
     // ========================================================================
     // Private: Gemini API Methods
     // ========================================================================
@@ -390,7 +451,11 @@ export class WebArenaAdapter implements IArenaAdapter {
     ): Promise<Result<ArenaChatResponse, string>> {
         const { message, history, settings, command } = request;
         const model = settings.model || LLM_DEFAULTS.GEMINI_MODEL;
-        const apiKey = settings.apiKey!;
+        const providerSettings = loadFromStorage<ArenaProviderSettingsMap>(
+            STORAGE_KEYS.PROVIDER_SETTINGS,
+            getDefaultProviderSettings(),
+        );
+        const apiKey = providerSettings['gemini']?.apiKey!;
 
         // Build conversation contents
         const contents = this.buildGeminiContents(history, message, command);
@@ -442,7 +507,11 @@ export class WebArenaAdapter implements IArenaAdapter {
     ): Promise<Result<ArenaChatResponse, string>> {
         const { message, history, settings, command } = request;
         const model = settings.model || LLM_DEFAULTS.GEMINI_MODEL;
-        const apiKey = settings.apiKey!;
+        const providerSettings = loadFromStorage<ArenaProviderSettingsMap>(
+            STORAGE_KEYS.PROVIDER_SETTINGS,
+            getDefaultProviderSettings(),
+        );
+        const apiKey = providerSettings['gemini']?.apiKey!;
 
         // Build conversation contents
         const contents = this.buildGeminiContents(history, message, command);

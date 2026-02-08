@@ -14,14 +14,16 @@ import { cn } from '../../utils/styling';
 import { useArenaAdapter, useNotificationAdapter, useAdapterEvent } from '../../hooks/useAdapter';
 import useAppStateStore from '../../hooks/store/useAppStateStore';
 import { createArenaSession, createArenaMessage, buildDefaultSources } from '../../hooks/store/createArenaSlice';
-import { createSessionMetadata, getAgentDefinition } from '../../config/arenaConfig';
-import type { ArenaAgentId } from '../../config/arenaConfig';
+import { createSessionMetadata, getAgentDefinition, mergeReferences } from '../../config/arenaConfig';
+import type { ArenaAgentId, ArenaReference } from '../../config/arenaConfig';
+import type { ArenaProviderSettingsMap } from '../../config/arenaConfig';
 import type { ArenaCommandId, ArenaSettings as ArenaSettingsType, ArenaView } from '../../types/arena';
 import ArenaSessionList from './ArenaSessionList';
 import ArenaChatView from './ArenaChatView';
 import ArenaChatToolbar from './ArenaChatToolbar';
 import ArenaSettings from './ArenaSettings';
 import ArenaAgentSelect from './ArenaAgentSelect';
+import ArenaReferencesModal from './ArenaReferencesModal';
 
 // ============================================================================
 // Types
@@ -42,6 +44,7 @@ export function ArenaPane({ className }: ArenaPaneProps): React.ReactElement {
   
   // Local state
   const [isCreatingSession, setIsCreatingSession] = useState(false);
+  const [showReferencesModal, setShowReferencesModal] = useState(false);
   
   // Global state from store
   const {
@@ -57,6 +60,8 @@ export function ArenaPane({ className }: ArenaPaneProps): React.ReactElement {
     arenaView,
     arenaActiveSources,
     arenaSessionMetadata,
+    arenaReferences,
+    arenaProviderSettings,
     setArenaSessions,
     addArenaSession,
     removeArenaSession,
@@ -66,6 +71,7 @@ export function ArenaPane({ className }: ArenaPaneProps): React.ReactElement {
     updateArenaMessage,
     setArenaSettings,
     updateArenaSettings,
+    setArenaProviderSettings,
     setArenaIsLoading,
     setArenaIsStreaming,
     setArenaStreamingContent,
@@ -78,20 +84,23 @@ export function ArenaPane({ className }: ArenaPaneProps): React.ReactElement {
     setArenaActiveSources,
     setArenaSessionMetadata,
     updateArenaSessionMetadata,
+    setArenaReferences,
   } = useAppStateStore();
 
   // ============================================================================
   // Effects
   // ============================================================================
 
-  // Load sessions on mount
+  // Load sessions, settings, and user references on mount
   useEffect(() => {
     async function loadData() {
       setArenaIsLoading(true);
 
-      const [sessionsResult, settingsResult] = await Promise.all([
+      const [sessionsResult, settingsResult, refsResult, providerSettingsResult] = await Promise.all([
         arenaAdapter.loadSessions(),
         arenaAdapter.loadSettings(),
+        arenaAdapter.loadReferences(),
+        arenaAdapter.loadProviderSettings(),
       ]);
 
       if (sessionsResult.isOk) {
@@ -104,11 +113,19 @@ export function ArenaPane({ className }: ArenaPaneProps): React.ReactElement {
         setArenaSettings(settingsResult.value);
       }
 
+      if (refsResult.isOk) {
+        setArenaReferences(mergeReferences(refsResult.value));
+      }
+
+      if (providerSettingsResult.isOk) {
+        setArenaProviderSettings(providerSettingsResult.value);
+      }
+
       setArenaIsLoading(false);
     }
 
     loadData();
-  }, [arenaAdapter, setArenaSessions, setArenaSettings, setArenaIsLoading, setArenaError]);
+  }, [arenaAdapter, setArenaSessions, setArenaSettings, setArenaReferences, setArenaProviderSettings, setArenaIsLoading, setArenaError]);
 
   // Load messages when active session changes
   useEffect(() => {
@@ -173,6 +190,22 @@ export function ArenaPane({ className }: ArenaPaneProps): React.ReactElement {
   // ============================================================================
   // Handlers
   // ============================================================================
+
+  /** Called when the user modifies references in the modal (toggle, add, remove) */
+  const handleReferencesChange = useCallback(
+    async (updatedRefs: ArenaReference[]) => {
+      setArenaReferences(updatedRefs);
+
+      // Persist only user-added (non-default) references
+      const userRefs = updatedRefs.filter((r) => !r.isDefault);
+      const result = await arenaAdapter.saveReferences(userRefs);
+
+      if (result.isErr) {
+        notification.showNotification('error', `Failed to save references: ${result.error}`);
+      }
+    },
+    [arenaAdapter, setArenaReferences, notification],
+  );
 
   /** Called from the ArenaAgentSelect page */
   const handleSelectAgent = useCallback(
@@ -360,17 +393,26 @@ export function ArenaPane({ className }: ArenaPaneProps): React.ReactElement {
   );
 
   const handleSaveAdvancedSettings = useCallback(
-    async (newSettings: ArenaSettingsType) => {
-      const result = await arenaAdapter.saveSettings(newSettings);
-      if (result.isOk) {
+    async (newSettings: ArenaSettingsType, newProviderSettings: ArenaProviderSettingsMap) => {
+      const [settingsResult, providerResult] = await Promise.all([
+        arenaAdapter.saveSettings(newSettings),
+        arenaAdapter.saveProviderSettings(newProviderSettings),
+      ]);
+
+      if (settingsResult.isOk && providerResult.isOk) {
         setArenaSettings(newSettings);
+        setArenaProviderSettings(newProviderSettings);
         notification.showNotification('success', 'Settings saved');
         setArenaView('chat');
       } else {
-        notification.showNotification('error', `Failed to save settings: ${result.error}`);
+        const errors = [
+          settingsResult.isErr ? settingsResult.error : null,
+          providerResult.isErr ? providerResult.error : null,
+        ].filter(Boolean).join('; ');
+        notification.showNotification('error', `Failed to save settings: ${errors}`);
       }
     },
-    [arenaAdapter, setArenaSettings, setArenaView, notification],
+    [arenaAdapter, setArenaSettings, setArenaProviderSettings, setArenaView, notification],
   );
 
   /** Navigate back to agent selection */
@@ -459,6 +501,7 @@ export function ArenaPane({ className }: ArenaPaneProps): React.ReactElement {
         {arenaView === 'settings' ? (
           <ArenaSettings
             settings={arenaSettings}
+            providerSettings={arenaProviderSettings}
             onSave={handleSaveAdvancedSettings}
             onCancel={() => setArenaView(arenaSelectedAgent ? 'chat' : 'select-agent')}
           />
@@ -468,8 +511,10 @@ export function ArenaPane({ className }: ArenaPaneProps): React.ReactElement {
           <>
             {/* Toolbar */}
             <ArenaChatToolbar
-              sources={arenaActiveSources}
+              referenceCount={arenaReferences.filter((r) => r.enabled).length}
+              onOpenReferences={() => setShowReferencesModal(true)}
               settings={arenaSettings}
+              providerSettings={arenaProviderSettings}
               metadata={arenaSessionMetadata ?? undefined}
               onSettingsChange={handleToolbarSettingsChange}
               onOpenSettings={() => setArenaView('settings')}
@@ -488,6 +533,15 @@ export function ArenaPane({ className }: ArenaPaneProps): React.ReactElement {
           <ArenaAgentSelect onSelectAgent={handleSelectAgent} />
         )}
       </div>
+
+      {/* ---- References Modal ---- */}
+      {showReferencesModal && (
+        <ArenaReferencesModal
+          references={arenaReferences}
+          onReferencesChange={handleReferencesChange}
+          onClose={() => setShowReferencesModal(false)}
+        />
+      )}
     </div>
   );
 }

@@ -20,8 +20,13 @@ import {
   DEFAULT_REFERENCE_WEBSITES,
   STORAGE_KEYS,
   LLM_DEFAULTS,
+  ARENA_DIR,
+  ARENA_REFERENCES_FILE,
   createSessionMetadata,
+  getDefaultReferences,
+  mergeReferences,
 } from '../../config/arenaConfig';
+import type { ArenaReference } from '../../config/arenaConfig';
 
 // ============================================================================
 // Agent IDs & Definitions
@@ -178,11 +183,12 @@ describe('DEFAULT_REFERENCE_WEBSITES', () => {
 });
 
 describe('STORAGE_KEYS', () => {
-  it('should have session, message, documents, and settings keys', () => {
+  it('should have session, message, documents, settings, and references keys', () => {
     expect(STORAGE_KEYS.SESSIONS).toBeTruthy();
     expect(STORAGE_KEYS.MESSAGES).toBeTruthy();
     expect(STORAGE_KEYS.DOCUMENTS).toBeTruthy();
     expect(STORAGE_KEYS.SETTINGS).toBeTruthy();
+    expect(STORAGE_KEYS.REFERENCES).toBeTruthy();
   });
 });
 
@@ -206,5 +212,116 @@ describe('createSessionMetadata', () => {
     expect(meta.messageCount).toBe(0);
     expect(meta.totalTokenCount).toBe(0);
     expect(meta.startedAt).toBeGreaterThan(0);
+  });
+});
+
+// ============================================================================
+// Arena Directory & File Constants
+// ============================================================================
+
+describe('ARENA_DIR', () => {
+  it('should be "arena"', () => {
+    expect(ARENA_DIR).toBe('arena');
+  });
+});
+
+describe('ARENA_REFERENCES_FILE', () => {
+  it('should be "references.json"', () => {
+    expect(ARENA_REFERENCES_FILE).toBe('references.json');
+  });
+});
+
+// ============================================================================
+// Reference Helpers
+// ============================================================================
+
+describe('getDefaultReferences', () => {
+  it('should return the same number of references as DEFAULT_REFERENCE_WEBSITES', () => {
+    const refs = getDefaultReferences();
+    expect(refs).toHaveLength(DEFAULT_REFERENCE_WEBSITES.length);
+  });
+
+  it('should mark every reference as isDefault', () => {
+    const refs = getDefaultReferences();
+    for (const r of refs) {
+      expect(r.isDefault).toBe(true);
+    }
+  });
+
+  it('should set type to "web" for all default references', () => {
+    const refs = getDefaultReferences();
+    for (const r of refs) {
+      expect(r.type).toBe('web');
+    }
+  });
+
+  it('should preserve id, name, url, description, category, and enabled from website config', () => {
+    const refs = getDefaultReferences();
+    for (let i = 0; i < DEFAULT_REFERENCE_WEBSITES.length; i++) {
+      const website = DEFAULT_REFERENCE_WEBSITES[i];
+      const ref = refs[i];
+      expect(ref.id).toBe(website.id);
+      expect(ref.name).toBe(website.name);
+      expect(ref.url).toBe(website.url);
+      expect(ref.description).toBe(website.description);
+      expect(ref.category).toBe(website.category);
+      expect(ref.enabled).toBe(website.enabled);
+    }
+  });
+});
+
+describe('mergeReferences', () => {
+  const userRef: ArenaReference = {
+    id: 'user-custom',
+    name: 'Custom API',
+    url: 'https://example.com/api',
+    type: 'document',
+    isDefault: false,
+    enabled: true,
+  };
+
+  it('should return defaults when called with an empty array', () => {
+    const merged = mergeReferences([]);
+    const defaults = getDefaultReferences();
+    expect(merged).toHaveLength(defaults.length);
+    expect(merged.map((r) => r.id)).toEqual(defaults.map((d) => d.id));
+  });
+
+  it('should append user-added references after the defaults', () => {
+    const merged = mergeReferences([userRef]);
+    const defaults = getDefaultReferences();
+    expect(merged).toHaveLength(defaults.length + 1);
+    expect(merged[merged.length - 1].id).toBe('user-custom');
+  });
+
+  it('should prefer the user copy when a default id is overridden', () => {
+    // Override the 'mdn' default to toggle it off
+    const overriddenMdn: ArenaReference = {
+      id: 'mdn',
+      name: 'MDN Web Docs',
+      url: 'https://developer.mozilla.org',
+      type: 'web',
+      isDefault: true,
+      enabled: false, // user toggled off
+    };
+    const merged = mergeReferences([overriddenMdn]);
+    const mdnRef = merged.find((r) => r.id === 'mdn');
+    expect(mdnRef).toBeDefined();
+    expect(mdnRef!.enabled).toBe(false);
+  });
+
+  it('should not create duplicates when user refs overlap with defaults', () => {
+    const overriddenMdn: ArenaReference = {
+      id: 'mdn',
+      name: 'MDN Web Docs',
+      url: 'https://developer.mozilla.org',
+      type: 'web',
+      isDefault: true,
+      enabled: true,
+    };
+    const merged = mergeReferences([overriddenMdn, userRef]);
+    const defaults = getDefaultReferences();
+    // defaults + 1 user ref (the mdn override replaces the default, not added)
+    expect(merged).toHaveLength(defaults.length + 1);
   });
 });

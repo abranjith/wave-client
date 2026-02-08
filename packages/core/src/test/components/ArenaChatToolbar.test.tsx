@@ -1,16 +1,22 @@
 /**
  * Tests for the ArenaChatToolbar component.
+ *
+ * The toolbar displays:
+ *  - A "References" icon button (BookOpen) with a badge showing the enabled-reference count
+ *  - A provider / model popover
+ *  - Metadata stats (messages, tokens) when a session is active
  */
 
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import ArenaChatToolbar from '../../components/arena/ArenaChatToolbar';
-import { DEFAULT_ARENA_SETTINGS, createSessionMetadata } from '../../config/arenaConfig';
-import type { ArenaSourceConfig } from '../../config/arenaConfig';
+import { DEFAULT_ARENA_SETTINGS, createSessionMetadata, getDefaultProviderSettings } from '../../config/arenaConfig';
 
 const defaultProps = {
-  sources: [] as ArenaSourceConfig[],
+  referenceCount: 0,
+  onOpenReferences: vi.fn(),
   settings: DEFAULT_ARENA_SETTINGS,
+  providerSettings: getDefaultProviderSettings(),
   onSettingsChange: vi.fn(),
   onOpenSettings: vi.fn(),
 };
@@ -43,26 +49,24 @@ describe('ArenaChatToolbar', () => {
     expect(screen.getByText('1,234')).toBeInTheDocument();
   });
 
-  it('should display source pills when enabled sources are provided', () => {
-    const sources: ArenaSourceConfig[] = [
-      { type: 'web', label: 'MDN Web Docs', url: 'https://developer.mozilla.org', enabled: true },
-      { type: 'document', label: 'My Doc', enabled: true },
-    ];
+  it('should display the References button with the enabled count badge', () => {
+    render(<ArenaChatToolbar {...defaultProps} referenceCount={3} />);
 
-    render(<ArenaChatToolbar {...defaultProps} sources={sources} />);
-
-    expect(screen.getByText('MDN Web Docs')).toBeInTheDocument();
-    expect(screen.getByText('My Doc')).toBeInTheDocument();
+    // The badge should show the count and the label "References" should be visible
+    expect(screen.getByText('3')).toBeInTheDocument();
+    expect(screen.getByText('References')).toBeInTheDocument();
   });
 
-  it('should show "No sources" when all sources are disabled', () => {
-    const sources: ArenaSourceConfig[] = [
-      { type: 'web', label: 'MDN Web Docs', url: 'https://developer.mozilla.org', enabled: false },
-    ];
+  it('should call onOpenReferences when the References button is clicked', () => {
+    const onOpenReferences = vi.fn();
+    render(
+      <ArenaChatToolbar {...defaultProps} onOpenReferences={onOpenReferences} />,
+    );
 
-    render(<ArenaChatToolbar {...defaultProps} sources={sources} />);
+    const referencesBtn = screen.getByText('References');
+    fireEvent.click(referencesBtn);
 
-    expect(screen.getByText('No sources')).toBeInTheDocument();
+    expect(onOpenReferences).toHaveBeenCalledOnce();
   });
 
   it('should open provider popover when provider/model button is clicked', () => {

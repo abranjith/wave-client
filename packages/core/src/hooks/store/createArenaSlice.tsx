@@ -12,12 +12,17 @@ import type {
     ArenaSettings,
     ArenaSourceConfig,
     ArenaSessionMetadata,
+    ArenaReference,
+    ArenaProviderSettingsMap,
+    ArenaProviderType,
 } from '../../config/arenaConfig';
 import {
     DEFAULT_ARENA_SETTINGS,
     getAgentDefinition,
     createSessionMetadata,
     DEFAULT_REFERENCE_WEBSITES,
+    getDefaultReferences,
+    getDefaultProviderSettings,
 } from '../../config/arenaConfig';
 
 // ============================================================================
@@ -44,6 +49,10 @@ export interface ArenaSlice {
     arenaActiveSources: ArenaSourceConfig[];
     /** Session metadata for the active session */
     arenaSessionMetadata: ArenaSessionMetadata | null;
+    /** All references (default + user-added, already merged) */
+    arenaReferences: ArenaReference[];
+    /** Per-provider configuration (API keys, URLs, enabled/disabled, disabled models) */
+    arenaProviderSettings: ArenaProviderSettingsMap;
     
     // Session actions
     setArenaSessions: (sessions: ArenaSession[]) => void;
@@ -68,6 +77,8 @@ export interface ArenaSlice {
     // Settings actions
     setArenaSettings: (settings: ArenaSettings) => void;
     updateArenaSettings: (updates: Partial<ArenaSettings>) => void;
+    setArenaProviderSettings: (settings: ArenaProviderSettingsMap) => void;
+    updateArenaProviderSettings: (providerId: ArenaProviderType, updates: Partial<ArenaProviderSettingsMap[ArenaProviderType]>) => void;
     
     // UI state actions
     setArenaIsLoading: (isLoading: boolean) => void;
@@ -84,6 +95,12 @@ export interface ArenaSlice {
     setArenaActiveSources: (sources: ArenaSourceConfig[]) => void;
     setArenaSessionMetadata: (metadata: ArenaSessionMetadata | null) => void;
     updateArenaSessionMetadata: (updates: Partial<ArenaSessionMetadata>) => void;
+    
+    // Reference actions
+    setArenaReferences: (refs: ArenaReference[]) => void;
+    addArenaReference: (ref: ArenaReference) => void;
+    removeArenaReference: (refId: string) => void;
+    toggleArenaReference: (refId: string) => void;
     
     // Utility actions
     resetArenaState: () => void;
@@ -189,6 +206,8 @@ const createArenaSlice: StateCreator<ArenaSlice> = (set, get) => ({
     arenaView: 'select-agent' as ArenaView,
     arenaActiveSources: [],
     arenaSessionMetadata: null,
+    arenaReferences: getDefaultReferences(),
+    arenaProviderSettings: getDefaultProviderSettings(),
     
     // Session actions
     setArenaSessions: (sessions) => set({ arenaSessions: sessions }),
@@ -289,6 +308,15 @@ const createArenaSlice: StateCreator<ArenaSlice> = (set, get) => ({
         arenaSettings: { ...state.arenaSettings, ...updates },
     })),
     
+    setArenaProviderSettings: (settings) => set({ arenaProviderSettings: settings }),
+    
+    updateArenaProviderSettings: (providerId, updates) => set((state) => ({
+        arenaProviderSettings: {
+            ...state.arenaProviderSettings,
+            [providerId]: { ...state.arenaProviderSettings[providerId], ...updates },
+        },
+    })),
+    
     // UI state actions
     setArenaIsLoading: (isLoading) => set({ arenaIsLoading: isLoading }),
     
@@ -329,6 +357,23 @@ const createArenaSlice: StateCreator<ArenaSlice> = (set, get) => ({
             : null,
     })),
     
+    // Reference actions
+    setArenaReferences: (refs) => set({ arenaReferences: refs }),
+    
+    addArenaReference: (ref) => set((state) => ({
+        arenaReferences: [...state.arenaReferences, ref],
+    })),
+    
+    removeArenaReference: (refId) => set((state) => ({
+        arenaReferences: state.arenaReferences.filter((r) => r.id !== refId),
+    })),
+    
+    toggleArenaReference: (refId) => set((state) => ({
+        arenaReferences: state.arenaReferences.map((r) =>
+            r.id === refId ? { ...r, enabled: !r.enabled } : r,
+        ),
+    })),
+    
     // Utility actions
     resetArenaState: () => set({
         arenaSessions: [],
@@ -345,6 +390,8 @@ const createArenaSlice: StateCreator<ArenaSlice> = (set, get) => ({
         arenaView: 'select-agent' as ArenaView,
         arenaActiveSources: [],
         arenaSessionMetadata: null,
+        arenaReferences: getDefaultReferences(),
+        arenaProviderSettings: getDefaultProviderSettings(),
     }),
     
     getActiveArenaSession: () => {

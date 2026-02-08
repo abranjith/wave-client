@@ -38,6 +38,8 @@ import type {
     ArenaChatResponse,
     ArenaChatStreamChunk,
 } from './arena';
+import type { ArenaReference } from '../config/arenaConfig';
+import type { ArenaProviderSettingsMap } from '../config/arenaConfig';
 
 // ============================================================================
 // Common Types
@@ -494,6 +496,30 @@ export interface IArenaAdapter {
      * Falls back to the static MODEL_DEFINITIONS in arenaConfig if not supported.
      */
     getAvailableModels?(provider: string): Promise<Result<{ id: string; label: string }[], string>>;
+
+    // References (stored in .waveclient/arena/)
+    /**
+     * Load user-added references.
+     * The UI merges these with the built-in defaults from `getDefaultReferences()`.
+     */
+    loadReferences(): Promise<Result<ArenaReference[], string>>;
+
+    /**
+     * Save user-added references.
+     * Only non-default (user-added) references need to be persisted.
+     */
+    saveReferences(references: ArenaReference[]): Promise<Result<void, string>>;
+
+    // Provider Settings (stored in .waveclient/arena/)
+    /**
+     * Load per-provider settings (API keys, URLs, disabled models).
+     */
+    loadProviderSettings(): Promise<Result<ArenaProviderSettingsMap, string>>;
+
+    /**
+     * Save per-provider settings.
+     */
+    saveProviderSettings(settings: ArenaProviderSettingsMap): Promise<Result<void, string>>;
 }
 
 // ============================================================================

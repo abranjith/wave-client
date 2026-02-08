@@ -33,6 +33,9 @@ export {
   DEFAULT_REFERENCE_WEBSITES,
   // Storage
   STORAGE_KEYS,
+  ARENA_DIR,
+  ARENA_REFERENCES_FILE,
+  ARENA_PROVIDER_SETTINGS_FILE,
   ARENA_DOCS_DIR,
   ARENA_DOCS_METADATA_FILE,
   // Session metadata
@@ -41,6 +44,13 @@ export {
   DEFAULT_ARENA_SETTINGS,
   // LLM defaults
   LLM_DEFAULTS,
+  // Reference helpers
+  getDefaultReferences,
+  mergeReferences,
+  // Provider settings helpers
+  getDefaultProviderSettings,
+  getEnabledProviders,
+  getEnabledModels,
 } from '../config/arenaConfig';
 
 export type {
@@ -48,12 +58,15 @@ export type {
   ArenaAgentDefinition,
   ArenaSourceType,
   ArenaSourceConfig,
+  ArenaReference,
   ReferenceWebsite,
   ArenaProviderType,
   ProviderDefinition,
   ModelDefinition,
   ArenaSessionMetadata,
   ArenaSettings,
+  ArenaProviderSettings,
+  ArenaProviderSettingsMap,
 } from '../config/arenaConfig';
 
 // ============================================================================

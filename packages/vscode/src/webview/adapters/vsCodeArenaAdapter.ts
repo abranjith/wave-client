@@ -19,7 +19,10 @@ import {
     type ArenaChatResponse,
     type ArenaChatStreamChunk,
     type IAdapterEvents,
+    type ArenaReference,
+    type ArenaProviderSettingsMap,
     DEFAULT_ARENA_SETTINGS,
+    getDefaultProviderSettings,
     geminiGenerateContentUrl,
     ollamaChatUrl,
     geminiModelsUrl,
@@ -131,6 +134,8 @@ export function createVSCodeArenaAdapter(
     let localMessages: Map<string, ArenaMessage[]> = new Map();
     let localDocuments: ArenaDocument[] = [];
     let localSettings: ArenaSettings = DEFAULT_ARENA_SETTINGS;
+    let localReferences: ArenaReference[] = [];
+    let localProviderSettings: ArenaProviderSettingsMap = getDefaultProviderSettings();
 
     // Try to restore from VS Code state
     const savedState = vsCodeApi.getState() as any;
@@ -146,6 +151,12 @@ export function createVSCodeArenaAdapter(
     if (savedState?.arenaSettings) {
         localSettings = { ...DEFAULT_ARENA_SETTINGS, ...savedState.arenaSettings };
     }
+    if (savedState?.arenaReferences) {
+        localReferences = savedState.arenaReferences;
+    }
+    if (savedState?.arenaProviderSettings) {
+        localProviderSettings = { ...getDefaultProviderSettings(), ...savedState.arenaProviderSettings };
+    }
 
     function saveState() {
         vsCodeApi.setState({
@@ -154,6 +165,8 @@ export function createVSCodeArenaAdapter(
             arenaMessages: Object.fromEntries(localMessages),
             arenaDocuments: localDocuments,
             arenaSettings: localSettings,
+            arenaReferences: localReferences,
+            arenaProviderSettings: localProviderSettings,
         });
     }
 
@@ -164,12 +177,14 @@ export function createVSCodeArenaAdapter(
      * Send a message using Gemini API
      */
     async function sendGeminiMessage(request: ArenaChatRequest): Promise<Result<ArenaChatResponse, string>> {
-        if (!request.settings.apiKey) {
-            return err('API key not configured. Please set your API key in Arena settings.');
+        const providerCfg = localProviderSettings['gemini'];
+        const apiKey = providerCfg?.apiKey;
+        if (!apiKey) {
+            return err('API key not configured. Please set your Gemini API key in Arena settings.');
         }
 
         const model = request.settings.model || LLM_DEFAULTS.GEMINI_MODEL;
-        const apiUrl = geminiGenerateContentUrl(model, request.settings.apiKey);
+        const apiUrl = geminiGenerateContentUrl(model, apiKey);
 
         // Build conversation history
         const contents = request.history.slice(-5).map((msg: ArenaMessage) => ({
@@ -222,7 +237,8 @@ export function createVSCodeArenaAdapter(
      * Send a message using Ollama API
      */
     async function sendOllamaMessage(request: ArenaChatRequest): Promise<Result<ArenaChatResponse, string>> {
-        const baseUrl = request.settings.ollamaBaseUrl || LLM_DEFAULTS.OLLAMA_BASE_URL;
+        const providerCfg = localProviderSettings['ollama'];
+        const baseUrl = providerCfg?.apiUrl || LLM_DEFAULTS.OLLAMA_BASE_URL;
         const model = request.settings.model || LLM_DEFAULTS.OLLAMA_MODEL;
         const apiUrl = ollamaChatUrl(baseUrl);
 
@@ -445,7 +461,8 @@ export function createVSCodeArenaAdapter(
                 }
             } else if (provider === 'ollama') {
                 try {
-                    const baseUrl = localSettings.ollamaBaseUrl || LLM_DEFAULTS.OLLAMA_BASE_URL;
+                    const providerCfg = localProviderSettings['ollama'];
+                    const baseUrl = providerCfg?.apiUrl || LLM_DEFAULTS.OLLAMA_BASE_URL;
                     const response = await fetch(ollamaTagsUrl(baseUrl));
                     return ok(response.ok);
                 } catch {
@@ -458,7 +475,8 @@ export function createVSCodeArenaAdapter(
         async getAvailableModels(provider: string): Promise<Result<{ id: string; label: string }[], string>> {
             if (provider === 'ollama') {
                 try {
-                    const baseUrl = localSettings.ollamaBaseUrl || LLM_DEFAULTS.OLLAMA_BASE_URL;
+                    const providerCfg = localProviderSettings['ollama'];
+                    const baseUrl = providerCfg?.apiUrl || LLM_DEFAULTS.OLLAMA_BASE_URL;
                     const response = await fetch(ollamaTagsUrl(baseUrl));
                     if (!response.ok) return err('Failed to fetch Ollama models');
                     const data = await response.json();
@@ -470,6 +488,28 @@ export function createVSCodeArenaAdapter(
             }
             // For other providers, return the static list from config
             return ok(getModelsForProvider(provider as any).map(m => ({ id: m.id, label: m.label })));
+        },
+
+        // References (stored in webview state, persisted across reloads)
+        async loadReferences(): Promise<Result<ArenaReference[], string>> {
+            return ok([...localReferences]);
+        },
+
+        async saveReferences(references: ArenaReference[]): Promise<Result<void, string>> {
+            localReferences = references;
+            saveState();
+            return ok(undefined);
+        },
+
+        // Provider Settings
+        async loadProviderSettings(): Promise<Result<ArenaProviderSettingsMap, string>> {
+            return ok({ ...localProviderSettings });
+        },
+
+        async saveProviderSettings(settings: ArenaProviderSettingsMap): Promise<Result<void, string>> {
+            localProviderSettings = settings;
+            saveState();
+            return ok(undefined);
         },
     };
 }

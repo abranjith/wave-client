@@ -80,16 +80,24 @@ export {
     DEFAULT_ARENA_SETTINGS,
     DEFAULT_REFERENCE_WEBSITES,
     STORAGE_KEYS,
+    ARENA_DIR,
+    ARENA_REFERENCES_FILE,
+    ARENA_PROVIDER_SETTINGS_FILE,
     LLM_DEFAULTS,
     getAgentDefinition,
     getProviderDefinition,
     getModelsForProvider,
+    getDefaultProviderSettings,
+    getEnabledProviders,
+    getEnabledModels,
     geminiGenerateContentUrl,
     geminiStreamUrl,
     geminiModelsUrl,
     ollamaChatUrl,
     ollamaTagsUrl,
     createSessionMetadata,
+    getDefaultReferences,
+    mergeReferences,
 } from './config/arenaConfig';
 
 export type {
@@ -99,6 +107,9 @@ export type {
     ArenaAgentDefinition,
     ArenaSourceConfig,
     ArenaSourceType,
+    ArenaReference,
+    ArenaProviderSettings,
+    ArenaProviderSettingsMap,
 } from './config/arenaConfig';
 
 // Collection types

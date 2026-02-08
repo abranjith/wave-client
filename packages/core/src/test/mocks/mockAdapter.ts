@@ -52,6 +52,9 @@ import type {
     ArenaChatStreamChunk,
 } from '../../types/arena';
 import { DEFAULT_ARENA_SETTINGS } from '../../types/arena';
+import type { ArenaReference } from '../../config/arenaConfig';
+import type { ArenaProviderSettingsMap } from '../../config/arenaConfig';
+import { getDefaultProviderSettings } from '../../config/arenaConfig';
 import type {
     Collection,
     CollectionItem,
@@ -89,6 +92,8 @@ export interface MockDataStore {
     arenaMessages: ArenaMessage[];
     arenaDocuments: ArenaDocument[];
     arenaSettings: ArenaSettings;
+    arenaReferences: ArenaReference[];
+    arenaProviderSettings: ArenaProviderSettingsMap;
 }
 
 function createDefaultMockStore(): MockDataStore {
@@ -115,6 +120,8 @@ function createDefaultMockStore(): MockDataStore {
         arenaMessages: [],
         arenaDocuments: [],
         arenaSettings: DEFAULT_ARENA_SETTINGS,
+        arenaReferences: [],
+        arenaProviderSettings: getDefaultProviderSettings(),
     };
 }
 
@@ -704,6 +711,31 @@ function createMockArenaAdapter(store: MockDataStore): IArenaAdapter {
         async validateApiKey(_provider: string, _apiKey: string): Promise<Result<boolean, string>> {
             // Mock validation - always succeeds
             return ok(true);
+        },
+
+        // References
+        async loadReferences(): Promise<Result<ArenaReference[], string>> {
+            return ok([...store.arenaReferences]);
+        },
+
+        async saveReferences(references: ArenaReference[]): Promise<Result<void, string>> {
+            store.arenaReferences = references;
+            return ok(undefined);
+        },
+
+        // Provider Settings
+        async loadProviderSettings(): Promise<Result<ArenaProviderSettingsMap, string>> {
+            return ok({ ...store.arenaProviderSettings });
+        },
+
+        async saveProviderSettings(settings: ArenaProviderSettingsMap): Promise<Result<void, string>> {
+            store.arenaProviderSettings = settings;
+            return ok(undefined);
+        },
+
+        // Models
+        async getAvailableModels(_provider: string): Promise<Result<{ id: string; label: string }[], string>> {
+            return ok([{ id: 'mock-model', label: 'Mock Model' }]);
         },
     };
 }

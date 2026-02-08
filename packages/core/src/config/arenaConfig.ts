@@ -98,6 +98,31 @@ export interface ArenaSourceConfig {
   enabled: boolean;
 }
 
+/**
+ * A reference resource used by Arena agents.
+ *
+ * Default references (from `DEFAULT_REFERENCE_WEBSITES`) have `isDefault: true`
+ * and cannot be removed by the user. User-added references have `isDefault: false`
+ * and are persisted in the `.waveclient/arena/` directory.
+ */
+export interface ArenaReference {
+  id: string;
+  /** Human-readable name */
+  name: string;
+  /** Full URL of the reference */
+  url: string;
+  /** Optional description shown in the modal */
+  description?: string;
+  /** Grouping category (e.g. "Standards", "Documentation") */
+  category?: string;
+  /** Source type: web, document, or mcp */
+  type: ArenaSourceType;
+  /** True for built-in references that cannot be removed */
+  isDefault: boolean;
+  /** Whether this reference is currently active */
+  enabled: boolean;
+}
+
 // ============================================================================
 // Reference Websites (learn-web defaults)
 // ============================================================================
@@ -335,7 +360,18 @@ export const STORAGE_KEYS = {
   MESSAGES: 'wave-arena-messages',
   DOCUMENTS: 'wave-arena-documents',
   SETTINGS: 'wave-arena-settings',
+  REFERENCES: 'wave-arena-references',
+  PROVIDER_SETTINGS: 'wave-arena-provider-settings',
 } as const;
+
+/** Directory name for arena data (relative to saveFilesLocation / .waveclient) */
+export const ARENA_DIR = 'arena';
+
+/** File name for persisted user references inside ARENA_DIR */
+export const ARENA_REFERENCES_FILE = 'references.json';
+
+/** File name for persisted provider settings inside ARENA_DIR */
+export const ARENA_PROVIDER_SETTINGS_FILE = 'provider-settings.json';
 
 /** Directory name for arena documents (relative to saveFilesLocation) */
 export const ARENA_DOCS_DIR = 'arena-docs';
@@ -390,20 +426,88 @@ export function createSessionMetadata(
 // Default Arena Settings
 // ============================================================================
 
+// ============================================================================
+// Per-Provider Settings
+// ============================================================================
+
+/**
+ * Per-provider user configuration.
+ * Stored separately from the general ArenaSettings so each provider
+ * keeps its own API key, base URL, and model enable/disable state.
+ */
+export interface ArenaProviderSettings {
+  /** Provider this config belongs to */
+  providerId: ArenaProviderType;
+  /** Whether the user has disabled this provider (hidden from toolbar) */
+  enabled: boolean;
+  /** API key (cloud providers only) */
+  apiKey?: string;
+  /** Custom API / server base URL (e.g. Ollama URL) */
+  apiUrl?: string;
+  /** Model IDs the user has explicitly disabled */
+  disabledModels: string[];
+}
+
+/**
+ * All per-provider settings keyed by provider id.
+ */
+export type ArenaProviderSettingsMap = Record<ArenaProviderType, ArenaProviderSettings>;
+
+/**
+ * Build the default per-provider settings from PROVIDER_DEFINITIONS.
+ */
+export function getDefaultProviderSettings(): ArenaProviderSettingsMap {
+  const map = {} as ArenaProviderSettingsMap;
+  for (const p of PROVIDER_DEFINITIONS) {
+    map[p.id] = {
+      providerId: p.id,
+      enabled: p.available,
+      apiKey: undefined,
+      apiUrl: p.id === 'ollama' ? OLLAMA_DEFAULT_BASE_URL : undefined,
+      disabledModels: [],
+    };
+  }
+  return map;
+}
+
+/**
+ * Get provider definitions that are both implemented AND enabled by the user.
+ */
+export function getEnabledProviders(
+  providerSettings: ArenaProviderSettingsMap,
+): ProviderDefinition[] {
+  return PROVIDER_DEFINITIONS.filter(
+    (p) => p.available && providerSettings[p.id]?.enabled !== false,
+  );
+}
+
+/**
+ * Get models for a provider, excluding user-disabled ones.
+ */
+export function getEnabledModels(
+  providerId: ArenaProviderType,
+  providerSettings: ArenaProviderSettingsMap,
+): ModelDefinition[] {
+  const disabled = new Set(providerSettings[providerId]?.disabledModels ?? []);
+  return MODEL_DEFINITIONS.filter(
+    (m) => m.provider === providerId && !disabled.has(m.id),
+  );
+}
+
+// ============================================================================
+// General Arena Settings
+// ============================================================================
+
 /**
  * Arena settings persisted per-user.
- * Provider / model / apiKey are stored here and
- * surfaced via the chat toolbar rather than a separate settings page.
+ * Provider / model / api key configuration is in `ArenaProviderSettingsMap`
+ * and managed through the Settings panel.
  */
 export interface ArenaSettings {
-  /** Current LLM provider */
+  /** Current LLM provider (selected in toolbar) */
   provider: ArenaProviderType;
-  /** API key for cloud providers */
-  apiKey?: string;
-  /** Model to use (provider-specific) */
+  /** Model to use (selected in toolbar, provider-specific) */
   model?: string;
-  /** Base URL for Ollama */
-  ollamaBaseUrl?: string;
   /** Max sessions to keep */
   maxSessions: number;
   /** Max messages per session */
@@ -442,3 +546,45 @@ export const LLM_DEFAULTS = {
   /** Rate-limit: requests per second per domain */
   RATE_LIMIT_PER_DOMAIN: 1,
 } as const;
+
+// ============================================================================
+// Reference Helpers
+// ============================================================================
+
+/**
+ * Convert `DEFAULT_REFERENCE_WEBSITES` into `ArenaReference[]` with `isDefault: true`.
+ */
+export function getDefaultReferences(): ArenaReference[] {
+  return DEFAULT_REFERENCE_WEBSITES.map((w) => ({
+    id: w.id,
+    name: w.name,
+    url: w.url,
+    description: w.description,
+    category: w.category,
+    type: 'web' as ArenaSourceType,
+    isDefault: true,
+    enabled: w.enabled,
+  }));
+}
+
+/**
+ * Merge default references with user-added references.
+ * Defaults always come first; duplicates (by id) prefer the user copy
+ * so the user can toggle `enabled` on a default.
+ */
+export function mergeReferences(
+  userRefs: ArenaReference[],
+): ArenaReference[] {
+  const defaults = getDefaultReferences();
+  const userMap = new Map(userRefs.map((r) => [r.id, r]));
+  const merged: ArenaReference[] = defaults.map((d) => userMap.get(d.id) ?? d);
+
+  // Append any user refs whose id doesn't collide with a default
+  for (const r of userRefs) {
+    if (!defaults.some((d) => d.id === r.id)) {
+      merged.push(r);
+    }
+  }
+
+  return merged;
+}

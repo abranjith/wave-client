@@ -4,43 +4,41 @@
  * Persistent horizontal bar at the top of the chat area (below the header,
  * above the message list). Contains three sections:
  *
- * Left — **Sources**: pill/chip per active source (URLs, docs, MCP tools).
- *   A `+` button placeholder for future "add source" functionality.
+ * Left — **References**: single accent-coloured icon. Clicking it opens the
+ *   `ArenaReferencesModal` (managed by the parent).
  *
  * Centre — **Provider / Model**: compact dropdown showing the current
- *   provider + model. Clicking opens a popover with provider radio,
- *   model select, API key input, and Ollama URL fields.
+ *   provider + model. Clicking opens a lightweight popover for provider /
+ *   model selection only. All config (API keys, URLs, enable/disable) is
+ *   handled in the Settings panel.
  *
  * Right — **Metadata**: live session stats (messages, tokens, duration).
  */
 
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import {
-  Globe,
-  FileText,
-  Wrench,
-  Plus,
+  BookOpen,
   ChevronDown,
   X,
-  Eye,
-  EyeOff,
-  Key,
   MessageSquare,
   Hash,
   Clock,
 } from 'lucide-react';
 import { cn } from '../../utils/styling';
 import {
-  PROVIDER_DEFINITIONS,
-  getModelsForProvider,
   getProviderDefinition,
-  OLLAMA_DEFAULT_BASE_URL,
 } from '../../config/arenaConfig';
 import type {
   ArenaProviderType,
-  ArenaSourceConfig,
   ArenaSettings,
   ArenaSessionMetadata,
+  ArenaProviderSettingsMap,
+  ProviderDefinition,
+  ModelDefinition,
+} from '../../config/arenaConfig';
+import {
+  getEnabledProviders,
+  getEnabledModels,
 } from '../../config/arenaConfig';
 
 // ============================================================================
@@ -48,13 +46,17 @@ import type {
 // ============================================================================
 
 export interface ArenaChatToolbarProps {
-  /** Active sources for the current agent */
-  sources: ArenaSourceConfig[];
-  /** Current arena settings (contains provider, model, apiKey, etc.) */
+  /** Number of enabled references (shown as badge on the icon) */
+  referenceCount: number;
+  /** Open the references modal */
+  onOpenReferences: () => void;
+  /** Current arena settings (contains provider, model) */
   settings: ArenaSettings;
+  /** Per-provider settings (for filtering enabled providers/models) */
+  providerSettings: ArenaProviderSettingsMap;
   /** Session metadata for stats display */
   metadata?: ArenaSessionMetadata;
-  /** Callback when provider / model / api key settings change */
+  /** Callback when provider / model selection changes */
   onSettingsChange: (updates: Partial<ArenaSettings>) => void;
   /** Open the full settings panel (gear icon) */
   onOpenSettings?: () => void;
@@ -67,8 +69,10 @@ export interface ArenaChatToolbarProps {
 // ============================================================================
 
 export function ArenaChatToolbar({
-  sources,
+  referenceCount,
+  onOpenReferences,
   settings,
+  providerSettings,
   metadata,
   onSettingsChange,
   onOpenSettings,
@@ -101,8 +105,24 @@ export function ArenaChatToolbar({
         className,
       )}
     >
-      {/* ---- LEFT: Sources ---- */}
-      <SourcesSection sources={sources} />
+      {/* ---- LEFT: References icon ---- */}
+      <button
+        onClick={onOpenReferences}
+        className={cn(
+          'relative inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md transition-colors',
+          'text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/30',
+          'border border-blue-200 dark:border-blue-700',
+        )}
+        title="Manage references"
+      >
+        <BookOpen size={14} />
+        <span className="text-xs font-medium">References</span>
+        {referenceCount > 0 && (
+          <span className="inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 text-[10px] font-bold rounded-full bg-blue-600 text-white dark:bg-blue-500">
+            {referenceCount}
+          </span>
+        )}
+      </button>
 
       {/* ---- Spacer ---- */}
       <div className="flex-1" />
@@ -132,6 +152,7 @@ export function ArenaChatToolbar({
         {showProviderPopover && (
           <ProviderPopover
             settings={settings}
+            providerSettings={providerSettings}
             onSettingsChange={onSettingsChange}
             onClose={() => setShowProviderPopover(false)}
           />
@@ -140,51 +161,6 @@ export function ArenaChatToolbar({
 
       {/* ---- RIGHT: Metadata ---- */}
       <MetadataSection metadata={metadata} />
-    </div>
-  );
-}
-
-// ============================================================================
-// Sources Section
-// ============================================================================
-
-const SOURCE_ICON: Record<string, React.ReactNode> = {
-  web: <Globe size={12} />,
-  document: <FileText size={12} />,
-  mcp: <Wrench size={12} />,
-};
-
-function SourcesSection({ sources }: { sources: ArenaSourceConfig[] }) {
-  const enabledSources = sources.filter((s) => s.enabled);
-
-  return (
-    <div className="flex items-center gap-1.5 overflow-x-auto max-w-[40%] scrollbar-thin">
-      {enabledSources.length === 0 ? (
-        <span className="text-slate-400 dark:text-slate-500 italic">No sources</span>
-      ) : (
-        enabledSources.map((source, idx) => (
-          <span
-            key={`${source.type}-${idx}`}
-            className={cn(
-              'inline-flex items-center gap-1 px-2 py-0.5 rounded-full whitespace-nowrap',
-              'bg-slate-200/70 dark:bg-slate-700 text-slate-600 dark:text-slate-300',
-            )}
-            title={source.url || source.label}
-          >
-            {SOURCE_ICON[source.type] ?? null}
-            {source.label}
-          </span>
-        ))
-      )}
-
-      {/* Placeholder add-source button */}
-      <button
-        disabled
-        title="Add source (coming soon)"
-        className="p-1 rounded text-slate-300 dark:text-slate-600 cursor-not-allowed"
-      >
-        <Plus size={14} />
-      </button>
     </div>
   );
 }
@@ -221,19 +197,19 @@ function MetadataSection({ metadata }: { metadata?: ArenaSessionMetadata }) {
 }
 
 // ============================================================================
-// Provider Popover
+// Provider Popover (selection only — config is in Settings)
 // ============================================================================
 
 interface ProviderPopoverProps {
   settings: ArenaSettings;
+  providerSettings: ArenaProviderSettingsMap;
   onSettingsChange: (updates: Partial<ArenaSettings>) => void;
   onClose: () => void;
 }
 
-function ProviderPopover({ settings, onSettingsChange, onClose }: ProviderPopoverProps) {
-  const [showApiKey, setShowApiKey] = useState(false);
-  const availableProviders = PROVIDER_DEFINITIONS.filter((p) => p.available);
-  const models = getModelsForProvider(settings.provider);
+function ProviderPopover({ settings, providerSettings, onSettingsChange, onClose }: ProviderPopoverProps) {
+  const enabledProviders: ProviderDefinition[] = getEnabledProviders(providerSettings);
+  const enabledModels: ModelDefinition[] = getEnabledModels(settings.provider, providerSettings);
   const providerDef = getProviderDefinition(settings.provider);
 
   const handleProviderChange = useCallback(
@@ -242,11 +218,9 @@ function ProviderPopover({ settings, onSettingsChange, onClose }: ProviderPopove
       onSettingsChange({
         provider: providerId,
         model: def?.defaultModel,
-        // Reset api key when switching providers
-        ...(providerId !== settings.provider ? { apiKey: undefined } : {}),
       });
     },
-    [onSettingsChange, settings.provider],
+    [onSettingsChange],
   );
 
   return (
@@ -270,27 +244,31 @@ function ProviderPopover({ settings, onSettingsChange, onClose }: ProviderPopove
           <label className="text-[11px] font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide">
             Provider
           </label>
-          {availableProviders.map((p) => (
-            <label
-              key={p.id}
-              className={cn(
-                'flex items-center gap-2 px-2 py-1.5 rounded cursor-pointer transition-colors',
-                settings.provider === p.id
-                  ? 'bg-blue-50 dark:bg-blue-900/30'
-                  : 'hover:bg-slate-50 dark:hover:bg-slate-700/50',
-              )}
-            >
-              <input
-                type="radio"
-                name="arena-provider"
-                value={p.id}
-                checked={settings.provider === p.id}
-                onChange={() => handleProviderChange(p.id)}
-                className="accent-blue-600"
-              />
-              <span className="text-xs text-slate-700 dark:text-slate-300">{p.label}</span>
-            </label>
-          ))}
+          {enabledProviders.length === 0 ? (
+            <p className="text-xs text-slate-400 py-1">No providers enabled. Configure in Settings.</p>
+          ) : (
+            enabledProviders.map((p) => (
+              <label
+                key={p.id}
+                className={cn(
+                  'flex items-center gap-2 px-2 py-1.5 rounded cursor-pointer transition-colors',
+                  settings.provider === p.id
+                    ? 'bg-blue-50 dark:bg-blue-900/30'
+                    : 'hover:bg-slate-50 dark:hover:bg-slate-700/50',
+                )}
+              >
+                <input
+                  type="radio"
+                  name="arena-provider"
+                  value={p.id}
+                  checked={settings.provider === p.id}
+                  onChange={() => handleProviderChange(p.id)}
+                  className="accent-blue-600"
+                />
+                <span className="text-xs text-slate-700 dark:text-slate-300">{p.label}</span>
+              </label>
+            ))
+          )}
         </div>
 
         {/* Model select */}
@@ -298,74 +276,23 @@ function ProviderPopover({ settings, onSettingsChange, onClose }: ProviderPopove
           <label className="text-[11px] font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide block mb-1">
             Model
           </label>
-          <select
-            value={settings.model || providerDef?.defaultModel}
-            onChange={(e) => onSettingsChange({ model: e.target.value })}
-            className="w-full px-2 py-1.5 text-xs bg-slate-100 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500"
-          >
-            {models.map((m) => (
-              <option key={m.id} value={m.id}>
-                {m.label}
-                {m.note ? ` (${m.note})` : ''}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        {/* API Key (cloud providers only) */}
-        {providerDef?.requiresApiKey && (
-          <div>
-            <label className="text-[11px] font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide block mb-1">
-              API Key
-            </label>
-            <div className="relative">
-              <Key size={12} className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-400" />
-              <input
-                type={showApiKey ? 'text' : 'password'}
-                value={settings.apiKey || ''}
-                onChange={(e) => onSettingsChange({ apiKey: e.target.value })}
-                placeholder="Enter API key..."
-                className="w-full pl-7 pr-8 py-1.5 text-xs bg-slate-100 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500"
-              />
-              <button
-                type="button"
-                onClick={() => setShowApiKey((v) => !v)}
-                className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
-              >
-                {showApiKey ? <EyeOff size={12} /> : <Eye size={12} />}
-              </button>
-            </div>
-            {settings.provider === 'gemini' && (
-              <p className="mt-1 text-[10px] text-slate-400">
-                Get your key from{' '}
-                <a
-                  href="https://aistudio.google.com/apikey"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-blue-500 hover:underline"
-                >
-                  Google AI Studio
-                </a>
-              </p>
-            )}
-          </div>
-        )}
-
-        {/* Ollama URL */}
-        {settings.provider === 'ollama' && (
-          <div>
-            <label className="text-[11px] font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide block mb-1">
-              Ollama URL
-            </label>
-            <input
-              type="url"
-              value={settings.ollamaBaseUrl || OLLAMA_DEFAULT_BASE_URL}
-              onChange={(e) => onSettingsChange({ ollamaBaseUrl: e.target.value })}
-              placeholder={OLLAMA_DEFAULT_BASE_URL}
+          {enabledModels.length === 0 ? (
+            <p className="text-xs text-slate-400 py-1">No models available. Configure in Settings.</p>
+          ) : (
+            <select
+              value={settings.model || providerDef?.defaultModel}
+              onChange={(e) => onSettingsChange({ model: e.target.value })}
               className="w-full px-2 py-1.5 text-xs bg-slate-100 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500"
-            />
-          </div>
-        )}
+            >
+              {enabledModels.map((m) => (
+                <option key={m.id} value={m.id}>
+                  {m.label}
+                  {m.note ? ` (${m.note})` : ''}
+                </option>
+              ))}
+            </select>
+          )}
+        </div>
       </div>
     </div>
   );
