@@ -488,6 +488,12 @@ export interface IArenaAdapter {
      * Validate API key for a provider
      */
     validateApiKey(provider: string, apiKey: string): Promise<Result<boolean, string>>;
+
+    /**
+     * Get available models for a provider (e.g. dynamically fetched from Ollama).
+     * Falls back to the static MODEL_DEFINITIONS in arenaConfig if not supported.
+     */
+    getAvailableModels?(provider: string): Promise<Result<{ id: string; label: string }[], string>>;
 }
 
 // ============================================================================

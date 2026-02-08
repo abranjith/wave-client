@@ -5,10 +5,11 @@
  */
 
 import React from 'react';
-import { MessageSquare, BookOpen, Trash2, Loader2 } from 'lucide-react';
+import { Globe, FileText, Zap, Trash2, Loader2 } from 'lucide-react';
 import { cn } from '../../utils/styling';
 import type { ArenaSession } from '../../types/arena';
-import { ARENA_AGENTS } from '../../types/arena';
+import { ARENA_AGENT_IDS, getAgentDefinition } from '../../config/arenaConfig';
+import type { ArenaAgentId } from '../../config/arenaConfig';
 
 // ============================================================================
 // Types
@@ -88,8 +89,14 @@ function ArenaSessionItem({
 }: ArenaSessionItemProps): React.ReactElement {
   const [showDelete, setShowDelete] = React.useState(false);
 
-  const AgentIcon = session.agent === ARENA_AGENTS.LEARN ? BookOpen : MessageSquare;
-  const agentColor = session.agent === ARENA_AGENTS.LEARN ? 'text-green-500' : 'text-purple-500';
+  const agentDef = getAgentDefinition(session.agent as ArenaAgentId);
+  const ICON_MAP: Record<string, React.ComponentType<{ size?: number; className?: string }>> = {
+    [ARENA_AGENT_IDS.LEARN_WEB]: Globe,
+    [ARENA_AGENT_IDS.LEARN_DOCS]: FileText,
+    [ARENA_AGENT_IDS.WAVE_CLIENT]: Zap,
+  };
+  const AgentIcon = ICON_MAP[session.agent] ?? Globe;
+  const agentColor = agentDef?.iconColor ?? 'text-blue-500';
 
   const formatDate = (timestamp: number): string => {
     const date = new Date(timestamp);

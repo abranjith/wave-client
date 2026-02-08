@@ -1,14 +1,16 @@
 /**
  * ArenaSettings Component
- * 
- * Settings panel for Arena configuration.
+ *
+ * Advanced settings panel for Arena configuration.
+ * Provider, model, and API key selection now live in ArenaChatToolbar.
+ * This panel handles session limits, streaming toggle, and other preferences.
  */
 
 import React, { useState } from 'react';
-import { Save, X, Key, Eye, EyeOff, AlertCircle, CheckCircle } from 'lucide-react';
+import { Save, X } from 'lucide-react';
 import { cn } from '../../utils/styling';
-import type { ArenaSettings as ArenaSettingsType, ArenaProviderType } from '../../types/arena';
-import { DEFAULT_ARENA_SETTINGS } from '../../types/arena';
+import type { ArenaSettings as ArenaSettingsType } from '../../types/arena';
+import { DEFAULT_ARENA_SETTINGS } from '../../config/arenaConfig';
 
 // ============================================================================
 // Types
@@ -20,29 +22,6 @@ export interface ArenaSettingsProps {
   onCancel: () => void;
 }
 
-const PROVIDERS: { value: ArenaProviderType; label: string; available: boolean }[] = [
-  { value: 'gemini', label: 'Google Gemini', available: true },
-  { value: 'openai', label: 'OpenAI', available: false },
-  { value: 'anthropic', label: 'Anthropic Claude', available: false },
-  { value: 'ollama', label: 'Ollama (Local)', available: true },
-  { value: 'copilot', label: 'GitHub Copilot', available: false },
-];
-
-const GEMINI_MODELS = [
-  { value: 'gemini-2.0-flash', label: 'Gemini 2.0 Flash (Recommended)' },
-  { value: 'gemini-1.5-flash', label: 'Gemini 1.5 Flash' },
-  { value: 'gemini-1.5-pro', label: 'Gemini 1.5 Pro' },
-];
-
-const OLLAMA_MODELS = [
-  { value: 'llama2', label: 'Llama 2' },
-  { value: 'mistral', label: 'Mistral' },
-  { value: 'neural-chat', label: 'Neural Chat' },
-  { value: 'dolphin-mixtral', label: 'Dolphin Mixtral' },
-  { value: 'openchat', label: 'OpenChat' },
-  { value: 'wizardlm2', label: 'WizardLM 2' },
-];
-
 // ============================================================================
 // Component
 // ============================================================================
@@ -53,18 +32,13 @@ export function ArenaSettings({
   onCancel,
 }: ArenaSettingsProps): React.ReactElement {
   const [formState, setFormState] = useState<ArenaSettingsType>(settings);
-  const [showApiKey, setShowApiKey] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
-  const [apiKeyStatus, setApiKeyStatus] = useState<'untested' | 'valid' | 'invalid'>('untested');
 
   const handleChange = <K extends keyof ArenaSettingsType>(
     key: K,
-    value: ArenaSettingsType[K]
+    value: ArenaSettingsType[K],
   ) => {
     setFormState((prev) => ({ ...prev, [key]: value }));
-    if (key === 'apiKey') {
-      setApiKeyStatus('untested');
-    }
   };
 
   const handleSave = async () => {
@@ -78,7 +52,6 @@ export function ArenaSettings({
 
   const handleReset = () => {
     setFormState(DEFAULT_ARENA_SETTINGS);
-    setApiKeyStatus('untested');
   };
 
   return (
@@ -98,128 +71,9 @@ export function ArenaSettings({
 
       {/* Form */}
       <div className="flex-1 overflow-y-auto p-6 space-y-6">
-        {/* Provider Selection */}
-        <div>
-          <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-            AI Provider
-          </label>
-          <select
-            value={formState.provider}
-            onChange={(e) => handleChange('provider', e.target.value as ArenaProviderType)}
-            className="w-full px-3 py-2 text-sm bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-          >
-            {PROVIDERS.map((provider) => (
-              <option
-                key={provider.value}
-                value={provider.value}
-                disabled={!provider.available}
-              >
-                {provider.label} {!provider.available && '(Coming Soon)'}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        {/* API Key */}
-        {formState.provider !== 'ollama' && formState.provider !== 'copilot' && (
-          <div>
-            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-              API Key
-            </label>
-            <div className="relative">
-              <Key size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-              <input
-                type={showApiKey ? 'text' : 'password'}
-                value={formState.apiKey || ''}
-                onChange={(e) => handleChange('apiKey', e.target.value)}
-                placeholder="Enter your API key..."
-                className="w-full pl-10 pr-20 py-2 text-sm bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-              <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
-                <button
-                  type="button"
-                  onClick={() => setShowApiKey(!showApiKey)}
-                  className="p-1 text-slate-400 hover:text-slate-600"
-                >
-                  {showApiKey ? <EyeOff size={16} /> : <Eye size={16} />}
-                </button>
-                {apiKeyStatus === 'valid' && (
-                  <CheckCircle size={16} className="text-green-500" />
-                )}
-                {apiKeyStatus === 'invalid' && (
-                  <AlertCircle size={16} className="text-red-500" />
-                )}
-              </div>
-            </div>
-            <p className="mt-1 text-xs text-slate-500">
-              {formState.provider === 'gemini' && (
-                <>Get your API key from <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline">Google AI Studio</a></>
-              )}
-            </p>
-          </div>
-        )}
-
-        {/* Model Selection */}
-        {formState.provider === 'gemini' && (
-          <div>
-            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-              Model
-            </label>
-            <select
-              value={formState.model || 'gemini-2.0-flash'}
-              onChange={(e) => handleChange('model', e.target.value)}
-              className="w-full px-3 py-2 text-sm bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-            >
-              {GEMINI_MODELS.map((model) => (
-                <option key={model.value} value={model.value}>
-                  {model.label}
-                </option>
-              ))}
-            </select>
-          </div>
-        )}
-
-        {/* Ollama Settings */}
-        {formState.provider === 'ollama' && (
-          <>
-            <div>
-              <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-                Ollama Base URL
-              </label>
-              <input
-                type="url"
-                value={formState.ollamaBaseUrl || 'http://localhost:11434'}
-                onChange={(e) => handleChange('ollamaBaseUrl', e.target.value)}
-                placeholder="http://localhost:11434"
-                className="w-full px-3 py-2 text-sm bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-              <p className="mt-1 text-xs text-slate-500">
-                Make sure Ollama is running locally. <a href="https://ollama.ai" target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline">Get Ollama</a>
-              </p>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-                Model
-              </label>
-              <select
-                value={formState.model || 'llama2'}
-                onChange={(e) => handleChange('model', e.target.value)}
-                className="w-full px-3 py-2 text-sm bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                {OLLAMA_MODELS.map((model) => (
-                  <option key={model.value} value={model.value}>
-                    {model.label}
-                  </option>
-                ))}
-              </select>
-              <p className="mt-1 text-xs text-slate-500">
-                Pull models with: <code className="text-xs bg-slate-200 dark:bg-slate-700 px-1 py-0.5 rounded">ollama pull {formState.model || 'llama2'}</code>
-              </p>
-            </div>
-          </>
-        )}
-
-        <hr className="border-slate-200 dark:border-slate-700" />
+        <p className="text-xs text-slate-500 dark:text-slate-400">
+          Provider, model, and API key settings are managed in the chat toolbar.
+        </p>
 
         {/* Streaming */}
         <div className="flex items-center justify-between">

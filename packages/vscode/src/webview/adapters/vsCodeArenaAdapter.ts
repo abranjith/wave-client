@@ -20,6 +20,13 @@ import {
     type ArenaChatStreamChunk,
     type IAdapterEvents,
     DEFAULT_ARENA_SETTINGS,
+    geminiGenerateContentUrl,
+    ollamaChatUrl,
+    geminiModelsUrl,
+    ollamaTagsUrl,
+    ARENA_AGENT_IDS,
+    getModelsForProvider,
+    LLM_DEFAULTS,
 } from '@wave-client/core';
 
 // ============================================================================
@@ -161,8 +168,8 @@ export function createVSCodeArenaAdapter(
             return err('API key not configured. Please set your API key in Arena settings.');
         }
 
-        const model = request.settings.model || 'gemini-2.0-flash';
-        const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${request.settings.apiKey}`;
+        const model = request.settings.model || LLM_DEFAULTS.GEMINI_MODEL;
+        const apiUrl = geminiGenerateContentUrl(model, request.settings.apiKey);
 
         // Build conversation history
         const contents = request.history.slice(-5).map((msg: ArenaMessage) => ({
@@ -177,9 +184,7 @@ export function createVSCodeArenaAdapter(
         });
 
         // Add system instruction based on agent type
-        const systemInstruction = request.agent === 'learn'
-            ? 'You are a knowledgeable assistant helping users learn about web technologies, HTTP protocols, REST APIs, WebSocket, GraphQL, and related topics. Provide accurate, educational responses with examples when helpful.'
-            : 'You are a helpful assistant for Wave Client, a REST API testing tool. Help users understand how to use collections, environments, flows, and test suites. Be concise and practical.';
+        const systemInstruction = getSystemPromptForAgent(request.agent);
 
         const response = await fetch(apiUrl, {
             method: 'POST',
@@ -217,18 +222,15 @@ export function createVSCodeArenaAdapter(
      * Send a message using Ollama API
      */
     async function sendOllamaMessage(request: ArenaChatRequest): Promise<Result<ArenaChatResponse, string>> {
-        const baseUrl = request.settings.ollamaBaseUrl || 'http://localhost:11434';
-        //const model = request.settings.model || 'llama2';
-        const model = "llama3.2";
-        const apiUrl = `${baseUrl}/api/chat`;
+        const baseUrl = request.settings.ollamaBaseUrl || LLM_DEFAULTS.OLLAMA_BASE_URL;
+        const model = request.settings.model || LLM_DEFAULTS.OLLAMA_MODEL;
+        const apiUrl = ollamaChatUrl(baseUrl);
 
         // Build conversation history
         const messages = [
             {
                 role: 'system',
-                content: request.agent === 'learn'
-                    ? 'You are a knowledgeable assistant helping users learn about web technologies, HTTP protocols, REST APIs, WebSocket, GraphQL, and related topics. Provide accurate, educational responses with examples when helpful.'
-                    : 'You are a helpful assistant for Wave Client, a REST API testing tool. Help users understand how to use collections, environments, flows, and test suites. Be concise and practical.',
+                content: getSystemPromptForAgent(request.agent),
             },
             ...request.history.slice(-5).map((msg: ArenaMessage) => ({
                 role: msg.role,
@@ -436,18 +438,15 @@ export function createVSCodeArenaAdapter(
             // Quick validation by making a minimal API call
             if (provider === 'gemini') {
                 try {
-                    const response = await fetch(
-                        `https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`
-                    );
+                    const response = await fetch(geminiModelsUrl(apiKey));
                     return ok(response.ok);
                 } catch {
                     return ok(false);
                 }
             } else if (provider === 'ollama') {
-                // For Ollama, validate the base URL connection
                 try {
-                    const baseUrl = localSettings.ollamaBaseUrl || 'http://localhost:11434';
-                    const response = await fetch(`${baseUrl}/api/tags`);
+                    const baseUrl = localSettings.ollamaBaseUrl || LLM_DEFAULTS.OLLAMA_BASE_URL;
+                    const response = await fetch(ollamaTagsUrl(baseUrl));
                     return ok(response.ok);
                 } catch {
                     return ok(false);
@@ -455,7 +454,40 @@ export function createVSCodeArenaAdapter(
             }
             return ok(false);
         },
+
+        async getAvailableModels(provider: string): Promise<Result<{ id: string; label: string }[], string>> {
+            if (provider === 'ollama') {
+                try {
+                    const baseUrl = localSettings.ollamaBaseUrl || LLM_DEFAULTS.OLLAMA_BASE_URL;
+                    const response = await fetch(ollamaTagsUrl(baseUrl));
+                    if (!response.ok) return err('Failed to fetch Ollama models');
+                    const data = await response.json();
+                    const models = (data.models || []).map((m: { name: string }) => ({ id: m.name, label: m.name }));
+                    return ok(models);
+                } catch {
+                    return err('Could not connect to Ollama');
+                }
+            }
+            // For other providers, return the static list from config
+            return ok(getModelsForProvider(provider as any).map(m => ({ id: m.id, label: m.label })));
+        },
     };
+}
+
+/**
+ * Returns a system prompt tailored to the given agent type.
+ */
+function getSystemPromptForAgent(agent: string): string {
+    switch (agent) {
+        case ARENA_AGENT_IDS.LEARN_WEB:
+            return 'You are a knowledgeable assistant helping users learn about web technologies, HTTP protocols, REST APIs, WebSocket, GraphQL, and related topics. Provide accurate, educational responses with examples when helpful.';
+        case ARENA_AGENT_IDS.LEARN_DOCS:
+            return 'You are a knowledgeable assistant that helps users learn from their uploaded documents. When answering, reference the specific documents and cite relevant sections. If no documents are available, let the user know they should upload documents first.';
+        case ARENA_AGENT_IDS.WAVE_CLIENT:
+            return 'You are a helpful assistant for Wave Client, a REST API testing tool. Help users understand how to use collections, environments, flows, and test suites. Be concise and practical.';
+        default:
+            return 'You are a helpful AI assistant.';
+    }
 }
 
 export default createVSCodeArenaAdapter;

@@ -5,10 +5,12 @@
  */
 
 import React, { useRef, useEffect } from 'react';
-import { BookOpen, MessageSquare, User, Bot, ExternalLink, Loader2, Square, AlertCircle } from 'lucide-react';
+import { Globe, FileText, Zap, User, Bot, ExternalLink, Loader2, Square, AlertCircle } from 'lucide-react';
 import { cn } from '../../utils/styling';
 import type { ArenaSession, ArenaMessage, ArenaMessageSource, ArenaCommandId } from '../../types/arena';
-import { ARENA_AGENTS, ARENA_COMMAND_DEFINITIONS } from '../../types/arena';
+import { ARENA_COMMAND_DEFINITIONS } from '../../types/arena';
+import { ARENA_AGENT_IDS, getAgentDefinition } from '../../config/arenaConfig';
+import type { ArenaAgentId } from '../../config/arenaConfig';
 import ArenaChatInput from './ArenaChatInput';
 
 // ============================================================================
@@ -43,9 +45,15 @@ export function ArenaChatView({
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, streamingContent]);
 
-  const AgentIcon = session.agent === ARENA_AGENTS.LEARN ? BookOpen : MessageSquare;
-  const agentColor = session.agent === ARENA_AGENTS.LEARN ? 'text-green-500' : 'text-purple-500';
-  const agentName = session.agent === ARENA_AGENTS.LEARN ? 'Learn Agent' : 'Discover Agent';
+  const ICON_MAP: Record<string, React.ComponentType<{ size?: number; className?: string }>> = {
+    [ARENA_AGENT_IDS.LEARN_WEB]: Globe,
+    [ARENA_AGENT_IDS.LEARN_DOCS]: FileText,
+    [ARENA_AGENT_IDS.WAVE_CLIENT]: Zap,
+  };
+  const agentDef = getAgentDefinition(session.agent as ArenaAgentId);
+  const AgentIcon = ICON_MAP[session.agent] ?? Globe;
+  const agentColor = agentDef?.iconColor ?? 'text-blue-500';
+  const agentName = agentDef?.label ?? 'AI Agent';
 
   // Get commands for this agent
   const agentCommands = ARENA_COMMAND_DEFINITIONS.filter(cmd => cmd.agent === session.agent);

@@ -15,17 +15,29 @@ import type {
     ArenaChatResponse,
     ArenaChatStreamChunk,
 } from '@wave-client/core';
-import { ok, err, Result, DEFAULT_ARENA_SETTINGS } from '@wave-client/core';
+import {
+    ok,
+    err,
+    Result,
+    DEFAULT_ARENA_SETTINGS,
+    STORAGE_KEYS as CONFIG_STORAGE_KEYS,
+    geminiGenerateContentUrl,
+    geminiStreamUrl,
+    geminiModelsUrl,
+    ARENA_AGENT_IDS,
+    getModelsForProvider,
+    LLM_DEFAULTS,
+} from '@wave-client/core';
 
 // ============================================================================
 // Storage Keys
 // ============================================================================
 
 const STORAGE_KEYS = {
-    SESSIONS: 'wave-arena-sessions',
-    MESSAGES: 'wave-arena-messages',
-    DOCUMENTS: 'wave-arena-documents',
-    SETTINGS: 'wave-arena-settings',
+    SESSIONS: CONFIG_STORAGE_KEYS.SESSIONS,
+    MESSAGES: CONFIG_STORAGE_KEYS.MESSAGES,
+    DOCUMENTS: CONFIG_STORAGE_KEYS.DOCUMENTS,
+    SETTINGS: CONFIG_STORAGE_KEYS.SETTINGS,
 } as const;
 
 // ============================================================================
@@ -356,16 +368,16 @@ export class WebArenaAdapter implements IArenaAdapter {
                 return err(`Provider ${provider} is not supported yet.`);
             }
 
-            // Make a simple test request to Gemini
-            const response = await fetch(
-                `https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`,
-                { method: 'GET' }
-            );
-
+            const response = await fetch(geminiModelsUrl(apiKey), { method: 'GET' });
             return ok(response.ok);
         } catch (error) {
             return err(`Failed to validate API key: ${error}`);
         }
+    }
+
+    async getAvailableModels(provider: string): Promise<Result<{ id: string; label: string }[], string>> {
+        // For the web adapter we currently only support Gemini so return static list
+        return ok(getModelsForProvider(provider as any).map(m => ({ id: m.id, label: m.label })));
     }
 
     // ========================================================================
@@ -377,7 +389,7 @@ export class WebArenaAdapter implements IArenaAdapter {
         signal: AbortSignal
     ): Promise<Result<ArenaChatResponse, string>> {
         const { message, history, settings, command } = request;
-        const model = settings.model || 'gemini-1.5-flash';
+        const model = settings.model || LLM_DEFAULTS.GEMINI_MODEL;
         const apiKey = settings.apiKey!;
 
         // Build conversation contents
@@ -386,7 +398,7 @@ export class WebArenaAdapter implements IArenaAdapter {
 
         try {
             const response = await fetch(
-                `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
+                geminiGenerateContentUrl(model, apiKey),
                 {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -429,7 +441,7 @@ export class WebArenaAdapter implements IArenaAdapter {
         onChunk: (chunk: ArenaChatStreamChunk) => void
     ): Promise<Result<ArenaChatResponse, string>> {
         const { message, history, settings, command } = request;
-        const model = settings.model || 'gemini-1.5-flash';
+        const model = settings.model || LLM_DEFAULTS.GEMINI_MODEL;
         const apiKey = settings.apiKey!;
 
         // Build conversation contents
@@ -439,7 +451,7 @@ export class WebArenaAdapter implements IArenaAdapter {
 
         try {
             const response = await fetch(
-                `https://generativelanguage.googleapis.com/v1beta/models/${model}:streamGenerateContent?key=${apiKey}&alt=sse`,
+                geminiStreamUrl(model, apiKey),
                 {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -552,15 +564,22 @@ export class WebArenaAdapter implements IArenaAdapter {
     }
 
     private getSystemPrompt(agent: string, command?: string): string {
-        if (agent === 'learn') {
-            return this.getLearnAgentPrompt(command);
-        } else if (agent === 'discover') {
-            return this.getDiscoverAgentPrompt(command);
+        switch (agent) {
+            case ARENA_AGENT_IDS.LEARN_WEB:
+                return this.getLearnWebAgentPrompt(command);
+            case ARENA_AGENT_IDS.LEARN_DOCS:
+                return this.getLearnDocsAgentPrompt(command);
+            case ARENA_AGENT_IDS.WAVE_CLIENT:
+                return this.getWaveClientAgentPrompt(command);
+            default:
+                // Backward compat: old 'learn' / 'discover' sessions
+                if (agent === 'learn') return this.getLearnWebAgentPrompt(command);
+                if (agent === 'discover') return this.getWaveClientAgentPrompt(command);
+                return 'You are a helpful AI assistant.';
         }
-        return '';
     }
 
-    private getLearnAgentPrompt(command?: string): string {
+    private getLearnWebAgentPrompt(command?: string): string {
         const basePrompt = `You are Wave Arena Learn Agent, an expert in web technologies, networking, and API development.
 Your role is to help users understand web technologies including HTTP protocols, REST APIs, GraphQL, WebSocket, 
 network protocols (TCP/IP, DNS, TLS), and modern web development practices.
@@ -584,7 +603,18 @@ Guidelines:
         return basePrompt + (command ? (commandPrompts[command] || '') : '');
     }
 
-    private getDiscoverAgentPrompt(command?: string): string {
+    private getLearnDocsAgentPrompt(_command?: string): string {
+        return `You are Wave Arena Learn Docs Agent, a specialised assistant that helps users learn from their uploaded documents.
+Your role is to answer questions by referencing the specific documents the user has uploaded.
+
+Guidelines:
+- Always cite the source document when quoting or paraphrasing
+- If no relevant document content is available, let the user know
+- Summarise key points from documents when asked
+- Be precise and comprehensive`;
+    }
+
+    private getWaveClientAgentPrompt(command?: string): string {
         const basePrompt = `You are Wave Arena Discover Agent, a helpful assistant for Wave Client - an HTTP REST client application.
 Your role is to help users work with their collections, environments, flows, and test suites.
 

@@ -3,12 +3,22 @@ import type {
     ArenaSession,
     ArenaMessage,
     ArenaDocument,
-    ArenaSettings,
-    ArenaAgentId,
     ArenaCommandId,
     ArenaMessageStatus,
+    ArenaView,
 } from '../../types/arena';
-import { DEFAULT_ARENA_SETTINGS } from '../../types/arena';
+import type {
+    ArenaAgentId,
+    ArenaSettings,
+    ArenaSourceConfig,
+    ArenaSessionMetadata,
+} from '../../config/arenaConfig';
+import {
+    DEFAULT_ARENA_SETTINGS,
+    getAgentDefinition,
+    createSessionMetadata,
+    DEFAULT_REFERENCE_WEBSITES,
+} from '../../config/arenaConfig';
 
 // ============================================================================
 // Types
@@ -26,6 +36,14 @@ export interface ArenaSlice {
     arenaStreamingContent: string;
     arenaStreamingMessageId: string | null;
     arenaError: string | null;
+    /** Currently selected agent (null = show agent selection page) */
+    arenaSelectedAgent: ArenaAgentId | null;
+    /** Current view in the Arena pane */
+    arenaView: ArenaView;
+    /** Active sources for the current agent (toolbar) */
+    arenaActiveSources: ArenaSourceConfig[];
+    /** Session metadata for the active session */
+    arenaSessionMetadata: ArenaSessionMetadata | null;
     
     // Session actions
     setArenaSessions: (sessions: ArenaSession[]) => void;
@@ -60,6 +78,13 @@ export interface ArenaSlice {
     setArenaError: (error: string | null) => void;
     clearArenaError: () => void;
     
+    // Agent / view actions
+    selectArenaAgent: (agentId: ArenaAgentId) => void;
+    setArenaView: (view: ArenaView) => void;
+    setArenaActiveSources: (sources: ArenaSourceConfig[]) => void;
+    setArenaSessionMetadata: (metadata: ArenaSessionMetadata | null) => void;
+    updateArenaSessionMetadata: (updates: Partial<ArenaSessionMetadata>) => void;
+    
     // Utility actions
     resetArenaState: () => void;
     getActiveArenaSession: () => ArenaSession | undefined;
@@ -81,14 +106,44 @@ function generateId(prefix: string): string {
  */
 export function createArenaSession(agent: ArenaAgentId, title?: string): ArenaSession {
     const now = Date.now();
+    const def = getAgentDefinition(agent);
+    const defaultTitle = def ? `New ${def.label} Chat` : 'New Chat';
     return {
         id: generateId('session'),
-        title: title || `New ${agent === 'learn' ? 'Learn' : 'Discover'} Chat`,
+        title: title || defaultTitle,
         agent,
         createdAt: now,
         updatedAt: now,
         messageCount: 0,
     };
+}
+
+/**
+ * Build the default sources list for an agent.
+ */
+export function buildDefaultSources(agentId: ArenaAgentId): ArenaSourceConfig[] {
+    const def = getAgentDefinition(agentId);
+    if (!def) return [];
+
+    if (def.defaultSourceTypes.includes('web')) {
+        return DEFAULT_REFERENCE_WEBSITES
+            .filter((w) => w.enabled)
+            .map((w) => ({
+                type: 'web' as const,
+                label: w.name,
+                url: w.url,
+                enabled: true,
+            }));
+    }
+
+    if (def.defaultSourceTypes.includes('mcp')) {
+        return [
+            { type: 'mcp' as const, label: 'MCP Tools', enabled: true },
+        ];
+    }
+
+    // learn-docs: empty until user uploads
+    return [];
 }
 
 /**
@@ -130,6 +185,10 @@ const createArenaSlice: StateCreator<ArenaSlice> = (set, get) => ({
     arenaStreamingContent: '',
     arenaStreamingMessageId: null,
     arenaError: null,
+    arenaSelectedAgent: null,
+    arenaView: 'select-agent' as ArenaView,
+    arenaActiveSources: [],
+    arenaSessionMetadata: null,
     
     // Session actions
     setArenaSessions: (sessions) => set({ arenaSessions: sessions }),
@@ -251,6 +310,25 @@ const createArenaSlice: StateCreator<ArenaSlice> = (set, get) => ({
     
     clearArenaError: () => set({ arenaError: null }),
     
+    // Agent / view actions
+    selectArenaAgent: (agentId) => set({
+        arenaSelectedAgent: agentId,
+        arenaView: 'chat' as ArenaView,
+        arenaActiveSources: buildDefaultSources(agentId),
+    }),
+    
+    setArenaView: (view) => set({ arenaView: view }),
+    
+    setArenaActiveSources: (sources) => set({ arenaActiveSources: sources }),
+    
+    setArenaSessionMetadata: (metadata) => set({ arenaSessionMetadata: metadata }),
+    
+    updateArenaSessionMetadata: (updates) => set((state) => ({
+        arenaSessionMetadata: state.arenaSessionMetadata
+            ? { ...state.arenaSessionMetadata, ...updates }
+            : null,
+    })),
+    
     // Utility actions
     resetArenaState: () => set({
         arenaSessions: [],
@@ -263,6 +341,10 @@ const createArenaSlice: StateCreator<ArenaSlice> = (set, get) => ({
         arenaStreamingContent: '',
         arenaStreamingMessageId: null,
         arenaError: null,
+        arenaSelectedAgent: null,
+        arenaView: 'select-agent' as ArenaView,
+        arenaActiveSources: [],
+        arenaSessionMetadata: null,
     }),
     
     getActiveArenaSession: () => {

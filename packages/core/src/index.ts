@@ -62,14 +62,44 @@ export type {
     ArenaChatRequest,
     ArenaChatResponse,
     ArenaChatStreamChunk,
+    ArenaView,
 } from './types/arena';
 
 export {
     ARENA_AGENTS,
     ARENA_COMMANDS,
     ARENA_COMMAND_DEFINITIONS,
-    DEFAULT_ARENA_SETTINGS,
 } from './types/arena';
+
+// Arena config (centralized constants)
+export {
+    ARENA_AGENT_IDS,
+    ARENA_AGENT_DEFINITIONS,
+    PROVIDER_DEFINITIONS,
+    MODEL_DEFINITIONS,
+    DEFAULT_ARENA_SETTINGS,
+    DEFAULT_REFERENCE_WEBSITES,
+    STORAGE_KEYS,
+    LLM_DEFAULTS,
+    getAgentDefinition,
+    getProviderDefinition,
+    getModelsForProvider,
+    geminiGenerateContentUrl,
+    geminiStreamUrl,
+    geminiModelsUrl,
+    ollamaChatUrl,
+    ollamaTagsUrl,
+    createSessionMetadata,
+} from './config/arenaConfig';
+
+export type {
+    ArenaSessionMetadata,
+    ProviderDefinition,
+    ModelDefinition,
+    ArenaAgentDefinition,
+    ArenaSourceConfig,
+    ArenaSourceType,
+} from './config/arenaConfig';
 
 // Collection types
 export type {
