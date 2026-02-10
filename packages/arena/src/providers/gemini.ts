@@ -17,7 +17,7 @@ export interface GeminiProviderConfig {
 }
 
 const DEFAULT_MODEL = 'gemini-1.5-pro';
-const DEFAULT_TEMPERATURE = 0.7;
+const DEFAULT_TEMPERATURE = 1.0;
 const DEFAULT_MAX_OUTPUT_TOKENS = 8192;
 
 /**
@@ -36,13 +36,15 @@ export function createGeminiProvider(config: GeminiProviderConfig): BaseChatMode
     throw new Error('Gemini API key is required');
   }
 
-  return new ChatGoogleGenerativeAI({
+  const chatModel: BaseChatModel = new ChatGoogleGenerativeAI({
     apiKey,
     model,
     temperature,
     maxOutputTokens,
     streaming,
   });
+
+  return chatModel;
 }
 
 /**

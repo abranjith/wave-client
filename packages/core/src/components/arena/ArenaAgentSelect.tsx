@@ -10,6 +10,7 @@
 import React from 'react';
 import { Globe, FileText, Zap, ArrowRight } from 'lucide-react';
 import { cn } from '../../utils/styling';
+import { SecondaryButton } from '../ui/SecondaryButton';
 import { ARENA_AGENT_DEFINITIONS } from '../../config/arenaConfig';
 import type { ArenaAgentId, ArenaAgentDefinition } from '../../config/arenaConfig';
 
@@ -59,12 +60,13 @@ export function ArenaAgentSelect({ onSelectAgent, className }: ArenaAgentSelectP
       {/* Agent list */}
       <div className="w-full max-w-md space-y-2">
         {ARENA_AGENT_DEFINITIONS.map((agent) => (
-          <button
+          <SecondaryButton
             key={agent.id}
             onClick={() => onSelectAgent(agent.id)}
             className={cn(
-              'group w-full flex items-center gap-4 px-4 py-3.5 rounded-lg border transition-all text-left',
+              'group w-full justify-start gap-4 px-4 py-3.5 rounded-lg border transition-all text-left h-auto',
               'border-slate-200 dark:border-slate-700',
+              'text-slate-900 dark:text-slate-100',
               'hover:border-blue-400 dark:hover:border-blue-500',
               'hover:bg-blue-50/50 dark:hover:bg-blue-900/20',
               'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500',
@@ -95,7 +97,7 @@ export function ArenaAgentSelect({ onSelectAgent, className }: ArenaAgentSelectP
               size={16}
               className="flex-shrink-0 text-slate-300 dark:text-slate-600 group-hover:text-blue-500 transition-colors"
             />
-          </button>
+          </SecondaryButton>
         ))}
       </div>
     </div>

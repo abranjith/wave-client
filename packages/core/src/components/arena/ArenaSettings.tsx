@@ -11,6 +11,8 @@
 import React, { useState, useCallback } from 'react';
 import { Save, X, Eye, EyeOff, Key, Globe, ChevronDown, ChevronUp } from 'lucide-react';
 import { cn } from '../../utils/styling';
+import { PrimaryButton } from '../ui/PrimaryButton';
+import { SecondaryButton } from '../ui/SecondaryButton';
 import type { ArenaSettings as ArenaSettingsType } from '../../types/arena';
 import {
   DEFAULT_ARENA_SETTINGS,
@@ -117,12 +119,15 @@ export function ArenaSettings({
         <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
           Arena Settings
         </h2>
-        <button
+        <SecondaryButton
           onClick={onCancel}
-          className="p-2 text-slate-500 hover:text-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-md transition-colors"
+          size="icon"
+          variant="ghost"
+          className="h-8 w-8 p-0 text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200"
+          aria-label="Close settings"
         >
           <X size={20} />
-        </button>
+        </SecondaryButton>
       </div>
 
       {/* Form */}
@@ -222,33 +227,6 @@ export function ArenaSettings({
             General Preferences
           </h3>
 
-          {/* Streaming */}
-          <div className="flex items-center justify-between mb-4">
-            <div>
-              <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">
-                Streaming Responses
-              </label>
-              <p className="text-xs text-slate-500">
-                Show AI responses as they're generated
-              </p>
-            </div>
-            <button
-              type="button"
-              onClick={() => handleChange('enableStreaming', !formState.enableStreaming)}
-              className={cn(
-                'relative w-11 h-6 rounded-full transition-colors',
-                formState.enableStreaming ? 'bg-blue-600' : 'bg-slate-300 dark:bg-slate-600',
-              )}
-            >
-              <span
-                className={cn(
-                  'absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full transition-transform',
-                  formState.enableStreaming && 'translate-x-5',
-                )}
-              />
-            </button>
-          </div>
-
           {/* Session Limits */}
           <div className="mb-4">
             <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
@@ -290,27 +268,26 @@ export function ArenaSettings({
 
       {/* Footer */}
       <div className="flex items-center justify-between px-6 py-4 border-t border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50">
-        <button
+        <SecondaryButton
           onClick={handleReset}
-          className="px-3 py-2 text-sm text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 transition-colors"
+          variant="ghost"
+          size="sm"
+          className="text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100"
         >
           Reset to Defaults
-        </button>
+        </SecondaryButton>
         <div className="flex items-center gap-2">
-          <button
-            onClick={onCancel}
-            className="px-4 py-2 text-sm text-slate-700 dark:text-slate-300 bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 rounded-md transition-colors"
-          >
+          <SecondaryButton onClick={onCancel} size="sm">
             Cancel
-          </button>
-          <button
+          </SecondaryButton>
+          <PrimaryButton
             onClick={handleSave}
             disabled={isSaving}
-            className="flex items-center gap-2 px-4 py-2 text-sm text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50 rounded-md transition-colors"
+            size="sm"
           >
             <Save size={16} />
             {isSaving ? 'Saving...' : 'Save Settings'}
-          </button>
+          </PrimaryButton>
         </div>
       </div>
     </div>
@@ -366,9 +343,11 @@ function ProviderCard({
         />
 
         {/* Name + description */}
-        <button
+        <SecondaryButton
           onClick={onToggleExpand}
-          className="flex-1 flex items-center gap-2 text-left"
+          variant="ghost"
+          size="sm"
+          className="flex-1 justify-start items-center gap-2 text-left h-auto px-0"
         >
           <span className="text-sm font-medium text-slate-800 dark:text-slate-200">
             {provider.label}
@@ -379,7 +358,7 @@ function ProviderCard({
           <span className="ml-auto text-slate-400">
             {isExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
           </span>
-        </button>
+        </SecondaryButton>
       </div>
 
       {/* Expanded detail */}
@@ -400,13 +379,16 @@ function ProviderCard({
                   placeholder="Enter API key..."
                   className="w-full pl-7 pr-8 py-1.5 text-xs bg-slate-100 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500"
                 />
-                <button
+                <SecondaryButton
                   type="button"
                   onClick={() => setShowApiKey((v) => !v)}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                  size="icon"
+                  variant="ghost"
+                  className="absolute right-2 top-1/2 -translate-y-1/2 h-6 w-6 p-0 text-slate-400 hover:text-slate-600"
+                  aria-label={showApiKey ? 'Hide API key' : 'Show API key'}
                 >
                   {showApiKey ? <EyeOff size={12} /> : <Eye size={12} />}
-                </button>
+                </SecondaryButton>
               </div>
               {provider.id === 'gemini' && (
                 <p className="mt-1 text-[10px] text-slate-400">

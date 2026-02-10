@@ -24,6 +24,8 @@ import {
   Shield,
 } from 'lucide-react';
 import { cn } from '../../utils/styling';
+import { PrimaryButton } from '../ui/PrimaryButton';
+import { SecondaryButton } from '../ui/SecondaryButton';
 import type { ArenaReference, ArenaSourceType } from '../../config/arenaConfig';
 
 // ============================================================================
@@ -174,13 +176,15 @@ export function ArenaReferencesModal({
               {enabledCount} of {references.length} active
             </p>
           </div>
-          <button
+          <SecondaryButton
             onClick={onClose}
-            className="p-1.5 rounded-md text-slate-400 hover:text-slate-600 hover:bg-slate-100 dark:hover:text-slate-300 dark:hover:bg-slate-700 transition-colors"
+            size="icon"
+            variant="ghost"
+            className="h-7 w-7 p-0 text-slate-400 hover:text-slate-600 dark:text-slate-400 dark:hover:text-slate-300"
             aria-label="Close"
           >
             <X size={18} />
-          </button>
+          </SecondaryButton>
         </div>
 
         {/* ---- List ---- */}
@@ -231,23 +235,25 @@ export function ArenaReferencesModal({
                 placeholder="https://..."
                 className="flex-1 px-2.5 py-1.5 text-sm bg-slate-100 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500"
               />
-              <button
+              <PrimaryButton
                 onClick={handleAdd}
                 disabled={!newName.trim() || !newUrl.trim()}
-                className="px-3 py-1.5 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-40 rounded-md transition-colors"
+                size="sm"
               >
                 Add
-              </button>
-              <button
+              </PrimaryButton>
+              <SecondaryButton
                 onClick={() => {
                   setShowAddForm(false);
                   setNewName('');
                   setNewUrl('');
                 }}
-                className="px-3 py-1.5 text-sm text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 transition-colors"
+                size="sm"
+                variant="ghost"
+                className="text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200"
               >
                 Cancel
-              </button>
+              </SecondaryButton>
             </div>
           </div>
         )}
@@ -255,22 +261,21 @@ export function ArenaReferencesModal({
         {/* ---- Footer ---- */}
         <div className="flex items-center justify-between px-5 py-3 border-t border-slate-200 dark:border-slate-700">
           {!showAddForm ? (
-            <button
+            <SecondaryButton
               onClick={() => setShowAddForm(true)}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 transition-colors"
+              size="sm"
+              variant="ghost"
+              className="text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
             >
               <Plus size={14} />
               Add Reference
-            </button>
+            </SecondaryButton>
           ) : (
             <div />
           )}
-          <button
-            onClick={onClose}
-            className="px-4 py-1.5 text-sm font-medium text-slate-600 hover:text-slate-800 dark:text-slate-300 dark:hover:text-slate-100 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 rounded-md transition-colors"
-          >
+          <SecondaryButton onClick={onClose} size="sm">
             Done
-          </button>
+          </SecondaryButton>
         </div>
       </div>
     </div>
@@ -363,14 +368,17 @@ function ReferenceRow({ reference, onToggle, onRemove }: ReferenceRowProps) {
 
       {/* Remove button (user-added only) */}
       {!reference.isDefault ? (
-        <button
+        <SecondaryButton
           onClick={() => onRemove(reference.id)}
-          className="p-1 rounded text-slate-300 hover:text-red-500 dark:text-slate-600 dark:hover:text-red-400 transition-colors flex-shrink-0"
+          size="icon"
+          variant="ghost"
+          colorTheme="error"
+          className="h-6 w-6 p-0 text-slate-300 hover:text-red-500 dark:text-slate-600 dark:hover:text-red-400 flex-shrink-0"
           title="Remove reference"
           aria-label={`Remove ${reference.name}`}
         >
           <Trash2 size={14} />
-        </button>
+        </SecondaryButton>
       ) : (
         /* Spacer to keep alignment consistent */
         <div className="w-[22px] flex-shrink-0" />

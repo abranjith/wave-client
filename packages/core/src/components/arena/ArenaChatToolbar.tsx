@@ -23,6 +23,7 @@ import {
   MessageSquare,
   Hash,
   Clock,
+  Zap,
 } from 'lucide-react';
 import { cn } from '../../utils/styling';
 import {
@@ -40,6 +41,7 @@ import {
   getEnabledProviders,
   getEnabledModels,
 } from '../../config/arenaConfig';
+import { SecondaryButton } from '../ui/SecondaryButton';
 
 // ============================================================================
 // Types
@@ -58,6 +60,10 @@ export interface ArenaChatToolbarProps {
   metadata?: ArenaSessionMetadata;
   /** Callback when provider / model selection changes */
   onSettingsChange: (updates: Partial<ArenaSettings>) => void;
+  /** Whether streaming responses are enabled */
+  enableStreaming: boolean;
+  /** Callback to toggle streaming */
+  onEnableStreamingChange: (enabled: boolean) => void;
   /** Open the full settings panel (gear icon) */
   onOpenSettings?: () => void;
   /** Optional CSS class name */
@@ -75,6 +81,8 @@ export function ArenaChatToolbar({
   providerSettings,
   metadata,
   onSettingsChange,
+  enableStreaming,
+  onEnableStreamingChange,
   onOpenSettings,
   className,
 }: ArenaChatToolbarProps): React.ReactElement {
@@ -106,11 +114,11 @@ export function ArenaChatToolbar({
       )}
     >
       {/* ---- LEFT: References icon ---- */}
-      <button
+      <SecondaryButton
         onClick={onOpenReferences}
+        size="sm"
         className={cn(
-          'relative inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md transition-colors',
-          'text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/30',
+          'relative inline-flex items-center gap-1.5 px-2.5 py-1',
           'border border-blue-200 dark:border-blue-700',
         )}
         title="Manage references"
@@ -122,18 +130,36 @@ export function ArenaChatToolbar({
             {referenceCount}
           </span>
         )}
-      </button>
+      </SecondaryButton>
 
       {/* ---- Spacer ---- */}
       <div className="flex-1" />
 
+      {/* ---- Streaming Toggle ---- */}
+      <button
+        type="button"
+        onClick={() => onEnableStreamingChange(!enableStreaming)}
+        title={enableStreaming ? 'Streaming enabled' : 'Streaming disabled'}
+        className={cn(
+          'p-1.5 rounded-md transition-colors',
+          enableStreaming
+            ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400'
+            : 'bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400',
+          'hover:bg-opacity-80 dark:hover:bg-opacity-80',
+        )}
+      >
+        <Zap size={16} className={enableStreaming ? 'fill-current' : ''} />
+      </button>
+
       {/* ---- CENTRE: Provider / Model ---- */}
       <div className="relative" ref={popoverRef}>
-        <button
+        <SecondaryButton
           onClick={() => setShowProviderPopover((v) => !v)}
+          size="sm"
           className={cn(
-            'flex items-center gap-1.5 px-2.5 py-1 rounded-md transition-colors',
+            'flex items-center gap-1.5 px-2.5 py-1',
             'border border-slate-200 dark:border-slate-600',
+            'text-slate-700 dark:text-slate-300',
             'hover:bg-slate-100 dark:hover:bg-slate-700',
             showProviderPopover && 'bg-slate-100 dark:bg-slate-700',
           )}
@@ -146,7 +172,7 @@ export function ArenaChatToolbar({
             {currentModel}
           </span>
           <ChevronDown size={12} className="text-slate-400" />
-        </button>
+        </SecondaryButton>
 
         {/* ---- Provider popover ---- */}
         {showProviderPopover && (
@@ -233,9 +259,15 @@ function ProviderPopover({ settings, providerSettings, onSettingsChange, onClose
       {/* Header */}
       <div className="flex items-center justify-between px-3 py-2 border-b border-slate-200 dark:border-slate-700">
         <span className="text-xs font-medium text-slate-700 dark:text-slate-300">Provider & Model</span>
-        <button onClick={onClose} className="p-0.5 text-slate-400 hover:text-slate-600">
+        <SecondaryButton
+          onClick={onClose}
+          size="icon"
+          variant="ghost"
+          className="h-6 w-6 p-0 text-slate-400 hover:text-slate-600"
+          aria-label="Close"
+        >
           <X size={14} />
-        </button>
+        </SecondaryButton>
       </div>
 
       <div className="p-3 space-y-3">

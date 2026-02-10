@@ -7,6 +7,8 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { Send, Loader2, Command, X } from 'lucide-react';
 import { cn } from '../../utils/styling';
+import { PrimaryButton } from '../ui/PrimaryButton';
+import { SecondaryButton } from '../ui/SecondaryButton';
 import type { ArenaCommandId, ArenaCommand } from '../../types/arena';
 
 // ============================================================================
@@ -141,11 +143,14 @@ export function ArenaChatInput({
           </div>
           <div className="p-1">
             {filteredCommands.map((cmd, idx) => (
-              <button
+              <SecondaryButton
                 key={cmd.id}
+                variant="ghost"
+                size="sm"
                 onClick={() => selectCommand(cmd)}
                 className={cn(
-                  'w-full flex items-start gap-2 px-3 py-2 rounded text-left transition-colors',
+                  'w-full justify-start items-start gap-2 px-3 py-2 h-auto text-left',
+                  'text-slate-900 dark:text-slate-100',
                   idx === selectedCommandIndex
                     ? 'bg-blue-50 dark:bg-blue-900/30'
                     : 'hover:bg-slate-100 dark:hover:bg-slate-700'
@@ -162,7 +167,7 @@ export function ArenaChatInput({
                     {cmd.description}
                   </p>
                 </div>
-              </button>
+              </SecondaryButton>
             ))}
           </div>
         </div>
@@ -173,12 +178,15 @@ export function ArenaChatInput({
         <div className="mb-2 flex items-center gap-2">
           <span className="inline-flex items-center gap-1 px-2 py-1 text-xs font-mono bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded">
             {activeCommand.id}
-            <button
+            <SecondaryButton
+              size="icon"
+              variant="ghost"
               onClick={clearCommand}
-              className="ml-1 hover:text-blue-900 dark:hover:text-blue-100"
+              className="ml-1 h-4 w-4 p-0 text-blue-700 hover:text-blue-900 dark:text-blue-300 dark:hover:text-blue-100"
+              aria-label="Clear command"
             >
               <X size={12} />
-            </button>
+            </SecondaryButton>
           </span>
           <span className="text-xs text-slate-500 dark:text-slate-400">
             {activeCommand.description}
@@ -208,22 +216,19 @@ export function ArenaChatInput({
           </div>
         </div>
 
-        <button
+        <PrimaryButton
           onClick={handleSend}
           disabled={isLoading || !input.trim()}
-          className={cn(
-            'flex items-center justify-center w-10 h-10 rounded-lg transition-colors',
-            input.trim() && !isLoading
-              ? 'bg-blue-600 text-white hover:bg-blue-700'
-              : 'bg-slate-200 dark:bg-slate-700 text-slate-400 cursor-not-allowed'
-          )}
+          size="icon"
+          className={cn('h-10 w-10', !(input.trim() && !isLoading) && 'cursor-not-allowed')}
+          aria-label="Send message"
         >
           {isLoading ? (
             <Loader2 size={18} className="animate-spin" />
           ) : (
             <Send size={18} />
           )}
-        </button>
+        </PrimaryButton>
       </div>
 
       {/* Hint */}

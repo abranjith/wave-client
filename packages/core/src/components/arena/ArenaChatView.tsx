@@ -11,6 +11,7 @@ import type { ArenaSession, ArenaMessage, ArenaMessageSource, ArenaCommandId } f
 import { ARENA_COMMAND_DEFINITIONS } from '../../types/arena';
 import { ARENA_AGENT_IDS, getAgentDefinition } from '../../config/arenaConfig';
 import type { ArenaAgentId } from '../../config/arenaConfig';
+import { SecondaryButton } from '../ui/SecondaryButton';
 import ArenaChatInput from './ArenaChatInput';
 
 // ============================================================================
@@ -70,13 +71,14 @@ export function ArenaChatView({
           <p className="text-xs text-slate-500 dark:text-slate-400">{agentName}</p>
         </div>
         {isStreaming && (
-          <button
+          <SecondaryButton
+            size="sm"
             onClick={onCancelMessage}
-            className="flex items-center gap-1 px-2 py-1 text-xs text-red-600 hover:bg-red-50 dark:hover:bg-red-900/30 rounded transition-colors"
+            colorTheme="error"
           >
             <Square size={12} />
             Stop
-          </button>
+          </SecondaryButton>
         )}
       </div>
 
@@ -148,13 +150,14 @@ function ArenaWelcomeMessage({
       {/* Quick Commands */}
       <div className="flex flex-wrap justify-center gap-2">
         {commands.slice(0, 4).map((cmd) => (
-          <button
+          <SecondaryButton
             key={cmd.id}
+            size="sm"
             onClick={() => onCommandClick(cmd.id)}
-            className="px-3 py-1.5 text-xs font-mono bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-full hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
+            className="rounded-full font-mono"
           >
             {cmd.id}
-          </button>
+          </SecondaryButton>
         ))}
       </div>
     </div>
@@ -198,7 +201,7 @@ function ArenaMessageBubble({
       </div>
 
       {/* Content */}
-      <div className={cn('flex-1 max-w-[80%]', isUser && 'flex flex-col items-end')}>
+      <div className={cn('flex-1 max-w-[88%]', isUser && 'flex flex-col items-end')}>
         {/* Command badge */}
         {message.command && (
           <span className="text-xs font-mono text-blue-600 dark:text-blue-400 mb-1">

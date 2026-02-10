@@ -7,6 +7,7 @@
 import React from 'react';
 import { Globe, FileText, Zap, Trash2, Loader2 } from 'lucide-react';
 import { cn } from '../../utils/styling';
+import { SecondaryButton } from '../ui/SecondaryButton';
 import type { ArenaSession } from '../../types/arena';
 import { ARENA_AGENT_IDS, getAgentDefinition } from '../../config/arenaConfig';
 import type { ArenaAgentId } from '../../config/arenaConfig';
@@ -133,16 +134,20 @@ function ArenaSessionItem({
       </div>
       
       {showDelete && (
-        <button
+        <SecondaryButton
           onClick={(e) => {
             e.stopPropagation();
             onDelete();
           }}
-          className="p-1 rounded text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/30 transition-colors"
+          size="icon"
+          variant="ghost"
+          colorTheme="error"
+          className="h-6 w-6 p-0 text-slate-400 hover:text-red-500"
           title="Delete session"
+          aria-label="Delete session"
         >
           <Trash2 size={14} />
-        </button>
+        </SecondaryButton>
       )}
     </div>
   );

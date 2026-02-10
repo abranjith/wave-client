@@ -11,6 +11,8 @@
 import React, { useState, useCallback, useEffect, useMemo } from 'react';
 import { Settings, Sparkles, ArrowLeft } from 'lucide-react';
 import { cn } from '../../utils/styling';
+import { PrimaryButton } from '../ui/PrimaryButton';
+import { SecondaryButton } from '../ui/SecondaryButton';
 import { useArenaAdapter, useNotificationAdapter, useAdapterEvent } from '../../hooks/useAdapter';
 import useAppStateStore from '../../hooks/store/useAppStateStore';
 import { createArenaSession, createArenaMessage, buildDefaultSources } from '../../hooks/store/createArenaSlice';
@@ -454,33 +456,39 @@ export function ArenaPane({ className }: ArenaPaneProps): React.ReactElement {
             </h2>
             <div className="flex items-center gap-1">
               {arenaView === 'chat' && (
-                <button
+                <SecondaryButton
                   onClick={handleBackToAgentSelect}
-                  className="p-1.5 rounded-md text-slate-500 hover:text-slate-700 hover:bg-slate-200 dark:text-slate-400 dark:hover:text-slate-200 dark:hover:bg-slate-700 transition-colors"
+                  size="icon"
+                  variant="ghost"
+                  className="h-7 w-7 p-0 text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200"
                   title="Back to agents"
+                  aria-label="Back to agents"
                 >
                   <ArrowLeft size={16} />
-                </button>
+                </SecondaryButton>
               )}
-              <button
+              <SecondaryButton
                 onClick={() => setArenaView(arenaView === 'settings' ? 'chat' : 'settings')}
-                className="p-1.5 rounded-md text-slate-500 hover:text-slate-700 hover:bg-slate-200 dark:text-slate-400 dark:hover:text-slate-200 dark:hover:bg-slate-700 transition-colors"
+                size="icon"
+                variant="ghost"
+                className="h-7 w-7 p-0 text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200"
                 title="Advanced settings"
+                aria-label="Advanced settings"
               >
                 <Settings size={16} />
-              </button>
+              </SecondaryButton>
             </div>
           </div>
 
           {/* New chat for the current agent */}
           {arenaSelectedAgent && arenaView === 'chat' && (
-            <button
+            <PrimaryButton
               onClick={() => handleSelectAgent(arenaSelectedAgent)}
               disabled={isCreatingSession}
-              className="w-full flex items-center justify-center gap-2 px-3 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50 rounded-md transition-colors"
+              className="w-full"
             >
               New {agentDef?.label ?? ''} Chat
-            </button>
+            </PrimaryButton>
           )}
         </div>
 
@@ -517,6 +525,8 @@ export function ArenaPane({ className }: ArenaPaneProps): React.ReactElement {
               providerSettings={arenaProviderSettings}
               metadata={arenaSessionMetadata ?? undefined}
               onSettingsChange={handleToolbarSettingsChange}
+              enableStreaming={arenaSettings.enableStreaming}
+              onEnableStreamingChange={(enabled) => handleToolbarSettingsChange({ enableStreaming: enabled })}
               onOpenSettings={() => setArenaView('settings')}
             />
             {/* Chat */}
