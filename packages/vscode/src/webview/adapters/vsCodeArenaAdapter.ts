@@ -406,26 +406,32 @@ export function createVSCodeArenaAdapter(
             const messageId = result.value.messageId;
             const content = result.value.content;
             
-            // Simulate streaming by chunking the response
+            // Simulate streaming by chunking the response.
+            // Emit chunks both via the callback AND via the event system,
+            // because ArenaPane listens on 'arenaStreamChunk' events.
             const chunkSize = 20;
             for (let i = 0; i < content.length; i += chunkSize) {
                 const chunk = content.slice(i, i + chunkSize);
-                onChunk({
+                const chunkData: ArenaChatStreamChunk = {
                     messageId,
                     content: chunk,
                     done: false,
-                });
+                };
+                onChunk(chunkData);
+                events.emit('arenaStreamChunk', chunkData);
                 // Small delay to simulate streaming
                 await new Promise(r => setTimeout(r, 10));
             }
 
             // Final chunk
-            onChunk({
+            const finalChunk: ArenaChatStreamChunk = {
                 messageId,
                 content: '',
                 done: true,
                 tokenCount: result.value.tokenCount,
-            });
+            };
+            onChunk(finalChunk);
+            events.emit('arenaStreamChunk', finalChunk);
 
             return result;
         },
@@ -478,7 +484,9 @@ export function createVSCodeArenaAdapter(
                     const providerCfg = localProviderSettings['ollama'];
                     const baseUrl = providerCfg?.apiUrl || LLM_DEFAULTS.OLLAMA_BASE_URL;
                     const response = await fetch(ollamaTagsUrl(baseUrl));
-                    if (!response.ok) return err('Failed to fetch Ollama models');
+                    if (!response.ok) { 
+                        return err('Failed to fetch Ollama models'); 
+                    }
                     const data = await response.json();
                     const models = (data.models || []).map((m: { name: string }) => ({ id: m.name, label: m.name }));
                     return ok(models);

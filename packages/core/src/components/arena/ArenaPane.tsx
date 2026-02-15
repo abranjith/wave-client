@@ -309,6 +309,15 @@ export function ArenaPane({ className }: ArenaPaneProps): React.ReactElement {
           setArenaIsStreaming(false);
           notification.showNotification('error', result.error);
         } else {
+          // Safety-net: update the visible message content and stop streaming
+          // in case the arenaStreamChunk event listener didn't fire.
+          updateArenaMessage(assistantMessage.id, {
+            content: result.value.content,
+            status: 'complete',
+            sources: result.value.sources,
+            tokenCount: result.value.tokenCount,
+          });
+          setArenaIsStreaming(false);
           await arenaAdapter.saveMessage({
             ...assistantMessage,
             content: result.value.content,
