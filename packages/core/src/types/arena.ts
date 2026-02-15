@@ -36,8 +36,6 @@ export {
   ARENA_DIR,
   ARENA_REFERENCES_FILE,
   ARENA_PROVIDER_SETTINGS_FILE,
-  ARENA_DOCS_DIR,
-  ARENA_DOCS_METADATA_FILE,
   // Session metadata
   createSessionMetadata,
   // Settings
@@ -69,43 +67,53 @@ export type {
   ArenaProviderSettingsMap,
 } from '../config/arenaConfig';
 
-// ============================================================================
-// Legacy Aliases (deprecated — use ARENA_AGENT_IDS instead)
-// ============================================================================
+// Re-export chat block types
+export type {
+  ArenaChatBlock,
+  ArenaChatBlockType,
+  TextBlock,
+  CodeBlock,
+  JsonViewerBlock,
+  RequestFormBlock,
+  ResponseViewerBlock,
+  EnvSelectorBlock,
+  TableBlock,
+  ConfirmationBlock,
+  ProgressBlock,
+  EnvOption,
+  RequestFormData,
+} from './arenaChatBlocks';
 
-import { ARENA_AGENT_IDS } from '../config/arenaConfig';
-
-/**
- * @deprecated Use `ARENA_AGENT_IDS` from `config/arenaConfig` instead.
- */
-export const ARENA_AGENTS = ARENA_AGENT_IDS;
+export {
+  textBlock,
+  codeBlock,
+  jsonViewerBlock,
+  tableBlock,
+  progressBlock,
+} from './arenaChatBlocks';
 
 // ============================================================================
 // Commands
 // ============================================================================
 
 /**
- * Commands are now internal to agents and auto-resolved based on the agent.
- * These IDs remain available for backwards compatibility with existing
- * chat history persisted in storage.
+ * Commands are internal to agents and auto-resolved based on the agent.
+ * Each command is associated with exactly one agent.
  */
 export const ARENA_COMMANDS = {
-  // learn-web agent
-  LEARN_HTTP: '/learn-http',
-  LEARN_REST: '/learn-rest',
-  LEARN_WEBSOCKET: '/learn-websocket',
-  LEARN_GRAPHQL: '/learn-graphql',
-  LEARN_WEB: '/learn-web',
-
-  // learn-docs agent
-  LEARN_LOCAL: '/learn-local',
-
   // wave-client agent
   HELP: '/help',
   COLLECTIONS: '/collections',
   ENVIRONMENTS: '/environments',
   FLOWS: '/flows',
   TESTS: '/tests',
+
+  // web-expert agent
+  HTTP: '/http',
+  REST: '/rest',
+  WEBSOCKET: '/websocket',
+  GRAPHQL: '/graphql',
+  RFC: '/rfc',
 } as const;
 
 export type ArenaCommandId = typeof ARENA_COMMANDS[keyof typeof ARENA_COMMANDS];
@@ -123,91 +131,81 @@ export interface ArenaCommand {
 
 /**
  * All available commands with metadata.
- * These are now used internally within the chat input command palette;
- * the primary UX entry point is agent selection, not command selection.
+ * Used in the chat input command palette when the user types `/`.
  */
 export const ARENA_COMMAND_DEFINITIONS: ArenaCommand[] = [
-  // learn-web agent commands
-  {
-    id: ARENA_COMMANDS.LEARN_HTTP,
-    label: 'HTTP Protocols',
-    description: 'Learn about HTTP/1.1, HTTP/2, HTTP/3, headers, methods, status codes',
-    agent: ARENA_AGENT_IDS.LEARN_WEB,
-    placeholder: 'Ask about HTTP protocols...',
-  },
-  {
-    id: ARENA_COMMANDS.LEARN_REST,
-    label: 'REST APIs',
-    description: 'Learn about REST principles, best practices, API design',
-    agent: ARENA_AGENT_IDS.LEARN_WEB,
-    placeholder: 'Ask about REST APIs...',
-  },
-  {
-    id: ARENA_COMMANDS.LEARN_WEBSOCKET,
-    label: 'WebSocket',
-    description: 'Learn about WebSocket protocol, real-time communication',
-    agent: ARENA_AGENT_IDS.LEARN_WEB,
-    placeholder: 'Ask about WebSocket...',
-  },
-  {
-    id: ARENA_COMMANDS.LEARN_GRAPHQL,
-    label: 'GraphQL',
-    description: 'Learn about GraphQL queries, mutations, subscriptions',
-    agent: ARENA_AGENT_IDS.LEARN_WEB,
-    placeholder: 'Ask about GraphQL...',
-  },
-  {
-    id: ARENA_COMMANDS.LEARN_WEB,
-    label: 'Web Technologies',
-    description: 'Learn from curated reference sites (MDN, IETF, W3C)',
-    agent: ARENA_AGENT_IDS.LEARN_WEB,
-    placeholder: 'Ask about web technologies...',
-  },
-
-  // learn-docs agent commands
-  {
-    id: ARENA_COMMANDS.LEARN_LOCAL,
-    label: 'Local Docs',
-    description: 'Ask questions about your uploaded documentation',
-    agent: ARENA_AGENT_IDS.LEARN_DOCS,
-    placeholder: 'Ask about your documents...',
-  },
-
   // wave-client agent commands
   {
     id: ARENA_COMMANDS.HELP,
     label: 'Help',
     description: 'Get help with Wave Client features',
-    agent: ARENA_AGENT_IDS.WAVE_CLIENT,
+    agent: 'wave-client',
     placeholder: 'What would you like help with?',
   },
   {
     id: ARENA_COMMANDS.COLLECTIONS,
     label: 'Collections',
     description: 'Manage and explore your request collections',
-    agent: ARENA_AGENT_IDS.WAVE_CLIENT,
+    agent: 'wave-client',
     placeholder: 'Ask about collections...',
   },
   {
     id: ARENA_COMMANDS.ENVIRONMENTS,
     label: 'Environments',
     description: 'Manage environments and variables',
-    agent: ARENA_AGENT_IDS.WAVE_CLIENT,
+    agent: 'wave-client',
     placeholder: 'Ask about environments...',
   },
   {
     id: ARENA_COMMANDS.FLOWS,
     label: 'Flows',
     description: 'Create and run request flows',
-    agent: ARENA_AGENT_IDS.WAVE_CLIENT,
+    agent: 'wave-client',
     placeholder: 'Ask about flows...',
   },
   {
     id: ARENA_COMMANDS.TESTS,
     label: 'Tests',
     description: 'Create and run test suites',
-    agent: ARENA_AGENT_IDS.WAVE_CLIENT,
+    agent: 'wave-client',
     placeholder: 'Ask about tests...',
+  },
+
+  // web-expert agent commands
+  {
+    id: ARENA_COMMANDS.HTTP,
+    label: 'HTTP Protocols',
+    description: 'Learn about HTTP/1.1, HTTP/2, HTTP/3, headers, methods, status codes',
+    agent: 'web-expert',
+    placeholder: 'Ask about HTTP protocols...',
+  },
+  {
+    id: ARENA_COMMANDS.REST,
+    label: 'REST APIs',
+    description: 'Learn about REST principles, best practices, API design',
+    agent: 'web-expert',
+    placeholder: 'Ask about REST APIs...',
+  },
+  {
+    id: ARENA_COMMANDS.WEBSOCKET,
+    label: 'WebSocket',
+    description: 'Learn about WebSocket protocol, real-time communication',
+    agent: 'web-expert',
+    placeholder: 'Ask about WebSocket...',
+  },
+  {
+    id: ARENA_COMMANDS.GRAPHQL,
+    label: 'GraphQL',
+    description: 'Learn about GraphQL queries, mutations, subscriptions',
+    agent: 'web-expert',
+    placeholder: 'Ask about GraphQL...',
+  },
+  {
+    id: ARENA_COMMANDS.RFC,
+    label: 'RFC Lookup',
+    description: 'Find and explain a specific RFC document',
+    agent: 'web-expert',
+    placeholder: 'Which RFC would you like to look up?',
   },
 ];
 
@@ -220,7 +218,6 @@ export const ARENA_COMMAND_DEFINITIONS: ArenaCommand[] = [
  */
 export type ArenaMessageRole = 'user' | 'assistant' | 'system';
 
-/**
 /** Status of a message */
 export type ArenaMessageStatus = 'pending' | 'streaming' | 'complete' | 'error';
 
@@ -240,6 +237,14 @@ export interface ArenaMessage {
   error?: string;
   /** Sources/references used in the response */
   sources?: ArenaMessageSource[];
+  /**
+   * Rich content blocks for this message.
+   *
+   * When present and non-empty, the UI renders each block via
+   * `ArenaBlockRenderer` instead of treating `content` as raw markdown.
+   * Backward-compatible: if absent or empty, falls back to `content`.
+   */
+  blocks?: import('./arenaChatBlocks').ArenaChatBlock[];
 }
 
 /** Source reference in a message */
@@ -273,21 +278,22 @@ export interface ArenaSessionWithMessages extends ArenaSession {
 }
 
 // ============================================================================
-// Document Types
+// Document Types (deprecated — will be removed in future phase)
 // ============================================================================
 
-/** A user-uploaded document for the Learn agent */
+/**
+ * @deprecated The learn-docs agent has been removed. This type is kept
+ * temporarily for adapter backward compatibility and will be removed
+ * when adapters are refactored (Phase 5).
+ */
 export interface ArenaDocument {
   id: string;
   filename: string;
   mimeType: string;
   size: number;
   uploadedAt: number;
-  /** Whether the document has been processed/indexed */
   processed: boolean;
-  /** Number of chunks after processing */
   chunkCount?: number;
-  /** Processing error if any */
   error?: string;
 }
 
@@ -295,8 +301,15 @@ export interface ArenaDocument {
 // UI State Types
 // ============================================================================
 
-/** Current view in the Arena pane */
-export type ArenaView = 'select-agent' | 'chat' | 'settings';
+/**
+ * Current view in the Arena pane.
+ *
+ * After the refactor, the only real view is 'chat' (with welcome screen
+ * shown when there are no messages). The other values are kept temporarily
+ * for backward compatibility with ArenaPane / ArenaSettings until Phase 3
+ * replaces those components.
+ */
+export type ArenaView = 'chat' | 'select-agent' | 'settings';
 
 /** Arena UI state for the Zustand store */
 export interface ArenaState {
@@ -306,8 +319,6 @@ export interface ArenaState {
   activeSessionId: string | null;
   /** Messages for the active session */
   messages: ArenaMessage[];
-  /** Uploaded documents */
-  documents: ArenaDocument[];
   /** Arena settings */
   settings: import('../config/arenaConfig').ArenaSettings;
   /** Whether Arena is loading */
@@ -318,11 +329,11 @@ export interface ArenaState {
   streamingContent: string;
   /** Error state */
   error: string | null;
-  /** Currently selected agent (null = show agent selection) */
+  /** Currently selected agent (null = show welcome) */
   selectedAgent: import('../config/arenaConfig').ArenaAgentId | null;
   /** Current view in the Arena pane */
   arenaView: ArenaView;
-  /** Active sources for the current agent (toolbar) */
+  /** Active sources for the current agent */
   activeSources: import('../config/arenaConfig').ArenaSourceConfig[];
 }
 
@@ -338,11 +349,6 @@ export interface ArenaActions {
   sendMessage(content: string, command?: ArenaCommandId): Promise<void>;
   cancelMessage(): void;
   loadMessages(sessionId: string): Promise<void>;
-
-  // Document management
-  uploadDocument(file: File): Promise<void>;
-  deleteDocument(documentId: string): Promise<void>;
-  loadDocuments(): Promise<void>;
 
   // Settings
   updateSettings(settings: Partial<import('../config/arenaConfig').ArenaSettings>): Promise<void>;
@@ -383,6 +389,8 @@ export interface ArenaChatResponse {
   content: string;
   sources?: ArenaMessageSource[];
   tokenCount?: number;
+  /** Optional rich blocks to render instead of raw content */
+  blocks?: import('./arenaChatBlocks').ArenaChatBlock[];
 }
 
 /** Streaming chunk from a chat request */
@@ -392,4 +400,6 @@ export interface ArenaChatStreamChunk {
   done: boolean;
   sources?: ArenaMessageSource[];
   tokenCount?: number;
+  /** Blocks emitted so far (only present on final chunk or when done=true) */
+  blocks?: import('./arenaChatBlocks').ArenaChatBlock[];
 }

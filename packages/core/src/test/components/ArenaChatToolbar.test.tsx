@@ -19,6 +19,8 @@ const defaultProps = {
   providerSettings: getDefaultProviderSettings(),
   onSettingsChange: vi.fn(),
   onOpenSettings: vi.fn(),
+  enableStreaming: true,
+  onEnableStreamingChange: vi.fn(),
 };
 
 describe('ArenaChatToolbar', () => {

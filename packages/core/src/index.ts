@@ -42,6 +42,9 @@ export type {
 
 export { isAdapterSuccess, isAdapterError, createAdapterEventEmitter } from './types/adapters';
 
+export type { ArenaAppSettings } from './hooks/store/createSettingsSlice';
+export { DEFAULT_ARENA_APP_SETTINGS } from './hooks/store/createSettingsSlice';
+
 // Arena types
 export type {
     ArenaAgentId,
@@ -63,12 +66,31 @@ export type {
     ArenaChatResponse,
     ArenaChatStreamChunk,
     ArenaView,
+    // Chat block types
+    ArenaChatBlock,
+    ArenaChatBlockType,
+    TextBlock,
+    CodeBlock,
+    JsonViewerBlock,
+    RequestFormBlock,
+    ResponseViewerBlock,
+    EnvSelectorBlock,
+    TableBlock,
+    ConfirmationBlock,
+    ProgressBlock,
+    EnvOption,
+    RequestFormData,
 } from './types/arena';
 
 export {
-    ARENA_AGENTS,
     ARENA_COMMANDS,
     ARENA_COMMAND_DEFINITIONS,
+    // Chat block helpers
+    textBlock,
+    codeBlock,
+    jsonViewerBlock,
+    tableBlock,
+    progressBlock,
 } from './types/arena';
 
 // Arena config (centralized constants)

@@ -1,11 +1,23 @@
-import React, { useState, useEffect } from 'react';
-import { SaveIcon, XIcon, FolderOpenIcon, RotateCcwIcon, InfoIcon, AlertTriangleIcon, ShieldAlertIcon, CheckCircleIcon, XCircleIcon } from 'lucide-react';
+import React, { useState, useEffect, useCallback } from 'react';
+import { SaveIcon, XIcon, FolderOpenIcon, RotateCcwIcon, InfoIcon, AlertTriangleIcon, ShieldAlertIcon, CheckCircleIcon, XCircleIcon, Key, Globe, ChevronDown, ChevronUp, Eye, EyeOff } from 'lucide-react';
 import { Button } from '../ui/button';
 import { PrimaryButton } from '../ui/PrimaryButton';
 import { SecondaryButton } from '../ui/SecondaryButton';
 import { Input } from '../ui/input';
 import { Label } from '../ui/label';
-import { AppSettings, DEFAULT_SETTINGS } from '../../hooks/store/createSettingsSlice';
+import { cn } from '../../utils/styling';
+import { AppSettings, DEFAULT_SETTINGS, ArenaAppSettings, DEFAULT_ARENA_APP_SETTINGS } from '../../hooks/store/createSettingsSlice';
+import {
+  PROVIDER_DEFINITIONS,
+  getModelsForProvider,
+  getDefaultProviderSettings,
+  OLLAMA_DEFAULT_BASE_URL,
+} from '../../config/arenaConfig';
+import type {
+  ArenaProviderType,
+  ArenaProviderSettingsMap,
+  ProviderDefinition,
+} from '../../config/arenaConfig';
 
 interface SettingsWizardProps {
   settings: AppSettings;
@@ -31,6 +43,15 @@ const SettingsWizard: React.FC<SettingsWizardProps> = ({
   const [encryptionKeyEnvVar, setEncryptionKeyEnvVar] = useState(settings.encryptionKeyEnvVar);
   const [ignoreCertificateValidation, setIgnoreCertificateValidation] = useState(settings.ignoreCertificateValidation);
 
+  // Arena / AI form state
+  const [arenaDefaultProvider, setArenaDefaultProvider] = useState<ArenaProviderType>(settings.arena?.defaultProvider ?? DEFAULT_ARENA_APP_SETTINGS.defaultProvider);
+  const [arenaDefaultModel, setArenaDefaultModel] = useState(settings.arena?.defaultModel ?? DEFAULT_ARENA_APP_SETTINGS.defaultModel);
+  const [arenaEnableStreaming, setArenaEnableStreaming] = useState(settings.arena?.enableStreaming ?? DEFAULT_ARENA_APP_SETTINGS.enableStreaming);
+  const [arenaMaxSessions, setArenaMaxSessions] = useState(settings.arena?.maxSessions ?? DEFAULT_ARENA_APP_SETTINGS.maxSessions);
+  const [arenaMaxMessages, setArenaMaxMessages] = useState(settings.arena?.maxMessagesPerSession ?? DEFAULT_ARENA_APP_SETTINGS.maxMessagesPerSession);
+  const [arenaProviders, setArenaProviders] = useState<ArenaProviderSettingsMap>(settings.arena?.providers ?? getDefaultProviderSettings());
+  const [expandedProvider, setExpandedProvider] = useState<ArenaProviderType | null>(null);
+
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   // Sync state when settings prop changes
@@ -42,7 +63,52 @@ const SettingsWizard: React.FC<SettingsWizardProps> = ({
     setCommonHeaderNames((settings.commonHeaderNames || []).join(', '));
     setEncryptionKeyEnvVar(settings.encryptionKeyEnvVar);
     setIgnoreCertificateValidation(settings.ignoreCertificateValidation);
+    // Sync arena state
+    setArenaDefaultProvider(settings.arena?.defaultProvider ?? DEFAULT_ARENA_APP_SETTINGS.defaultProvider);
+    setArenaDefaultModel(settings.arena?.defaultModel ?? DEFAULT_ARENA_APP_SETTINGS.defaultModel);
+    setArenaEnableStreaming(settings.arena?.enableStreaming ?? DEFAULT_ARENA_APP_SETTINGS.enableStreaming);
+    setArenaMaxSessions(settings.arena?.maxSessions ?? DEFAULT_ARENA_APP_SETTINGS.maxSessions);
+    setArenaMaxMessages(settings.arena?.maxMessagesPerSession ?? DEFAULT_ARENA_APP_SETTINGS.maxMessagesPerSession);
+    setArenaProviders(settings.arena?.providers ?? getDefaultProviderSettings());
   }, [settings, defaultSaveLocation]);
+
+  /** Update a single field in a provider's settings */
+  const handleProviderFieldChange = useCallback(
+    <K extends keyof ArenaProviderSettingsMap[ArenaProviderType]>(
+      providerId: ArenaProviderType,
+      key: K,
+      value: ArenaProviderSettingsMap[ArenaProviderType][K],
+    ) => {
+      setArenaProviders((prev) => ({
+        ...prev,
+        [providerId]: { ...prev[providerId], [key]: value },
+      }));
+    },
+    [],
+  );
+
+  /** Toggle a model's disabled state for a provider */
+  const handleToggleModel = useCallback(
+    (providerId: ArenaProviderType, modelId: string) => {
+      setArenaProviders((prev) => {
+        const current = prev[providerId];
+        const disabled = new Set(current.disabledModels);
+        if (disabled.has(modelId)) {
+          disabled.delete(modelId);
+        } else {
+          disabled.add(modelId);
+        }
+        return {
+          ...prev,
+          [providerId]: { ...current, disabledModels: Array.from(disabled) },
+        };
+      });
+    },
+    [],
+  );
+
+  /** Only providers that have a working implementation */
+  const implementedProviders = PROVIDER_DEFINITIONS.filter((p) => p.available);
 
   const validateForm = (): boolean => {
     const newErrors: Record<string, string> = {};
@@ -85,8 +151,16 @@ const SettingsWizard: React.FC<SettingsWizardProps> = ({
       maxHistoryItems,
       commonHeaderNames: parsedHeaderNames,
       encryptionKeyEnvVar: encryptionKeyEnvVar.trim(),
-      encryptionKeyValidationStatus: settings.encryptionKeyValidationStatus, // Will be updated by SettingsService on save
+      encryptionKeyValidationStatus: settings.encryptionKeyValidationStatus,
       ignoreCertificateValidation,
+      arena: {
+        defaultProvider: arenaDefaultProvider,
+        defaultModel: arenaDefaultModel,
+        enableStreaming: arenaEnableStreaming,
+        maxSessions: arenaMaxSessions,
+        maxMessagesPerSession: arenaMaxMessages,
+        providers: arenaProviders,
+      },
     };
 
     onSave(updatedSettings);
@@ -100,6 +174,14 @@ const SettingsWizard: React.FC<SettingsWizardProps> = ({
     setCommonHeaderNames('');
     setEncryptionKeyEnvVar(DEFAULT_SETTINGS.encryptionKeyEnvVar);
     setIgnoreCertificateValidation(DEFAULT_SETTINGS.ignoreCertificateValidation);
+    // Reset arena settings
+    setArenaDefaultProvider(DEFAULT_ARENA_APP_SETTINGS.defaultProvider);
+    setArenaDefaultModel(DEFAULT_ARENA_APP_SETTINGS.defaultModel);
+    setArenaEnableStreaming(DEFAULT_ARENA_APP_SETTINGS.enableStreaming);
+    setArenaMaxSessions(DEFAULT_ARENA_APP_SETTINGS.maxSessions);
+    setArenaMaxMessages(DEFAULT_ARENA_APP_SETTINGS.maxMessagesPerSession);
+    setArenaProviders(getDefaultProviderSettings());
+    setExpandedProvider(null);
     setErrors({});
   };
 
@@ -309,6 +391,133 @@ const SettingsWizard: React.FC<SettingsWizardProps> = ({
         </div>
       </div>
 
+      {/* ================================================================ */}
+      {/* Arena / AI Settings Section                                      */}
+      {/* ================================================================ */}
+      <div className="space-y-4">
+        <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-300 border-b pb-2">
+          Arena / AI Settings
+        </h3>
+
+        {/* Default Provider & Model */}
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <Label htmlFor="arenaDefaultProvider">Default Provider</Label>
+            <select
+              id="arenaDefaultProvider"
+              value={arenaDefaultProvider}
+              onChange={(e) => {
+                const pid = e.target.value as ArenaProviderType;
+                const def = PROVIDER_DEFINITIONS.find((p) => p.id === pid);
+                setArenaDefaultProvider(pid);
+                setArenaDefaultModel(def?.defaultModel ?? '');
+              }}
+              className="w-full mt-1 px-2 py-1.5 text-sm bg-slate-100 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500"
+            >
+              {implementedProviders
+                .filter((p) => arenaProviders[p.id]?.enabled !== false)
+                .map((p) => (
+                  <option key={p.id} value={p.id}>{p.label}</option>
+                ))}
+            </select>
+            <p className="text-xs text-slate-500 mt-1">Provider used by default in new chats</p>
+          </div>
+          <div>
+            <Label htmlFor="arenaDefaultModel">Default Model</Label>
+            <select
+              id="arenaDefaultModel"
+              value={arenaDefaultModel}
+              onChange={(e) => setArenaDefaultModel(e.target.value)}
+              className="w-full mt-1 px-2 py-1.5 text-sm bg-slate-100 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500"
+            >
+              {getModelsForProvider(arenaDefaultProvider)
+                .filter((m) => !arenaProviders[arenaDefaultProvider]?.disabledModels.includes(m.id))
+                .map((m) => (
+                  <option key={m.id} value={m.id}>
+                    {m.label}{m.note ? ` (${m.note})` : ''}
+                  </option>
+                ))}
+            </select>
+            <p className="text-xs text-slate-500 mt-1">Model used by default in new chats</p>
+          </div>
+        </div>
+
+        {/* Streaming toggle */}
+        <div className="flex items-center justify-between p-3 border border-slate-200 dark:border-slate-700 rounded-md">
+          <div className="flex-1">
+            <Label htmlFor="arenaEnableStreaming" className="cursor-pointer">
+              Enable Streaming Responses
+            </Label>
+            <p className="text-xs text-slate-500 mt-1">
+              Stream AI responses token-by-token instead of waiting for the full response
+            </p>
+          </div>
+          <label className="relative inline-flex items-center cursor-pointer">
+            <input
+              type="checkbox"
+              id="arenaEnableStreaming"
+              checked={arenaEnableStreaming}
+              onChange={(e) => setArenaEnableStreaming(e.target.checked)}
+              className="sr-only peer"
+            />
+            <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 dark:peer-focus:ring-blue-800 rounded-full peer dark:bg-slate-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-slate-600 peer-checked:bg-blue-600"></div>
+          </label>
+        </div>
+
+        {/* Session Limits */}
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <Label htmlFor="arenaMaxSessions">Max Sessions</Label>
+            <Input
+              id="arenaMaxSessions"
+              type="number"
+              min={1}
+              max={20}
+              value={arenaMaxSessions}
+              onChange={(e) => setArenaMaxSessions(parseInt(e.target.value) || 5)}
+              className="mt-1"
+            />
+            <p className="text-xs text-slate-500 mt-1">Chat sessions to keep (1–20)</p>
+          </div>
+          <div>
+            <Label htmlFor="arenaMaxMessages">Max Messages per Session</Label>
+            <Input
+              id="arenaMaxMessages"
+              type="number"
+              min={5}
+              max={50}
+              value={arenaMaxMessages}
+              onChange={(e) => setArenaMaxMessages(parseInt(e.target.value) || 10)}
+              className="mt-1"
+            />
+            <p className="text-xs text-slate-500 mt-1">Messages per session (5–50)</p>
+          </div>
+        </div>
+
+        {/* Provider Configuration — collapsible cards */}
+        <div>
+          <Label className="mb-2 block">Provider Configuration</Label>
+          <p className="text-xs text-slate-500 mb-3">
+            Set API keys, custom URLs, and enable or disable providers &amp; individual models.
+          </p>
+          <div className="space-y-2">
+            {implementedProviders.map((provider) => (
+              <ArenaProviderCard
+                key={provider.id}
+                provider={provider}
+                providerConfig={arenaProviders[provider.id]}
+                isExpanded={expandedProvider === provider.id}
+                onToggleExpand={() =>
+                  setExpandedProvider((prev) => (prev === provider.id ? null : provider.id))
+                }
+                onFieldChange={(key, value) => handleProviderFieldChange(provider.id, key, value)}
+                onToggleModel={(modelId) => handleToggleModel(provider.id, modelId)}
+              />
+            ))}
+          </div>
+        </div>
+      </div>
+
       {/* Action Buttons */}
       <div className="flex justify-between pt-4 border-t sticky bottom-0 bg-white dark:bg-slate-900 pb-2">
         <SecondaryButton
@@ -342,5 +551,162 @@ const SettingsWizard: React.FC<SettingsWizardProps> = ({
     </div>
   );
 };
+
+// ============================================================================
+// ArenaProviderCard — collapsible provider configuration card
+// ============================================================================
+
+interface ArenaProviderCardProps {
+  provider: ProviderDefinition;
+  providerConfig: ArenaProviderSettingsMap[ArenaProviderType];
+  isExpanded: boolean;
+  onToggleExpand: () => void;
+  onFieldChange: <K extends keyof ArenaProviderSettingsMap[ArenaProviderType]>(
+    key: K,
+    value: ArenaProviderSettingsMap[ArenaProviderType][K],
+  ) => void;
+  onToggleModel: (modelId: string) => void;
+}
+
+function ArenaProviderCard({
+  provider,
+  providerConfig,
+  isExpanded,
+  onToggleExpand,
+  onFieldChange,
+  onToggleModel,
+}: ArenaProviderCardProps) {
+  const [showApiKey, setShowApiKey] = useState(false);
+  const models = getModelsForProvider(provider.id);
+  const disabledSet = new Set(providerConfig.disabledModels);
+
+  return (
+    <div
+      className={cn(
+        'rounded-lg border transition-colors',
+        providerConfig.enabled
+          ? 'border-slate-200 dark:border-slate-700'
+          : 'border-slate-200/60 dark:border-slate-700/60 opacity-60',
+      )}
+    >
+      {/* Header row */}
+      <div className="flex items-center gap-3 px-4 py-3">
+        <input
+          type="checkbox"
+          checked={providerConfig.enabled}
+          onChange={() => onFieldChange('enabled', !providerConfig.enabled)}
+          className="accent-blue-600 flex-shrink-0"
+          aria-label={`Enable ${provider.label}`}
+        />
+        <button
+          type="button"
+          onClick={onToggleExpand}
+          className="flex-1 flex items-center gap-2 text-left"
+        >
+          <span className="text-sm font-medium text-slate-800 dark:text-slate-200">
+            {provider.label}
+          </span>
+          <span className="text-xs text-slate-400 dark:text-slate-500">
+            {provider.description}
+          </span>
+          <span className="ml-auto text-slate-400">
+            {isExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+          </span>
+        </button>
+      </div>
+
+      {/* Expanded details */}
+      {isExpanded && (
+        <div className="px-4 pb-4 pt-0 space-y-3 border-t border-slate-100 dark:border-slate-700/60">
+          {/* API Key */}
+          {provider.requiresApiKey && (
+            <div className="mt-3">
+              <label className="text-[11px] font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide block mb-1">
+                API Key
+              </label>
+              <div className="relative">
+                <Key size={12} className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-400" />
+                <input
+                  type={showApiKey ? 'text' : 'password'}
+                  value={providerConfig.apiKey || ''}
+                  onChange={(e) => onFieldChange('apiKey', e.target.value || undefined)}
+                  placeholder="Enter API key..."
+                  className="w-full pl-7 pr-8 py-1.5 text-xs bg-slate-100 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowApiKey((v) => !v)}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                  aria-label={showApiKey ? 'Hide API key' : 'Show API key'}
+                >
+                  {showApiKey ? <EyeOff size={12} /> : <Eye size={12} />}
+                </button>
+              </div>
+              {provider.id === 'gemini' && (
+                <p className="mt-1 text-[10px] text-slate-400">
+                  Get your key from{' '}
+                  <a
+                    href="https://aistudio.google.com/apikey"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-blue-500 hover:underline"
+                  >
+                    Google AI Studio
+                  </a>
+                </p>
+              )}
+            </div>
+          )}
+
+          {/* API URL */}
+          <div>
+            <label className="text-[11px] font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide block mb-1">
+              <Globe size={10} className="inline mr-1" />
+              API URL
+            </label>
+            <input
+              type="url"
+              value={providerConfig.apiUrl || ''}
+              onChange={(e) => onFieldChange('apiUrl', e.target.value || undefined)}
+              placeholder={provider.id === 'ollama' ? OLLAMA_DEFAULT_BASE_URL : 'https://...'}
+              className="w-full px-2 py-1.5 text-xs bg-slate-100 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500"
+            />
+          </div>
+
+          {/* Model enable/disable */}
+          <div>
+            <label className="text-[11px] font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide block mb-1">
+              Models
+            </label>
+            <div className="space-y-1">
+              {models.map((m) => (
+                <label
+                  key={m.id}
+                  className={cn(
+                    'flex items-center gap-2 px-2 py-1 rounded cursor-pointer text-xs transition-colors',
+                    disabledSet.has(m.id)
+                      ? 'text-slate-400 dark:text-slate-500'
+                      : 'text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700/50',
+                  )}
+                >
+                  <input
+                    type="checkbox"
+                    checked={!disabledSet.has(m.id)}
+                    onChange={() => onToggleModel(m.id)}
+                    className="accent-blue-600"
+                  />
+                  <span>{m.label}</span>
+                  {m.note && (
+                    <span className="text-[10px] text-slate-400">{m.note}</span>
+                  )}
+                </label>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 
 export default SettingsWizard;

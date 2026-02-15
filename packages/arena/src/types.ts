@@ -72,9 +72,17 @@ export interface ChatChunk {
 // ============================================================================
 
 /**
- * Agent mode for Learn agent
+ * Web Expert agent query mode
+ * - 'web': Query curated reference websites (RFCs, MDN, W3C, etc.)
+ * - 'local': Search user-uploaded documents via vector store
+ * - 'auto': Automatically determine the best source based on query
  */
-export type LearnAgentMode = 'web' | 'local' | 'auto';
+export type WebExpertMode = 'web' | 'local' | 'auto';
+
+/**
+ * @deprecated Use WebExpertMode instead (Phase 1.3)
+ */
+export type LearnAgentMode = WebExpertMode;
 
 /**
  * Definition of an available agent
@@ -83,8 +91,6 @@ export interface ArenaAgent {
   id: string;
   name: string;
   description: string;
-  /** Available modes for this agent */
-  modes?: string[];
   /** Icon name (lucide icon) */
   icon: string;
   /** Whether this agent is enabled */
@@ -95,12 +101,10 @@ export interface ArenaAgent {
  * A predefined command/prompt suggestion
  */
 export interface ArenaCommand {
-  /** The trigger string (e.g., '/learn-web') */
+  /** The trigger string (e.g., '/help') */
   trigger: string;
   /** Which agent handles this command */
   agent: string;
-  /** Mode to activate (for Learn agent) */
-  mode?: LearnAgentMode;
   /** Human-readable label */
   label: string;
   /** Detailed description */
@@ -221,7 +225,7 @@ export interface DocumentInfo {
 // ============================================================================
 
 /**
- * A curated reference website for Learn-Web
+ * A curated reference website for the Web Expert agent
  */
 export interface ReferenceWebsite {
   id: string;
@@ -340,79 +344,68 @@ export const DEFAULT_ARENA_SETTINGS: ArenaSettings = {
  * All available Arena commands
  */
 export const ARENA_COMMANDS: ArenaCommand[] = [
-  // Learn Agent
+  // Wave Client Agent
   {
-    trigger: '/learn-web',
-    agent: 'learn',
-    mode: 'web',
-    label: 'Search web standards & protocols',
-    description: 'Query curated reference websites for official standards and RFCs',
-  },
-  {
-    trigger: '/learn-local',
-    agent: 'learn',
-    mode: 'local',
-    label: 'Search your uploaded documents',
-    description: 'Search through your uploaded documents and notes',
-  },
-  {
-    trigger: '/explain',
-    agent: 'learn',
-    mode: 'auto',
-    label: 'Explain a concept',
-    description: 'Get a detailed explanation of a web technology concept',
-  },
-  {
-    trigger: '/compare',
-    agent: 'learn',
-    mode: 'auto',
-    label: 'Compare technologies',
-    description: 'Compare different protocols, standards, or approaches',
-  },
-  {
-    trigger: '/rfc',
-    agent: 'learn',
-    mode: 'web',
-    label: 'Look up an RFC',
-    description: 'Find and explain a specific RFC document',
-  },
-
-  // Discover Agent
-  {
-    trigger: '/discover',
-    agent: 'discover',
-    label: 'Explore Wave Client',
-    description: 'Learn about Wave Client features and capabilities',
+    trigger: '/help',
+    agent: 'wave-client',
+    label: 'Get help with Wave Client',
+    description: 'Get help with Wave Client features and capabilities',
   },
   {
     trigger: '/collections',
-    agent: 'discover',
+    agent: 'wave-client',
     label: 'Help with collections',
     description: 'Get help managing your API collections',
   },
   {
     trigger: '/flows',
-    agent: 'discover',
+    agent: 'wave-client',
     label: 'Help with flows',
     description: 'Learn about automation flows and how to use them',
   },
   {
     trigger: '/tests',
-    agent: 'discover',
+    agent: 'wave-client',
     label: 'Help with test suites',
     description: 'Get help with API testing and test suites',
   },
   {
-    trigger: '/how-to',
-    agent: 'discover',
-    label: 'Step-by-step guidance',
-    description: 'Get step-by-step instructions for common tasks',
+    trigger: '/environments',
+    agent: 'wave-client',
+    label: 'Help with environments',
+    description: 'Manage environments and variables',
+  },
+
+  // Web Expert Agent
+  {
+    trigger: '/http',
+    agent: 'web-expert',
+    label: 'HTTP protocols & standards',
+    description: 'Learn about HTTP/1.1, HTTP/2, HTTP/3, headers, methods, status codes',
   },
   {
-    trigger: '/suggest',
-    agent: 'discover',
-    label: 'Get contextual suggestions',
-    description: 'Get suggestions based on your current Wave Client data',
+    trigger: '/rest',
+    agent: 'web-expert',
+    label: 'REST API design',
+    description: 'REST principles, best practices, API design patterns',
+  },
+  {
+    trigger: '/websocket',
+    agent: 'web-expert',
+    label: 'WebSocket protocol',
+    description: 'WebSocket specification, real-time communication patterns',
+  },
+  {
+    trigger: '/graphql',
+    agent: 'web-expert',
+    label: 'GraphQL',
+    description: 'GraphQL queries, mutations, subscriptions, schema design',
+  },
+  {
+    trigger: '/rfc',
+    agent: 'web-expert',
+    label: 'Look up an RFC',
+    description: 'Find and explain a specific RFC document',
   },
 ];
 
@@ -421,18 +414,17 @@ export const ARENA_COMMANDS: ArenaCommand[] = [
  */
 export const ARENA_AGENTS: ArenaAgent[] = [
   {
-    id: 'learn',
-    name: 'Learn',
-    description: 'Web technologies expert - protocols, standards, and best practices',
-    modes: ['web', 'local', 'auto'],
-    icon: 'GraduationCap',
+    id: 'wave-client',
+    name: 'Wave Client',
+    description: 'Wave Client assistant — feature help, collections, environments, flows, and test suites via MCP tools',
+    icon: 'Zap',
     enabled: true,
   },
   {
-    id: 'discover',
-    name: 'Discover',
-    description: 'Wave Client assistant - feature discovery and guidance',
-    icon: 'Compass',
+    id: 'web-expert',
+    name: 'Web Expert',
+    description: 'Web technologies expert — HTTP protocols, REST, GraphQL, WebSocket, OAuth, and internet standards',
+    icon: 'Globe',
     enabled: true,
   },
 ];

@@ -4,15 +4,17 @@
  * Displays the chat interface with messages and input.
  */
 
-import React, { useRef, useEffect } from 'react';
-import { Globe, FileText, Zap, User, Bot, ExternalLink, Loader2, Square, AlertCircle } from 'lucide-react';
+import React, { useRef, useEffect, useCallback } from 'react';
+import { Globe, Zap, User, Bot, ExternalLink, Square, AlertCircle, Cpu } from 'lucide-react';
 import { cn } from '../../utils/styling';
-import type { ArenaSession, ArenaMessage, ArenaMessageSource, ArenaCommandId } from '../../types/arena';
+import type { ArenaSession, ArenaMessage, ArenaMessageSource, ArenaCommandId, ArenaChatBlock } from '../../types/arena';
 import { ARENA_COMMAND_DEFINITIONS } from '../../types/arena';
 import { ARENA_AGENT_IDS, getAgentDefinition } from '../../config/arenaConfig';
 import type { ArenaAgentId } from '../../config/arenaConfig';
 import { SecondaryButton } from '../ui/SecondaryButton';
-import ArenaChatInput from './ArenaChatInput';
+import ArenaInputBar from './ArenaInputBar';
+import { ArenaBlockRenderer } from './blocks';
+import type { BlockCallbacks } from './blocks/ArenaBlockRenderer';
 
 // ============================================================================
 // Types
@@ -23,8 +25,11 @@ export interface ArenaChatViewProps {
   messages: ArenaMessage[];
   streamingContent: string;
   isStreaming: boolean;
+  isLoading?: boolean;
   onSendMessage: (content: string, command?: ArenaCommandId) => void;
   onCancelMessage: () => void;
+  /** Optional callbacks for interactive block components */
+  blockCallbacks?: BlockCallbacks;
 }
 
 // ============================================================================
@@ -36,8 +41,10 @@ export function ArenaChatView({
   messages,
   streamingContent,
   isStreaming,
+  isLoading,
   onSendMessage,
   onCancelMessage,
+  blockCallbacks,
 }: ArenaChatViewProps): React.ReactElement {
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -47,14 +54,16 @@ export function ArenaChatView({
   }, [messages, streamingContent]);
 
   const ICON_MAP: Record<string, React.ComponentType<{ size?: number; className?: string }>> = {
-    [ARENA_AGENT_IDS.LEARN_WEB]: Globe,
-    [ARENA_AGENT_IDS.LEARN_DOCS]: FileText,
     [ARENA_AGENT_IDS.WAVE_CLIENT]: Zap,
+    [ARENA_AGENT_IDS.WEB_EXPERT]: Globe,
   };
   const agentDef = getAgentDefinition(session.agent as ArenaAgentId);
-  const AgentIcon = ICON_MAP[session.agent] ?? Globe;
+  const AgentIcon = ICON_MAP[session.agent] ?? Cpu;
   const agentColor = agentDef?.iconColor ?? 'text-blue-500';
   const agentName = agentDef?.label ?? 'AI Agent';
+
+  // Memoised block callbacks for message rendering
+  const mergedBlockCallbacks: BlockCallbacks = useCallback(() => blockCallbacks ?? {}, [blockCallbacks])() as unknown as BlockCallbacks;
 
   // Get commands for this agent
   const agentCommands = ARENA_COMMAND_DEFINITIONS.filter(cmd => cmd.agent === session.agent);
@@ -99,6 +108,7 @@ export function ArenaChatView({
             message={message}
             isStreaming={isStreaming && message.status === 'streaming'}
             streamingContent={message.status === 'streaming' ? streamingContent : undefined}
+            blockCallbacks={mergedBlockCallbacks}
           />
         ))}
 
@@ -106,11 +116,14 @@ export function ArenaChatView({
       </div>
 
       {/* Input */}
-      <ArenaChatInput
+      <ArenaInputBar
         commands={agentCommands}
         onSend={onSendMessage}
-        isLoading={isStreaming}
-        placeholder={`Ask ${agentName}...`}
+        onCancel={onCancelMessage}
+        agentId={session.agent as ArenaAgentId}
+        isLoading={isLoading}
+        isStreaming={isStreaming}
+        placeholder={`Ask ${agentName}…`}
       />
     </div>
   );
@@ -142,8 +155,8 @@ function ArenaWelcomeMessage({
         Chat with {agentName}
       </h3>
       <p className="text-sm text-slate-500 dark:text-slate-400 max-w-md mx-auto mb-6">
-        {agentName === 'Learn Agent'
-          ? 'Ask questions about HTTP, REST, WebSocket, GraphQL, and other web technologies.'
+        {agentName === 'Web Expert'
+          ? 'Ask questions about HTTP, REST, WebSocket, GraphQL, gRPC, and other web technologies.'
           : 'Get help with Wave Client features, collections, environments, flows, and tests.'}
       </p>
 
@@ -172,15 +185,20 @@ interface ArenaMessageBubbleProps {
   message: ArenaMessage;
   isStreaming?: boolean;
   streamingContent?: string;
+  blockCallbacks?: BlockCallbacks;
 }
 
 function ArenaMessageBubble({
   message,
   isStreaming,
   streamingContent,
+  blockCallbacks,
 }: ArenaMessageBubbleProps): React.ReactElement {
   const isUser = message.role === 'user';
   const content = isStreaming ? (streamingContent || '') : message.content;
+
+  /** True if the message has structured block content to render */
+  const hasBlocks = message.blocks && message.blocks.length > 0;
 
   return (
     <div className={cn('flex gap-3', isUser && 'flex-row-reverse')}>
@@ -225,8 +243,21 @@ function ArenaMessageBubble({
             </div>
           ) : (
             <>
-              {/* Render markdown-like content */}
-              <MessageContent content={content} />
+              {/* Structured block content (takes precedence) */}
+              {hasBlocks && (
+                <div className="space-y-2">
+                  {message.blocks!.map((block: ArenaChatBlock, idx: number) => (
+                    <ArenaBlockRenderer
+                      key={idx}
+                      block={block}
+                      callbacks={blockCallbacks ?? {}}
+                    />
+                  ))}
+                </div>
+              )}
+
+              {/* Fallback: plain text / markdown content */}
+              {!hasBlocks && <MessageContent content={content} />}
 
               {/* Streaming indicator */}
               {isStreaming && (

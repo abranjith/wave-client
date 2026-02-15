@@ -9,7 +9,7 @@
  */
 
 import React, { useState, useCallback, useEffect, useMemo } from 'react';
-import { Settings, Sparkles, ArrowLeft } from 'lucide-react';
+import { Settings, Sparkles, ArrowLeft, PanelRight } from 'lucide-react';
 import { cn } from '../../utils/styling';
 import { PrimaryButton } from '../ui/PrimaryButton';
 import { SecondaryButton } from '../ui/SecondaryButton';
@@ -20,12 +20,11 @@ import { createSessionMetadata, getAgentDefinition, mergeReferences } from '../.
 import type { ArenaAgentId, ArenaReference } from '../../config/arenaConfig';
 import type { ArenaProviderSettingsMap } from '../../config/arenaConfig';
 import type { ArenaCommandId, ArenaSettings as ArenaSettingsType, ArenaView } from '../../types/arena';
-import ArenaSessionList from './ArenaSessionList';
 import ArenaChatView from './ArenaChatView';
 import ArenaChatToolbar from './ArenaChatToolbar';
 import ArenaSettings from './ArenaSettings';
-import ArenaAgentSelect from './ArenaAgentSelect';
-import ArenaReferencesModal from './ArenaReferencesModal';
+import ArenaRightPane from './ArenaRightPane';
+import ArenaWelcomeScreen from './ArenaWelcomeScreen';
 
 // ============================================================================
 // Types
@@ -46,7 +45,7 @@ export function ArenaPane({ className }: ArenaPaneProps): React.ReactElement {
   
   // Local state
   const [isCreatingSession, setIsCreatingSession] = useState(false);
-  const [showReferencesModal, setShowReferencesModal] = useState(false);
+  const [showRightPane, setShowRightPane] = useState(true);
   
   // Global state from store
   const {
@@ -445,67 +444,69 @@ export function ArenaPane({ className }: ArenaPaneProps): React.ReactElement {
 
   return (
     <div className={cn('flex h-full w-full overflow-hidden', className)}>
-      {/* ---- Sidebar ---- */}
-      <div className="w-64 flex-shrink-0 border-r border-slate-200 dark:border-slate-700 flex flex-col bg-slate-50 dark:bg-slate-900">
-        {/* Header */}
-        <div className="p-3 border-b border-slate-200 dark:border-slate-700">
-          <div className="flex items-center justify-between mb-3">
-            <h2 className="text-sm font-semibold text-slate-900 dark:text-slate-100 flex items-center gap-2">
-              <Sparkles size={16} className="text-blue-500" />
-              Wave Arena
-            </h2>
-            <div className="flex items-center gap-1">
-              {arenaView === 'chat' && (
-                <SecondaryButton
-                  onClick={handleBackToAgentSelect}
-                  size="icon"
-                  variant="ghost"
-                  className="h-7 w-7 p-0 text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200"
-                  title="Back to agents"
-                  aria-label="Back to agents"
-                >
-                  <ArrowLeft size={16} />
-                </SecondaryButton>
-              )}
+      {/* ---- Main Content Column ---- */}
+      <div className="flex-1 flex flex-col overflow-hidden">
+        {/* Top bar — always visible */}
+        <div className="flex items-center justify-between px-4 py-2 border-b border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900">
+          <div className="flex items-center gap-2">
+            {arenaView === 'chat' && arenaSelectedAgent && (
               <SecondaryButton
-                onClick={() => setArenaView(arenaView === 'settings' ? 'chat' : 'settings')}
+                onClick={handleBackToAgentSelect}
                 size="icon"
                 variant="ghost"
                 className="h-7 w-7 p-0 text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200"
-                title="Advanced settings"
-                aria-label="Advanced settings"
+                title="Back to agents"
+                aria-label="Back to agents"
               >
-                <Settings size={16} />
+                <ArrowLeft size={16} />
               </SecondaryButton>
-            </div>
+            )}
+            <h2 className="text-sm font-semibold text-slate-800 dark:text-slate-100 flex items-center gap-2">
+              <Sparkles size={14} className="text-blue-500" />
+              Wave Arena
+            </h2>
+            {arenaSelectedAgent && arenaView === 'chat' && (
+              <PrimaryButton
+                onClick={() => handleSelectAgent(arenaSelectedAgent)}
+                disabled={isCreatingSession}
+                size="sm"
+                className="ml-4 text-xs"
+              >
+                New Chat
+              </PrimaryButton>
+            )}
           </div>
 
-          {/* New chat for the current agent */}
-          {arenaSelectedAgent && arenaView === 'chat' && (
-            <PrimaryButton
-              onClick={() => handleSelectAgent(arenaSelectedAgent)}
-              disabled={isCreatingSession}
-              className="w-full"
+          <div className="flex items-center gap-1">
+            <SecondaryButton
+              onClick={() => setShowRightPane((v) => !v)}
+              size="icon"
+              variant="ghost"
+              className={cn(
+                'h-7 w-7 p-0',
+                showRightPane
+                  ? 'text-blue-500 dark:text-blue-400'
+                  : 'text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200',
+              )}
+              title="Toggle context panel"
+              aria-label="Toggle context panel"
             >
-              New {agentDef?.label ?? ''} Chat
-            </PrimaryButton>
-          )}
+              <PanelRight size={16} />
+            </SecondaryButton>
+            <SecondaryButton
+              onClick={() => setArenaView(arenaView === 'settings' ? 'chat' : 'settings')}
+              size="icon"
+              variant="ghost"
+              className="h-7 w-7 p-0 text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200"
+              title="Arena settings"
+              aria-label="Arena settings"
+            >
+              <Settings size={16} />
+            </SecondaryButton>
+          </div>
         </div>
 
-        {/* Session List */}
-        <div className="flex-1 overflow-y-auto">
-          <ArenaSessionList
-            sessions={filteredSessions}
-            activeSessionId={arenaActiveSessionId}
-            onSelectSession={handleSelectSession}
-            onDeleteSession={handleDeleteSession}
-            isLoading={arenaIsLoading}
-          />
-        </div>
-      </div>
-
-      {/* ---- Main Content ---- */}
-      <div className="flex-1 flex flex-col overflow-hidden">
+        {/* View switcher */}
         {arenaView === 'settings' ? (
           <ArenaSettings
             settings={arenaSettings}
@@ -513,45 +514,53 @@ export function ArenaPane({ className }: ArenaPaneProps): React.ReactElement {
             onSave={handleSaveAdvancedSettings}
             onCancel={() => setArenaView(arenaSelectedAgent ? 'chat' : 'select-agent')}
           />
-        ) : arenaView === 'select-agent' || !arenaSelectedAgent ? (
-          <ArenaAgentSelect onSelectAgent={handleSelectAgent} />
+        ) : !arenaSelectedAgent || arenaView === 'select-agent' ? (
+          <ArenaWelcomeScreen onSelectAgent={handleSelectAgent} />
         ) : activeSession ? (
           <>
-            {/* Toolbar */}
             <ArenaChatToolbar
               referenceCount={arenaReferences.filter((r) => r.enabled).length}
-              onOpenReferences={() => setShowReferencesModal(true)}
+              onOpenReferences={() => setShowRightPane(true)}
               settings={arenaSettings}
               providerSettings={arenaProviderSettings}
               metadata={arenaSessionMetadata ?? undefined}
               onSettingsChange={handleToolbarSettingsChange}
               enableStreaming={arenaSettings.enableStreaming}
-              onEnableStreamingChange={(enabled) => handleToolbarSettingsChange({ enableStreaming: enabled })}
+              onEnableStreamingChange={(enabled) =>
+                handleToolbarSettingsChange({ enableStreaming: enabled })
+              }
               onOpenSettings={() => setArenaView('settings')}
             />
-            {/* Chat */}
             <ArenaChatView
               session={activeSession}
               messages={arenaMessages}
               streamingContent={arenaStreamingContent}
               isStreaming={arenaIsStreaming}
+              isLoading={arenaIsLoading}
               onSendMessage={handleSendMessage}
               onCancelMessage={handleCancelMessage}
             />
           </>
         ) : (
-          <ArenaAgentSelect onSelectAgent={handleSelectAgent} />
+          <ArenaWelcomeScreen onSelectAgent={handleSelectAgent} />
         )}
       </div>
 
-      {/* ---- References Modal ---- */}
-      {showReferencesModal && (
-        <ArenaReferencesModal
-          references={arenaReferences}
-          onReferencesChange={handleReferencesChange}
-          onClose={() => setShowReferencesModal(false)}
-        />
-      )}
+      {/* ---- Right Pane ---- */}
+      <ArenaRightPane
+        isOpen={showRightPane}
+        onToggle={() => setShowRightPane((v) => !v)}
+        selectedAgent={arenaSelectedAgent}
+        sessions={filteredSessions}
+        activeSessionId={arenaActiveSessionId}
+        sessionMetadata={arenaSessionMetadata}
+        activeSources={arenaActiveSources}
+        references={arenaReferences}
+        onSelectSession={handleSelectSession}
+        onDeleteSession={handleDeleteSession}
+        onReferencesChange={handleReferencesChange}
+        onSourcesChange={setArenaActiveSources}
+      />
     </div>
   );
 }

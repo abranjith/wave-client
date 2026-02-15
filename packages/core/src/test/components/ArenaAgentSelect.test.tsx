@@ -37,10 +37,10 @@ describe('ArenaAgentSelect', () => {
     expect(onSelectAgent).toHaveBeenCalledWith(firstDef.id);
   });
 
-  it('should render 3 agent options', () => {
+  it('should render 2 agent options', () => {
     render(<ArenaAgentSelect onSelectAgent={vi.fn()} />);
 
     const buttons = screen.getAllByRole('button');
-    expect(buttons).toHaveLength(3);
+    expect(buttons).toHaveLength(2);
   });
 });

@@ -18,14 +18,14 @@ import type { ArenaAgentId, ArenaAgentDefinition } from '../../config/arenaConfi
 // Icon resolver
 // ============================================================================
 
-const ICON_MAP = {
+const ICON_MAP: Record<string, React.ComponentType<{ size?: number; className?: string }>> = {
   Globe,
   FileText,
   Zap,
-} as const;
+};
 
-function AgentIcon({ name, className }: { name: ArenaAgentDefinition['iconName']; className?: string }) {
-  const Icon = ICON_MAP[name];
+function AgentIcon({ name, className }: { name: string; className?: string }) {
+  const Icon = ICON_MAP[name] ?? Globe;
   return <Icon size={22} className={className} />;
 }
 

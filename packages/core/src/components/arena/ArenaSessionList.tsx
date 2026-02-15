@@ -92,9 +92,8 @@ function ArenaSessionItem({
 
   const agentDef = getAgentDefinition(session.agent as ArenaAgentId);
   const ICON_MAP: Record<string, React.ComponentType<{ size?: number; className?: string }>> = {
-    [ARENA_AGENT_IDS.LEARN_WEB]: Globe,
-    [ARENA_AGENT_IDS.LEARN_DOCS]: FileText,
     [ARENA_AGENT_IDS.WAVE_CLIENT]: Zap,
+    [ARENA_AGENT_IDS.WEB_EXPERT]: Globe,
   };
   const AgentIcon = ICON_MAP[session.agent] ?? Globe;
   const agentColor = agentDef?.iconColor ?? 'text-blue-500';

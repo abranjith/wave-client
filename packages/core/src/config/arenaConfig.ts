@@ -14,11 +14,14 @@
 
 /**
  * Arena Agent IDs
+ *
+ * Two built-in agents:
+ * - `wave-client` — Wave Client assistant, uses MCP tools
+ * - `web-expert`  — Web technologies expert, uses web fetcher + vector store
  */
 export const ARENA_AGENT_IDS = {
-  LEARN_WEB: 'learn-web',
-  LEARN_DOCS: 'learn-docs',
   WAVE_CLIENT: 'wave-client',
+  WEB_EXPERT: 'web-expert',
 } as const;
 
 export type ArenaAgentId = typeof ARENA_AGENT_IDS[keyof typeof ARENA_AGENT_IDS];
@@ -32,7 +35,7 @@ export interface ArenaAgentDefinition {
   label: string;
   description: string;
   /** Lucide icon name — resolved by the component at render time */
-  iconName: 'Globe' | 'FileText' | 'Zap';
+  iconName: string;
   /** Accent colour class for the icon (Tailwind) */
   iconColor: string;
   /** Placeholder text shown in the chat input */
@@ -46,31 +49,22 @@ export interface ArenaAgentDefinition {
  */
 export const ARENA_AGENT_DEFINITIONS: ArenaAgentDefinition[] = [
   {
-    id: ARENA_AGENT_IDS.LEARN_WEB,
-    label: 'Learn Web',
-    description: 'Explore HTTP, REST, WebSocket, GraphQL and web standards from curated sources like MDN, IETF, and W3C.',
-    iconName: 'Globe',
-    iconColor: 'text-emerald-500',
-    placeholder: 'Ask about web technologies...',
-    defaultSourceTypes: ['web'],
-  },
-  {
-    id: ARENA_AGENT_IDS.LEARN_DOCS,
-    label: 'Learn Docs',
-    description: 'Ask questions about your own uploaded documentation and local reference files.',
-    iconName: 'FileText',
-    iconColor: 'text-amber-500',
-    placeholder: 'Ask about your documents...',
-    defaultSourceTypes: ['document'],
-  },
-  {
     id: ARENA_AGENT_IDS.WAVE_CLIENT,
     label: 'Wave Client',
-    description: 'Get help with Wave Client features — collections, environments, flows, tests, and more.',
+    description: 'Get help with Wave Client features — collections, environments, flows, tests, and more. Can execute actions via MCP tools.',
     iconName: 'Zap',
     iconColor: 'text-violet-500',
     placeholder: 'What would you like help with?',
     defaultSourceTypes: ['mcp'],
+  },
+  {
+    id: ARENA_AGENT_IDS.WEB_EXPERT,
+    label: 'Web Expert',
+    description: 'Expert on HTTP, REST, WebSocket, GraphQL, gRPC, OAuth, and web standards. Cites RFCs, MDN, W3C, and IETF sources.',
+    iconName: 'Globe',
+    iconColor: 'text-emerald-500',
+    placeholder: 'Ask about web technologies, protocols, or standards...',
+    defaultSourceTypes: ['web'],
   },
 ];
 
@@ -85,6 +79,12 @@ export function getAgentDefinition(agentId: ArenaAgentId): ArenaAgentDefinition 
 // Source Types
 // ============================================================================
 
+/**
+ * Source types available to Arena agents.
+ *
+ * @deprecated 'document' will be removed in a future version.
+ *             New code should only use 'web' or 'mcp'.
+ */
 export type ArenaSourceType = 'web' | 'document' | 'mcp';
 
 /**
@@ -94,6 +94,7 @@ export interface ArenaSourceConfig {
   type: ArenaSourceType;
   label: string;
   url?: string;
+  /** @deprecated Will be removed with document source type. */
   documentId?: string;
   enabled: boolean;
 }
@@ -124,7 +125,7 @@ export interface ArenaReference {
 }
 
 // ============================================================================
-// Reference Websites (learn-web defaults)
+// Reference Websites (web-expert agent defaults)
 // ============================================================================
 
 export interface ReferenceWebsite {
@@ -358,6 +359,7 @@ export function ollamaTagsUrl(baseUrl: string = OLLAMA_DEFAULT_BASE_URL): string
 export const STORAGE_KEYS = {
   SESSIONS: 'wave-arena-sessions',
   MESSAGES: 'wave-arena-messages',
+  /** @deprecated Document storage will be removed. */
   DOCUMENTS: 'wave-arena-documents',
   SETTINGS: 'wave-arena-settings',
   REFERENCES: 'wave-arena-references',
@@ -373,11 +375,7 @@ export const ARENA_REFERENCES_FILE = 'references.json';
 /** File name for persisted provider settings inside ARENA_DIR */
 export const ARENA_PROVIDER_SETTINGS_FILE = 'provider-settings.json';
 
-/** Directory name for arena documents (relative to saveFilesLocation) */
-export const ARENA_DOCS_DIR = 'arena-docs';
-
-/** Metadata file for arena documents */
-export const ARENA_DOCS_METADATA_FILE = 'metadata.json';
+// ARENA_DOCS_DIR and ARENA_DOCS_METADATA_FILE removed — document storage is deprecated.
 
 // ============================================================================
 // Session Metadata
@@ -512,11 +510,11 @@ export interface ArenaSettings {
   maxSessions: number;
   /** Max messages per session */
   maxMessagesPerSession: number;
-  /** Max document upload size in bytes */
+  /** @deprecated Document uploads will be removed. */
   maxDocumentSize: number;
   /** Enable streaming responses */
   enableStreaming: boolean;
-  /** Custom reference websites for learn-web agent */
+  /** Custom reference websites for web-expert agent */
   customReferenceSites?: string[];
 }
 

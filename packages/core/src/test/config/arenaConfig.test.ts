@@ -33,14 +33,13 @@ import type { ArenaReference } from '../../config/arenaConfig';
 // ============================================================================
 
 describe('ARENA_AGENT_IDS', () => {
-  it('should have exactly 3 agent IDs', () => {
-    expect(Object.keys(ARENA_AGENT_IDS)).toHaveLength(3);
+  it('should have exactly 2 agent IDs', () => {
+    expect(Object.keys(ARENA_AGENT_IDS)).toHaveLength(2);
   });
 
-  it('should contain learn-web, learn-docs, and wave-client', () => {
-    expect(ARENA_AGENT_IDS.LEARN_WEB).toBe('learn-web');
-    expect(ARENA_AGENT_IDS.LEARN_DOCS).toBe('learn-docs');
+  it('should contain wave-client and web-expert', () => {
     expect(ARENA_AGENT_IDS.WAVE_CLIENT).toBe('wave-client');
+    expect(ARENA_AGENT_IDS.WEB_EXPERT).toBe('web-expert');
   });
 });
 
@@ -66,9 +65,9 @@ describe('ARENA_AGENT_DEFINITIONS', () => {
 
 describe('getAgentDefinition', () => {
   it('should return definition for valid agent ID', () => {
-    const def = getAgentDefinition(ARENA_AGENT_IDS.LEARN_WEB);
+    const def = getAgentDefinition(ARENA_AGENT_IDS.WEB_EXPERT);
     expect(def).toBeDefined();
-    expect(def!.id).toBe('learn-web');
+    expect(def!.id).toBe('web-expert');
   });
 
   it('should return undefined for invalid agent ID', () => {
@@ -183,12 +182,16 @@ describe('DEFAULT_REFERENCE_WEBSITES', () => {
 });
 
 describe('STORAGE_KEYS', () => {
-  it('should have session, message, documents, settings, and references keys', () => {
+  it('should have session, message, settings, references and provider-settings keys', () => {
     expect(STORAGE_KEYS.SESSIONS).toBeTruthy();
     expect(STORAGE_KEYS.MESSAGES).toBeTruthy();
-    expect(STORAGE_KEYS.DOCUMENTS).toBeTruthy();
     expect(STORAGE_KEYS.SETTINGS).toBeTruthy();
     expect(STORAGE_KEYS.REFERENCES).toBeTruthy();
+    expect(STORAGE_KEYS.PROVIDER_SETTINGS).toBeTruthy();
+  });
+
+  it('should still expose DOCUMENTS key (deprecated)', () => {
+    expect(STORAGE_KEYS.DOCUMENTS).toBeTruthy();
   });
 });
 
@@ -275,7 +278,7 @@ describe('mergeReferences', () => {
     id: 'user-custom',
     name: 'Custom API',
     url: 'https://example.com/api',
-    type: 'document',
+    type: 'web',
     isDefault: false,
     enabled: true,
   };

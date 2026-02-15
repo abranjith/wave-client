@@ -35,6 +35,7 @@ export interface ArenaSlice {
     arenaActiveSessionId: string | null;
     arenaMessages: ArenaMessage[];
     arenaDocuments: ArenaDocument[];
+    /** @deprecated Use `settings.arena` from the settings slice instead (Phase 4). Will be removed in Phase 3. */
     arenaSettings: ArenaSettings;
     arenaIsLoading: boolean;
     arenaIsStreaming: boolean;
@@ -51,7 +52,7 @@ export interface ArenaSlice {
     arenaSessionMetadata: ArenaSessionMetadata | null;
     /** All references (default + user-added, already merged) */
     arenaReferences: ArenaReference[];
-    /** Per-provider configuration (API keys, URLs, enabled/disabled, disabled models) */
+    /** @deprecated Use `settings.arena.providers` from the settings slice instead (Phase 4). Will be removed in Phase 3. */
     arenaProviderSettings: ArenaProviderSettingsMap;
     
     // Session actions
@@ -75,9 +76,13 @@ export interface ArenaSlice {
     removeArenaDocument: (documentId: string) => void;
     
     // Settings actions
+    /** @deprecated Use settings slice actions instead (Phase 4). Will be removed in Phase 3. */
     setArenaSettings: (settings: ArenaSettings) => void;
+    /** @deprecated Use settings slice actions instead (Phase 4). Will be removed in Phase 3. */
     updateArenaSettings: (updates: Partial<ArenaSettings>) => void;
+    /** @deprecated Use settings slice actions instead (Phase 4). Will be removed in Phase 3. */
     setArenaProviderSettings: (settings: ArenaProviderSettingsMap) => void;
+    /** @deprecated Use settings slice actions instead (Phase 4). Will be removed in Phase 3. */
     updateArenaProviderSettings: (providerId: ArenaProviderType, updates: Partial<ArenaProviderSettingsMap[ArenaProviderType]>) => void;
     
     // UI state actions
@@ -159,7 +164,6 @@ export function buildDefaultSources(agentId: ArenaAgentId): ArenaSourceConfig[] 
         ];
     }
 
-    // learn-docs: empty until user uploads
     return [];
 }
 
@@ -301,7 +305,7 @@ const createArenaSlice: StateCreator<ArenaSlice> = (set, get) => ({
         arenaDocuments: state.arenaDocuments.filter((d) => d.id !== documentId),
     })),
     
-    // Settings actions
+    // Settings actions (deprecated — use settings slice instead)
     setArenaSettings: (settings) => set({ arenaSettings: settings }),
     
     updateArenaSettings: (updates) => set((state) => ({

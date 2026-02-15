@@ -1,4 +1,42 @@
 import { StateCreator } from 'zustand';
+import type { ArenaProviderType, ArenaProviderSettingsMap } from '../../config/arenaConfig';
+import { getDefaultProviderSettings } from '../../config/arenaConfig';
+
+// ============================================================================
+// Arena Settings (sub-section of AppSettings)
+// ============================================================================
+
+/**
+ * Arena-specific settings managed through the SettingsWizard.
+ * Covers LLM provider config, model selection, and general AI preferences.
+ */
+export interface ArenaAppSettings {
+    /** Default LLM provider */
+    defaultProvider: ArenaProviderType;
+    /** Default model for the selected provider */
+    defaultModel: string;
+    /** Enable streaming responses */
+    enableStreaming: boolean;
+    /** Max sessions to keep */
+    maxSessions: number;
+    /** Max messages per session */
+    maxMessagesPerSession: number;
+    /** Per-provider configuration (API keys, URLs, disabled models) */
+    providers: ArenaProviderSettingsMap;
+}
+
+export const DEFAULT_ARENA_APP_SETTINGS: ArenaAppSettings = {
+    defaultProvider: 'gemini',
+    defaultModel: 'gemini-2.0-flash',
+    enableStreaming: true,
+    maxSessions: 5,
+    maxMessagesPerSession: 10,
+    providers: getDefaultProviderSettings(),
+};
+
+// ============================================================================
+// App Settings
+// ============================================================================
 
 // Settings interface
 export interface AppSettings {
@@ -23,6 +61,9 @@ export interface AppSettings {
     
     // Security settings
     ignoreCertificateValidation: boolean; // Default: false
+    
+    // Arena / AI settings
+    arena: ArenaAppSettings;
 }
 
 // Default settings
@@ -35,6 +76,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
     encryptionKeyEnvVar: 'WAVECLIENT_SECRET_KEY',
     encryptionKeyValidationStatus: 'none',
     ignoreCertificateValidation: false,
+    arena: { ...DEFAULT_ARENA_APP_SETTINGS },
 };
 
 // Settings store interface
@@ -54,6 +96,10 @@ interface SettingsSlice {
     setCommonHeaderNames: (headerNames: string[]) => void;
     setEncryptionKeyEnvVar: (envVar: string) => void;
     setIgnoreCertificateValidation: (ignore: boolean) => void;
+    
+    // Arena settings
+    updateArenaSettings: (updates: Partial<ArenaAppSettings>) => void;
+    updateArenaProviderSettings: (providerId: ArenaProviderType, updates: Partial<ArenaAppSettings['providers'][ArenaProviderType]>) => void;
     
     // Utility operations
     getSettings: () => AppSettings;
@@ -100,6 +146,30 @@ const createSettingsSlice: StateCreator<SettingsSlice> = (set, get) => ({
 
     setIgnoreCertificateValidation: (ignore) => set((state) => ({
         settings: { ...state.settings, ignoreCertificateValidation: ignore }
+    })),
+
+    // Arena settings — deep-merge into settings.arena
+    updateArenaSettings: (updates) => set((state) => ({
+        settings: {
+            ...state.settings,
+            arena: { ...state.settings.arena, ...updates },
+        },
+    })),
+
+    updateArenaProviderSettings: (providerId, updates) => set((state) => ({
+        settings: {
+            ...state.settings,
+            arena: {
+                ...state.settings.arena,
+                providers: {
+                    ...state.settings.arena.providers,
+                    [providerId]: {
+                        ...state.settings.arena.providers[providerId],
+                        ...updates,
+                    },
+                },
+            },
+        },
     })),
 
     // Get current settings
