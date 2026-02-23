@@ -16,7 +16,7 @@ export interface OllamaProviderConfig {
   streaming?: boolean;
 }
 
-const DEFAULT_MODEL = 'llama2';
+const DEFAULT_MODEL = 'llama3.2';
 const DEFAULT_TEMPERATURE = 1.0;
 const DEFAULT_NUM_CTX = 4096;
 

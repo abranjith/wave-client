@@ -63,7 +63,7 @@ function loadSystemPrompt(): string {
     const promptPath = resolve(__dirname, 'prompts', 'wave-client-agent.md');
     return readFileSync(promptPath, 'utf-8');
   } catch {
-    return `You are the Wave Client Assistant, an expert AI agent embedded inside Wave Client — a VS Code extension for making HTTP requests, managing APIs, and testing endpoints.
+    return `You are the Wave Client Assistant, an expert AI agent embedded inside Wave Client - client for making HTTP requests, managing APIs, and testing endpoints.
 Use available tools to inspect the user's workspace and provide contextual help.`;
   }
 }

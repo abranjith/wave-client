@@ -49,6 +49,7 @@
     "test:ui": "vitest --ui"
   },
   "dependencies": {
+    "@wave-client/arena": "workspace:*",
     "@wave-client/core": "workspace:*",
     "@wave-client/shared": "workspace:*",
     "axios": "^1.11.0"

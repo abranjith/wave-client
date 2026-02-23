@@ -1,0 +1,31 @@
+{
+  "version": "0.0.5",
+  "provider": "copilot",
+  "installedPrompts": [
+    "architect",
+    "brainstorm",
+    "code_review",
+    "devops",
+    "feature",
+    "fix",
+    "implement",
+    "integration_tests",
+    "memorize",
+    "performance_review",
+    "planner",
+    "readme",
+    "security_audit",
+    "spec_help",
+    "technical_docs",
+    "unit_tests"
+  ],
+  "installedAt": "2026-02-22T00:33:08.757Z",
+  "updatedAt": "2026-02-23T03:29:05.651Z",
+  "projectProfile": {
+    "language": "TypeScript",
+    "frameworks": "None / not sure yet",
+    "testFramework": "Vitest",
+    "architecture": "Monorepo",
+    "conventions": ""
+  }
+}

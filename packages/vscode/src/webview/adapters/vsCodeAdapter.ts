@@ -867,6 +867,11 @@ export function createVSCodeAdapter(
                 events.emit('settingsChanged', undefined);
                 break;
 
+            // Arena streaming push events (no requestId — forwarded to event bus)
+            case 'arena.streamChunk':
+                events.emit('arenaStreamChunk', message.chunk);
+                break;
+
             // Note: Other message types without requestId are ignored
             // They may be legacy messages handled elsewhere
         }

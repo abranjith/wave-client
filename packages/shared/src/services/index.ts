@@ -32,5 +32,11 @@ export {
     type HttpAuth
 } from './HttpService';
 
+/** Persistent on-disk storage service for all Arena AI chat data. */
+export {
+    ArenaStorageService,
+    arenaStorageService,
+} from './ArenaStorageService';
+
 // Auth services
 export * from './auth/index';

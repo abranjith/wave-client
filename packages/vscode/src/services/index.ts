@@ -70,6 +70,10 @@ export type {
 export { SecurityService, securityService } from './SecurityService';
 export type { EncryptionStatus } from './SecurityService';
 
+// Arena services
+export { ArenaService, arenaService } from './ArenaService';
+export { ArenaStorageService, arenaStorageService } from '@wave-client/shared';
+
 // Types (re-exported from shared for convenience)
 export type {
     Collection,

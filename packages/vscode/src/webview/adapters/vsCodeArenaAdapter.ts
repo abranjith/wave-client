@@ -1,41 +1,44 @@
 /**
  * VS Code Arena Adapter
- * 
+ *
  * Implements IArenaAdapter for the VS Code webview environment.
- * This adapter handles Arena AI chat operations by communicating with
- * the extension backend via postMessage.
+ * This is a thin relay adapter — every operation is delegated to the extension
+ * host via postMessage and awaited through the shared pendingRequests map.
+ * No in-memory state is maintained here; the extension host is the source of truth.
  */
 
-import {
-    ok,
-    err,
-    type Result,
-    type IArenaAdapter,
-    type ArenaSession,
-    type ArenaMessage,
-    type ArenaDocument,
-    type ArenaSettings,
-    type ArenaChatRequest,
-    type ArenaChatResponse,
-    type ArenaChatStreamChunk,
-    type IAdapterEvents,
-    type ArenaReference,
-    type ArenaProviderSettingsMap,
-    DEFAULT_ARENA_SETTINGS,
-    getDefaultProviderSettings,
-    geminiGenerateContentUrl,
-    ollamaChatUrl,
-    geminiModelsUrl,
-    ollamaTagsUrl,
-    ARENA_AGENT_IDS,
-    getModelsForProvider,
-    LLM_DEFAULTS,
+import type {
+    Result,
+    IArenaAdapter,
+    ArenaSession,
+    ArenaMessage,
+    ArenaDocument,
+    ArenaSettings,
+    ArenaChatRequest,
+    ArenaChatResponse,
+    ArenaChatStreamChunk,
+    IAdapterEvents,
+    ArenaReference,
+    ArenaProviderSettingsMap,
 } from '@wave-client/core';
+
+// ---------------------------------------------------------------------------
+// Inline Result helpers — avoids a value-import of the ESM @wave-client/core
+// package in the CJS webpack compilation context (TS1479).
+// These match the shape produced by the real ok()/err() from @wave-client/core.
+// ---------------------------------------------------------------------------
+function ok<T>(value: T): Result<T, never> {
+    return { isOk: true, isErr: false, value } as unknown as Result<T, never>;
+}
+function err<E>(error: E): Result<never, E> {
+    return { isOk: false, isErr: true, error } as unknown as Result<never, E>;
+}
 
 // ============================================================================
 // Types
 // ============================================================================
 
+/** Shared shape used by the parent vsCodeAdapter pendingRequests map. */
 interface PendingRequest<T> {
     resolve: (value: T) => void;
     reject: (error: Error) => void;
@@ -54,14 +57,12 @@ interface VSCodeAPI {
 
 /**
  * Creates the Arena adapter for VS Code.
- * 
- * Note: For the MVP, Arena functionality is implemented entirely in the webview
- * using the @wave-client/arena package. The extension backend is only used for:
- * - Storing sessions/messages/documents (via storage service)
- * - Securely storing API keys (via secret storage)
- * 
- * In the future, we may move the LangGraph execution to the extension backend
- * for better performance and to avoid exposing API keys to the webview.
+ *
+ * All operations are delegated to the extension host via postMessage.
+ * Streaming chunks arrive as `arena.streamChunk` push messages — routed to the
+ * `arenaStreamChunk` event by `vsCodeAdapter.handleMessage` — so we subscribe
+ * to that event before posting a `streamMessage` request and unsubscribe when
+ * the response (or error) arrives.
  */
 export function createVSCodeArenaAdapter(
     vsCodeApi: VSCodeAPI,
@@ -90,22 +91,27 @@ export function createVSCodeArenaAdapter(
                 resolve(err(`Request timed out: ${type}`));
             }, defaultTimeout);
 
-            // Map request types to response data fields
+            // Map request types to response data fields.
+            // Empty string ('') means the response carries no data (void success).
             const responseDataMap: Record<string, string> = {
-                'arena.loadSessions': 'sessions',
-                'arena.saveSession': '',
-                'arena.deleteSession': '',
-                'arena.loadMessages': 'messages',
-                'arena.saveMessage': '',
+                'arena.loadSessions':         'sessions',
+                'arena.saveSession':          '',
+                'arena.deleteSession':        '',
+                'arena.loadMessages':         'messages',
+                'arena.saveMessage':          '',
                 'arena.clearSessionMessages': '',
-                'arena.loadDocuments': 'documents',
-                'arena.uploadDocument': 'document',
-                'arena.deleteDocument': '',
-                'arena.sendMessage': 'response',
-                'arena.streamMessage': 'response',
-                'arena.loadSettings': 'settings',
-                'arena.saveSettings': '',
-                'arena.validateApiKey': 'valid',
+                'arena.loadDocuments':        'documents',
+                'arena.uploadDocument':       'document',
+                'arena.deleteDocument':       '',
+                'arena.streamMessage':        'response',
+                'arena.loadSettings':         'settings',
+                'arena.saveSettings':         '',
+                'arena.validateApiKey':       'valid',
+                'arena.loadReferences':       'references',
+                'arena.saveReferences':       '',
+                'arena.loadProviderSettings': 'settings',
+                'arena.saveProviderSettings': '',
+                'arena.getAvailableModels':   'models',
             };
 
             pendingRequests.set(requestId, {
@@ -127,415 +133,155 @@ export function createVSCodeArenaAdapter(
         });
     }
 
-    // For MVP, we'll store data locally in the webview state
-    // This is a temporary solution until we implement proper backend storage
-    
-    let localSessions: ArenaSession[] = [];
-    let localMessages: Map<string, ArenaMessage[]> = new Map();
-    let localDocuments: ArenaDocument[] = [];
-    let localSettings: ArenaSettings = DEFAULT_ARENA_SETTINGS;
-    let localReferences: ArenaReference[] = [];
-    let localProviderSettings: ArenaProviderSettingsMap = getDefaultProviderSettings();
-
-    // Try to restore from VS Code state
-    const savedState = vsCodeApi.getState() as any;
-    if (savedState?.arenaSessions) {
-        localSessions = savedState.arenaSessions;
-    }
-    if (savedState?.arenaMessages) {
-        localMessages = new Map(Object.entries(savedState.arenaMessages));
-    }
-    if (savedState?.arenaDocuments) {
-        localDocuments = savedState.arenaDocuments;
-    }
-    if (savedState?.arenaSettings) {
-        localSettings = { ...DEFAULT_ARENA_SETTINGS, ...savedState.arenaSettings };
-    }
-    if (savedState?.arenaReferences) {
-        localReferences = savedState.arenaReferences;
-    }
-    if (savedState?.arenaProviderSettings) {
-        localProviderSettings = { ...getDefaultProviderSettings(), ...savedState.arenaProviderSettings };
-    }
-
-    function saveState() {
-        vsCodeApi.setState({
-            ...vsCodeApi.getState() as any,
-            arenaSessions: localSessions,
-            arenaMessages: Object.fromEntries(localMessages),
-            arenaDocuments: localDocuments,
-            arenaSettings: localSettings,
-            arenaReferences: localReferences,
-            arenaProviderSettings: localProviderSettings,
-        });
-    }
-
-    // Active chat cancellation
-    const activeChatControllers: Map<string, AbortController> = new Map();
+    // ============================================================================
+    // IArenaAdapter implementation — all ops delegate to extension host
+    // ============================================================================
 
     /**
-     * Send a message using Gemini API
+     * Stream a chat message to the extension host and relay chunks via callback
+     * and the shared `arenaStreamChunk` event.
+     *
+     * We subscribe to `arenaStreamChunk` BEFORE posting the request so no chunk
+     * emitted on the event bus before the Promise resolves is missed.
      */
-    async function sendGeminiMessage(request: ArenaChatRequest): Promise<Result<ArenaChatResponse, string>> {
-        const providerCfg = localProviderSettings['gemini'];
-        const apiKey = providerCfg?.apiKey;
-        if (!apiKey) {
-            return err('API key not configured. Please set your Gemini API key in Arena settings.');
-        }
+    async function streamMessageImpl(
+        request: ArenaChatRequest,
+        onChunk: (chunk: ArenaChatStreamChunk) => void
+    ): Promise<Result<ArenaChatResponse, string>> {
+        const chunkHandler = (chunk: ArenaChatStreamChunk) => onChunk(chunk);
+        events.on('arenaStreamChunk', chunkHandler);
 
-        const model = request.settings.model || LLM_DEFAULTS.GEMINI_MODEL;
-        const apiUrl = geminiGenerateContentUrl(model, apiKey);
-
-        // Build conversation history
-        const contents = request.history.slice(-5).map((msg: ArenaMessage) => ({
-            role: msg.role === 'user' ? 'user' : 'model',
-            parts: [{ text: msg.content }],
-        }));
-
-        // Add current message
-        contents.push({
-            role: 'user',
-            parts: [{ text: request.message }],
+        const result = await sendAndWait<ArenaChatResponse>('arena.streamMessage', {
+            request: request as unknown as Record<string, unknown>,
         });
 
-        // Add system instruction based on agent type
-        const systemInstruction = getSystemPromptForAgent(request.agent);
-
-        const response = await fetch(apiUrl, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-                contents,
-                systemInstruction: {
-                    parts: [{ text: systemInstruction }],
-                },
-                generationConfig: {
-                    temperature: 0.7,
-                    maxOutputTokens: 4096,
-                },
-            }),
-        });
-
-        if (!response.ok) {
-            const errorData = await response.json().catch(() => ({}));
-            return err(errorData.error?.message || `API error: ${response.status}`);
-        }
-
-        const data = await response.json();
-        const responseText = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
-
-        return ok({
-            messageId: `msg-${Date.now()}`,
-            content: responseText,
-            tokenCount: data.usageMetadata?.totalTokenCount,
-        });
-    }
-
-    /**
-     * Send a message using Ollama API
-     */
-    async function sendOllamaMessage(request: ArenaChatRequest): Promise<Result<ArenaChatResponse, string>> {
-        const providerCfg = localProviderSettings['ollama'];
-        const baseUrl = providerCfg?.apiUrl || LLM_DEFAULTS.OLLAMA_BASE_URL;
-        const model = request.settings.model || LLM_DEFAULTS.OLLAMA_MODEL;
-        const apiUrl = ollamaChatUrl(baseUrl);
-
-        // Build conversation history
-        const messages = [
-            {
-                role: 'system',
-                content: getSystemPromptForAgent(request.agent),
-            },
-            ...request.history.slice(-5).map((msg: ArenaMessage) => ({
-                role: msg.role,
-                content: msg.content,
-            })),
-            {
-                role: 'user' as const,
-                content: request.message,
-            },
-        ];
-
-        const response = await fetch(apiUrl, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-                model,
-                messages,
-                stream: false,
-                options: {
-                    temperature: 0.7,
-                    num_ctx: 4096,
-                },
-            }),
-        });
-
-        if (!response.ok) {
-            const errorText = await response.text().catch(() => '');
-            return err(errorText || `Ollama API error: ${response.status}. Make sure Ollama is running.`);
-        }
-
-        const data = await response.json();
-        const responseText = data.message?.content || '';
-
-        return ok({
-            messageId: `msg-${Date.now()}`,
-            content: responseText,
-            tokenCount: data.eval_count || undefined,
-        });
+        events.off('arenaStreamChunk', chunkHandler);
+        return result;
     }
 
     return {
-        // Session Management
+        // ── Session Management ───────────────────────────────────────────────
+
         async loadSessions(): Promise<Result<ArenaSession[], string>> {
-            return ok(localSessions);
+            return sendAndWait<ArenaSession[]>('arena.loadSessions');
         },
 
         async saveSession(session: ArenaSession): Promise<Result<void, string>> {
-            const existingIndex = localSessions.findIndex(s => s.id === session.id);
-            if (existingIndex >= 0) {
-                localSessions[existingIndex] = session;
-            } else {
-                localSessions.push(session);
-            }
-            saveState();
-            events.emit('arenaSessionsChanged', undefined);
-            return ok(undefined);
+            const result = await sendAndWait<void>('arena.saveSession', { session: session as unknown as Record<string, unknown> });
+            if (result.isOk) events.emit('arenaSessionsChanged', undefined);
+            return result;
         },
 
         async deleteSession(sessionId: string): Promise<Result<void, string>> {
-            localSessions = localSessions.filter(s => s.id !== sessionId);
-            localMessages.delete(sessionId);
-            saveState();
-            events.emit('arenaSessionsChanged', undefined);
-            return ok(undefined);
+            const result = await sendAndWait<void>('arena.deleteSession', { sessionId });
+            if (result.isOk) events.emit('arenaSessionsChanged', undefined);
+            return result;
         },
 
-        // Message Management
+        // ── Message Management ───────────────────────────────────────────────
+
         async loadMessages(sessionId: string): Promise<Result<ArenaMessage[], string>> {
-            return ok(localMessages.get(sessionId) || []);
+            return sendAndWait<ArenaMessage[]>('arena.loadMessages', { sessionId });
         },
 
         async saveMessage(message: ArenaMessage): Promise<Result<void, string>> {
-            const sessionMessages = localMessages.get(message.sessionId) || [];
-            const existingIndex = sessionMessages.findIndex(m => m.id === message.id);
-            if (existingIndex >= 0) {
-                sessionMessages[existingIndex] = message;
-            } else {
-                sessionMessages.push(message);
-            }
-            localMessages.set(message.sessionId, sessionMessages);
-            saveState();
-            events.emit('arenaMessagesChanged', { sessionId: message.sessionId });
-            return ok(undefined);
+            const result = await sendAndWait<void>('arena.saveMessage', { message: message as unknown as Record<string, unknown> });
+            if (result.isOk) events.emit('arenaMessagesChanged', { sessionId: message.sessionId });
+            return result;
         },
 
         async clearSessionMessages(sessionId: string): Promise<Result<void, string>> {
-            localMessages.delete(sessionId);
-            saveState();
-            events.emit('arenaMessagesChanged', { sessionId });
-            return ok(undefined);
+            const result = await sendAndWait<void>('arena.clearSessionMessages', { sessionId });
+            if (result.isOk) events.emit('arenaMessagesChanged', { sessionId });
+            return result;
         },
 
-        // Document Management
+        // ── Document Management ──────────────────────────────────────────────
+
         async loadDocuments(): Promise<Result<ArenaDocument[], string>> {
-            return ok(localDocuments);
+            return sendAndWait<ArenaDocument[]>('arena.loadDocuments');
         },
 
         async uploadDocument(file: File, content: ArrayBuffer): Promise<Result<ArenaDocument, string>> {
-            // For MVP, documents are stored in memory (metadata only)
-            // Full implementation would upload to extension backend for processing
-            const document: ArenaDocument = {
-                id: `doc-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
+            // Serialize only serialisable metadata; the extension host creates the ArenaDocument record.
+            const result = await sendAndWait<ArenaDocument>('arena.uploadDocument', {
                 filename: file.name,
                 mimeType: file.type,
                 size: file.size,
-                uploadedAt: Date.now(),
-                processed: false, // Would be true after vector embedding
-            };
-            localDocuments.push(document);
-            saveState();
-            events.emit('arenaDocumentsChanged', undefined);
-            return ok(document);
+                // content is intentionally omitted (too large for postMessage in MVP)
+            });
+            if (result.isOk) events.emit('arenaDocumentsChanged', undefined);
+            return result;
         },
 
         async deleteDocument(documentId: string): Promise<Result<void, string>> {
-            localDocuments = localDocuments.filter(d => d.id !== documentId);
-            saveState();
-            events.emit('arenaDocumentsChanged', undefined);
-            return ok(undefined);
+            const result = await sendAndWait<void>('arena.deleteDocument', { documentId });
+            if (result.isOk) events.emit('arenaDocumentsChanged', undefined);
+            return result;
         },
 
-        // Chat Operations
-        async sendMessage(request: ArenaChatRequest): Promise<Result<ArenaChatResponse, string>> {
-            // For MVP, we'll call the LLM API directly from the webview
-            // This is not ideal (exposes API key for cloud providers) but works for initial development
-            // TODO: Move to extension backend for production
-            
-            try {
-                const provider = request.settings.provider || 'gemini';
+        // ── Chat Operations ──────────────────────────────────────────────────
 
-                if (provider === 'gemini') {
-                    return await sendGeminiMessage(request);
-                } else if (provider === 'ollama') {
-                    return await sendOllamaMessage(request);
-                } else {
-                    return err(`Provider '${provider}' is not yet supported`);
-                }
-            } catch (error) {
-                return err(error instanceof Error ? error.message : 'Failed to send message');
-            }
+        async sendMessage(request: ArenaChatRequest): Promise<Result<ArenaChatResponse, string>> {
+            // Delegate to streamMessage with a no-op chunk handler so callers that
+            // want just the final response don't need to wire up event listeners.
+            return streamMessageImpl(request, () => { /* no-op */ });
         },
 
         async streamMessage(
             request: ArenaChatRequest,
             onChunk: (chunk: ArenaChatStreamChunk) => void
         ): Promise<Result<ArenaChatResponse, string>> {
-            // For MVP, use non-streaming and simulate streaming
-            // TODO: Implement actual streaming for both Gemini and Ollama
-            const result = await this.sendMessage(request);
-            
-            if (result.isErr) {
-                return result;
-            }
-
-            const messageId = result.value.messageId;
-            const content = result.value.content;
-            
-            // Simulate streaming by chunking the response.
-            // Emit chunks both via the callback AND via the event system,
-            // because ArenaPane listens on 'arenaStreamChunk' events.
-            const chunkSize = 20;
-            for (let i = 0; i < content.length; i += chunkSize) {
-                const chunk = content.slice(i, i + chunkSize);
-                const chunkData: ArenaChatStreamChunk = {
-                    messageId,
-                    content: chunk,
-                    done: false,
-                };
-                onChunk(chunkData);
-                events.emit('arenaStreamChunk', chunkData);
-                // Small delay to simulate streaming
-                await new Promise(r => setTimeout(r, 10));
-            }
-
-            // Final chunk
-            const finalChunk: ArenaChatStreamChunk = {
-                messageId,
-                content: '',
-                done: true,
-                tokenCount: result.value.tokenCount,
-            };
-            onChunk(finalChunk);
-            events.emit('arenaStreamChunk', finalChunk);
-
-            return result;
+            return streamMessageImpl(request, onChunk);
         },
 
         cancelChat(sessionId: string): void {
-            const controller = activeChatControllers.get(sessionId);
-            if (controller) {
-                controller.abort();
-                activeChatControllers.delete(sessionId);
-            }
+            // Fire-and-forget: tell the extension host to abort the in-flight request.
+            vsCodeApi.postMessage({ type: 'arena.cancelChat', sessionId });
         },
 
-        // Settings
+        // ── Settings ─────────────────────────────────────────────────────────
+
         async loadSettings(): Promise<Result<ArenaSettings, string>> {
-            return ok(localSettings);
+            return sendAndWait<ArenaSettings>('arena.loadSettings');
         },
 
         async saveSettings(settings: ArenaSettings): Promise<Result<void, string>> {
-            localSettings = settings;
-            saveState();
-            events.emit('arenaSettingsChanged', undefined);
-            return ok(undefined);
+            const result = await sendAndWait<void>('arena.saveSettings', { settings: settings as unknown as Record<string, unknown> });
+            if (result.isOk) events.emit('arenaSettingsChanged', undefined);
+            return result;
         },
 
-        async validateApiKey(provider: string, apiKey: string): Promise<Result<boolean, string>> {
-            // Quick validation by making a minimal API call
-            if (provider === 'gemini') {
-                try {
-                    const response = await fetch(geminiModelsUrl(apiKey));
-                    return ok(response.ok);
-                } catch {
-                    return ok(false);
-                }
-            } else if (provider === 'ollama') {
-                try {
-                    const providerCfg = localProviderSettings['ollama'];
-                    const baseUrl = providerCfg?.apiUrl || LLM_DEFAULTS.OLLAMA_BASE_URL;
-                    const response = await fetch(ollamaTagsUrl(baseUrl));
-                    return ok(response.ok);
-                } catch {
-                    return ok(false);
-                }
-            }
-            return ok(false);
-        },
+        // ── References ───────────────────────────────────────────────────────
 
-        async getAvailableModels(provider: string): Promise<Result<{ id: string; label: string }[], string>> {
-            if (provider === 'ollama') {
-                try {
-                    const providerCfg = localProviderSettings['ollama'];
-                    const baseUrl = providerCfg?.apiUrl || LLM_DEFAULTS.OLLAMA_BASE_URL;
-                    const response = await fetch(ollamaTagsUrl(baseUrl));
-                    if (!response.ok) { 
-                        return err('Failed to fetch Ollama models'); 
-                    }
-                    const data = await response.json();
-                    const models = (data.models || []).map((m: { name: string }) => ({ id: m.name, label: m.name }));
-                    return ok(models);
-                } catch {
-                    return err('Could not connect to Ollama');
-                }
-            }
-            // For other providers, return the static list from config
-            return ok(getModelsForProvider(provider as any).map(m => ({ id: m.id, label: m.label })));
-        },
-
-        // References (stored in webview state, persisted across reloads)
         async loadReferences(): Promise<Result<ArenaReference[], string>> {
-            return ok([...localReferences]);
+            return sendAndWait<ArenaReference[]>('arena.loadReferences');
         },
 
         async saveReferences(references: ArenaReference[]): Promise<Result<void, string>> {
-            localReferences = references;
-            saveState();
-            return ok(undefined);
+            return sendAndWait<void>('arena.saveReferences', { references: references as unknown as Record<string, unknown> });
         },
 
-        // Provider Settings
+        // ── Provider Settings ─────────────────────────────────────────────────
+
         async loadProviderSettings(): Promise<Result<ArenaProviderSettingsMap, string>> {
-            return ok({ ...localProviderSettings });
+            return sendAndWait<ArenaProviderSettingsMap>('arena.loadProviderSettings');
         },
 
         async saveProviderSettings(settings: ArenaProviderSettingsMap): Promise<Result<void, string>> {
-            localProviderSettings = settings;
-            saveState();
-            return ok(undefined);
+            return sendAndWait<void>('arena.saveProviderSettings', { settings: settings as unknown as Record<string, unknown> });
+        },
+
+        // ── API Key & Models ──────────────────────────────────────────────────
+
+        async validateApiKey(provider: string, apiKey: string): Promise<Result<boolean, string>> {
+            return sendAndWait<boolean>('arena.validateApiKey', { provider, apiKey });
+        },
+
+        async getAvailableModels(provider: string): Promise<Result<{ id: string; label: string }[], string>> {
+            return sendAndWait<{ id: string; label: string }[]>('arena.getAvailableModels', { provider });
         },
     };
-}
-
-/**
- * Returns a system prompt tailored to the given agent type.
- */
-function getSystemPromptForAgent(agent: string): string {
-    switch (agent) {
-        case ARENA_AGENT_IDS.LEARN_WEB:
-            return 'You are a knowledgeable assistant helping users learn about web technologies, HTTP protocols, REST APIs, WebSocket, GraphQL, and related topics. Provide accurate, educational responses with examples when helpful.';
-        case ARENA_AGENT_IDS.LEARN_DOCS:
-            return 'You are a knowledgeable assistant that helps users learn from their uploaded documents. When answering, reference the specific documents and cite relevant sections. If no documents are available, let the user know they should upload documents first.';
-        case ARENA_AGENT_IDS.WAVE_CLIENT:
-            return 'You are a helpful assistant for Wave Client, a REST API testing tool. Help users understand how to use collections, environments, flows, and test suites. Be concise and practical.';
-        default:
-            return 'You are a helpful AI assistant.';
-    }
 }
 
 export default createVSCodeArenaAdapter;

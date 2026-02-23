@@ -12,9 +12,32 @@ import {
     securityService,
     flowService,
     testSuiteService,
-    fileService
+    fileService,
+    arenaStorageService,
+    arenaService
 } from '../services';
 import type { RequestValidation } from '@wave-client/shared';
+import type {
+    ArenaLoadSessionsMsg,
+    ArenaSaveSessionMsg,
+    ArenaDeleteSessionMsg,
+    ArenaLoadMessagesMsg,
+    ArenaSaveMessageMsg,
+    ArenaClearMessagesMsg,
+    ArenaLoadDocumentsMsg,
+    ArenaUploadDocumentMsg,
+    ArenaDeleteDocumentMsg,
+    ArenaLoadSettingsMsg,
+    ArenaSaveSettingsMsg,
+    ArenaLoadReferencesMsg,
+    ArenaSaveReferencesMsg,
+    ArenaLoadProviderSettingsMsg,
+    ArenaSaveProviderSettingsMsg,
+    ArenaValidateApiKeyMsg,
+    ArenaGetAvailableModelsMsg,
+    ArenaStreamMessageMsg,
+    ArenaCancelChatMsg,
+} from '../services/types';
 
 /**
  * Converts a base64 string to a Uint8Array.
@@ -35,6 +58,9 @@ function base64ToUint8Array(base64: string): Uint8Array {
  * This class centralizes all webview message handling logic.
  */
 export class MessageHandler {
+    /** AbortControllers keyed by sessionId for in-flight Arena stream requests. */
+    private arenaAbortControllers = new Map<string, AbortController>();
+
     constructor(private panel: vscode.WebviewPanel) {}
 
     /**
@@ -176,6 +202,65 @@ export class MessageHandler {
                 break;
             case 'importFile':
                 await this.handleImportFile(message);
+                break;
+            // Arena storage handlers
+            case 'arena.loadSessions':
+                await this.handleArenaLoadSessions(message as ArenaLoadSessionsMsg);
+                break;
+            case 'arena.saveSession':
+                await this.handleArenaSaveSession(message as ArenaSaveSessionMsg);
+                break;
+            case 'arena.deleteSession':
+                await this.handleArenaDeleteSession(message as ArenaDeleteSessionMsg);
+                break;
+            case 'arena.loadMessages':
+                await this.handleArenaLoadMessages(message as ArenaLoadMessagesMsg);
+                break;
+            case 'arena.saveMessage':
+                await this.handleArenaSaveMessage(message as ArenaSaveMessageMsg);
+                break;
+            case 'arena.clearSessionMessages':
+                await this.handleArenaClearSessionMessages(message as ArenaClearMessagesMsg);
+                break;
+            case 'arena.loadDocuments':
+                await this.handleArenaLoadDocuments(message as ArenaLoadDocumentsMsg);
+                break;
+            case 'arena.uploadDocument':
+                await this.handleArenaUploadDocument(message as ArenaUploadDocumentMsg);
+                break;
+            case 'arena.deleteDocument':
+                await this.handleArenaDeleteDocument(message as ArenaDeleteDocumentMsg);
+                break;
+            case 'arena.loadSettings':
+                await this.handleArenaLoadSettings(message as ArenaLoadSettingsMsg);
+                break;
+            case 'arena.saveSettings':
+                await this.handleArenaSaveSettings(message as ArenaSaveSettingsMsg);
+                break;
+            case 'arena.loadReferences':
+                await this.handleArenaLoadReferences(message as ArenaLoadReferencesMsg);
+                break;
+            case 'arena.saveReferences':
+                await this.handleArenaSaveReferences(message as ArenaSaveReferencesMsg);
+                break;
+            case 'arena.loadProviderSettings':
+                await this.handleArenaLoadProviderSettings(message as ArenaLoadProviderSettingsMsg);
+                break;
+            case 'arena.saveProviderSettings':
+                await this.handleArenaSaveProviderSettings(message as ArenaSaveProviderSettingsMsg);
+                break;
+            // Arena action handlers
+            case 'arena.cancelChat':
+                this.handleArenaCancelChat(message as ArenaCancelChatMsg);
+                break;
+            case 'arena.validateApiKey':
+                await this.handleArenaValidateApiKey(message as ArenaValidateApiKeyMsg);
+                break;
+            case 'arena.getAvailableModels':
+                await this.handleArenaGetAvailableModels(message as ArenaGetAvailableModelsMsg);
+                break;
+            case 'arena.streamMessage':
+                await this.handleArenaStreamMessage(message as ArenaStreamMessageMsg);
                 break;
         }
     }
@@ -1405,6 +1490,248 @@ export class MessageHandler {
                 error: error.message
             });
         }
+    }
+
+    // ==================== Arena Storage Handlers — Sessions ====================
+
+    private async handleArenaLoadSessions(message: ArenaLoadSessionsMsg): Promise<void> {
+        const { requestId } = message;
+        try {
+            const sessions = await arenaStorageService.loadSessions();
+            this.postMessage({ type: 'arena.loadSessions', requestId, sessions });
+        } catch (error: any) {
+            this.postMessage({ type: 'arena.loadSessions', requestId, error: error.message });
+        }
+    }
+
+    private async handleArenaSaveSession(message: ArenaSaveSessionMsg): Promise<void> {
+        const { requestId, session } = message;
+        try {
+            await arenaStorageService.saveSession(session);
+            this.postMessage({ type: 'arena.saveSession', requestId });
+        } catch (error: any) {
+            this.postMessage({ type: 'arena.saveSession', requestId, error: error.message });
+        }
+    }
+
+    private async handleArenaDeleteSession(message: ArenaDeleteSessionMsg): Promise<void> {
+        const { requestId, sessionId } = message;
+        try {
+            await arenaStorageService.deleteSession(sessionId);
+            this.postMessage({ type: 'arena.deleteSession', requestId });
+        } catch (error: any) {
+            this.postMessage({ type: 'arena.deleteSession', requestId, error: error.message });
+        }
+    }
+
+    // ==================== Arena Storage Handlers — Messages ====================
+
+    private async handleArenaLoadMessages(message: ArenaLoadMessagesMsg): Promise<void> {
+        const { requestId, sessionId } = message;
+        try {
+            const messages = await arenaStorageService.loadMessages(sessionId);
+            this.postMessage({ type: 'arena.loadMessages', requestId, messages });
+        } catch (error: any) {
+            this.postMessage({ type: 'arena.loadMessages', requestId, error: error.message });
+        }
+    }
+
+    private async handleArenaSaveMessage(message: ArenaSaveMessageMsg): Promise<void> {
+        const { requestId } = message;
+        try {
+            // Upsert: load current array, replace/push, write back
+            const existing = await arenaStorageService.loadMessages(message.message.sessionId);
+            const idx = existing.findIndex((m) => m.id === message.message.id);
+            if (idx >= 0) {
+                existing[idx] = message.message;
+            } else {
+                existing.push(message.message);
+            }
+            await arenaStorageService.saveMessages(message.message.sessionId, existing);
+            this.postMessage({ type: 'arena.saveMessage', requestId });
+        } catch (error: any) {
+            this.postMessage({ type: 'arena.saveMessage', requestId, error: error.message });
+        }
+    }
+
+    private async handleArenaClearSessionMessages(message: ArenaClearMessagesMsg): Promise<void> {
+        const { requestId, sessionId } = message;
+        try {
+            await arenaStorageService.clearSessionMessages(sessionId);
+            this.postMessage({ type: 'arena.clearSessionMessages', requestId });
+        } catch (error: any) {
+            this.postMessage({ type: 'arena.clearSessionMessages', requestId, error: error.message });
+        }
+    }
+
+    // ==================== Arena Storage Handlers — Documents ====================
+
+    private async handleArenaLoadDocuments(message: ArenaLoadDocumentsMsg): Promise<void> {
+        const { requestId } = message;
+        try {
+            const documents = await arenaStorageService.loadDocuments();
+            this.postMessage({ type: 'arena.loadDocuments', requestId, documents });
+        } catch (error: any) {
+            this.postMessage({ type: 'arena.loadDocuments', requestId, error: error.message });
+        }
+    }
+
+    private async handleArenaUploadDocument(message: ArenaUploadDocumentMsg): Promise<void> {
+        const { requestId, metadata, contentBase64 } = message;
+        try {
+            const content = Buffer.from(contentBase64, 'base64');
+            await arenaStorageService.saveDocumentContent(metadata.id, content);
+            await arenaStorageService.saveDocumentMetadata(metadata);
+            this.postMessage({ type: 'arena.uploadDocument', requestId, document: metadata });
+        } catch (error: any) {
+            this.postMessage({ type: 'arena.uploadDocument', requestId, error: error.message });
+        }
+    }
+
+    private async handleArenaDeleteDocument(message: ArenaDeleteDocumentMsg): Promise<void> {
+        const { requestId, documentId } = message;
+        try {
+            await arenaStorageService.deleteDocument(documentId);
+            this.postMessage({ type: 'arena.deleteDocument', requestId });
+        } catch (error: any) {
+            this.postMessage({ type: 'arena.deleteDocument', requestId, error: error.message });
+        }
+    }
+
+    // ==================== Arena Storage Handlers — Settings & References ====================
+
+    private async handleArenaLoadSettings(message: ArenaLoadSettingsMsg): Promise<void> {
+        const { requestId } = message;
+        try {
+            const settings = await arenaStorageService.loadSettings();
+            this.postMessage({ type: 'arena.loadSettings', requestId, settings });
+        } catch (error: any) {
+            this.postMessage({ type: 'arena.loadSettings', requestId, error: error.message });
+        }
+    }
+
+    private async handleArenaSaveSettings(message: ArenaSaveSettingsMsg): Promise<void> {
+        const { requestId, settings } = message;
+        try {
+            await arenaStorageService.saveSettings(settings);
+            this.postMessage({ type: 'arena.saveSettings', requestId });
+        } catch (error: any) {
+            this.postMessage({ type: 'arena.saveSettings', requestId, error: error.message });
+        }
+    }
+
+    private async handleArenaLoadReferences(message: ArenaLoadReferencesMsg): Promise<void> {
+        const { requestId } = message;
+        try {
+            const references = await arenaStorageService.loadReferences();
+            this.postMessage({ type: 'arena.loadReferences', requestId, references });
+        } catch (error: any) {
+            this.postMessage({ type: 'arena.loadReferences', requestId, error: error.message });
+        }
+    }
+
+    private async handleArenaSaveReferences(message: ArenaSaveReferencesMsg): Promise<void> {
+        const { requestId, references } = message;
+        try {
+            await arenaStorageService.saveReferences(references);
+            this.postMessage({ type: 'arena.saveReferences', requestId });
+        } catch (error: any) {
+            this.postMessage({ type: 'arena.saveReferences', requestId, error: error.message });
+        }
+    }
+
+    private async handleArenaLoadProviderSettings(message: ArenaLoadProviderSettingsMsg): Promise<void> {
+        const { requestId } = message;
+        try {
+            const settings = await arenaStorageService.loadProviderSettings();
+            this.postMessage({ type: 'arena.loadProviderSettings', requestId, settings });
+        } catch (error: any) {
+            this.postMessage({ type: 'arena.loadProviderSettings', requestId, error: error.message });
+        }
+    }
+
+    private async handleArenaSaveProviderSettings(message: ArenaSaveProviderSettingsMsg): Promise<void> {
+        const { requestId, settings } = message;
+        try {
+            await arenaStorageService.saveProviderSettings(settings);
+            this.postMessage({ type: 'arena.saveProviderSettings', requestId });
+        } catch (error: any) {
+            this.postMessage({ type: 'arena.saveProviderSettings', requestId, error: error.message });
+        }
+    }
+
+    // ==================== Arena Action Handlers ====================
+
+    private async handleArenaValidateApiKey(message: ArenaValidateApiKeyMsg): Promise<void> {
+        const { requestId, provider, apiKey } = message;
+        try {
+            // Deviation A: construct minimal ArenaProviderSettings from provider + apiKey
+            const providerSettings = { provider: provider as any, enabled: true, apiKey };
+            const result = await arenaService.validateApiKey(provider as any, providerSettings);
+            this.postMessage({ type: 'arena.validateApiKey', requestId, valid: result.valid, error: result.error });
+        } catch (error: any) {
+            this.postMessage({ type: 'arena.validateApiKey', requestId, valid: false, error: error.message });
+        }
+    }
+
+    private async handleArenaGetAvailableModels(message: ArenaGetAvailableModelsMsg): Promise<void> {
+        const { requestId, provider } = message;
+        try {
+            // Deviation B: load providerSettings from storage so ArenaService can use stored API URL etc.
+            const allSettings = await arenaStorageService.loadProviderSettings();
+            const providerSettings = (allSettings as any)[provider] ?? { provider, enabled: true };
+            const models = await arenaService.getAvailableModels(provider as any, providerSettings);
+            this.postMessage({ type: 'arena.getAvailableModels', requestId, models });
+        } catch (error: any) {
+            this.postMessage({ type: 'arena.getAvailableModels', requestId, models: [], error: error.message });
+        }
+    }
+
+    /**
+     * Handles a streaming chat request.
+     *
+     * Stream chunks are pushed to the webview as `arena.streamChunk` events (no requestId).
+     * The final `arena.streamComplete` / `arena.streamError` carries the original requestId
+     * to resolve the webview's pending `sendAndWait` promise.
+     *
+     * An `AbortController` is registered for the session to support cancellation via
+     * `arena.cancelChat`.
+     */
+    private async handleArenaStreamMessage(message: ArenaStreamMessageMsg): Promise<void> {
+        const { requestId, chatRequest } = message;
+        const { sessionId } = chatRequest;
+
+        console.info('[Arena] stream start', { sessionId, agent: chatRequest.agent });
+
+        // Create an AbortController for this session so cancelChat can abort it
+        const controller = new AbortController();
+        this.arenaAbortControllers.set(sessionId, controller);
+
+        try {
+            const response = await arenaService.streamChat(
+                chatRequest,
+                (chunk) => {
+                    // Push each token to the webview — no requestId on stream chunks
+                    this.postMessage({ type: 'arena.streamChunk', sessionId, chunk });
+                },
+                controller.signal,
+            );
+            this.postMessage({ type: 'arena.streamComplete', requestId, response });
+        } catch (error: any) {
+            console.error('[Arena] stream error', { provider: chatRequest.provider, error: error.message });
+            this.postMessage({ type: 'arena.streamError', requestId, error: error.message });
+        } finally {
+            this.arenaAbortControllers.delete(sessionId);
+        }
+    }
+
+    private handleArenaCancelChat(message: ArenaCancelChatMsg): void {
+        console.info('[Arena] cancel chat', { sessionId: message.sessionId });
+        const controller = this.arenaAbortControllers.get(message.sessionId);
+        if (controller) {
+            controller.abort();
+        }
+        // Fire-and-forget: no response
     }
 
     // ==================== Helper Methods ====================
