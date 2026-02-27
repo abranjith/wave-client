@@ -5,7 +5,7 @@
  * Similar to CollectionsPane but for flows.
  */
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useCallback } from 'react';
 import { 
     PlusIcon, 
     PlayIcon, 
@@ -91,12 +91,9 @@ const FlowsPane: React.FC<FlowsPaneProps> = ({
         setIsLoading(false);
     }, [storageAdapter, setFlows, setIsLoading, setError]);
 
-    // Initial load - only if flows are empty
-    useEffect(() => {
-        if (flows.length === 0 && !isLoading && !error) {
-            loadFlows();
-        }
-    }, []);
+    // NOTE: Initial load is handled by the parent (App.tsx initializeData).
+    // This component reads from the shared Zustand store.
+    // loadFlows() is kept here for explicit retry (e.g., the retry button).
 
     // Create new flow
     const handleCreateFlow = useCallback(async () => {

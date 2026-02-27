@@ -99,8 +99,15 @@ export class SettingsService extends BaseStorageService {
 
         try {
             const savedSettings = this.readJsonFile<Partial<AppSettings>>(settingsFile, {});
-            // Merge with defaults to ensure all properties exist
-            this.cachedSettings = { ...this.getDefaultSettings(), ...savedSettings };
+            // Merge with defaults: use saved value only if it is non-null, non-undefined, and non-empty
+            const defaults = this.getDefaultSettings();
+            const merged = { ...defaults };
+            for (const [key, value] of Object.entries(savedSettings)) {
+                if (value !== null && value !== undefined && value !== '') {
+                    (merged as Record<string, unknown>)[key] = value;
+                }
+            }
+            this.cachedSettings = merged;
             return this.cachedSettings;
         } catch (error: unknown) {
             const message = error instanceof Error ? error.message : 'Unknown error';

@@ -5,7 +5,7 @@
  * Similar to FlowsPane but for test suites.
  */
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useCallback } from 'react';
 import { 
     PlusIcon, 
     PlayIcon, 
@@ -97,12 +97,9 @@ const TestLabPane: React.FC<TestLabPaneProps> = ({
         setIsLoading(false);
     }, [storageAdapter, setTestSuites, setIsLoading, setError]);
 
-    // Initial load - only if test suites are empty
-    useEffect(() => {
-        if (testSuites.length === 0 && !isLoading && !error) {
-            loadTestSuites();
-        }
-    }, []);
+    // NOTE: Initial load is handled by the parent (App.tsx initializeData).
+    // This component reads from the shared Zustand store.
+    // loadTestSuites() is kept here for explicit retry (e.g., the retry button).
 
     // Create new test suite
     const handleCreateTestSuite = useCallback(async () => {
