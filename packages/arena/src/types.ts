@@ -80,11 +80,6 @@ export interface ChatChunk {
 export type WebExpertMode = 'web' | 'local' | 'auto';
 
 /**
- * @deprecated Use WebExpertMode instead (Phase 1.3)
- */
-export type LearnAgentMode = WebExpertMode;
-
-/**
  * Definition of an available agent
  */
 export interface ArenaAgent {

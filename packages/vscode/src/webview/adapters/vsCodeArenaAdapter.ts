@@ -71,7 +71,7 @@ export function createVSCodeArenaAdapter(
     defaultTimeout: number = 120000
 ): IArenaAdapter {
     let requestIdCounter = 0;
-    
+
     function generateRequestId(): string {
         return `arena-req-${Date.now()}-${++requestIdCounter}`;
     }
@@ -85,7 +85,7 @@ export function createVSCodeArenaAdapter(
     ): Promise<Result<T, string>> {
         return new Promise((resolve) => {
             const requestId = generateRequestId();
-            
+
             const timeout = setTimeout(() => {
                 pendingRequests.delete(requestId);
                 resolve(err(`Request timed out: ${type}`));
@@ -94,24 +94,24 @@ export function createVSCodeArenaAdapter(
             // Map request types to response data fields.
             // Empty string ('') means the response carries no data (void success).
             const responseDataMap: Record<string, string> = {
-                'arena.loadSessions':         'sessions',
-                'arena.saveSession':          '',
-                'arena.deleteSession':        '',
-                'arena.loadMessages':         'messages',
-                'arena.saveMessage':          '',
+                'arena.loadSessions': 'sessions',
+                'arena.saveSession': '',
+                'arena.deleteSession': '',
+                'arena.loadMessages': 'messages',
+                'arena.saveMessage': '',
                 'arena.clearSessionMessages': '',
-                'arena.loadDocuments':        'documents',
-                'arena.uploadDocument':       'document',
-                'arena.deleteDocument':       '',
-                'arena.streamMessage':        'response',
-                'arena.loadSettings':         'settings',
-                'arena.saveSettings':         '',
-                'arena.validateApiKey':       'valid',
-                'arena.loadReferences':       'references',
-                'arena.saveReferences':       '',
+                'arena.loadDocuments': 'documents',
+                'arena.uploadDocument': 'document',
+                'arena.deleteDocument': '',
+                'arena.streamMessage': 'response',
+                'arena.loadSettings': 'settings',
+                'arena.saveSettings': '',
+                'arena.validateApiKey': 'valid',
+                'arena.loadReferences': 'references',
+                'arena.saveReferences': '',
                 'arena.loadProviderSettings': 'settings',
                 'arena.saveProviderSettings': '',
-                'arena.getAvailableModels':   'models',
+                'arena.getAvailableModels': 'models',
             };
 
             pendingRequests.set(requestId, {
@@ -168,13 +168,13 @@ export function createVSCodeArenaAdapter(
 
         async saveSession(session: ArenaSession): Promise<Result<void, string>> {
             const result = await sendAndWait<void>('arena.saveSession', { session: session as unknown as Record<string, unknown> });
-            if (result.isOk) events.emit('arenaSessionsChanged', undefined);
+            if (result.isOk) { events.emit('arenaSessionsChanged', undefined); }
             return result;
         },
 
         async deleteSession(sessionId: string): Promise<Result<void, string>> {
             const result = await sendAndWait<void>('arena.deleteSession', { sessionId });
-            if (result.isOk) events.emit('arenaSessionsChanged', undefined);
+            if (result.isOk) { events.emit('arenaSessionsChanged', undefined); }
             return result;
         },
 
@@ -186,13 +186,13 @@ export function createVSCodeArenaAdapter(
 
         async saveMessage(message: ArenaMessage): Promise<Result<void, string>> {
             const result = await sendAndWait<void>('arena.saveMessage', { message: message as unknown as Record<string, unknown> });
-            if (result.isOk) events.emit('arenaMessagesChanged', { sessionId: message.sessionId });
+            if (result.isOk) { events.emit('arenaMessagesChanged', { sessionId: message.sessionId }); }
             return result;
         },
 
         async clearSessionMessages(sessionId: string): Promise<Result<void, string>> {
             const result = await sendAndWait<void>('arena.clearSessionMessages', { sessionId });
-            if (result.isOk) events.emit('arenaMessagesChanged', { sessionId });
+            if (result.isOk) { events.emit('arenaMessagesChanged', { sessionId }); }
             return result;
         },
 
@@ -210,13 +210,13 @@ export function createVSCodeArenaAdapter(
                 size: file.size,
                 // content is intentionally omitted (too large for postMessage in MVP)
             });
-            if (result.isOk) events.emit('arenaDocumentsChanged', undefined);
+            if (result.isOk) { events.emit('arenaDocumentsChanged', undefined); }
             return result;
         },
 
         async deleteDocument(documentId: string): Promise<Result<void, string>> {
             const result = await sendAndWait<void>('arena.deleteDocument', { documentId });
-            if (result.isOk) events.emit('arenaDocumentsChanged', undefined);
+            if (result.isOk) { events.emit('arenaDocumentsChanged', undefined); }
             return result;
         },
 
@@ -248,7 +248,7 @@ export function createVSCodeArenaAdapter(
 
         async saveSettings(settings: ArenaSettings): Promise<Result<void, string>> {
             const result = await sendAndWait<void>('arena.saveSettings', { settings: settings as unknown as Record<string, unknown> });
-            if (result.isOk) events.emit('arenaSettingsChanged', undefined);
+            if (result.isOk) { events.emit('arenaSettingsChanged', undefined); }
             return result;
         },
 

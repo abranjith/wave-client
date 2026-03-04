@@ -74,9 +74,18 @@ interface VSCodeAPI {
 // Request ID Generator
 // ============================================================================
 
-let requestIdCounter = 0;
 function generateRequestId(): string {
-    return `req-${Date.now()}-${++requestIdCounter}`;
+    // Use crypto.randomUUID() for guaranteed uniqueness even under concurrent calls.
+    // Available in all modern browsers and VS Code webview contexts.
+    if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+        return `req-${crypto.randomUUID()}`;
+    }
+    // Fallback: manually construct a UUID v4
+    return 'req-xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+        const r = (Math.random() * 16) | 0;
+        const v = c === 'x' ? r : (r & 0x3) | 0x8;
+        return v.toString(16);
+    });
 }
 
 // ============================================================================
@@ -908,38 +917,4 @@ export function createVSCodeAdapter(
     };
 
     return { adapter, handleMessage, cleanup };
-}
-
-// ============================================================================
-// Legacy Bridge Hook (for gradual migration)
-// ============================================================================
-
-/**
- * Creates a bridge that allows using the adapter pattern alongside the existing
- * vsCodeRef.current.postMessage pattern during the migration period.
- * 
- * Usage in App.tsx:
- * ```tsx
- * const vsCodeRef = useRef<any>(null);
- * const adapterBridge = useRef<ReturnType<typeof createVSCodeAdapter> | null>(null);
- * 
- * useEffect(() => {
- *   if (typeof acquireVsCodeApi !== 'undefined' && !vsCodeRef.current) {
- *     vsCodeRef.current = acquireVsCodeApi();
- *     adapterBridge.current = createVSCodeAdapter(vsCodeRef.current);
- *     window.addEventListener('message', adapterBridge.current.handleMessage);
- *   }
- *   return () => {
- *     adapterBridge.current?.cleanup();
- *   };
- * }, []);
- * ```
- */
-export function useLegacyBridge(vsCodeApi: VSCodeAPI | null) {
-    // This hook can be used during the transition period
-    // It provides both the old vsCodeApi and the new adapter interface
-    if (!vsCodeApi) {
-        return null;
-    }
-    return createVSCodeAdapter(vsCodeApi);
 }

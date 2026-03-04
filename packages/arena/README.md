@@ -35,27 +35,7 @@ This package provides the AI chat experience for Wave Client, featuring:
 - **HNSWLib** - Local vector store for document embeddings
 
 ## Usage
-
-```typescript
-import { createLearnAgent, createDiscoverAgent } from '@wave-client/arena';
-
-// Create agents with provider config
-const learnAgent = createLearnAgent({
-  provider: 'gemini',
-  apiKey: process.env.GOOGLE_API_KEY,
-});
-
-const discoverAgent = createDiscoverAgent({
-  provider: 'gemini',
-  apiKey: process.env.GOOGLE_API_KEY,
-  mcpTools: mcpServerTools,
-});
-
-// Stream chat response
-for await (const chunk of learnAgent.chat(sessionId, message)) {
-  console.log(chunk.content);
-}
-```
+#TODO: Add usage examples and API documentation here.
 
 ## Development
 

@@ -244,8 +244,12 @@ export function createWebExpertAgent(config: WebExpertAgentConfig) {
 
       try {
         const messages: BaseMessage[] = sessionMessages.map((msg) => {
-          if (msg.role === 'user') return new HumanMessage(msg.content);
-          if (msg.role === 'assistant') return new AIMessage(msg.content);
+          if (msg.role === 'user') {
+            return new HumanMessage(msg.content);
+          }
+          if (msg.role === 'assistant') {
+            return new AIMessage(msg.content);
+          }
           return new SystemMessage(msg.content);
         });
 

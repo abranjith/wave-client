@@ -15,7 +15,12 @@
 			"outFiles": [
 				"${workspaceFolder}/packages/vscode/dist/**/*.js"
 			],
-			"preLaunchTask": "${defaultBuildTask}"
+			"preLaunchTask": "${defaultBuildTask}",
+			"skipFiles": [
+				"<node_internals>/**",
+				"${workspaceFolder}/node_modules/**",
+				"${workspaceFolder}/packages/*/node_modules/**"
+			]
 		}
 	]
 }

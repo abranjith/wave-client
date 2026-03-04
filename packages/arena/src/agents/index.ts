@@ -14,8 +14,3 @@ export {
   createWaveClientAgent,
   type WaveClientAgentConfig,
 } from './waveClientAgent';
-
-// Backward-compatible aliases
-// TODO: Remove these once all consumers are migrated
-export { createLearnAgent, type LearnAgentConfig } from './learnAgent';
-export { createDiscoverAgent, type DiscoverAgentConfig } from './discoverAgent';
