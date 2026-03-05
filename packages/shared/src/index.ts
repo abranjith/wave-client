@@ -23,6 +23,8 @@ export type {
     ArenaChatRequest,
     ArenaChatResponse,
     ArenaChatStreamChunk,
+    StreamHandle,
+    StreamUnsubscribe,
     ArenaMessage,
     ArenaMessageRole,
     ArenaMessageStatus,

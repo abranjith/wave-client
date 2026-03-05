@@ -65,6 +65,8 @@ export type {
     ArenaChatRequest,
     ArenaChatResponse,
     ArenaChatStreamChunk,
+    StreamHandle,
+    StreamUnsubscribe,
     ArenaView,
     // Chat block types
     ArenaChatBlock,

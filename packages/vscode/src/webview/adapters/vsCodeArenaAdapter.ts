@@ -5,6 +5,11 @@
  * This is a thin relay adapter — every operation is delegated to the extension
  * host via postMessage and awaited through the shared pendingRequests map.
  * No in-memory state is maintained here; the extension host is the source of truth.
+ *
+ * Streaming: `streamMessage()` returns a `StreamHandle` immediately.  Chunks
+ * arrive as `arena.streamChunk` messages keyed by `streamId`; completion and
+ * errors arrive as `arena.streamComplete` / `arena.streamError`.  No pending
+ * promise (and therefore no timeout) is involved for the streaming path.
  */
 
 import type {
@@ -20,6 +25,8 @@ import type {
     IAdapterEvents,
     ArenaReference,
     ArenaProviderSettingsMap,
+    StreamHandle,
+    StreamUnsubscribe,
 } from '@wave-client/core';
 
 // ---------------------------------------------------------------------------
@@ -59,25 +66,36 @@ interface VSCodeAPI {
  * Creates the Arena adapter for VS Code.
  *
  * All operations are delegated to the extension host via postMessage.
- * Streaming chunks arrive as `arena.streamChunk` push messages — routed to the
- * `arenaStreamChunk` event by `vsCodeAdapter.handleMessage` — so we subscribe
- * to that event before posting a `streamMessage` request and unsubscribe when
- * the response (or error) arrives.
+ * Streaming uses a `streamId`-based protocol where chunks, completion, and
+ * error messages are correlated via a unique `streamId` rather than the
+ * shared `pendingRequests` map — eliminating timeout issues and dual-channel
+ * race conditions.
  */
 export function createVSCodeArenaAdapter(
     vsCodeApi: VSCodeAPI,
     pendingRequests: Map<string, PendingRequest<unknown>>,
     events: IAdapterEvents,
     defaultTimeout: number = 120000
-): IArenaAdapter {
+): { adapter: IArenaAdapter; handleStreamMessage: (message: any) => boolean } {
     let requestIdCounter = 0;
+
+    /** Active stream listeners keyed by streamId.  Cleaned up on done / error / cancel. */
+    const activeStreams = new Map<string, {
+        chunkCbs: Set<(chunk: ArenaChatStreamChunk) => void>;
+        doneCbs: Set<(response: ArenaChatResponse) => void>;
+        errorCbs: Set<(error: string) => void>;
+    }>();
 
     function generateRequestId(): string {
         return `arena-req-${Date.now()}-${++requestIdCounter}`;
     }
 
+    function generateStreamId(): string {
+        return `arena-stream-${Date.now()}-${++requestIdCounter}`;
+    }
+
     /**
-     * Send a request and wait for response
+     * Send a request and wait for response (used for non-streaming ops only).
      */
     function sendAndWait<T>(
         type: string,
@@ -103,7 +121,6 @@ export function createVSCodeArenaAdapter(
                 'arena.loadDocuments': 'documents',
                 'arena.uploadDocument': 'document',
                 'arena.deleteDocument': '',
-                'arena.streamMessage': 'response',
                 'arena.loadSettings': 'settings',
                 'arena.saveSettings': '',
                 'arena.validateApiKey': 'valid',
@@ -112,6 +129,7 @@ export function createVSCodeArenaAdapter(
                 'arena.loadProviderSettings': 'settings',
                 'arena.saveProviderSettings': '',
                 'arena.getAvailableModels': 'models',
+                'arena.sendMessage': 'response',
             };
 
             pendingRequests.set(requestId, {
@@ -133,33 +151,54 @@ export function createVSCodeArenaAdapter(
         });
     }
 
-    // ============================================================================
-    // IArenaAdapter implementation — all ops delegate to extension host
-    // ============================================================================
+    // ========================================================================
+    // Stream message routing
+    // ========================================================================
 
     /**
-     * Stream a chat message to the extension host and relay chunks via callback
-     * and the shared `arenaStreamChunk` event.
-     *
-     * We subscribe to `arenaStreamChunk` BEFORE posting the request so no chunk
-     * emitted on the event bus before the Promise resolves is missed.
+     * Called by the parent vsCodeAdapter's `handleMessage` for stream-related
+     * push messages.  Dispatches to the correct StreamHandle listeners.
      */
-    async function streamMessageImpl(
-        request: ArenaChatRequest,
-        onChunk: (chunk: ArenaChatStreamChunk) => void
-    ): Promise<Result<ArenaChatResponse, string>> {
-        const chunkHandler = (chunk: ArenaChatStreamChunk) => onChunk(chunk);
-        events.on('arenaStreamChunk', chunkHandler);
+    function handleStreamMessage(message: any): boolean {
+        const streamId: string | undefined = message.streamId;
+        if (!streamId) return false;
 
-        const result = await sendAndWait<ArenaChatResponse>('arena.streamMessage', {
-            request: request as unknown as Record<string, unknown>,
-        });
+        const listeners = activeStreams.get(streamId);
+        if (!listeners) return false;
 
-        events.off('arenaStreamChunk', chunkHandler);
-        return result;
+        switch (message.type) {
+            case 'arena.streamChunk':
+                listeners.chunkCbs.forEach((cb) => {
+                    try { cb(message.chunk); } catch (e) { console.error('[ArenaAdapter] chunk cb error', e); }
+                });
+                return true;
+
+            case 'arena.streamComplete':
+                listeners.doneCbs.forEach((cb) => {
+                    try { cb(message.response); } catch (e) { console.error('[ArenaAdapter] done cb error', e); }
+                });
+                activeStreams.delete(streamId);
+                return true;
+
+            case 'arena.streamError':
+                listeners.errorCbs.forEach((cb) => {
+                    try { cb(message.error ?? 'Unknown stream error'); } catch (e) { console.error('[ArenaAdapter] error cb error', e); }
+                });
+                activeStreams.delete(streamId);
+                return true;
+
+            default:
+                return false;
+        }
     }
 
-    return {
+    // Expose the stream-message router so the parent adapter can call it.
+
+    // ========================================================================
+    // IArenaAdapter implementation
+    // ========================================================================
+
+    const adapter: IArenaAdapter = {
         // ── Session Management ───────────────────────────────────────────────
 
         async loadSessions(): Promise<Result<ArenaSession[], string>> {
@@ -223,21 +262,54 @@ export function createVSCodeArenaAdapter(
         // ── Chat Operations ──────────────────────────────────────────────────
 
         async sendMessage(request: ArenaChatRequest): Promise<Result<ArenaChatResponse, string>> {
-            // Delegate to streamMessage with a no-op chunk handler so callers that
-            // want just the final response don't need to wire up event listeners.
-            return streamMessageImpl(request, () => { /* no-op */ });
+            // Non-streaming path: use sendAndWait with a dedicated message type
+            // that tells the extension host NOT to push stream chunks.
+            return sendAndWait<ArenaChatResponse>('arena.sendMessage', {
+                request: request as unknown as Record<string, unknown>,
+            });
         },
 
-        async streamMessage(
-            request: ArenaChatRequest,
-            onChunk: (chunk: ArenaChatStreamChunk) => void
-        ): Promise<Result<ArenaChatResponse, string>> {
-            return streamMessageImpl(request, onChunk);
-        },
+        streamMessage(request: ArenaChatRequest): StreamHandle {
+            const streamId = generateStreamId();
+            const listeners = {
+                chunkCbs: new Set<(chunk: ArenaChatStreamChunk) => void>(),
+                doneCbs: new Set<(response: ArenaChatResponse) => void>(),
+                errorCbs: new Set<(error: string) => void>(),
+            };
+            activeStreams.set(streamId, listeners);
 
-        cancelChat(sessionId: string): void {
-            // Fire-and-forget: tell the extension host to abort the in-flight request.
-            vsCodeApi.postMessage({ type: 'arena.cancelChat', sessionId });
+            // Fire-and-forget: post the request to the extension host.
+            vsCodeApi.postMessage({
+                type: 'arena.streamMessage',
+                streamId,
+                chatRequest: request,
+            });
+
+            let ended = false;
+
+            function makeSub<T>(set: Set<T>, cb: T): StreamUnsubscribe {
+                set.add(cb);
+                let removed = false;
+                return () => { if (!removed) { removed = true; set.delete(cb); } };
+            }
+
+            const handle: StreamHandle = {
+                onChunk(cb) { return makeSub(listeners.chunkCbs, cb); },
+                onDone(cb) { return makeSub(listeners.doneCbs, cb); },
+                onError(cb) { return makeSub(listeners.errorCbs, cb); },
+                cancel() {
+                    if (ended) return;
+                    ended = true;
+                    vsCodeApi.postMessage({ type: 'arena.cancelChat', streamId });
+                    // Immediately notify error listeners so the UI stops streaming
+                    listeners.errorCbs.forEach((cb) => {
+                        try { cb('Cancelled'); } catch (e) { console.error('[ArenaAdapter] cancel cb error', e); }
+                    });
+                    activeStreams.delete(streamId);
+                },
+            };
+
+            return handle;
         },
 
         // ── Settings ─────────────────────────────────────────────────────────
@@ -282,6 +354,8 @@ export function createVSCodeArenaAdapter(
             return sendAndWait<{ id: string; label: string }[]>('arena.getAvailableModels', { provider });
         },
     };
+
+    return { adapter, handleStreamMessage };
 }
 
 export default createVSCodeArenaAdapter;

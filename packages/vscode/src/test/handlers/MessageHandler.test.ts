@@ -485,34 +485,61 @@ describe('MessageHandler', () => {
       );
     });
 
+    // ==================== Streaming — sendMessage (non-streaming) ====================
+
+    it('arena.sendMessage — resolves → posts arena.sendMessage with requestId and response', async () => {
+      const { arenaService } = await import('../../services/index.js');
+      const response = { messageId: 'msg-1', content: 'Hello!' };
+      (arenaService.streamChat as any).mockResolvedValue(response);
+
+      const request = { sessionId: 'sess-send', message: 'hi', agent: 'wave-client', history: [], settings: {} };
+      await handler.handleMessage({ type: 'arena.sendMessage', requestId: 'r-send-1', request });
+
+      expect(mockPanel.webview.postMessage).toHaveBeenCalledWith(
+        expect.objectContaining({ type: 'arena.sendMessage', requestId: 'r-send-1', response })
+      );
+    });
+
+    it('arena.sendMessage — rejects → posts error with requestId', async () => {
+      const { arenaService } = await import('../../services/index.js');
+      (arenaService.streamChat as any).mockRejectedValue(new Error('provider offline'));
+
+      const request = { sessionId: 'sess-send-err', message: 'hi', agent: 'wave-client', history: [], settings: {} };
+      await handler.handleMessage({ type: 'arena.sendMessage', requestId: 'r-send-2', request });
+
+      expect(mockPanel.webview.postMessage).toHaveBeenCalledWith(
+        expect.objectContaining({ type: 'arena.sendMessage', requestId: 'r-send-2', error: 'provider offline' })
+      );
+    });
+
     // ==================== Streaming — streamMessage ====================
 
-    it('arena.streamMessage — resolves → posts arena.streamComplete with requestId and response', async () => {
+    it('arena.streamMessage — resolves → posts arena.streamComplete with streamId and response', async () => {
       const { arenaService } = await import('../../services/index.js');
       const response = { messageId: 'msg-1', content: 'Hello!' };
       (arenaService.streamChat as any).mockResolvedValue(response);
 
       const chatRequest = { sessionId: 'sess-stream', message: 'hi', agent: 'wave-client', history: [], settings: {} };
-      await handler.handleMessage({ type: 'arena.streamMessage', requestId: 'r19', chatRequest });
+      await handler.handleMessage({ type: 'arena.streamMessage', streamId: 'stream-19', chatRequest });
 
       expect(mockPanel.webview.postMessage).toHaveBeenCalledWith(
-        expect.objectContaining({ type: 'arena.streamComplete', requestId: 'r19', response })
+        expect.objectContaining({ type: 'arena.streamComplete', streamId: 'stream-19', response })
       );
     });
 
-    it('arena.streamMessage — rejects → posts arena.streamError with requestId and error', async () => {
+    it('arena.streamMessage — rejects → posts arena.streamError with streamId and error', async () => {
       const { arenaService } = await import('../../services/index.js');
       (arenaService.streamChat as any).mockRejectedValue(new Error('provider offline'));
 
       const chatRequest = { sessionId: 'sess-err', message: 'hi', agent: 'wave-client', history: [], settings: {} };
-      await handler.handleMessage({ type: 'arena.streamMessage', requestId: 'r20', chatRequest });
+      await handler.handleMessage({ type: 'arena.streamMessage', streamId: 'stream-20', chatRequest });
 
       expect(mockPanel.webview.postMessage).toHaveBeenCalledWith(
-        expect.objectContaining({ type: 'arena.streamError', requestId: 'r20', error: 'provider offline' })
+        expect.objectContaining({ type: 'arena.streamError', streamId: 'stream-20', error: 'provider offline' })
       );
     });
 
-    it('arena.streamMessage — onChunk callback posts arena.streamChunk without requestId', async () => {
+    it('arena.streamMessage — onChunk callback posts arena.streamChunk with streamId', async () => {
       const { arenaService } = await import('../../services/index.js');
       const response = { messageId: 'msg-2', content: 'result' };
       (arenaService.streamChat as any).mockImplementation(async (_req: any, onChunk: any) => {
@@ -521,16 +548,11 @@ describe('MessageHandler', () => {
       });
 
       const chatRequest = { sessionId: 'sess-chunk', message: 'hi', agent: 'wave-client', history: [], settings: {} };
-      await handler.handleMessage({ type: 'arena.streamMessage', requestId: 'r21', chatRequest });
+      await handler.handleMessage({ type: 'arena.streamMessage', streamId: 'stream-21', chatRequest });
 
       expect(mockPanel.webview.postMessage).toHaveBeenCalledWith(
-        expect.objectContaining({ type: 'arena.streamChunk', sessionId: 'sess-chunk', chunk: { messageId: 'msg-2', content: 'partial', done: false } })
+        expect.objectContaining({ type: 'arena.streamChunk', streamId: 'stream-21', chunk: { messageId: 'msg-2', content: 'partial', done: false } })
       );
-      // No requestId on the chunk message
-      const chunkCall = (mockPanel.webview.postMessage as any).mock.calls.find(
-        (call: any[]) => call[0].type === 'arena.streamChunk'
-      );
-      expect(chunkCall[0]).not.toHaveProperty('requestId');
     });
 
     it('arena.streamMessage — AbortController is removed from map after completion', async () => {
@@ -538,11 +560,11 @@ describe('MessageHandler', () => {
       (arenaService.streamChat as any).mockResolvedValue({ messageId: 'msg-3', content: 'done' });
 
       const chatRequest = { sessionId: 'sess-done', message: 'hi', agent: 'wave-client', history: [], settings: {} };
-      await handler.handleMessage({ type: 'arena.streamMessage', requestId: 'r22', chatRequest });
+      await handler.handleMessage({ type: 'arena.streamMessage', streamId: 'stream-22', chatRequest });
 
-      // After completion, cancelChat with the same sessionId should be a no-op (no throw)
+      // After completion, cancelChat with the same streamId should be a no-op (no throw)
       expect(() => {
-        handler.handleMessage({ type: 'arena.cancelChat', sessionId: 'sess-done' });
+        handler.handleMessage({ type: 'arena.cancelChat', streamId: 'stream-22' });
       }).not.toThrow();
     });
 
@@ -558,13 +580,13 @@ describe('MessageHandler', () => {
 
       const chatRequest = { sessionId: 'sess-cancel', message: 'hi', agent: 'wave-client', history: [], settings: {} };
       // Start streaming (don't await — it won't resolve yet)
-      const streamingHandlerPromise = handler.handleMessage({ type: 'arena.streamMessage', requestId: 'r23', chatRequest });
+      const streamingHandlerPromise = handler.handleMessage({ type: 'arena.streamMessage', streamId: 'stream-23', chatRequest });
 
       // Give the async stream handler time to register the controller
       await new Promise((r) => setTimeout(r, 0));
 
       // Cancel the stream
-      await handler.handleMessage({ type: 'arena.cancelChat', sessionId: 'sess-cancel' });
+      await handler.handleMessage({ type: 'arena.cancelChat', streamId: 'stream-23' });
 
       expect(abortSpy).toHaveBeenCalled();
 
@@ -575,9 +597,9 @@ describe('MessageHandler', () => {
       abortSpy.mockRestore();
     });
 
-    it('arena.cancelChat — unknown sessionId → does NOT throw', async () => {
+    it('arena.cancelChat — unknown streamId → does NOT throw', async () => {
       await expect(
-        handler.handleMessage({ type: 'arena.cancelChat', sessionId: 'nonexistent-session' })
+        handler.handleMessage({ type: 'arena.cancelChat', streamId: 'nonexistent-stream' })
       ).resolves.not.toThrow();
     });
   });

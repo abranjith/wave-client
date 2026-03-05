@@ -396,10 +396,53 @@ export interface ArenaChatResponse {
 /** Streaming chunk from a chat request */
 export interface ArenaChatStreamChunk {
   messageId: string;
+  /** Incremental text delta (never accumulated — append to existing content). */
   content: string;
   done: boolean;
   sources?: ArenaMessageSource[];
   tokenCount?: number;
   /** Blocks emitted so far (only present on final chunk or when done=true) */
   blocks?: import('./arenaChatBlocks').ArenaChatBlock[];
+  /**
+   * Error detail from the provider or agent.
+   * When set, `content` should be empty — errors are displayed
+   * separately by the UI, not concatenated into the message body.
+   */
+  error?: string;
+}
+
+// ============================================================================
+// StreamHandle — explicit lifecycle for streaming chat
+// ============================================================================
+
+/**
+ * Unsubscribe function returned by StreamHandle event subscriptions.
+ * Calling it removes the listener; calling it more than once is a no-op.
+ */
+export type StreamUnsubscribe = () => void;
+
+/**
+ * Explicit lifecycle handle for a streaming chat response.
+ *
+ * Returned synchronously by `IArenaAdapter.streamMessage()` so the caller
+ * can subscribe to events and cancel the stream without holding a Promise.
+ *
+ * Lifecycle:
+ *   1. `onChunk(cb)` — 0‥N incremental text chunks.
+ *   2. `onDone(cb)` / `onError(cb)` — exactly one of these fires to end the stream.
+ *   3. `cancel()` — may be called at any time; triggers `onError('Cancelled')`.
+ *
+ * All callbacks are invoked synchronously on the next microtask after the
+ * underlying transport delivers data.  Calling `cancel()` after the stream
+ * has already completed (done or errored) is a safe no-op.
+ */
+export interface StreamHandle {
+  /** Subscribe to incremental text chunks (content delta, not accumulated). */
+  onChunk(cb: (chunk: ArenaChatStreamChunk) => void): StreamUnsubscribe;
+  /** Subscribe to the final complete response (fires once, stream ends). */
+  onDone(cb: (response: ArenaChatResponse) => void): StreamUnsubscribe;
+  /** Subscribe to stream errors (fires once, stream ends). */
+  onError(cb: (error: string) => void): StreamUnsubscribe;
+  /** Cancel the in-flight stream. Safe to call multiple times. */
+  cancel(): void;
 }

@@ -735,14 +735,16 @@ function createVSCodeSecurityAdapter(vsCodeApi: VSCodeAPI): ISecurityAdapter {
 // VS Code Notification Adapter
 // ============================================================================
 
-function createVSCodeNotificationAdapter(): INotificationAdapter {
-    // Notifications are handled via the banner store in the webview
-    // The extension sends banner messages that the App.tsx listens for
+function createVSCodeNotificationAdapter(events: IAdapterEvents): INotificationAdapter {
     return {
-        showNotification(type, message, duration) {
-            // This is handled internally via the banner store
-            // No need to send to extension
-            console.log(`[${type}] ${message}`);
+        showNotification(type, message, _duration) {
+            // Route notifications through the banner event system so they surface
+            // as visible banners in the webview UI.
+            const bannerType = type === 'success' ? 'success'
+                : type === 'error' ? 'error'
+                : type === 'warning' ? 'warning'
+                : 'info';
+            events.emit('banner', { type: bannerType, message });
         },
 
         async showConfirmation(message, confirmLabel, cancelLabel): Promise<boolean> {
@@ -800,8 +802,9 @@ export function createVSCodeAdapter(
     const file = createVSCodeFileAdapter(vsCodeApi, pendingRequests, defaultTimeout);
     const secret = createVSCodeSecretAdapter(vsCodeApi);
     const security = createVSCodeSecurityAdapter(vsCodeApi);
-    const notification = createVSCodeNotificationAdapter();
-    const arena = createVSCodeArenaAdapter(vsCodeApi, pendingRequests, events, defaultTimeout);
+    const notification = createVSCodeNotificationAdapter(events);
+    const { adapter: arena, handleStreamMessage: arenaHandleStreamMessage } =
+        createVSCodeArenaAdapter(vsCodeApi, pendingRequests, events, defaultTimeout);
 
     /**
      * Message handler for both request/response and push events.
@@ -812,7 +815,14 @@ export function createVSCodeAdapter(
     const handleMessage: MessageListener = (event) => {
         const message = event.data;
 
-        // 1. Handle request/response messages (with requestId)
+        // 1. Route stream-correlated messages (keyed by streamId, no requestId).
+        //    Must be checked BEFORE the generic requestId path so that
+        //    arena.streamComplete / arena.streamError are not swallowed.
+        if (message.streamId && arenaHandleStreamMessage(message)) {
+            return;
+        }
+
+        // 2. Handle request/response messages (with requestId)
         if (message.requestId) {
             const pending = pendingRequests.get(message.requestId);
             if (pending) {
@@ -826,7 +836,7 @@ export function createVSCodeAdapter(
             return; // Don't process as push event
         }
 
-        // 2. Handle push events (no requestId)
+        // 3. Handle push events (no requestId, no streamId)
         switch (message.type) {
             // Banner/notification events
             case 'bannerSuccess':
@@ -874,11 +884,6 @@ export function createVSCodeAdapter(
                 break;
             case 'settingsChanged':
                 events.emit('settingsChanged', undefined);
-                break;
-
-            // Arena streaming push events (no requestId — forwarded to event bus)
-            case 'arena.streamChunk':
-                events.emit('arenaStreamChunk', message.chunk);
                 break;
 
             // Note: Other message types without requestId are ignored

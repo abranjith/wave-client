@@ -80,8 +80,12 @@ export interface ArenaValidateApiKeyMsg     { type: 'arena.validateApiKey';    r
 export interface ArenaGetAvailableModelsMsg { type: 'arena.getAvailableModels'; requestId: string; provider: string }
 
 // Streaming
-export interface ArenaStreamMessageMsg { type: 'arena.streamMessage'; requestId: string; chatRequest: ArenaChatRequest }
-export interface ArenaCancelChatMsg    { type: 'arena.cancelChat';    sessionId: string }  // no requestId — fire-and-forget
+/** Non-streaming chat request — extension processes and returns result in one response. */
+export interface ArenaSendMessageMsg { type: 'arena.sendMessage'; requestId: string; request: ArenaChatRequest }
+/** Streaming chat request — extension pushes chunks via streamId correlation. */
+export interface ArenaStreamMessageMsg { type: 'arena.streamMessage'; streamId: string; chatRequest: ArenaChatRequest }
+/** Cancel an in-flight stream by streamId (fire-and-forget). */
+export interface ArenaCancelChatMsg    { type: 'arena.cancelChat';    streamId: string }  // no requestId — fire-and-forget
 
 /** Discriminated union of all Arena postMessage protocol messages. */
 export type ArenaPostMessage =
@@ -102,5 +106,6 @@ export type ArenaPostMessage =
     | ArenaSaveProviderSettingsMsg
     | ArenaValidateApiKeyMsg
     | ArenaGetAvailableModelsMsg
+    | ArenaSendMessageMsg
     | ArenaStreamMessageMsg
     | ArenaCancelChatMsg;

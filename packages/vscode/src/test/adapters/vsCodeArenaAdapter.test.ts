@@ -18,7 +18,9 @@ import type {
     ArenaReference,
     ArenaProviderSettingsMap,
     ArenaChatStreamChunk,
+    ArenaChatResponse,
     IArenaAdapter,
+    StreamHandle,
 } from '@wave-client/core';
 import { createVSCodeArenaAdapter } from '../../webview/adapters/vsCodeArenaAdapter.js';
 
@@ -97,6 +99,7 @@ describe('createVSCodeArenaAdapter', () => {
     let pendingRequests: Map<string, any>;
     let events: IAdapterEvents;
     let adapter: IArenaAdapter;
+    let handleStreamMessage: (message: any) => boolean;
 
     /** Get the requestId from the most-recent postMessage call. */
     function lastRequestId(): string {
@@ -122,7 +125,9 @@ describe('createVSCodeArenaAdapter', () => {
         pendingRequests = new Map();
         events = createMockEvents();
         // Short default timeout so timeout tests don't take 2 minutes
-        adapter = createVSCodeArenaAdapter(vsCodeApi, pendingRequests, events, 200);
+        const result = createVSCodeArenaAdapter(vsCodeApi, pendingRequests, events, 200);
+        adapter = result.adapter;
+        handleStreamMessage = result.handleStreamMessage;
     });
 
     // =========================================================================
@@ -389,11 +394,11 @@ describe('createVSCodeArenaAdapter', () => {
     const CHAT_RESPONSE = { messageId: 'resp-1', content: 'Hello back', tokenCount: 20 };
 
     describe('sendMessage', () => {
-        it('delegates to streamMessage — posts arena.streamMessage and resolves response', async () => {
+        it('posts arena.sendMessage (non-streaming) and resolves response', async () => {
             const promise = adapter.sendMessage(CHAT_REQUEST);
 
             expect(vsCodeApi.postMessage).toHaveBeenCalledWith(
-                expect.objectContaining({ type: 'arena.streamMessage', request: CHAT_REQUEST })
+                expect.objectContaining({ type: 'arena.sendMessage', request: CHAT_REQUEST })
             );
 
             resolveRequest({ response: CHAT_RESPONSE });
@@ -404,66 +409,123 @@ describe('createVSCodeArenaAdapter', () => {
     });
 
     describe('streamMessage', () => {
-        it('subscribes to arenaStreamChunk BEFORE posting, delivers chunks to callback, unsubscribes after', async () => {
-            const receivedChunks: ArenaChatStreamChunk[] = [];
-            const promise = adapter.streamMessage(CHAT_REQUEST, (c: ArenaChatStreamChunk) => receivedChunks.push(c));
+        it('returns a StreamHandle and posts arena.streamMessage with streamId', () => {
+            const handle: StreamHandle = adapter.streamMessage(CHAT_REQUEST);
 
-            // Ensure the request was posted
+            expect(handle).toBeDefined();
+            expect(handle.onChunk).toBeTypeOf('function');
+            expect(handle.onDone).toBeTypeOf('function');
+            expect(handle.onError).toBeTypeOf('function');
+            expect(handle.cancel).toBeTypeOf('function');
+
+            // Verify the postMessage was sent with streamId
             expect(vsCodeApi.postMessage).toHaveBeenCalledWith(
-                expect.objectContaining({ type: 'arena.streamMessage' })
+                expect.objectContaining({ type: 'arena.streamMessage', chatRequest: CHAT_REQUEST })
             );
-
-            // Emit chunks via the event bus (as vsCodeAdapter would do for arena.streamChunk messages)
-            const chunk1: ArenaChatStreamChunk = { messageId: 'resp-1', content: 'Hello', done: false };
-            const chunk2: ArenaChatStreamChunk = { messageId: 'resp-1', content: ' back', done: false };
-            const chunkFinal: ArenaChatStreamChunk = { messageId: 'resp-1', content: '', done: true, tokenCount: 20 };
-
-            events.emit('arenaStreamChunk', chunk1);
-            events.emit('arenaStreamChunk', chunk2);
-            events.emit('arenaStreamChunk', chunkFinal);
-
-            // Resolve the final response
-            resolveRequest({ response: CHAT_RESPONSE });
-            const result = await promise;
-
-            expect(result.isOk).toBe(true);
-            expect(receivedChunks).toEqual([chunk1, chunk2, chunkFinal]);
-
-            // After resolution, the chunk handler should have been removed
-            const afterResolutionSpy = vi.fn();
-            events.on('arenaStreamChunk', afterResolutionSpy);
-            events.emit('arenaStreamChunk', { messageId: 'x', content: '', done: true });
-            // afterResolutionSpy fires but the adapter's own internal handler should NOT fire
-            // (We can verify the receivedChunks array has not grown)
-            expect(receivedChunks).toHaveLength(3);
-            events.off('arenaStreamChunk', afterResolutionSpy);
+            const posted = vsCodeApi.postMessage.mock.lastCall![0] as any;
+            expect(posted.streamId).toBeDefined();
         });
 
-        it('propagates error result without leaking the chunk listener', async () => {
+        it('delivers chunks to onChunk listeners via handleStreamMessage', () => {
+            const handle = adapter.streamMessage(CHAT_REQUEST);
+            const streamId = (vsCodeApi.postMessage.mock.lastCall![0] as any).streamId;
+
+            const receivedChunks: ArenaChatStreamChunk[] = [];
+            handle.onChunk((c) => receivedChunks.push(c));
+
+            const chunk1: ArenaChatStreamChunk = { messageId: 'resp-1', content: 'Hello', done: false };
+            const chunk2: ArenaChatStreamChunk = { messageId: 'resp-1', content: ' back', done: false };
+
+            handleStreamMessage({ type: 'arena.streamChunk', streamId, chunk: chunk1 });
+            handleStreamMessage({ type: 'arena.streamChunk', streamId, chunk: chunk2 });
+
+            expect(receivedChunks).toEqual([chunk1, chunk2]);
+        });
+
+        it('delivers completion to onDone listeners and cleans up', () => {
+            const handle = adapter.streamMessage(CHAT_REQUEST);
+            const streamId = (vsCodeApi.postMessage.mock.lastCall![0] as any).streamId;
+
+            let doneResponse: ArenaChatResponse | undefined;
+            handle.onDone((r) => { doneResponse = r; });
+
+            const response: ArenaChatResponse = { messageId: 'resp-1', content: 'Hello back', tokenCount: 20 };
+            handleStreamMessage({ type: 'arena.streamComplete', streamId, response });
+
+            expect(doneResponse).toEqual(response);
+
+            // After completion, further chunks for the same streamId should be ignored
+            const lateChunk = vi.fn();
+            handle.onChunk(lateChunk);
+            handleStreamMessage({ type: 'arena.streamChunk', streamId, chunk: { messageId: 'x', content: 'late', done: false } });
+            // handleStreamMessage returns false because the stream was cleaned up
+            expect(lateChunk).not.toHaveBeenCalled();
+        });
+
+        it('delivers errors to onError listeners and cleans up', () => {
+            const handle = adapter.streamMessage(CHAT_REQUEST);
+            const streamId = (vsCodeApi.postMessage.mock.lastCall![0] as any).streamId;
+
+            let errorMsg: string | undefined;
+            handle.onError((e) => { errorMsg = e; });
+
+            handleStreamMessage({ type: 'arena.streamError', streamId, error: 'LLM error' });
+
+            expect(errorMsg).toBe('LLM error');
+        });
+
+        it('unsubscribe callback prevents further delivery', () => {
+            const handle = adapter.streamMessage(CHAT_REQUEST);
+            const streamId = (vsCodeApi.postMessage.mock.lastCall![0] as any).streamId;
+
             const chunks: ArenaChatStreamChunk[] = [];
-            const promise = adapter.streamMessage(CHAT_REQUEST, (c: ArenaChatStreamChunk) => chunks.push(c));
+            const unsub = handle.onChunk((c) => chunks.push(c));
 
-            resolveRequest({ error: 'LLM error' });
-            const result = await promise;
+            handleStreamMessage({ type: 'arena.streamChunk', streamId, chunk: { messageId: 'r', content: 'a', done: false } });
+            expect(chunks).toHaveLength(1);
 
-            expect(result.isOk).toBe(false);
-            expect((result as any).error).toBe('LLM error');
-            expect(chunks).toHaveLength(0);
+            unsub();
+            handleStreamMessage({ type: 'arena.streamChunk', streamId, chunk: { messageId: 'r', content: 'b', done: false } });
+            expect(chunks).toHaveLength(1); // Not delivered after unsub
         });
     });
 
-    describe('cancelChat', () => {
-        it('fires a fire-and-forget arena.cancelChat postMessage', () => {
-            adapter.cancelChat('sess-1');
+    describe('StreamHandle.cancel', () => {
+        it('fires arena.cancelChat with streamId and notifies error listeners', () => {
+            const handle = adapter.streamMessage(CHAT_REQUEST);
+            const streamId = (vsCodeApi.postMessage.mock.lastCall![0] as any).streamId;
+
+            let errorMsg: string | undefined;
+            handle.onError((e) => { errorMsg = e; });
+
+            handle.cancel();
+
+            // Should post cancel message with the streamId
             expect(vsCodeApi.postMessage).toHaveBeenCalledWith({
                 type: 'arena.cancelChat',
-                sessionId: 'sess-1',
+                streamId,
             });
+            // Error listeners should be called with 'Cancelled'
+            expect(errorMsg).toBe('Cancelled');
         });
 
         it('does NOT create a pending request entry', () => {
-            adapter.cancelChat('sess-1');
+            const handle = adapter.streamMessage(CHAT_REQUEST);
+            handle.cancel();
+            // Only the stream request entry, not a cancel request
             expect(pendingRequests.size).toBe(0);
+        });
+
+        it('is idempotent — calling cancel twice does not double-post', () => {
+            const handle = adapter.streamMessage(CHAT_REQUEST);
+            const postCountAfterStream = vsCodeApi.postMessage.mock.calls.length;
+
+            handle.cancel();
+            handle.cancel();
+
+            // Only one cancel postMessage should have been sent
+            const cancelCalls = vsCodeApi.postMessage.mock.calls.slice(postCountAfterStream);
+            expect(cancelCalls).toHaveLength(1);
         });
     });
 

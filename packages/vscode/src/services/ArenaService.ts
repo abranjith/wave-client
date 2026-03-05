@@ -92,8 +92,10 @@ export class ArenaService {
             }
 
             if (chunk.error) {
-                accContent += `\n[Error: ${chunk.error}]`;
-                onChunk({ messageId, content: accContent, done: true });
+                // Emit the error in a dedicated field with empty content delta.
+                // The UI renders error text separately — not concatenated into the
+                // message body — so we must NOT send the accumulated content here.
+                onChunk({ messageId, content: '', error: chunk.error, done: true });
                 finished = true;
                 break;
             }
@@ -112,9 +114,11 @@ export class ArenaService {
             }
         }
 
-        // If aborted mid-stream, emit a terminal done chunk.
+        // If aborted mid-stream, emit a terminal done chunk with empty delta.
+        // The UI already has the accumulated text from prior incremental chunks;
+        // the final ArenaChatResponse (returned below) carries the full content.
         if (!finished) {
-            onChunk({ messageId, content: accContent, done: true });
+            onChunk({ messageId, content: '', done: true });
         }
 
         return { messageId, content: accContent };

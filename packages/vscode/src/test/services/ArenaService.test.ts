@@ -232,7 +232,7 @@ describe('ArenaService', () => {
     // -------------------------------------------------------------------------
 
     describe('streamChat — error propagation', () => {
-        it('folds chunk.error into content on the done chunk', async () => {
+        it('emits error field on the done chunk (content stays empty)', async () => {
             mockChatFn.mockReturnValue(
                 makeChunks([
                     { content: 'partial', done: false },
@@ -246,9 +246,11 @@ describe('ArenaService', () => {
 
             const lastChunk = chunks[chunks.length - 1];
             expect(lastChunk.done).toBe(true);
-            expect(lastChunk.content).toContain('[Error: upstream failure]');
+            // Error chunk now carries content: '' with a separate error field
+            expect(lastChunk.content).toBe('');
+            expect(lastChunk.error).toBe('upstream failure');
+            // Accumulated response still contains the partial content
             expect(response.content).toContain('partial');
-            expect(response.content).toContain('[Error: upstream failure]');
         });
     });
 

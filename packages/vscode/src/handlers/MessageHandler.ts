@@ -35,6 +35,7 @@ import type {
     ArenaSaveProviderSettingsMsg,
     ArenaValidateApiKeyMsg,
     ArenaGetAvailableModelsMsg,
+    ArenaSendMessageMsg,
     ArenaStreamMessageMsg,
     ArenaCancelChatMsg,
 } from '../services/types';
@@ -58,7 +59,7 @@ function base64ToUint8Array(base64: string): Uint8Array {
  * This class centralizes all webview message handling logic.
  */
 export class MessageHandler {
-    /** AbortControllers keyed by sessionId for in-flight Arena stream requests. */
+    /** AbortControllers keyed by streamId for in-flight Arena stream requests. */
     private arenaAbortControllers = new Map<string, AbortController>();
 
     constructor(private panel: vscode.WebviewPanel) {}
@@ -258,6 +259,9 @@ export class MessageHandler {
                 break;
             case 'arena.getAvailableModels':
                 await this.handleArenaGetAvailableModels(message as ArenaGetAvailableModelsMsg);
+                break;
+            case 'arena.sendMessage':
+                await this.handleArenaSendMessage(message as ArenaSendMessageMsg);
                 break;
             case 'arena.streamMessage':
                 await this.handleArenaStreamMessage(message as ArenaStreamMessageMsg);
@@ -1688,48 +1692,73 @@ export class MessageHandler {
     }
 
     /**
+     * Handles a non-streaming chat request.
+     *
+     * Delegates to `arenaService.streamChat` with an internal accumulator but
+     * returns a single `arena.sendMessage` response with the full content.
+     */
+    private async handleArenaSendMessage(message: ArenaSendMessageMsg): Promise<void> {
+        const { requestId, request: chatRequest } = message;
+
+        try {
+            const response = await arenaService.streamChat(
+                chatRequest,
+                () => { /* non-streaming — discard intermediate chunks */ },
+            );
+            this.postMessage({ type: 'arena.sendMessage', requestId, response });
+        } catch (error: any) {
+            this.postMessage({ type: 'arena.sendMessage', requestId, error: error.message });
+        }
+    }
+
+    /**
      * Handles a streaming chat request.
      *
-     * Stream chunks are pushed to the webview as `arena.streamChunk` events (no requestId).
-     * The final `arena.streamComplete` / `arena.streamError` carries the original requestId
-     * to resolve the webview's pending `sendAndWait` promise.
+     * Stream chunks are pushed to the webview as `arena.streamChunk` events
+     * keyed by `streamId` (no requestId).  The final `arena.streamComplete` /
+     * `arena.streamError` also carries the `streamId` so the webview adapter
+     * can route them to the correct `StreamHandle` listeners.
      *
-     * An `AbortController` is registered for the session to support cancellation via
-     * `arena.cancelChat`.
+     * An `AbortController` is registered by `streamId` to support cancellation
+     * via `arena.cancelChat`.
      */
     private async handleArenaStreamMessage(message: ArenaStreamMessageMsg): Promise<void> {
-        const { requestId, chatRequest } = message;
-        const { sessionId } = chatRequest;
+        const { streamId, chatRequest } = message;
 
-        console.info('[Arena] stream start', { sessionId, agent: chatRequest.agent });
+        console.info('[Arena] stream start', { streamId, agent: chatRequest.agent });
 
-        // Create an AbortController for this session so cancelChat can abort it
+        // If a stream with this streamId is already in-flight, abort it first
+        const existing = this.arenaAbortControllers.get(streamId);
+        if (existing) { existing.abort(); }
+
         const controller = new AbortController();
-        this.arenaAbortControllers.set(sessionId, controller);
+        this.arenaAbortControllers.set(streamId, controller);
 
         try {
             const response = await arenaService.streamChat(
                 chatRequest,
                 (chunk) => {
-                    // Push each token to the webview — no requestId on stream chunks
-                    this.postMessage({ type: 'arena.streamChunk', sessionId, chunk });
+                    // Push each token to the webview — keyed by streamId
+                    this.postMessage({ type: 'arena.streamChunk', streamId, chunk });
                 },
                 controller.signal,
             );
-            this.postMessage({ type: 'arena.streamComplete', requestId, response });
+            this.postMessage({ type: 'arena.streamComplete', streamId, response });
         } catch (error: any) {
-            console.error('[Arena] stream error', { provider: chatRequest.provider, error: error.message });
-            this.postMessage({ type: 'arena.streamError', requestId, error: error.message });
+            console.error('[Arena] stream error', { streamId, error: error.message });
+            // Fast-fail: immediately notify the webview so the UI stops streaming
+            this.postMessage({ type: 'arena.streamError', streamId, error: error.message });
         } finally {
-            this.arenaAbortControllers.delete(sessionId);
+            this.arenaAbortControllers.delete(streamId);
         }
     }
 
     private handleArenaCancelChat(message: ArenaCancelChatMsg): void {
-        console.info('[Arena] cancel chat', { sessionId: message.sessionId });
-        const controller = this.arenaAbortControllers.get(message.sessionId);
+        console.info('[Arena] cancel chat', { streamId: message.streamId });
+        const controller = this.arenaAbortControllers.get(message.streamId);
         if (controller) {
             controller.abort();
+            this.arenaAbortControllers.delete(message.streamId);
         }
         // Fire-and-forget: no response
     }

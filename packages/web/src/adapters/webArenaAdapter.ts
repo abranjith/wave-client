@@ -16,6 +16,8 @@ import type {
     ArenaChatStreamChunk,
     ArenaReference,
     ArenaProviderSettingsMap,
+    StreamHandle,
+    StreamUnsubscribe,
 } from '@wave-client/core';
 import {
     ok,
@@ -290,7 +292,10 @@ export class WebArenaAdapter implements IArenaAdapter {
             }
 
             // Cancel any existing request
-            this.cancelChat(request.sessionId);
+            if (activeChatController) {
+                activeChatController.abort();
+                activeChatController = null;
+            }
             activeChatController = new AbortController();
 
             const response = await this.callGeminiAPI(request, activeChatController.signal);
@@ -305,53 +310,99 @@ export class WebArenaAdapter implements IArenaAdapter {
         }
     }
 
-    async streamMessage(
-        request: ArenaChatRequest,
-        onChunk: (chunk: ArenaChatStreamChunk) => void
-    ): Promise<Result<ArenaChatResponse, string>> {
-        try {
-            const { settings } = request;
-            
-            // For MVP, only Gemini is supported
-            if (settings.provider !== 'gemini') {
-                return err(`Provider ${settings.provider} is not supported yet. Please use Gemini.`);
-            }
+    streamMessage(request: ArenaChatRequest): StreamHandle {
+        const chunkCbs = new Set<(chunk: ArenaChatStreamChunk) => void>();
+        const doneCbs = new Set<(response: ArenaChatResponse) => void>();
+        const errorCbs = new Set<(error: string) => void>();
+        let ended = false;
 
-            // Resolve API key from provider settings
-            const providerSettings = loadFromStorage<ArenaProviderSettingsMap>(
-                STORAGE_KEYS.PROVIDER_SETTINGS,
-                getDefaultProviderSettings(),
-            );
-            const apiKey = providerSettings['gemini']?.apiKey;
-            if (!apiKey) {
-                return err('API key is required. Please configure your Gemini API key in Arena settings.');
-            }
-
-            // Cancel any existing request
-            this.cancelChat(request.sessionId);
-            activeChatController = new AbortController();
-
-            const response = await this.callGeminiAPIWithStream(
-                request, 
-                activeChatController.signal,
-                onChunk
-            );
-            activeChatController = null;
-            
-            return response;
-        } catch (error) {
-            if (error instanceof DOMException && error.name === 'AbortError') {
-                return err('Chat request was cancelled');
-            }
-            return err(`Failed to stream message: ${error}`);
+        function makeSub<T>(set: Set<T>, cb: T): StreamUnsubscribe {
+            set.add(cb);
+            let removed = false;
+            return () => { if (!removed) { removed = true; set.delete(cb); } };
         }
-    }
 
-    cancelChat(_sessionId: string): void {
+        function emitError(msg: string) {
+            if (ended) return;
+            ended = true;
+            errorCbs.forEach((cb) => { try { cb(msg); } catch (e) { console.error('[WebArena] error cb error', e); } });
+        }
+
+        function emitDone(response: ArenaChatResponse) {
+            if (ended) return;
+            ended = true;
+            doneCbs.forEach((cb) => { try { cb(response); } catch (e) { console.error('[WebArena] done cb error', e); } });
+        }
+
+        // Cancel any existing request
         if (activeChatController) {
             activeChatController.abort();
             activeChatController = null;
         }
+        const controller = new AbortController();
+        activeChatController = controller;
+
+        // Kick off the async stream in the background
+        (async () => {
+            try {
+                const { settings } = request;
+                if (settings.provider !== 'gemini') {
+                    emitError(`Provider ${settings.provider} is not supported yet. Please use Gemini.`);
+                    return;
+                }
+                const providerSettings = loadFromStorage<ArenaProviderSettingsMap>(
+                    STORAGE_KEYS.PROVIDER_SETTINGS,
+                    getDefaultProviderSettings(),
+                );
+                const apiKey = providerSettings['gemini']?.apiKey;
+                if (!apiKey) {
+                    emitError('API key is required. Please configure your Gemini API key in Arena settings.');
+                    return;
+                }
+
+                const result = await this.callGeminiAPIWithStream(
+                    request,
+                    controller.signal,
+                    (chunk) => {
+                        if (ended) return;
+                        chunkCbs.forEach((cb) => { try { cb(chunk); } catch (e) { console.error('[WebArena] chunk cb error', e); } });
+                    },
+                );
+
+                if (activeChatController === controller) {
+                    activeChatController = null;
+                }
+
+                if (result.isOk) {
+                    emitDone(result.value);
+                } else {
+                    emitError(result.error);
+                }
+            } catch (error) {
+                if (activeChatController === controller) {
+                    activeChatController = null;
+                }
+                if (error instanceof DOMException && error.name === 'AbortError') {
+                    emitError('Chat request was cancelled');
+                } else {
+                    emitError(`Failed to stream message: ${error}`);
+                }
+            }
+        })();
+
+        return {
+            onChunk(cb) { return makeSub(chunkCbs, cb); },
+            onDone(cb) { return makeSub(doneCbs, cb); },
+            onError(cb) { return makeSub(errorCbs, cb); },
+            cancel() {
+                if (ended) return;
+                controller.abort();
+                if (activeChatController === controller) {
+                    activeChatController = null;
+                }
+                emitError('Cancelled');
+            },
+        };
     }
 
     // ========================================================================

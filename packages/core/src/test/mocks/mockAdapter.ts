@@ -50,6 +50,8 @@ import type {
     ArenaChatRequest,
     ArenaChatResponse,
     ArenaChatStreamChunk,
+    StreamHandle,
+    StreamUnsubscribe,
 } from '../../types/arena';
 import { DEFAULT_ARENA_SETTINGS } from '../../types/arena';
 import type { ArenaReference } from '../../config/arenaConfig';
@@ -664,38 +666,55 @@ function createMockArenaAdapter(store: MockDataStore): IArenaAdapter {
             });
         },
 
-        async streamMessage(
-            request: ArenaChatRequest,
-            onChunk: (chunk: ArenaChatStreamChunk) => void
-        ): Promise<Result<ArenaChatResponse, string>> {
-            // Simulate streaming with chunks
+        streamMessage(request: ArenaChatRequest): StreamHandle {
+            // Simulate streaming with chunks via StreamHandle
             const content = `Mock streamed response to: ${request.message}`;
             const words = content.split(' ');
-            
-            for (let i = 0; i < words.length; i++) {
-                onChunk({
-                    messageId: `msg-${Date.now()}`,
-                    content: words[i] + ' ',
-                    done: false,
-                });
+            const messageId = `msg-${Date.now()}`;
+
+            const chunkCbs = new Set<(chunk: ArenaChatStreamChunk) => void>();
+            const doneCbs = new Set<(response: ArenaChatResponse) => void>();
+            const errorCbs = new Set<(error: string) => void>();
+            let cancelled = false;
+
+            function makeSub<T>(set: Set<T>, cb: T): StreamUnsubscribe {
+                set.add(cb);
+                let removed = false;
+                return () => { if (!removed) { removed = true; set.delete(cb); } };
             }
-            
-            onChunk({
-                messageId: `msg-${Date.now()}`,
-                content: '',
-                done: true,
-                tokenCount: 50,
-            });
 
-            return ok({
-                messageId: `msg-${Date.now()}`,
-                content,
-                tokenCount: 50,
-            });
-        },
+            // Drive the stream asynchronously so listeners can register first
+            setTimeout(() => {
+                if (cancelled) return;
 
-        cancelChat(_sessionId: string): void {
-            // Mock cancel - no-op
+                for (let i = 0; i < words.length; i++) {
+                    chunkCbs.forEach((cb) => cb({
+                        messageId,
+                        content: words[i] + ' ',
+                        done: false,
+                    }));
+                }
+
+                chunkCbs.forEach((cb) => cb({
+                    messageId,
+                    content: '',
+                    done: true,
+                    tokenCount: 50,
+                }));
+
+                const response: ArenaChatResponse = { messageId, content, tokenCount: 50 };
+                doneCbs.forEach((cb) => cb(response));
+            }, 0);
+
+            return {
+                onChunk(cb) { return makeSub(chunkCbs, cb); },
+                onDone(cb) { return makeSub(doneCbs, cb); },
+                onError(cb) { return makeSub(errorCbs, cb); },
+                cancel() {
+                    cancelled = true;
+                    errorCbs.forEach((cb) => { try { cb('Cancelled'); } catch { /* noop */ } });
+                },
+            };
         },
 
         // Settings

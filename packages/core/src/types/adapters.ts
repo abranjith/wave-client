@@ -37,6 +37,7 @@ import type {
     ArenaChatRequest,
     ArenaChatResponse,
     ArenaChatStreamChunk,
+    StreamHandle,
 } from './arena';
 import type { ArenaReference } from '../config/arenaConfig';
 import type { ArenaProviderSettingsMap } from '../config/arenaConfig';
@@ -461,19 +462,13 @@ export interface IArenaAdapter {
     sendMessage(request: ArenaChatRequest): Promise<Result<ArenaChatResponse, string>>;
     
     /**
-     * Send a chat message and stream the response
-     * Calls onChunk for each streaming chunk
-     * Returns the final complete response
+     * Start a streaming chat and return a {@link StreamHandle} immediately.
+     *
+     * The handle exposes `onChunk`, `onDone`, `onError` subscriptions and a
+     * `cancel()` method so the caller controls the full stream lifecycle
+     * without juggling Promises or global events.
      */
-    streamMessage(
-        request: ArenaChatRequest,
-        onChunk: (chunk: ArenaChatStreamChunk) => void
-    ): Promise<Result<ArenaChatResponse, string>>;
-    
-    /**
-     * Cancel an ongoing chat request
-     */
-    cancelChat(sessionId: string): void;
+    streamMessage(request: ArenaChatRequest): StreamHandle;
 
     // Settings
     /**
