@@ -114,7 +114,7 @@ describe('ArenaStorageService', () => {
             }),
         };
 
-        setSecurityServiceInstance(mockSecurityService);
+        setSecurityServiceInstance(mockSecurityService as any);
 
         service = new ArenaStorageService();
         mockFs.addDirectory(ARENA_ROOT);

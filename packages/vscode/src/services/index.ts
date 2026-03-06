@@ -70,8 +70,8 @@ export type {
 export { SecurityService, securityService } from './SecurityService';
 export type { EncryptionStatus } from './SecurityService';
 
-// Arena services
-export { ArenaService, arenaService } from './ArenaService';
+// Arena services — ArenaService is defined in @wave-client/arena and re-exported here for convenience
+export { ArenaService, arenaService } from '@wave-client/arena';
 export { ArenaStorageService, arenaStorageService } from '@wave-client/shared';
 
 // Types (re-exported from shared for convenience)

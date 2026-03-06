@@ -437,7 +437,6 @@ export function ArenaPane({ className }: ArenaPaneProps): React.ReactElement {
   // ============================================================================
 
   const activeSession = arenaSessions.find((s) => s.id === arenaActiveSessionId);
-  const agentDef = arenaSelectedAgent ? getAgentDefinition(arenaSelectedAgent) : null;
 
   // Filter sessions for the sidebar: show all when on agent-select, or only agent-specific when in chat
   const filteredSessions = useMemo(

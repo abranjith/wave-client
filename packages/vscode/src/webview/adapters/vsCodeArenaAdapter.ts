@@ -161,10 +161,10 @@ export function createVSCodeArenaAdapter(
      */
     function handleStreamMessage(message: any): boolean {
         const streamId: string | undefined = message.streamId;
-        if (!streamId) return false;
+        if (!streamId) { return false; }
 
         const listeners = activeStreams.get(streamId);
-        if (!listeners) return false;
+        if (!listeners) { return false; }
 
         switch (message.type) {
             case 'arena.streamChunk':
@@ -298,7 +298,7 @@ export function createVSCodeArenaAdapter(
                 onDone(cb) { return makeSub(listeners.doneCbs, cb); },
                 onError(cb) { return makeSub(listeners.errorCbs, cb); },
                 cancel() {
-                    if (ended) return;
+                    if (ended) { return; }
                     ended = true;
                     vsCodeApi.postMessage({ type: 'arena.cancelChat', streamId });
                     // Immediately notify error listeners so the UI stops streaming

@@ -26,3 +26,6 @@ export { createMcpBridge, type McpBridgeConfig } from './tools/mcpBridge';
 // Utils
 export { createVectorStore, type VectorStoreConfig } from './utils/vectorStore';
 export { createRateLimiter, type RateLimiterConfig } from './utils/rateLimiter';
+
+// Arena service — orchestrates provider config, agent lifecycle, and chat streaming
+export { ArenaService, arenaService } from './ArenaService';

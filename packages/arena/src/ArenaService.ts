@@ -1,5 +1,7 @@
-import { createProviderFactory, createWaveClientAgent, createWebExpertAgent } from '@wave-client/arena';
-import type { LLMProviderConfig, ChatMessage, ChatChunk } from '@wave-client/arena';
+import { createProviderFactory } from './providers/factory';
+import { createWaveClientAgent } from './agents/waveClientAgent';
+import { createWebExpertAgent } from './agents/webExpertAgent';
+import type { LLMProviderConfig, ChatMessage, ChatChunk } from './types';
 import type {
     ArenaChatRequest,
     ArenaChatResponse,
@@ -15,6 +17,7 @@ import {
     ollamaTagsUrl,
     getModelsForProvider,
     arenaStorageService,
+    httpService,
 } from '@wave-client/shared';
 
 /** Ollama default base URL (mirrors OLLAMA_DEFAULT_BASE_URL in @wave-client/core). */
@@ -26,24 +29,55 @@ interface CachedAgent {
 }
 
 /**
- * VS Code extension-host service that wires up LangGraph-powered Arena AI agents
- * to handle chat requests from the webview.
+ * Optional factory/agent dependencies for `ArenaService`.
+ * Injected in tests to replace real LangGraph agent constructors with mocks.
+ * In production the module-level defaults are used.
+ */
+interface ArenaServiceDeps {
+    createProviderFactory?: typeof createProviderFactory;
+    createWaveClientAgent?: typeof createWaveClientAgent;
+    createWebExpertAgent?: typeof createWebExpertAgent;
+}
+
+/**
+ * Arena AI agent orchestration service that wires up LangGraph-powered agents
+ * to handle chat requests.
+ *
+ * Import from `@wave-client/arena`:
+ * ```ts
+ * import { arenaService } from '@wave-client/arena';
+ * ```
  *
  * ### Agent Caching
  * Compiled LangGraph state-graphs are expensive to create.  ArenaService maintains
  * a `Map<string, CachedAgent>` keyed by `"${provider}:${model ?? 'default'}:${agentId}"`
- * so the same graph is reused across requests within a single extension host session.
+ * so the same graph is reused across requests within a single session.
  *
  * ### Provider Support
  * Only `'gemini'` and `'ollama'` are wired.  Any other provider throws immediately in
- * `buildProviderConfig`, which the calling message handler converts into a user error.
+ * `buildProviderConfig`, which the calling handler converts into a user error.
  *
  * ### Thread Safety
  * Node.js is single-threaded; no locking is needed.
+ *
+ * ### Testing
+ * Pass `deps` to override factory/agent constructors with mocks.  The shared
+ * singletons (`arenaStorageService`, `httpService`) can be spied on directly via
+ * `vi.spyOn` — they are shared by reference with the arena bundle.
  */
 export class ArenaService {
     /** Reuse compiled LangGraph graphs across requests. */
     private readonly agentCache = new Map<string, CachedAgent>();
+
+    private readonly _createProviderFactory: typeof createProviderFactory;
+    private readonly _createWaveClientAgent: typeof createWaveClientAgent;
+    private readonly _createWebExpertAgent: typeof createWebExpertAgent;
+
+    constructor(deps: ArenaServiceDeps = {}) {
+        this._createProviderFactory = deps.createProviderFactory ?? createProviderFactory;
+        this._createWaveClientAgent = deps.createWaveClientAgent ?? createWaveClientAgent;
+        this._createWebExpertAgent = deps.createWebExpertAgent ?? createWebExpertAgent;
+    }
 
     // =========================================================================
     // Public API
@@ -59,7 +93,7 @@ export class ArenaService {
      *     via `onChunk`.
      *  4. Return the accumulated `ArenaChatResponse` when streaming is complete.
      *
-     * @param request  The chat request from the webview.
+     * @param request  The chat request from the caller.
      * @param onChunk  Callback invoked for every streamed chunk.
      * @param signal   Optional `AbortSignal`; iteration stops when aborted.
      * @returns        The fully accumulated `ArenaChatResponse`.
@@ -71,7 +105,7 @@ export class ArenaService {
         signal?: AbortSignal,
     ): Promise<ArenaChatResponse> {
         const providerConfig = await this.buildProviderConfig(request);
-        const llm = createProviderFactory(providerConfig);
+        const llm = this._createProviderFactory(providerConfig);
         const agent = await this.getOrCreateAgent(request, llm);
         const chatHistory = this.convertHistory(request.history);
         const messageId = crypto.randomUUID();
@@ -127,8 +161,8 @@ export class ArenaService {
     /**
      * Validates a provider API key / connectivity without touching the agent.
      *
-     * Uses global `fetch` directly (not `HttpService`) to keep this path free of
-     * request-plumbing dependencies.
+     * Uses `httpService.send()` (axios-based) so that the user's proxy and
+     * certificate settings are respected automatically.
      *
      * @param provider         The provider type to validate.
      * @param providerSettings The provider settings (must include `apiKey` for cloud).
@@ -144,18 +178,30 @@ export class ArenaService {
                 if (!apiKey) {
                     return { valid: false, error: 'API key is empty' };
                 }
-                const res = await fetch(geminiModelsUrl(apiKey));
-                return res.ok
+                const result = await httpService.send({
+                    method: 'GET',
+                    url: geminiModelsUrl(apiKey),
+                    headers: {},
+                    validateStatus: true,
+                });
+                const status = result.response.status;
+                return status >= 200 && status < 400
                     ? { valid: true }
-                    : { valid: false, error: `Gemini returned status ${res.status}` };
+                    : { valid: false, error: `Gemini returned status ${status}` };
             }
 
             if (provider === 'ollama') {
                 const baseUrl = providerSettings.apiUrl ?? OLLAMA_DEFAULT_BASE_URL;
-                const res = await fetch(ollamaTagsUrl(baseUrl));
-                return res.ok
+                const result = await httpService.send({
+                    method: 'GET',
+                    url: ollamaTagsUrl(baseUrl),
+                    headers: {},
+                    validateStatus: true,
+                });
+                const status = result.response.status;
+                return status >= 200 && status < 400
                     ? { valid: true }
-                    : { valid: false, error: `Ollama returned status ${res.status}` };
+                    : { valid: false, error: `Ollama returned status ${status}` };
             }
 
             return { valid: false, error: `Provider '${provider}' validation is not supported` };
@@ -167,11 +213,9 @@ export class ArenaService {
     /**
      * Returns the list of models available for the given provider.
      *
-     * For Ollama, probes the live `/api/tags` endpoint and maps the response to
-     * `ModelDefinition[]`.  Falls back to the static list in `@wave-client/core`
-     * on any fetch failure.  All other providers use the static list directly.
-     *
-     * Uses global `fetch` directly (not `HttpService`).
+     * For Ollama, probes the live `/api/tags` endpoint via `httpService.send()` and
+     * maps the response to `ModelDefinition[]`.  Falls back to the static list on any
+     * failure.  All other providers use the static list directly.
      *
      * @param provider         The provider type.
      * @param providerSettings The provider settings (used for Ollama base URL).
@@ -184,9 +228,15 @@ export class ArenaService {
         if (provider === 'ollama') {
             try {
                 const baseUrl = providerSettings.apiUrl ?? OLLAMA_DEFAULT_BASE_URL;
-                const res = await fetch(ollamaTagsUrl(baseUrl));
-                if (res.ok) {
-                    const data = (await res.json()) as { models: { name: string }[] };
+                const result = await httpService.send({
+                    method: 'GET',
+                    url: ollamaTagsUrl(baseUrl),
+                    headers: {},
+                    validateStatus: true,
+                    responseType: 'json',
+                });
+                if (result.response.status >= 200 && result.response.status < 400) {
+                    const data = result.response.data as { models: { name: string }[] };
                     return (data.models ?? []).map((m) => ({
                         id: m.name,
                         label: m.name,
@@ -260,11 +310,11 @@ export class ArenaService {
         let agent: CachedAgent;
         switch (request.agent) {
             case ARENA_AGENT_IDS.WAVE_CLIENT:
-                agent = createWaveClientAgent({ llm });
+                agent = this._createWaveClientAgent({ llm });
                 break;
 
             case ARENA_AGENT_IDS.WEB_EXPERT:
-                agent = createWebExpertAgent({ llm });
+                agent = this._createWebExpertAgent({ llm });
                 break;
 
             default:

@@ -1,43 +1,31 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { ArenaService } from '@wave-client/arena';
 import type { ChatChunk } from '@wave-client/arena';
 import type { ArenaChatRequest, ArenaChatStreamChunk, ArenaProviderSettings } from '@wave-client/shared';
-import { ARENA_AGENT_IDS, getModelsForProvider } from '@wave-client/shared';
+import { ARENA_AGENT_IDS, arenaStorageService, httpService, getModelsForProvider } from '@wave-client/shared';
 
 // ---------------------------------------------------------------------------
-// Mock @wave-client/arena
+// Mock helpers
 // ---------------------------------------------------------------------------
 
+/** Mock functions passed as DI deps into ArenaService. */
 const mockChatFn = vi.fn();
-const mockWaveClientAgent = { chat: mockChatFn };
-const mockWebExpertAgent = { chat: mockChatFn };
-const mockCreateWaveClientAgent = vi.fn(() => mockWaveClientAgent);
-const mockCreateWebExpertAgent = vi.fn(() => mockWebExpertAgent);
 const mockCreateProviderFactory = vi.fn(() => ({}));
+const mockCreateWaveClientAgent = vi.fn(() => ({ chat: mockChatFn }));
+const mockCreateWebExpertAgent = vi.fn(() => ({ chat: mockChatFn }));
 
-vi.mock('@wave-client/arena', () => ({
-    createWaveClientAgent: mockCreateWaveClientAgent,
-    createWebExpertAgent: mockCreateWebExpertAgent,
-    createProviderFactory: mockCreateProviderFactory,
-}));
-
-// ---------------------------------------------------------------------------
-// Mock @wave-client/shared
-// ---------------------------------------------------------------------------
-
-// vi.hoisted ensures these are available inside mock factories (which are hoisted above variable declarations)
-const { mockLoadProviderSettings } = vi.hoisted(() => ({
-    mockLoadProviderSettings: vi.fn(),
-}));
-
-vi.mock('@wave-client/shared', async (importActual) => {
-    const actual = await importActual<typeof import('@wave-client/shared')>();
-    return {
-        ...actual,
-        arenaStorageService: {
-            loadProviderSettings: mockLoadProviderSettings,
-        },
-    };
-});
+/**
+ * Creates a test ArenaService with all factory/agent constructors replaced by
+ * vi.fn() mocks.  The shared singletons (arenaStorageService, httpService) are
+ * spied on in beforeEach so no vi.mock() is needed for @wave-client/shared.
+ */
+function makeService(): ArenaService {
+    return new ArenaService({
+        createProviderFactory: mockCreateProviderFactory as never,
+        createWaveClientAgent: mockCreateWaveClientAgent as never,
+        createWebExpertAgent: mockCreateWebExpertAgent as never,
+    });
+}
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -95,21 +83,24 @@ const defaultProviderSettings = {
 // ---------------------------------------------------------------------------
 
 describe('ArenaService', () => {
-    // Lazily import service after all mocks are registered
-    let ArenaService: typeof import('../../services/ArenaService.js').ArenaService;
+    beforeEach(() => {
+        // Spy on shared singletons in-place so the arena CJS bundle sees the same mock.
+        vi.spyOn(arenaStorageService, 'loadProviderSettings').mockResolvedValue(
+            defaultProviderSettings as never,
+        );
+        vi.spyOn(httpService, 'send').mockResolvedValue({
+            response: { status: 200, statusText: 'OK', headers: {}, data: undefined },
+        } as never);
 
-    beforeEach(async () => {
-        vi.clearAllMocks();
-        mockCreateWaveClientAgent.mockReturnValue(mockWaveClientAgent);
-        mockCreateWebExpertAgent.mockReturnValue(mockWebExpertAgent);
-        mockCreateProviderFactory.mockReturnValue({});
-        mockLoadProviderSettings.mockResolvedValue(defaultProviderSettings);
-
-        // Re-import to get a fresh service instance each time (clears agent cache)
-        vi.resetModules();
+        // Reset DI mock fns each test.
         mockChatFn.mockReset();
-        const mod = await import('../../services/ArenaService.js');
-        ArenaService = mod.ArenaService;
+        mockCreateProviderFactory.mockReset().mockReturnValue({});
+        mockCreateWaveClientAgent.mockReset().mockReturnValue({ chat: mockChatFn });
+        mockCreateWebExpertAgent.mockReset().mockReturnValue({ chat: mockChatFn });
+    });
+
+    afterEach(() => {
+        vi.restoreAllMocks();
     });
 
     // -------------------------------------------------------------------------
@@ -120,7 +111,7 @@ describe('ArenaService', () => {
         it('uses createWaveClientAgent when agent is WAVE_CLIENT', async () => {
             mockChatFn.mockReturnValue(makeChunks([{ content: 'ok', done: true }]));
 
-            const service = new ArenaService();
+            const service = makeService();
             const request = makeRequest({ agent: ARENA_AGENT_IDS.WAVE_CLIENT });
             await service.streamChat(request, () => {});
 
@@ -131,7 +122,7 @@ describe('ArenaService', () => {
         it('uses createWebExpertAgent when agent is WEB_EXPERT', async () => {
             mockChatFn.mockReturnValue(makeChunks([{ content: 'ok', done: true }]));
 
-            const service = new ArenaService();
+            const service = makeService();
             const request = makeRequest({ agent: ARENA_AGENT_IDS.WEB_EXPERT });
             await service.streamChat(request, () => {});
 
@@ -153,7 +144,7 @@ describe('ArenaService', () => {
                 ]),
             );
 
-            const service = new ArenaService();
+            const service = makeService();
             const chunks: ArenaChatStreamChunk[] = [];
             const response = await service.streamChat(makeRequest(), (c) => chunks.push(c));
 
@@ -172,7 +163,7 @@ describe('ArenaService', () => {
                 ]),
             );
 
-            const service = new ArenaService();
+            const service = makeService();
             const chunks: ArenaChatStreamChunk[] = [];
             await service.streamChat(makeRequest(), (c) => chunks.push(c));
 
@@ -195,7 +186,7 @@ describe('ArenaService', () => {
                 ]),
             );
 
-            const service = new ArenaService();
+            const service = makeService();
             const chunks: ArenaChatStreamChunk[] = [];
             const response = await service.streamChat(makeRequest(), (c) => chunks.push(c));
 
@@ -212,7 +203,7 @@ describe('ArenaService', () => {
 
     describe('streamChat — AbortSignal', () => {
         it('emits a single done:true chunk and returns empty content when signal is already aborted', async () => {
-            const service = new ArenaService();
+            const service = makeService();
             const controller = new AbortController();
             controller.abort();
 
@@ -240,7 +231,7 @@ describe('ArenaService', () => {
                 ]),
             );
 
-            const service = new ArenaService();
+            const service = makeService();
             const chunks: ArenaChatStreamChunk[] = [];
             const response = await service.streamChat(makeRequest(), (c) => chunks.push(c));
 
@@ -260,11 +251,11 @@ describe('ArenaService', () => {
 
     describe('streamChat — provider config errors', () => {
         it('rejects with an error when Gemini API key is missing', async () => {
-            mockLoadProviderSettings.mockResolvedValue({
-                gemini: { enabled: true, disabledModels: [] }, // no apiKey
-            });
+            vi.spyOn(arenaStorageService, 'loadProviderSettings').mockResolvedValue({
+                gemini: { enabled: true, disabledModels: [] },
+            } as never);
 
-            const service = new ArenaService();
+            const service = makeService();
             await expect(service.streamChat(makeRequest(), () => {})).rejects.toThrow(/Gemini API key/i);
         });
 
@@ -279,7 +270,7 @@ describe('ArenaService', () => {
                 },
             });
 
-            const service = new ArenaService();
+            const service = makeService();
             await expect(service.streamChat(request, () => {})).rejects.toThrow(/not supported/i);
         });
     });
@@ -294,7 +285,7 @@ describe('ArenaService', () => {
                 .mockReturnValueOnce(makeChunks([{ content: 'first', done: true }]))
                 .mockReturnValueOnce(makeChunks([{ content: 'second', done: true }]));
 
-            const service = new ArenaService();
+            const service = makeService();
             const request = makeRequest();
 
             await service.streamChat(request, () => {});
@@ -324,19 +315,18 @@ describe('ArenaService', () => {
         };
 
         it('returns { valid: true } when Gemini responds ok', async () => {
-            const fetchMock = vi.fn().mockResolvedValue({ ok: true, status: 200 });
-            vi.stubGlobal('fetch', fetchMock);
+            vi.spyOn(httpService, 'send').mockResolvedValue({
+                response: { status: 200, statusText: 'OK', headers: {}, data: undefined },
+            } as never);
 
             const service = new ArenaService();
             const result = await service.validateApiKey('gemini', geminiSettings);
 
             expect(result).toEqual({ valid: true });
-            vi.unstubAllGlobals();
         });
 
-        it('returns { valid: false, error: "API key is empty" } for empty Gemini key without calling fetch', async () => {
-            const fetchMock = vi.fn();
-            vi.stubGlobal('fetch', fetchMock);
+        it('returns { valid: false, error: "API key is empty" } for empty Gemini key without calling httpService.send', async () => {
+            const sendSpy = vi.spyOn(httpService, 'send');
 
             const service = new ArenaService();
             const result = await service.validateApiKey('gemini', {
@@ -345,40 +335,40 @@ describe('ArenaService', () => {
             });
 
             expect(result).toEqual({ valid: false, error: 'API key is empty' });
-            expect(fetchMock).not.toHaveBeenCalled();
-            vi.unstubAllGlobals();
+            expect(sendSpy).not.toHaveBeenCalled();
         });
 
         it('returns { valid: false } when Gemini returns 401', async () => {
-            vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 401 }));
+            vi.spyOn(httpService, 'send').mockResolvedValue({
+                response: { status: 401, statusText: 'Unauthorized', headers: {}, data: undefined },
+            } as never);
 
             const service = new ArenaService();
             const result = await service.validateApiKey('gemini', geminiSettings);
 
             expect(result.valid).toBe(false);
             expect(result.error).toContain('401');
-            vi.unstubAllGlobals();
         });
 
         it('returns { valid: true } when Ollama endpoint is reachable', async () => {
-            vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, status: 200 }));
+            vi.spyOn(httpService, 'send').mockResolvedValue({
+                response: { status: 200, statusText: 'OK', headers: {}, data: undefined },
+            } as never);
 
             const service = new ArenaService();
             const result = await service.validateApiKey('ollama', ollamaSettings);
 
             expect(result).toEqual({ valid: true });
-            vi.unstubAllGlobals();
         });
 
-        it('returns { valid: false } when fetch throws (ECONNREFUSED)', async () => {
-            vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('ECONNREFUSED')));
+        it('returns { valid: false } when httpService.send throws (ECONNREFUSED)', async () => {
+            vi.spyOn(httpService, 'send').mockRejectedValue(new Error('ECONNREFUSED'));
 
             const service = new ArenaService();
             const result = await service.validateApiKey('gemini', geminiSettings);
 
             expect(result.valid).toBe(false);
             expect(result.error).toContain('ECONNREFUSED');
-            vi.unstubAllGlobals();
         });
     });
 
@@ -402,13 +392,14 @@ describe('ArenaService', () => {
         };
 
         it('returns dynamic list from live Ollama /api/tags when reachable', async () => {
-            vi.stubGlobal(
-                'fetch',
-                vi.fn().mockResolvedValue({
-                    ok: true,
-                    json: async () => ({ models: [{ name: 'llama3' }, { name: 'mistral' }] }),
-                }),
-            );
+            vi.spyOn(httpService, 'send').mockResolvedValue({
+                response: {
+                    status: 200,
+                    statusText: 'OK',
+                    headers: {},
+                    data: { models: [{ name: 'llama3' }, { name: 'mistral' }] },
+                },
+            } as never);
 
             const service = new ArenaService();
             const models = await service.getAvailableModels('ollama', ollamaSettings);
@@ -419,29 +410,27 @@ describe('ArenaService', () => {
             expect(models).toContainEqual(
                 expect.objectContaining({ id: 'mistral', label: 'mistral', provider: 'ollama' }),
             );
-            vi.unstubAllGlobals();
         });
 
-        it('falls back to static list when Ollama fetch fails', async () => {
-            vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('ECONNREFUSED')));
+        it('falls back to static list when Ollama httpService.send throws', async () => {
+            vi.spyOn(httpService, 'send').mockRejectedValue(new Error('ECONNREFUSED'));
 
             const service = new ArenaService();
             const models = await service.getAvailableModels('ollama', ollamaSettings);
 
             expect(models).toEqual(getModelsForProvider('ollama'));
-            vi.unstubAllGlobals();
         });
 
-        it('returns static list for Gemini (no live fetch)', async () => {
-            const fetchMock = vi.fn();
-            vi.stubGlobal('fetch', fetchMock);
+        it('returns static list for Gemini (no httpService.send call)', async () => {
+            const sendSpy = vi.spyOn(httpService, 'send');
 
             const service = new ArenaService();
             const models = await service.getAvailableModels('gemini', geminiSettings);
 
             expect(models).toEqual(getModelsForProvider('gemini'));
-            expect(fetchMock).not.toHaveBeenCalled();
-            vi.unstubAllGlobals();
+            expect(sendSpy).not.toHaveBeenCalled();
         });
     });
 });
+
+

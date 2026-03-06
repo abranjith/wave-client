@@ -36,13 +36,14 @@ export function createGeminiProvider(config: GeminiProviderConfig): BaseChatMode
     throw new Error('Gemini API key is required');
   }
 
-  const chatModel: BaseChatModel = new ChatGoogleGenerativeAI({
+  // Cast via unknown to avoid TS2589 (excessively deep type instantiation from @langchain/google-genai generics)
+  const chatModel = new ChatGoogleGenerativeAI({
     apiKey,
     model,
     temperature,
     maxOutputTokens,
     streaming,
-  });
+  }) as unknown as BaseChatModel;
 
   return chatModel;
 }
