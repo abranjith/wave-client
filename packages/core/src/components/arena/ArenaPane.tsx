@@ -11,7 +11,6 @@
 import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import { Settings, Sparkles, ArrowLeft, PanelRight } from 'lucide-react';
 import { cn } from '../../utils/styling';
-import { PrimaryButton } from '../ui/PrimaryButton';
 import { SecondaryButton } from '../ui/SecondaryButton';
 import { useArenaAdapter, useNotificationAdapter } from '../../hooks/useAdapter';
 import useAppStateStore from '../../hooks/store/useAppStateStore';
@@ -213,11 +212,20 @@ export function ArenaPane({ className }: ArenaPaneProps): React.ReactElement {
       if (result.isOk) {
         addArenaSession(session);
         setArenaActiveSessionId(session.id);
+        setArenaView('chat');
       } else {
         notification.showNotification('error', `Failed to create session: ${result.error}`);
       }
     },
-    [isCreatingSession, arenaAdapter, addArenaSession, setArenaActiveSessionId, selectArenaAgent, notification],
+    [
+      isCreatingSession,
+      arenaAdapter,
+      addArenaSession,
+      setArenaActiveSessionId,
+      setArenaView,
+      selectArenaAgent,
+      notification,
+    ],
   );
 
   const handleDeleteSession = useCallback(
@@ -240,9 +248,10 @@ export function ArenaPane({ className }: ArenaPaneProps): React.ReactElement {
       if (session) {
         selectArenaAgent(session.agent);
         setArenaActiveSessionId(sessionId);
+        setArenaView('chat');
       }
     },
-    [arenaSessions, selectArenaAgent, setArenaActiveSessionId],
+    [arenaSessions, selectArenaAgent, setArenaActiveSessionId, setArenaView],
   );
 
   const handleSendMessage = useCallback(
@@ -428,9 +437,14 @@ export function ArenaPane({ className }: ArenaPaneProps): React.ReactElement {
 
   /** Navigate back to agent selection */
   const handleBackToAgentSelect = useCallback(() => {
+    activeStreamRef.current?.cancel();
+    activeStreamRef.current = null;
+    setArenaIsStreaming(false);
+
+    setArenaMessages([]);
     setArenaView('select-agent');
     setArenaActiveSessionId(null);
-  }, [setArenaView, setArenaActiveSessionId]);
+  }, [setArenaIsStreaming, setArenaMessages, setArenaView, setArenaActiveSessionId]);
 
   // ============================================================================
   // Derived state
@@ -474,16 +488,6 @@ export function ArenaPane({ className }: ArenaPaneProps): React.ReactElement {
               <Sparkles size={14} className="text-blue-500" />
               Wave Arena
             </h2>
-            {arenaSelectedAgent && arenaView === 'chat' && (
-              <PrimaryButton
-                onClick={() => handleSelectAgent(arenaSelectedAgent)}
-                disabled={isCreatingSession}
-                size="sm"
-                className="ml-4 text-xs"
-              >
-                New Chat
-              </PrimaryButton>
-            )}
           </div>
 
           <div className="flex items-center gap-1">
@@ -523,7 +527,7 @@ export function ArenaPane({ className }: ArenaPaneProps): React.ReactElement {
             onSave={handleSaveAdvancedSettings}
             onCancel={() => setArenaView(arenaSelectedAgent ? 'chat' : 'select-agent')}
           />
-        ) : !arenaSelectedAgent || arenaView === 'select-agent' ? (
+        ) : arenaView === 'select-agent' ? (
           <ArenaWelcomeScreen onSelectAgent={handleSelectAgent} />
         ) : activeSession ? (
           <>

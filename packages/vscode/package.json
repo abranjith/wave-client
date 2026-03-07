@@ -1,5 +1,5 @@
 {
-  "name": "@wave-client/vscode",
+  "name": "wave-client-vscode",
   "displayName": "Wave Client",
   "description": "A modern, intuitive REST client for VS Code using React and Tailwind CSS",
   "version": "0.0.1",
@@ -12,7 +12,7 @@
     "Other"
   ],
   "activationEvents": [
-    "onStartupFinished"
+    "onCommand:waveclient.open"
   ],
   "main": "dist/extension.js",
   "contributes": {
@@ -26,8 +26,8 @@
     "keybindings": [
       {
         "command": "waveclient.open",
-        "key": "ctrl+shift+w",
-        "mac": "cmd+shift+w"
+        "key": "ctrl+alt+w",
+        "mac": "cmd+alt+w"
       }
     ]
   },

@@ -6,32 +6,66 @@
  */
 
 import * as vscode from 'vscode';
-import { MessageHandler } from './handlers';
-import { securityService } from './services';
+import { securityService } from './services/SecurityService';
+
+let outputChannel: vscode.OutputChannel | undefined;
+
+function log(message: string): void {
+	outputChannel?.appendLine(message);
+}
 
 /**
  * Activates the extension.
  * Called when the extension is first activated.
  */
 export function activate(context: vscode.ExtensionContext) {
-	console.log('Congratulations, your extension "wave-client" is now active!');
+	outputChannel = vscode.window.createOutputChannel('Wave Client');
+	context.subscriptions.push(outputChannel);
+	log('Activating Wave Client extension...');
 
-	// Initialize SecurityService with VS Code's SecretStorage
-	securityService.initialize(context.secrets);
+	try {
+		// Initialize SecurityService with VS Code's SecretStorage
+		securityService.initialize(context.secrets);
 
-	// Register the main command to open Wave Client
-	const openDisposable = vscode.commands.registerCommand('waveclient.open', () => {
-		createWebviewPanel(context);
-	});
+		// Register the main command to open Wave Client
+		const openDisposable = vscode.commands.registerCommand('waveclient.open', async () => {
+			log('Command received: waveclient.open');
+			try {
+				await createWebviewPanel(context);
+			} catch (error) {
+				const message = error instanceof Error ? error.message : String(error);
+				log(`Failed to open Wave Client webview: ${message}`);
+				vscode.window.showErrorMessage(`Wave Client failed to open: ${message}`);
+			}
+		});
 
-	context.subscriptions.push(openDisposable);
+		context.subscriptions.push(openDisposable);
+	} catch (error) {
+		const message = error instanceof Error ? error.message : String(error);
+		log(`Activation failed: ${message}`);
+		vscode.window.showErrorMessage(`Wave Client activation failed: ${message}`);
+		throw error;
+	}
 }
 
 /**
  * Creates the webview panel for the Wave Client UI.
  * @param context The extension context
  */
-function createWebviewPanel(context: vscode.ExtensionContext): vscode.WebviewPanel {
+async function createWebviewPanel(context: vscode.ExtensionContext): Promise<vscode.WebviewPanel> {
+	const webviewScriptPath = vscode.Uri.joinPath(context.extensionUri, 'dist', 'webview', 'webview.js');
+	const webviewCssPath = vscode.Uri.joinPath(context.extensionUri, 'dist', 'webview', 'index.css');
+
+	try {
+		await vscode.workspace.fs.stat(webviewScriptPath);
+		await vscode.workspace.fs.stat(webviewCssPath);
+	} catch {
+		const message = 'Webview assets were not found in dist/webview. Run `pnpm --filter @wave-client/vscode build` and try again.';
+		log(message);
+		vscode.window.showErrorMessage(`Wave Client: ${message}`);
+		throw new Error(message);
+	}
+
 	const panel = vscode.window.createWebviewPanel(
 		'waveClient',
 		'Wave Client',
@@ -39,13 +73,15 @@ function createWebviewPanel(context: vscode.ExtensionContext): vscode.WebviewPan
 		{
 			enableScripts: true,
 			retainContextWhenHidden: true,
+			localResourceRoots: [vscode.Uri.joinPath(context.extensionUri, 'dist')],
 		}
 	);
 
 	// Set up the webview HTML content
 	panel.webview.html = getWebviewContent(panel.webview, context.extensionUri);
 
-	// Create message handler for webview communication
+	// Defer heavy handler imports until the panel is explicitly opened.
+	const { MessageHandler } = await import('./handlers/MessageHandler');
 	const messageHandler = new MessageHandler(panel);
 
 	// Listen for messages from the webview

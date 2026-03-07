@@ -7,9 +7,9 @@
   "private": true,
   "scripts": {
     "build": "pnpm turbo build",
-    "compile": "pnpm --filter @wave-client/vscode run compile",
-    "watch": "pnpm --filter @wave-client/vscode watch",
-    "package": "pnpm --filter @wave-client/vscode run package",
+    "compile": "pnpm --filter wave-client-vscode run compile",
+    "watch": "pnpm --filter wave-client-vscode watch",
+    "package": "pnpm --filter wave-client-vscode run package",
     "lint": "eslint packages",
     "test": "pnpm turbo test",
     "test:coverage": "pnpm turbo test:coverage",
@@ -19,7 +19,7 @@
     "build:core": "pnpm --filter @wave-client/core build",
     "build:shared": "pnpm --filter @wave-client/shared build",
     "build:server": "pnpm --filter @wave-client/server build",
-    "build:vscode": "pnpm --filter @wave-client/vscode build",
+    "build:vscode": "pnpm --filter wave-client-vscode build",
     "build:web": "pnpm --filter @wave-client/web build"
   },
   "devDependencies": {
