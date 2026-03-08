@@ -8,18 +8,18 @@
  *   3. Settings — advanced settings (max sessions, streaming, etc.)
  */
 
-import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Settings, Sparkles, ArrowLeft, PanelRight } from 'lucide-react';
 import { cn } from '../../utils/styling';
 import { SecondaryButton } from '../ui/SecondaryButton';
 import { useArenaAdapter, useNotificationAdapter } from '../../hooks/useAdapter';
 import useAppStateStore from '../../hooks/store/useAppStateStore';
-import { createArenaSession, createArenaMessage, buildDefaultSources } from '../../hooks/store/createArenaSlice';
-import { createSessionMetadata, getAgentDefinition, mergeReferences } from '../../config/arenaConfig';
-import type { ArenaAgentId, ArenaReference } from '../../config/arenaConfig';
-import type { ArenaProviderSettingsMap } from '../../config/arenaConfig';
-import type { ArenaCommandId, ArenaSettings as ArenaSettingsType, ArenaView } from '../../types/arena';
+import { createArenaMessage } from '../../hooks/store/createArenaSlice';
+import { createSessionMetadata, mergeReferences, DEFAULT_ARENA_SETTINGS } from '../../config/arenaConfig';
+import type { ArenaAgentId, ArenaReference, ArenaProviderSettingsMap, ArenaSettings as ArenaSettingsConfig } from '../../config/arenaConfig';
+import type { ArenaCommandId } from '../../types/arena';
 import type { StreamHandle } from '../../types/arena';
+import type { ArenaAppSettings } from '../../hooks/store/createSettingsSlice';
 import ArenaChatView from './ArenaChatView';
 import ArenaChatToolbar from './ArenaChatToolbar';
 import ArenaSettings from './ArenaSettings';
@@ -44,7 +44,6 @@ export function ArenaPane({ className }: ArenaPaneProps): React.ReactElement {
   const notification = useNotificationAdapter();
   
   // Local state
-  const [isCreatingSession, setIsCreatingSession] = useState(false);
   const [showRightPane, setShowRightPane] = useState(true);
 
   /** Ref to the active StreamHandle so we can cancel from anywhere. */
@@ -55,34 +54,29 @@ export function ArenaPane({ className }: ArenaPaneProps): React.ReactElement {
     arenaSessions,
     arenaActiveSessionId,
     arenaMessages,
-    arenaSettings,
     arenaIsLoading,
     arenaIsStreaming,
     arenaStreamingContent,
-    arenaError,
     arenaSelectedAgent,
     arenaView,
     arenaActiveSources,
     arenaSessionMetadata,
     arenaReferences,
-    arenaProviderSettings,
+    settings,
+    updateArenaSettings: updateArenaAppSettings,
     setArenaSessions,
-    addArenaSession,
     removeArenaSession,
+    startNewArenaSession,
     setArenaActiveSessionId,
     setArenaMessages,
     addArenaMessage,
     updateArenaMessage,
-    setArenaSettings,
-    updateArenaSettings,
-    setArenaProviderSettings,
     setArenaIsLoading,
     setArenaIsStreaming,
     setArenaStreamingContent,
     appendArenaStreamingContent,
     setArenaStreamingMessageId,
     setArenaError,
-    clearArenaError,
     selectArenaAgent,
     setArenaView,
     setArenaActiveSources,
@@ -90,6 +84,19 @@ export function ArenaPane({ className }: ArenaPaneProps): React.ReactElement {
     updateArenaSessionMetadata,
     setArenaReferences,
   } = useAppStateStore();
+
+  // Derive ArenaSettings (arenaConfig format) from the settings slice for
+  // downstream components (ArenaChatToolbar, ArenaSettings panel, chat requests).
+  const arenaSettings = useMemo<ArenaSettingsConfig>(() => ({
+    provider: settings.arena.defaultProvider,
+    model: settings.arena.defaultModel,
+    maxSessions: settings.arena.maxSessions,
+    maxMessagesPerSession: settings.arena.maxMessagesPerSession,
+    maxDocumentSize: DEFAULT_ARENA_SETTINGS.maxDocumentSize,
+    enableStreaming: settings.arena.enableStreaming,
+  }), [settings.arena]);
+
+  const arenaProviderSettings = settings.arena.providers;
 
   // ============================================================================
   // Effects
@@ -114,7 +121,14 @@ export function ArenaPane({ className }: ArenaPaneProps): React.ReactElement {
       }
 
       if (settingsResult.isOk) {
-        setArenaSettings(settingsResult.value);
+        const s = settingsResult.value;
+        updateArenaAppSettings({
+          defaultProvider: s.provider,
+          defaultModel: s.model || '',
+          enableStreaming: s.enableStreaming,
+          maxSessions: s.maxSessions,
+          maxMessagesPerSession: s.maxMessagesPerSession,
+        });
       }
 
       if (refsResult.isOk) {
@@ -122,14 +136,14 @@ export function ArenaPane({ className }: ArenaPaneProps): React.ReactElement {
       }
 
       if (providerSettingsResult.isOk) {
-        setArenaProviderSettings(providerSettingsResult.value);
+        updateArenaAppSettings({ providers: providerSettingsResult.value });
       }
 
       setArenaIsLoading(false);
     }
 
     loadData();
-  }, [arenaAdapter, setArenaSessions, setArenaSettings, setArenaReferences, setArenaProviderSettings, setArenaIsLoading, setArenaError]);
+  }, [arenaAdapter, setArenaSessions, updateArenaAppSettings, setArenaReferences, setArenaIsLoading, setArenaError]);
 
   // Load messages when active session changes
   useEffect(() => {
@@ -197,35 +211,20 @@ export function ArenaPane({ className }: ArenaPaneProps): React.ReactElement {
 
   /** Called from the ArenaAgentSelect page */
   const handleSelectAgent = useCallback(
-    async (agentId: ArenaAgentId) => {
-      selectArenaAgent(agentId);
+    (agentId: ArenaAgentId) => {
+      // Atomically create the session, add it to the store, and switch to
+      // chat view in a single store update — the UI transitions immediately.
+      const session = startNewArenaSession(agentId);
 
-      // Automatically create a new session for the selected agent
-      if (isCreatingSession) return;
-      setIsCreatingSession(true);
-
-      const session = createArenaSession(agentId);
-      const result = await arenaAdapter.saveSession(session);
-
-      setIsCreatingSession(false);
-
-      if (result.isOk) {
-        addArenaSession(session);
-        setArenaActiveSessionId(session.id);
-        setArenaView('chat');
-      } else {
-        notification.showNotification('error', `Failed to create session: ${result.error}`);
-      }
+      // Fire-and-forget persist — the session is already in the store so a
+      // failure only means it won't survive a reload.
+      arenaAdapter.saveSession(session).then((result) => {
+        if (result.isErr) {
+          console.warn('Failed to persist session:', result.error);
+        }
+      });
     },
-    [
-      isCreatingSession,
-      arenaAdapter,
-      addArenaSession,
-      setArenaActiveSessionId,
-      setArenaView,
-      selectArenaAgent,
-      notification,
-    ],
+    [arenaAdapter, startNewArenaSession],
   );
 
   const handleDeleteSession = useCallback(
@@ -302,6 +301,11 @@ export function ArenaPane({ className }: ArenaPaneProps): React.ReactElement {
         activeStreamRef.current = handle;
 
         handle.onChunk((chunk) => {
+          // Heartbeat: backend acknowledged the request. No content to append.
+          // The safety timeout in vsCodeArenaAdapter already resets automatically.
+          if (chunk.heartbeat) {
+            return;
+          }
           if (chunk.error) {
             // Error chunks carry the error string, not content — display separately
             updateArenaMessage(assistantMessage.id, {
@@ -403,25 +407,38 @@ export function ArenaPane({ className }: ArenaPaneProps): React.ReactElement {
 
   /** Toolbar settings changes (provider / model / api key) */
   const handleToolbarSettingsChange = useCallback(
-    async (updates: Partial<ArenaSettingsType>) => {
+    async (updates: Partial<ArenaSettingsConfig>) => {
       const newSettings = { ...arenaSettings, ...updates };
-      updateArenaSettings(updates);
+      // Map to ArenaAppSettings keys for the settings slice
+      const appUpdates: Partial<ArenaAppSettings> = {};
+      if (updates.provider !== undefined) appUpdates.defaultProvider = updates.provider;
+      if (updates.model !== undefined) appUpdates.defaultModel = updates.model;
+      if (updates.enableStreaming !== undefined) appUpdates.enableStreaming = updates.enableStreaming;
+      if (updates.maxSessions !== undefined) appUpdates.maxSessions = updates.maxSessions;
+      if (updates.maxMessagesPerSession !== undefined) appUpdates.maxMessagesPerSession = updates.maxMessagesPerSession;
+      updateArenaAppSettings(appUpdates);
       // Persist
       await arenaAdapter.saveSettings(newSettings);
     },
-    [arenaSettings, updateArenaSettings, arenaAdapter],
+    [arenaSettings, updateArenaAppSettings, arenaAdapter],
   );
 
   const handleSaveAdvancedSettings = useCallback(
-    async (newSettings: ArenaSettingsType, newProviderSettings: ArenaProviderSettingsMap) => {
+    async (newSettings: ArenaSettingsConfig, newProviderSettings: ArenaProviderSettingsMap) => {
       const [settingsResult, providerResult] = await Promise.all([
         arenaAdapter.saveSettings(newSettings),
         arenaAdapter.saveProviderSettings(newProviderSettings),
       ]);
 
       if (settingsResult.isOk && providerResult.isOk) {
-        setArenaSettings(newSettings);
-        setArenaProviderSettings(newProviderSettings);
+        updateArenaAppSettings({
+          defaultProvider: newSettings.provider,
+          defaultModel: newSettings.model || '',
+          enableStreaming: newSettings.enableStreaming,
+          maxSessions: newSettings.maxSessions,
+          maxMessagesPerSession: newSettings.maxMessagesPerSession,
+          providers: newProviderSettings,
+        });
         notification.showNotification('success', 'Settings saved');
         setArenaView('chat');
       } else {
@@ -432,7 +449,7 @@ export function ArenaPane({ className }: ArenaPaneProps): React.ReactElement {
         notification.showNotification('error', `Failed to save settings: ${errors}`);
       }
     },
-    [arenaAdapter, setArenaSettings, setArenaProviderSettings, setArenaView, notification],
+    [arenaAdapter, updateArenaAppSettings, setArenaView, notification],
   );
 
   /** Navigate back to agent selection */
@@ -472,7 +489,7 @@ export function ArenaPane({ className }: ArenaPaneProps): React.ReactElement {
         {/* Top bar — always visible */}
         <div className="flex items-center justify-between px-4 py-2 border-b border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900">
           <div className="flex items-center gap-2">
-            {arenaView === 'chat' && arenaSelectedAgent && (
+            {arenaView === 'chat' && arenaActiveSessionId && (
               <SecondaryButton
                 onClick={handleBackToAgentSelect}
                 size="icon"

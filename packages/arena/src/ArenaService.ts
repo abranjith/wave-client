@@ -25,7 +25,7 @@ const OLLAMA_DEFAULT_BASE_URL = 'http://localhost:11434';
 
 /** Minimal interface for a cached agent instance. */
 interface CachedAgent {
-    chat(history: ChatMessage[], message: string): AsyncGenerator<ChatChunk>;
+    chat(history: ChatMessage[], message: string, signal?: AbortSignal): AsyncGenerator<ChatChunk>;
 }
 
 /**
@@ -89,12 +89,15 @@ export class ArenaService {
      * Steps:
      *  1. Resolve `LLMProviderConfig` from stored provider settings + request.
      *  2. Create (or retrieve cached) agent.
-     *  3. Drive the `AsyncGenerator<ChatChunk>` render loop, emitting each chunk
-     *     via `onChunk`.
-     *  4. Return the accumulated `ArenaChatResponse` when streaming is complete.
+     *  3. Emit a heartbeat chunk immediately so the caller gets instant feedback.
+     *  4. Drive the `AsyncGenerator<ChatChunk>` render loop, emitting each chunk
+     *     via `onChunk`. A 90 s overall stream timeout ensures `onChunk` is always
+     *     called at least once (heartbeat) and the stream always terminates.
+     *  5. Return the accumulated `ArenaChatResponse` when streaming is complete.
      *
      * @param request  The chat request from the caller.
-     * @param onChunk  Callback invoked for every streamed chunk.
+     * @param onChunk  Callback invoked for every streamed chunk (always called at
+     *                 least once with a heartbeat chunk).
      * @param signal   Optional `AbortSignal`; iteration stops when aborted.
      * @returns        The fully accumulated `ArenaChatResponse`.
      * @throws         If the provider is unsupported or a required API key is missing.
@@ -105,11 +108,20 @@ export class ArenaService {
         signal?: AbortSignal,
     ): Promise<ArenaChatResponse> {
         const providerConfig = await this.buildProviderConfig(request);
+
+        console.info('[Arena] streamChat start', {
+            provider: providerConfig.provider,
+            model: (providerConfig as { model?: string }).model,
+            agent: request.agent,
+            sessionId: request.sessionId,
+        });
+
         const llm = this._createProviderFactory(providerConfig);
         const agent = await this.getOrCreateAgent(request, llm);
         const chatHistory = this.convertHistory(request.history);
         const messageId = crypto.randomUUID();
         let accContent = '';
+        let chunkCount = 0;
 
         // Handle already-aborted signal before entering the loop
         if (signal?.aborted) {
@@ -117,43 +129,69 @@ export class ArenaService {
             return { messageId, content: '' };
         }
 
-        const gen = agent.chat(chatHistory, request.message);
+        const gen = agent.chat(chatHistory, request.message, signal);
         let finished = false;
 
-        for await (const chunk of gen) {
-            if (signal?.aborted) {
-                break;
-            }
+        // Emit a heartbeat before entering the loop so the caller has instant feedback.
+        onChunk({ messageId, content: '', done: false, heartbeat: true });
+        chunkCount++;
 
-            if (chunk.error) {
-                // Emit the error in a dedicated field with empty content delta.
-                // The UI renders error text separately — not concatenated into the
-                // message body — so we must NOT send the accumulated content here.
-                onChunk({ messageId, content: '', error: chunk.error, done: true });
-                finished = true;
-                break;
-            }
+        // 90 s overall stream timeout — fires if the agent generator stalls.
+        let streamTimedOut = false;
+        const streamTimer = setTimeout(() => {
+            streamTimedOut = true;
+            console.warn('[Arena] stream timeout after 90 s', { sessionId: request.sessionId });
+            onChunk({ messageId, content: '', error: 'Request timed out after 90 s', done: true });
+            chunkCount++;
+        }, 90_000);
 
-            // Tool-call-only chunks carry no displayable text; skip silently.
-            if (chunk.toolCall) {
-                continue;
-            }
+        try {
+            for await (const chunk of gen) {
+                if (signal?.aborted || streamTimedOut) {
+                    break;
+                }
 
-            accContent += chunk.content;
-            onChunk({ messageId, content: chunk.content, done: chunk.done });
+                if (chunk.error) {
+                    // Emit the error in a dedicated field with empty content delta.
+                    // The UI renders error text separately — not concatenated into the
+                    // message body — so we must NOT send the accumulated content here.
+                    onChunk({ messageId, content: '', error: chunk.error, done: true });
+                    chunkCount++;
+                    finished = true;
+                    break;
+                }
 
-            if (chunk.done) {
-                finished = true;
-                break;
+                // Tool-call-only chunks carry no displayable text; skip silently.
+                if (chunk.toolCall) {
+                    continue;
+                }
+
+                accContent += chunk.content;
+                onChunk({ messageId, content: chunk.content, done: chunk.done });
+                chunkCount++;
+
+                if (chunk.done) {
+                    finished = true;
+                    break;
+                }
             }
+        } finally {
+            clearTimeout(streamTimer);
         }
 
-        // If aborted mid-stream, emit a terminal done chunk with empty delta.
+        // If aborted mid-stream (and not timed out), emit a terminal done chunk.
         // The UI already has the accumulated text from prior incremental chunks;
         // the final ArenaChatResponse (returned below) carries the full content.
-        if (!finished) {
+        if (!finished && !streamTimedOut) {
             onChunk({ messageId, content: '', done: true });
+            chunkCount++;
         }
+
+        console.info('[Arena] streamChat complete', {
+            sessionId: request.sessionId,
+            chunkCount,
+            contentLength: accContent.length,
+        });
 
         return { messageId, content: accContent };
     }

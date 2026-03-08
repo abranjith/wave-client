@@ -52,6 +52,13 @@ export interface ArenaInputBarProps {
   placeholder?: string;
   /** Additional CSS classes */
   className?: string;
+  /** Text to pre-populate the input (from example question chips) */
+  suggestedInput?: string;
+  /**
+   * Increment this key each time `suggestedInput` is set so the same
+   * suggestion can be applied twice in a row (avoids stale dependency trap).
+   */
+  suggestKey?: number;
 }
 
 // ============================================================================
@@ -76,6 +83,8 @@ export function ArenaInputBar({
   isStreaming = false,
   placeholder = 'Ask anything…',
   className,
+  suggestedInput,
+  suggestKey,
 }: ArenaInputBarProps): React.ReactElement {
   const [input, setInput] = useState('');
   const [showCommands, setShowCommands] = useState(false);
@@ -84,6 +93,21 @@ export function ArenaInputBar({
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const agentDef = agentId ? getAgentDefinition(agentId) : null;
+
+  // Sync suggested input into the textarea whenever suggestKey increments
+  useEffect(() => {
+    if (suggestedInput) {
+      setInput(suggestedInput);
+      // Reset textarea auto-height
+      if (textareaRef.current) {
+        textareaRef.current.style.height = 'auto';
+        textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, 200)}px`;
+        textareaRef.current.focus();
+      }
+    }
+  // suggestKey intentionally included so clicking the same chip twice re-fires the effect
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [suggestKey]);
 
   // ---- Filter commands based on input after "/" --------------------
   const filteredCommands = useMemo(() => {

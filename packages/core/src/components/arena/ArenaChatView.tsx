@@ -4,8 +4,8 @@
  * Displays the chat interface with messages and input.
  */
 
-import React, { useRef, useEffect, useCallback } from 'react';
-import { Globe, Zap, User, Bot, ExternalLink, Square, AlertCircle, Cpu } from 'lucide-react';
+import React, { useRef, useEffect, useCallback, useState } from 'react';
+import { Globe, Zap, User, Bot, ExternalLink, Square, AlertCircle, Cpu, HelpCircle } from 'lucide-react';
 import { cn } from '../../utils/styling';
 import type { ArenaSession, ArenaMessage, ArenaMessageSource, ArenaCommandId, ArenaChatBlock } from '../../types/arena';
 import { ARENA_COMMAND_DEFINITIONS } from '../../types/arena';
@@ -65,8 +65,14 @@ export function ArenaChatView({
   // Memoised block callbacks for message rendering
   const mergedBlockCallbacks: BlockCallbacks = useCallback(() => blockCallbacks ?? {}, [blockCallbacks])() as unknown as BlockCallbacks;
 
-  // Get commands for this agent
-  const agentCommands = ARENA_COMMAND_DEFINITIONS.filter(cmd => cmd.agent === session.agent);
+  // Get commands for this agent, including universal commands (e.g. /help)
+  const agentCommands = ARENA_COMMAND_DEFINITIONS.filter(
+    cmd => cmd.agent === session.agent || cmd.universal === true,
+  );
+
+  // Suggested input state — populated when user clicks an example question chip
+  const [suggestedInput, setSuggestedInput] = useState('');
+  const [suggestKey, setSuggestKey] = useState(0);
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
@@ -97,7 +103,12 @@ export function ArenaChatView({
           <ArenaWelcomeMessage
             agentName={agentName}
             agentIcon={<AgentIcon size={24} className={agentColor} />}
+            agentId={session.agent}
             commands={agentCommands}
+            onExampleClick={(q) => {
+              setSuggestedInput(q);
+              setSuggestKey(k => k + 1);
+            }}
             onCommandClick={(cmd) => onSendMessage(`${cmd} `)}
           />
         )}
@@ -124,6 +135,8 @@ export function ArenaChatView({
         isLoading={isLoading}
         isStreaming={isStreaming}
         placeholder={`Ask ${agentName}…`}
+        suggestedInput={suggestedInput}
+        suggestKey={suggestKey}
       />
     </div>
   );
@@ -133,19 +146,44 @@ export function ArenaChatView({
 // Welcome Message
 // ============================================================================
 
+// ============================================================================
+// Agent example questions shown on the welcome screen
+// ============================================================================
+
+const AGENT_EXAMPLE_QUESTIONS: Record<string, readonly string[]> = {
+  [ARENA_AGENT_IDS.WAVE_CLIENT]: [
+    'How do I set up an environment for staging?',
+    'Create a new collection from an OpenAPI spec',
+    'Run my test suite and show the results',
+  ],
+  [ARENA_AGENT_IDS.WEB_EXPERT]: [
+    'Explain HTTP/2 server push and when to use it',
+    'How does OAuth 2.0 PKCE differ from the standard code flow?',
+    'Compare REST vs GraphQL for mobile clients',
+  ],
+};
+
 interface ArenaWelcomeMessageProps {
   agentName: string;
   agentIcon: React.ReactNode;
+  agentId: string;
   commands: typeof ARENA_COMMAND_DEFINITIONS;
+  onExampleClick: (question: string) => void;
   onCommandClick: (command: string) => void;
 }
 
 function ArenaWelcomeMessage({
   agentName,
   agentIcon,
+  agentId,
   commands,
+  onExampleClick,
   onCommandClick,
 }: ArenaWelcomeMessageProps): React.ReactElement {
+  const examples = AGENT_EXAMPLE_QUESTIONS[agentId] ?? [];
+  // Only show command chips for wave-client (web-expert has no agent-specific commands)
+  const agentSpecificCommands = commands.filter(cmd => !cmd.universal);
+
   return (
     <div className="text-center py-8">
       <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-slate-100 dark:bg-slate-800 mb-4">
@@ -154,25 +192,42 @@ function ArenaWelcomeMessage({
       <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100 mb-2">
         Chat with {agentName}
       </h3>
-      <p className="text-sm text-slate-500 dark:text-slate-400 max-w-md mx-auto mb-6">
-        {agentName === 'Web Expert'
-          ? 'Ask questions about HTTP, REST, WebSocket, GraphQL, gRPC, and other web technologies.'
-          : 'Get help with Wave Client features, collections, environments, flows, and tests.'}
-      </p>
 
-      {/* Quick Commands */}
-      <div className="flex flex-wrap justify-center gap-2">
-        {commands.slice(0, 4).map((cmd) => (
-          <SecondaryButton
-            key={cmd.id}
-            size="sm"
-            onClick={() => onCommandClick(cmd.id)}
-            className="rounded-full font-mono"
-          >
-            {cmd.id}
-          </SecondaryButton>
-        ))}
-      </div>
+      {/* Example question chips */}
+      {examples.length > 0 && (
+        <div className="flex flex-col items-center gap-2 mb-6">
+          {examples.map((question) => (
+            <button
+              key={question}
+              type="button"
+              onClick={() => onExampleClick(question)}
+              className="inline-flex items-center gap-2 px-4 py-2 text-sm rounded-full border border-slate-200 dark:border-slate-600 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors max-w-sm text-left"
+            >
+              <HelpCircle size={14} className="flex-shrink-0 text-slate-400" />
+              {question}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* Quick Commands — wave-client only */}
+      {agentSpecificCommands.length > 0 && (
+        <div className="mt-2">
+          <p className="text-xs text-slate-400 uppercase tracking-wide font-semibold mb-2">Quick commands</p>
+          <div className="flex flex-wrap justify-center gap-2">
+            {agentSpecificCommands.slice(0, 4).map((cmd) => (
+              <SecondaryButton
+                key={cmd.id}
+                size="sm"
+                onClick={() => onCommandClick(cmd.id)}
+                className="rounded-full font-mono"
+              >
+                {cmd.id}
+              </SecondaryButton>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

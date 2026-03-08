@@ -33,8 +33,8 @@ function parseMarkdown(markdown: string): React.ReactNode[] {
     if (listType && listItems.length > 0) {
       const Tag = listType;
       const className = listType === 'ul'
-        ? 'list-disc list-inside space-y-0.5 mb-2'
-        : 'list-decimal list-inside space-y-0.5 mb-2';
+        ? 'list-disc pl-5 space-y-1 mb-3 text-[var(--vscode-foreground)]'
+        : 'list-decimal pl-5 space-y-1 mb-3 text-[var(--vscode-foreground)]';
       elements.push(
         <Tag key={`list-${elements.length}`} className={className}>
           {listItems}
@@ -90,11 +90,11 @@ function parseMarkdown(markdown: string): React.ReactNode[] {
       const level = headingMatch[1].length;
       const text = headingMatch[2];
       const sizes: Record<number, string> = {
-        1: 'text-lg font-bold mt-3 mb-1',
-        2: 'text-base font-bold mt-2.5 mb-1',
-        3: 'text-sm font-semibold mt-2 mb-0.5',
-        4: 'text-sm font-semibold mt-1.5 mb-0.5',
-        5: 'text-xs font-semibold mt-1 mb-0.5',
+        1: 'text-lg font-bold mt-4 mb-2 pb-1 border-b border-[var(--vscode-widget-border)]',
+        2: 'text-base font-bold mt-3 mb-1.5 pb-0.5 border-b border-[var(--vscode-widget-border)]',
+        3: 'text-sm font-semibold mt-2.5 mb-1',
+        4: 'text-sm font-semibold mt-2 mb-0.5',
+        5: 'text-xs font-semibold mt-1.5 mb-0.5',
         6: 'text-xs font-semibold mt-1 mb-0.5',
       };
       elements.push(
@@ -113,7 +113,7 @@ function parseMarkdown(markdown: string): React.ReactNode[] {
         listType = 'ul';
       }
       listItems.push(
-        <li key={`li-${i}`} className="text-[var(--vscode-foreground)]">
+        <li key={`li-${i}`} className="leading-relaxed">
           {renderInline(ulMatch[2])}
         </li>,
       );
@@ -128,7 +128,7 @@ function parseMarkdown(markdown: string): React.ReactNode[] {
         listType = 'ol';
       }
       listItems.push(
-        <li key={`li-${i}`} className="text-[var(--vscode-foreground)]">
+        <li key={`li-${i}`} className="leading-relaxed">
           {renderInline(olMatch[2])}
         </li>,
       );
@@ -142,7 +142,7 @@ function parseMarkdown(markdown: string): React.ReactNode[] {
       elements.push(
         <blockquote
           key={`bq-${i}`}
-          className="border-l-2 border-[var(--vscode-textLink-foreground)] pl-3 italic opacity-80 my-1"
+          className="border-l-2 border-[var(--vscode-textBlockQuote-border)] bg-[var(--vscode-textBlockQuote-background)] pl-3 py-0.5 text-sm opacity-90 my-2 rounded-r"
         >
           {renderInline(bqMatch[1])}
         </blockquote>,
@@ -156,7 +156,7 @@ function parseMarkdown(markdown: string): React.ReactNode[] {
       elements.push(
         <hr
           key={`hr-${i}`}
-          className="border-[var(--vscode-widget-border)] my-2"
+          className="border-[var(--vscode-widget-border)] my-4"
         />,
       );
       continue;

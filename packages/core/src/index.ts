@@ -419,7 +419,7 @@ export { BatchExecutor } from './utils/batchExecutor';
 export { default as useAppStateStore } from './hooks/store/useAppStateStore';
 
 // Arena slice helpers
-export { createArenaSession, createArenaMessage } from './hooks/store/createArenaSlice';
+export { createArenaMessage } from './hooks/store/createArenaSlice';
 
 // Custom hooks
 export { useCollectionRunner } from './hooks/useCollectionRunner';

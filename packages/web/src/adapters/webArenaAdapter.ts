@@ -500,7 +500,7 @@ export class WebArenaAdapter implements IArenaAdapter {
         request: ArenaChatRequest,
         signal: AbortSignal
     ): Promise<Result<ArenaChatResponse, string>> {
-        const { message, history, settings, command } = request;
+        const { message, history, settings } = request;
         const model = settings.model || LLM_DEFAULTS.GEMINI_MODEL;
         const providerSettings = loadFromStorage<ArenaProviderSettingsMap>(
             STORAGE_KEYS.PROVIDER_SETTINGS,
@@ -509,8 +509,8 @@ export class WebArenaAdapter implements IArenaAdapter {
         const apiKey = providerSettings['gemini']?.apiKey!;
 
         // Build conversation contents
-        const contents = this.buildGeminiContents(history, message, command);
-        const systemPrompt = this.getSystemPrompt(request.agent, command);
+        const contents = this.buildGeminiContents(history, message);
+        const systemPrompt = this.getSystemPrompt(request.agent);
 
         try {
             const response = await fetch(
@@ -556,17 +556,17 @@ export class WebArenaAdapter implements IArenaAdapter {
         signal: AbortSignal,
         onChunk: (chunk: ArenaChatStreamChunk) => void
     ): Promise<Result<ArenaChatResponse, string>> {
-        const { message, history, settings, command } = request;
+        const { message, history, settings } = request;
         const model = settings.model || LLM_DEFAULTS.GEMINI_MODEL;
         const providerSettings = loadFromStorage<ArenaProviderSettingsMap>(
             STORAGE_KEYS.PROVIDER_SETTINGS,
             getDefaultProviderSettings(),
         );
-        const apiKey = providerSettings['gemini']?.apiKey!;
+        const apiKey = providerSettings['gemini']?.apiKey!
 
         // Build conversation contents
-        const contents = this.buildGeminiContents(history, message, command);
-        const systemPrompt = this.getSystemPrompt(request.agent, command);
+        const contents = this.buildGeminiContents(history, message);
+        const systemPrompt = this.getSystemPrompt(request.agent);
         const messageId = generateId();
 
         try {
@@ -660,7 +660,6 @@ export class WebArenaAdapter implements IArenaAdapter {
     private buildGeminiContents(
         history: ArenaMessage[],
         message: string,
-        _command?: string
     ): Array<{ role: string; parts: Array<{ text: string }> }> {
         const contents: Array<{ role: string; parts: Array<{ text: string }> }> = [];
 
@@ -683,77 +682,66 @@ export class WebArenaAdapter implements IArenaAdapter {
         return contents;
     }
 
-    private getSystemPrompt(agent: string, command?: string): string {
+    private getSystemPrompt(agent: string): string {
         switch (agent) {
-            case ARENA_AGENT_IDS.LEARN_WEB:
-                return this.getLearnWebAgentPrompt(command);
-            case ARENA_AGENT_IDS.LEARN_DOCS:
-                return this.getLearnDocsAgentPrompt(command);
+            case ARENA_AGENT_IDS.WEB_EXPERT:
+                return this.getWebExpertPrompt();
             case ARENA_AGENT_IDS.WAVE_CLIENT:
-                return this.getWaveClientAgentPrompt(command);
+                return this.getWaveClientPrompt();
             default:
-                // Backward compat: old 'learn' / 'discover' sessions
-                if (agent === 'learn') return this.getLearnWebAgentPrompt(command);
-                if (agent === 'discover') return this.getWaveClientAgentPrompt(command);
                 return 'You are a helpful AI assistant.';
         }
     }
 
-    private getLearnWebAgentPrompt(command?: string): string {
-        const basePrompt = `You are Wave Arena Learn Agent, an expert in web technologies, networking, and API development.
-Your role is to help users understand web technologies including HTTP protocols, REST APIs, GraphQL, WebSocket, 
+    private getWebExpertPrompt(): string {
+        const basePrompt = `You are the Web Expert, an AI agent specialising in web technologies, networking protocols, and API design.
+Your role is to help users understand web technologies including HTTP protocols, REST APIs, GraphQL, WebSocket,
 network protocols (TCP/IP, DNS, TLS), and modern web development practices.
 
 Guidelines:
-- Provide accurate, up-to-date information
+- Provide accurate, up-to-date information based on official specifications and standards
 - Include practical examples when helpful
-- Reference official documentation when appropriate
+- Reference RFC numbers and official documentation when discussing protocol behaviour
 - Be concise but thorough
 - If you're unsure, say so rather than guessing`;
 
-        const commandPrompts: Record<string, string> = {
-            '/learn-http': `\n\nFocus on HTTP protocol topics: HTTP/1.1, HTTP/2, HTTP/3, headers, methods, status codes, caching, cookies, CORS.`,
-            '/learn-rest': `\n\nFocus on REST API topics: principles, best practices, design patterns, versioning, error handling, HATEOAS.`,
-            '/learn-websocket': `\n\nFocus on WebSocket topics: protocol, real-time communication, Socket.io, use cases, vs polling/SSE.`,
-            '/learn-graphql': `\n\nFocus on GraphQL topics: queries, mutations, subscriptions, schema design, vs REST.`,
-            '/learn-web': `\n\nFocus on general web technology topics using knowledge from MDN, W3C, IETF specifications.`,
-            '/learn-local': `\n\nAnswer questions based on the user's uploaded documentation.`,
-        };
+        const formattingRules = `
 
-        return basePrompt + (command ? (commandPrompts[command] || '') : '');
+## Response Format Rules
+
+- Use ## section headers when covering more than one distinct concept.
+- Use bullet points for any list of three or more items.
+- Wrap all code examples in fenced code blocks with a language tag (http, json, bash, typescript).
+- Bold key terms, protocol names, and RFC references on first use.
+- Keep paragraphs short — two to three sentences maximum.
+- End technical answers with a horizontal rule (---) followed by: **Key Takeaway:** one sentence summary.`;
+
+        return basePrompt + formattingRules;
     }
 
-    private getLearnDocsAgentPrompt(_command?: string): string {
-        return `You are Wave Arena Learn Docs Agent, a specialised assistant that helps users learn from their uploaded documents.
-Your role is to answer questions by referencing the specific documents the user has uploaded.
-
-Guidelines:
-- Always cite the source document when quoting or paraphrasing
-- If no relevant document content is available, let the user know
-- Summarise key points from documents when asked
-- Be precise and comprehensive`;
-    }
-
-    private getWaveClientAgentPrompt(command?: string): string {
-        const basePrompt = `You are Wave Arena Discover Agent, a helpful assistant for Wave Client - an HTTP REST client application.
+    private getWaveClientPrompt(): string {
+        const basePrompt = `You are the Wave Client AI assistant, a helpful agent for Wave Client — an HTTP REST client application.
 Your role is to help users work with their collections, environments, flows, and test suites.
 
 Guidelines:
 - Help users understand Wave Client features
-- Provide guidance on organizing collections and requests
+- Provide guidance on organising collections and requests
 - Assist with environment variable management
 - Help create and debug request flows
 - Guide test suite creation and execution`;
 
-        const commandPrompts: Record<string, string> = {
-            '/help': `\n\nProvide general help about Wave Client features and capabilities.`,
-            '/collections': `\n\nFocus on collection management: creating, organizing, importing/exporting collections and requests.`,
-            '/environments': `\n\nFocus on environment management: variables, environments, secrets, and variable substitution.`,
-            '/flows': `\n\nFocus on request flows: chaining requests, using response data, conditional logic.`,
-            '/tests': `\n\nFocus on test suites: creating tests, assertions, running test suites, test reports.`,
-        };
+        const formattingRules = `
 
-        return basePrompt + (command ? (commandPrompts[command] || '') : '');
+## Response Format Rules
+
+- Use ## section headers when a response covers setup, usage, and reference as distinct parts.
+- Use bullet points or tables instead of flowing lists in prose.
+- Wrap all code samples in fenced code blocks with a language tag (json, http, javascript).
+- Bold field names, variable names, and action verbs the user must act on.
+- End action-oriented answers with **Next Steps:** listing one or two concrete things the user should do next.
+- Always call list_* tools before answering questions about existing collections, environments, flows, or test suites.`;
+
+        return basePrompt + formattingRules;
     }
 }
 

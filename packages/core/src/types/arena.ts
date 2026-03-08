@@ -101,19 +101,11 @@ export {
  * Each command is associated with exactly one agent.
  */
 export const ARENA_COMMANDS = {
-  // wave-client agent
   HELP: '/help',
   COLLECTIONS: '/collections',
   ENVIRONMENTS: '/environments',
   FLOWS: '/flows',
   TESTS: '/tests',
-
-  // web-expert agent
-  HTTP: '/http',
-  REST: '/rest',
-  WEBSOCKET: '/websocket',
-  GRAPHQL: '/graphql',
-  RFC: '/rfc',
 } as const;
 
 export type ArenaCommandId = typeof ARENA_COMMANDS[keyof typeof ARENA_COMMANDS];
@@ -127,6 +119,8 @@ export interface ArenaCommand {
   description: string;
   agent: import('../config/arenaConfig').ArenaAgentId;
   placeholder?: string;
+  /** When true, this command is available to all agents regardless of the `agent` field */
+  universal?: boolean;
 }
 
 /**
@@ -134,13 +128,13 @@ export interface ArenaCommand {
  * Used in the chat input command palette when the user types `/`.
  */
 export const ARENA_COMMAND_DEFINITIONS: ArenaCommand[] = [
-  // wave-client agent commands
   {
     id: ARENA_COMMANDS.HELP,
     label: 'Help',
-    description: 'Get help with Wave Client features',
+    description: 'Get help and see what this agent can do',
     agent: 'wave-client',
     placeholder: 'What would you like help with?',
+    universal: true,
   },
   {
     id: ARENA_COMMANDS.COLLECTIONS,
@@ -169,43 +163,6 @@ export const ARENA_COMMAND_DEFINITIONS: ArenaCommand[] = [
     description: 'Create and run test suites',
     agent: 'wave-client',
     placeholder: 'Ask about tests...',
-  },
-
-  // web-expert agent commands
-  {
-    id: ARENA_COMMANDS.HTTP,
-    label: 'HTTP Protocols',
-    description: 'Learn about HTTP/1.1, HTTP/2, HTTP/3, headers, methods, status codes',
-    agent: 'web-expert',
-    placeholder: 'Ask about HTTP protocols...',
-  },
-  {
-    id: ARENA_COMMANDS.REST,
-    label: 'REST APIs',
-    description: 'Learn about REST principles, best practices, API design',
-    agent: 'web-expert',
-    placeholder: 'Ask about REST APIs...',
-  },
-  {
-    id: ARENA_COMMANDS.WEBSOCKET,
-    label: 'WebSocket',
-    description: 'Learn about WebSocket protocol, real-time communication',
-    agent: 'web-expert',
-    placeholder: 'Ask about WebSocket...',
-  },
-  {
-    id: ARENA_COMMANDS.GRAPHQL,
-    label: 'GraphQL',
-    description: 'Learn about GraphQL queries, mutations, subscriptions',
-    agent: 'web-expert',
-    placeholder: 'Ask about GraphQL...',
-  },
-  {
-    id: ARENA_COMMANDS.RFC,
-    label: 'RFC Lookup',
-    description: 'Find and explain a specific RFC document',
-    agent: 'web-expert',
-    placeholder: 'Which RFC would you like to look up?',
   },
 ];
 
@@ -409,6 +366,12 @@ export interface ArenaChatStreamChunk {
    * separately by the UI, not concatenated into the message body.
    */
   error?: string;
+  /**
+   * When true, this is a keep-alive heartbeat with no content.
+   * The UI should reset its safety timeout and show a progress indicator
+   * but must NOT append `content` (which will be empty) to the message body.
+   */
+  heartbeat?: boolean;
 }
 
 // ============================================================================

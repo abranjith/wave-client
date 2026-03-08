@@ -10,6 +10,12 @@
  * arrive as `arena.streamChunk` messages keyed by `streamId`; completion and
  * errors arrive as `arena.streamComplete` / `arena.streamError`.  No pending
  * promise (and therefore no timeout) is involved for the streaming path.
+ *
+ * Safety timeout: Each call to `streamMessage()` starts a 120 s safety timer
+ * that fires if no `arena.streamChunk`, `arena.streamComplete`, or
+ * `arena.streamError` message arrives.  The timer resets on every incoming
+ * chunk (including heartbeat chunks) so a slow-but-active stream stays alive.
+ * When the timer fires, `errorCbs` are called and the stream is cancelled.
  */
 
 import type {
@@ -84,6 +90,10 @@ export function createVSCodeArenaAdapter(
         chunkCbs: Set<(chunk: ArenaChatStreamChunk) => void>;
         doneCbs: Set<(response: ArenaChatResponse) => void>;
         errorCbs: Set<(error: string) => void>;
+        /** Reset the 120 s safety timer — called on every incoming chunk. */
+        resetSafetyTimer: () => void;
+        /** Clear the 120 s safety timer — called on stream completion or error. */
+        clearSafetyTimer: () => void;
     }>();
 
     function generateRequestId(): string {
@@ -168,12 +178,15 @@ export function createVSCodeArenaAdapter(
 
         switch (message.type) {
             case 'arena.streamChunk':
+                // Reset the per-stream safety timer on every incoming chunk
+                listeners.resetSafetyTimer();
                 listeners.chunkCbs.forEach((cb) => {
                     try { cb(message.chunk); } catch (e) { console.error('[ArenaAdapter] chunk cb error', e); }
                 });
                 return true;
 
             case 'arena.streamComplete':
+                listeners.clearSafetyTimer();
                 listeners.doneCbs.forEach((cb) => {
                     try { cb(message.response); } catch (e) { console.error('[ArenaAdapter] done cb error', e); }
                 });
@@ -181,6 +194,7 @@ export function createVSCodeArenaAdapter(
                 return true;
 
             case 'arena.streamError':
+                listeners.clearSafetyTimer();
                 listeners.errorCbs.forEach((cb) => {
                     try { cb(message.error ?? 'Unknown stream error'); } catch (e) { console.error('[ArenaAdapter] error cb error', e); }
                 });
@@ -271,12 +285,52 @@ export function createVSCodeArenaAdapter(
 
         streamMessage(request: ArenaChatRequest): StreamHandle {
             const streamId = generateStreamId();
+            const chunkCbs = new Set<(chunk: ArenaChatStreamChunk) => void>();
+            const doneCbs = new Set<(response: ArenaChatResponse) => void>();
+            const errorCbs = new Set<(error: string) => void>();
+
+            // ── 120 s UI-side safety timeout ──────────────────────────────────
+            // Fires if no events (chunks, complete, error) arrive within 120 s.
+            // The timer resets on every incoming `arena.streamChunk` so an
+            // actively-streaming session stays alive indefinitely.
+            let safetyTimer: ReturnType<typeof setTimeout> | null = null;
+
+            function resetSafetyTimer() {
+                if (safetyTimer) clearTimeout(safetyTimer);
+                safetyTimer = setTimeout(() => {
+                    const activeListeners = activeStreams.get(streamId);
+                    if (activeListeners) {
+                        activeListeners.errorCbs.forEach((cb) => {
+                            try {
+                                cb('Stream timed out — no response received within 120 s');
+                            } catch (e) {
+                                console.error('[ArenaAdapter] safety timeout cb error', e);
+                            }
+                        });
+                        activeStreams.delete(streamId);
+                    }
+                    vsCodeApi.postMessage({ type: 'arena.cancelChat', streamId });
+                }, 120_000);
+            }
+
+            function clearSafetyTimer() {
+                if (safetyTimer) {
+                    clearTimeout(safetyTimer);
+                    safetyTimer = null;
+                }
+            }
+
             const listeners = {
-                chunkCbs: new Set<(chunk: ArenaChatStreamChunk) => void>(),
-                doneCbs: new Set<(response: ArenaChatResponse) => void>(),
-                errorCbs: new Set<(error: string) => void>(),
+                chunkCbs,
+                doneCbs,
+                errorCbs,
+                resetSafetyTimer,
+                clearSafetyTimer,
             };
             activeStreams.set(streamId, listeners);
+
+            // Start the safety timer immediately
+            resetSafetyTimer();
 
             // Fire-and-forget: post the request to the extension host.
             vsCodeApi.postMessage({
@@ -294,15 +348,16 @@ export function createVSCodeArenaAdapter(
             }
 
             const handle: StreamHandle = {
-                onChunk(cb) { return makeSub(listeners.chunkCbs, cb); },
-                onDone(cb) { return makeSub(listeners.doneCbs, cb); },
-                onError(cb) { return makeSub(listeners.errorCbs, cb); },
+                onChunk(cb) { return makeSub(chunkCbs, cb); },
+                onDone(cb) { return makeSub(doneCbs, cb); },
+                onError(cb) { return makeSub(errorCbs, cb); },
                 cancel() {
                     if (ended) { return; }
                     ended = true;
+                    clearSafetyTimer();
                     vsCodeApi.postMessage({ type: 'arena.cancelChat', streamId });
                     // Immediately notify error listeners so the UI stops streaming
-                    listeners.errorCbs.forEach((cb) => {
+                    errorCbs.forEach((cb) => {
                         try { cb('Cancelled'); } catch (e) { console.error('[ArenaAdapter] cancel cb error', e); }
                     });
                     activeStreams.delete(streamId);

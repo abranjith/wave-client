@@ -77,21 +77,34 @@ async function createWebviewPanel(context: vscode.ExtensionContext): Promise<vsc
 		}
 	);
 
-	// Set up the webview HTML content
+	// Set the webview HTML first so the panel renders immediately.
 	panel.webview.html = getWebviewContent(panel.webview, context.extensionUri);
 
-	// Defer heavy handler imports until the panel is explicitly opened.
-	const { MessageHandler } = await import('./handlers/MessageHandler');
-	const messageHandler = new MessageHandler(panel);
+	// Queue messages the webview sends while the handler is still loading.
+	let messageHandler: InstanceType<typeof import('./handlers/MessageHandler').MessageHandler> | null = null;
+	const messageQueue: unknown[] = [];
 
-	// Listen for messages from the webview
 	panel.webview.onDidReceiveMessage(
 		async (message) => {
-			await messageHandler.handleMessage(message);
+			if (messageHandler) {
+				await messageHandler.handleMessage(message);
+			} else {
+				messageQueue.push(message);
+			}
 		},
 		undefined,
 		context.subscriptions
 	);
+
+	// Dynamically import the handler (pulls in lightweight service deps).
+	const { MessageHandler } = await import('./handlers/MessageHandler');
+	messageHandler = new MessageHandler(panel);
+
+	// Replay any messages that arrived while loading.
+	for (const queued of messageQueue) {
+		await messageHandler!.handleMessage(queued);
+	}
+	messageQueue.length = 0;
 
 	return panel;
 }

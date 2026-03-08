@@ -148,9 +148,11 @@ describe('ArenaService', () => {
             const chunks: ArenaChatStreamChunk[] = [];
             const response = await service.streamChat(makeRequest(), (c) => chunks.push(c));
 
-            expect(chunks).toHaveLength(2);
-            expect(chunks[0]).toMatchObject({ content: 'Hello', done: false });
-            expect(chunks[1]).toMatchObject({ content: ' World', done: true });
+            // ArenaService emits a heartbeat chunk first, then the real content chunks
+            const contentChunks = chunks.filter((c) => !c.heartbeat);
+            expect(contentChunks).toHaveLength(2);
+            expect(contentChunks[0]).toMatchObject({ content: 'Hello', done: false });
+            expect(contentChunks[1]).toMatchObject({ content: ' World', done: true });
             expect(response.content).toBe('Hello World');
         });
 
@@ -167,9 +169,10 @@ describe('ArenaService', () => {
             const chunks: ArenaChatStreamChunk[] = [];
             await service.streamChat(makeRequest(), (c) => chunks.push(c));
 
-            // First chunk should be 'A', not 'AB' or 'ABC'
-            expect(chunks[0].content).toBe('A');
-            expect(chunks[1].content).toBe('B');
+            // Filter out the heartbeat chunk so we only check content deltas
+            const contentChunks = chunks.filter((c) => !c.heartbeat);
+            expect(contentChunks[0].content).toBe('A');
+            expect(contentChunks[1].content).toBe('B');
         });
     });
 
@@ -190,9 +193,10 @@ describe('ArenaService', () => {
             const chunks: ArenaChatStreamChunk[] = [];
             const response = await service.streamChat(makeRequest(), (c) => chunks.push(c));
 
-            // Tool chunk is skipped, only the answer chunk is emitted
-            expect(chunks).toHaveLength(1);
-            expect(chunks[0].content).toBe('answer');
+            // Tool chunk is skipped; heartbeat is also emitted — filter to get only content chunks
+            const contentChunks = chunks.filter((c) => !c.heartbeat && !c.toolCall);
+            expect(contentChunks).toHaveLength(1);
+            expect(contentChunks[0].content).toBe('answer');
             expect(response.content).toBe('answer');
         });
     });
@@ -431,6 +435,83 @@ describe('ArenaService', () => {
             expect(sendSpy).not.toHaveBeenCalled();
         });
     });
-});
 
+    // =========================================================================
+    // streamChat — heartbeat and timeout (TASK-004)
+    // =========================================================================
+
+    describe('streamChat — heartbeat', () => {
+        it('emits heartbeat chunk before first content chunk', async () => {
+            mockChatFn.mockReturnValue(
+                makeChunks([{ content: 'hello', done: true }]),
+            );
+
+            const service = makeService();
+            const chunks: ArenaChatStreamChunk[] = [];
+            await service.streamChat(makeRequest(), (c) => chunks.push(c));
+
+            // First chunk must be the heartbeat
+            expect(chunks[0]).toMatchObject({ heartbeat: true, content: '', done: false });
+            // Subsequent chunks carry real content
+            expect(chunks.some((c) => c.content === 'hello')).toBe(true);
+        });
+
+        it('clears stream timer on normal completion (no spurious error)', async () => {
+            vi.useFakeTimers();
+
+            mockChatFn.mockReturnValue(
+                makeChunks([{ content: 'done', done: true }]),
+            );
+
+            const service = makeService();
+            const chunks: ArenaChatStreamChunk[] = [];
+            await service.streamChat(makeRequest(), (c) => chunks.push(c));
+
+            // Advance past the 90 s threshold — no error chunk should appear
+            vi.advanceTimersByTime(91_000);
+
+            expect(chunks.every((c) => !c.error)).toBe(true);
+
+            vi.useRealTimers();
+        });
+    });
+
+    describe('streamChat — 90 s stream timeout', () => {
+        it('emits error chunk and returns after 90 s of generator silence', async () => {
+            vi.useFakeTimers();
+
+            // Generator that never yields (simulates a completely stalled LLM)
+            async function* neverYields(): AsyncGenerator<ChatChunk> {
+                await new Promise<never>(() => { /* never resolves */ });
+            }
+            mockChatFn.mockReturnValue(neverYields());
+
+            const service = makeService();
+            const chunks: ArenaChatStreamChunk[] = [];
+
+            // Do NOT await — the generator is permanently stuck so streamChat
+            // will never resolve.  We only verify the side-effect: onChunk is
+            // called with an error chunk when the 90 s timer fires.
+            service.streamChat(makeRequest(), (c) => chunks.push(c)); // intentionally unawaited
+
+            // Flush enough microtask ticks to let streamChat complete its async
+            // setup (buildProviderConfig + getOrCreateAgent = 3 awaits) and
+            // register the streamTimer before we advance fake timers.
+            await Promise.resolve();
+            await Promise.resolve();
+            await Promise.resolve();
+            await Promise.resolve(); // extra buffer
+
+            // Advance fake timers past the 90 s stream timeout
+            vi.advanceTimersByTime(90_001);
+
+            const timeoutChunk = chunks.find((c) => c.error);
+            expect(timeoutChunk).toBeDefined();
+            expect(timeoutChunk?.error).toMatch(/timed out/i);
+            expect(timeoutChunk?.done).toBe(true);
+
+            vi.useRealTimers();
+        });
+    });
+});
 

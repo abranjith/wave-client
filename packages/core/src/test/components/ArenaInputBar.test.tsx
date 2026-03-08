@@ -23,12 +23,13 @@ const sampleCommands: ArenaCommand[] = [
     agent: ARENA_AGENT_IDS.WAVE_CLIENT,
     label: 'Get help',
     description: 'General help',
+    universal: true,
   },
   {
-    id: ARENA_COMMANDS.HTTP,
-    agent: ARENA_AGENT_IDS.WEB_EXPERT,
-    label: 'HTTP protocols',
-    description: 'HTTP questions',
+    id: ARENA_COMMANDS.COLLECTIONS,
+    agent: ARENA_AGENT_IDS.WAVE_CLIENT,
+    label: 'Collections',
+    description: 'Manage collections',
   },
 ];
 

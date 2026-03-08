@@ -13,6 +13,7 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { StateGraph, END, START } from '@langchain/langgraph';
+import type { LangGraphRunnableConfig } from '@langchain/langgraph';
 import {
   BaseMessage,
   HumanMessage,
@@ -39,6 +40,8 @@ export interface WaveClientAgentConfig {
   settings?: Partial<ArenaSettings>;
   /** Optional custom system prompt (overrides MD file) */
   systemPrompt?: string;
+  /** @internal Override the LLM per-call timeout (ms). Defaults to 60 000. Test-only. */
+  _llmTimeoutMs?: number;
 }
 
 interface WaveClientAgentState {
@@ -88,13 +91,35 @@ const WAVE_CLIENT_SYSTEM_PROMPT = loadSystemPrompt();
  * - Otherwise → route to END (agent response is the final answer)
  */
 export function createWaveClientAgent(config: WaveClientAgentConfig) {
-  const { llm, mcpTools = [], settings = {}, systemPrompt } = config;
+  const { llm, mcpTools = [], settings = {}, systemPrompt, _llmTimeoutMs = 60_000 } = config;
   const mergedSettings = { ...DEFAULT_ARENA_SETTINGS, ...settings };
   const prompt = systemPrompt ?? WAVE_CLIENT_SYSTEM_PROMPT;
 
   // Bind tools to LLM if available
   const llmWithTools =
     mcpTools.length > 0 ? (llm.bindTools?.(mcpTools) ?? llm) : llm;
+
+  // ---------------------------------------------------------------------------
+  // Signal helpers
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Creates an AbortSignal that aborts when either input signal aborts.
+   * Used to combine a per-call timeout signal with the LangGraph outer signal
+   * so both can trigger cancellation without replacing LangGraph callbacks.
+   */
+  function createCombinedSignal(sig1: AbortSignal, sig2: AbortSignal): AbortSignal {
+    if (sig1.aborted || sig2.aborted) {
+      const c = new AbortController();
+      c.abort();
+      return c.signal;
+    }
+    const controller = new AbortController();
+    const abort = () => controller.abort();
+    sig1.addEventListener('abort', abort, { once: true });
+    sig2.addEventListener('abort', abort, { once: true });
+    return controller.signal;
+  }
 
   // ---------------------------------------------------------------------------
   // State Graph
@@ -143,11 +168,24 @@ export function createWaveClientAgent(config: WaveClientAgentConfig) {
   /** Agent node — ask the LLM what to do next */
   const agentNode = async (
     state: WaveClientAgentState,
+    config?: LangGraphRunnableConfig,
   ): Promise<Partial<WaveClientAgentState>> => {
     const systemMessage = new SystemMessage(prompt);
     const messages = [systemMessage, ...state.messages];
-    const response = await llmWithTools.invoke(messages);
-    return { messages: [response] };
+    const timeoutController = new AbortController();
+    const timer = setTimeout(() => timeoutController.abort(), _llmTimeoutMs);
+    try {
+      const combinedSignal = config?.signal
+        ? createCombinedSignal(config.signal as AbortSignal, timeoutController.signal)
+        : timeoutController.signal;
+      const callConfig = config
+        ? { ...config, signal: combinedSignal }
+        : { signal: combinedSignal };
+      const response = await (llmWithTools as BaseChatModel).invoke(messages, callConfig as RunnableConfig);
+      return { messages: [response] };
+    } finally {
+      clearTimeout(timer);
+    }
   };
 
   /** Tool node — execute all requested tool calls */
@@ -197,11 +235,24 @@ export function createWaveClientAgent(config: WaveClientAgentConfig) {
   /** Generate node — produce the final response after tool results */
   const generateNode = async (
     state: WaveClientAgentState,
+    config?: LangGraphRunnableConfig,
   ): Promise<Partial<WaveClientAgentState>> => {
     const systemMessage = new SystemMessage(prompt);
     const messages = [systemMessage, ...state.messages];
-    const response = await llm.invoke(messages);
-    return { messages: [response] };
+    const timeoutController = new AbortController();
+    const timer = setTimeout(() => timeoutController.abort(), _llmTimeoutMs);
+    try {
+      const combinedSignal = config?.signal
+        ? createCombinedSignal(config.signal as AbortSignal, timeoutController.signal)
+        : timeoutController.signal;
+      const callConfig = config
+        ? { ...config, signal: combinedSignal }
+        : { signal: combinedSignal };
+      const response = await llm.invoke(messages, callConfig as RunnableConfig);
+      return { messages: [response] };
+    } finally {
+      clearTimeout(timer);
+    }
   };
 
   // ---------------------------------------------------------------------------
@@ -237,14 +288,15 @@ export function createWaveClientAgent(config: WaveClientAgentConfig) {
     async *chat(
       sessionMessages: ChatMessage[],
       userMessage: string,
+      signal?: AbortSignal,
     ): AsyncGenerator<ChatChunk> {
       const messageId = `msg-${Date.now()}`;
       let chunkIndex = 0;
 
       try {
         const messages: BaseMessage[] = sessionMessages.map((msg) => {
-          if (msg.role === 'user') return new HumanMessage(msg.content);
-          if (msg.role === 'assistant') return new AIMessage(msg.content);
+          if (msg.role === 'user') {return new HumanMessage(msg.content);}
+          if (msg.role === 'assistant') {return new AIMessage(msg.content);}
           if (msg.role === 'tool' && msg.toolCall) {
             return new ToolMessage({
               tool_call_id: msg.toolCall.name,
@@ -256,55 +308,22 @@ export function createWaveClientAgent(config: WaveClientAgentConfig) {
 
         messages.push(new HumanMessage(userMessage));
 
+        // streamMode: 'messages' emits [AIMessageChunk, metadata] tuples per token.
+        // This enables real-time streaming rather than waiting for the full LLM response.
+        // Tokens from both 'agent' (direct answers) and 'generate' (post-tool answers)
+        // nodes are emitted; tool-call-only chunks have empty content and are skipped.
         const stream = await app.stream(
           { messages, toolCalls: [] },
-          { streamMode: 'values' } as RunnableConfig,
+          { streamMode: 'messages', ...(signal && { signal }) } as RunnableConfig,
         );
 
-        let fullContent = '';
-
-        for await (const state of stream) {
-          const lastMessage = state.messages?.[state.messages.length - 1];
-
-          // Yield tool call chunks
-          if (lastMessage && 'tool_calls' in lastMessage) {
-            const toolCalls = (lastMessage as AIMessage).tool_calls;
-            if (toolCalls && toolCalls.length > 0) {
-              for (const tc of toolCalls) {
-                yield {
-                  id: `chunk-${chunkIndex++}`,
-                  content: '',
-                  done: false,
-                  messageId,
-                  toolCall: {
-                    name: tc.name,
-                    arguments: JSON.stringify(tc.args),
-                  },
-                };
-              }
-            }
-          }
-
-          // Yield AI text chunks
-          if (
-            lastMessage instanceof AIMessage &&
-            !(
-              'tool_calls' in lastMessage &&
-              (lastMessage as AIMessage).tool_calls?.length
-            )
-          ) {
-            const content = lastMessage.content?.toString() ?? '';
-            const newContent = content.slice(fullContent.length);
-
-            if (newContent) {
-              fullContent = content;
-              yield {
-                id: `chunk-${chunkIndex++}`,
-                content: newContent,
-                done: false,
-                messageId,
-              };
-            }
+        for await (const chunk of stream) {
+          // Each chunk is [AIMessageChunk, { langgraph_node, ... }].
+          // Filter on non-empty content to skip tool-call-only chunks.
+          const [messageChunk] = chunk as [{ content?: unknown }, Record<string, unknown>];
+          const content = messageChunk?.content?.toString() ?? '';
+          if (content) {
+            yield { id: `chunk-${chunkIndex++}`, content, done: false, messageId };
           }
         }
 

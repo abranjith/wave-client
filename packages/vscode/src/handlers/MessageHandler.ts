@@ -14,8 +14,23 @@ import {
     testSuiteService,
     fileService,
     arenaStorageService,
-    arenaService
 } from '../services';
+import type { ArenaService } from '../services';
+
+/**
+ * Lazy singleton for ArenaService. The `@wave-client/arena` package (and its
+ * heavy `@langchain/*` transitive deps) is imported on first use — not at
+ * module load — so the extension activates instantly and the main REST-client
+ * features are never blocked by the AI agent bundle.
+ */
+let _arenaService: InstanceType<typeof ArenaService> | null = null;
+async function getArenaService(): Promise<InstanceType<typeof ArenaService>> {
+    if (!_arenaService) {
+        const { arenaService } = await import('../services');
+        _arenaService = arenaService;
+    }
+    return _arenaService!;
+}
 import type { RequestValidation } from '@wave-client/shared';
 import type {
     ArenaLoadSessionsMsg,
@@ -264,7 +279,10 @@ export class MessageHandler {
                 await this.handleArenaSendMessage(message as ArenaSendMessageMsg);
                 break;
             case 'arena.streamMessage':
-                await this.handleArenaStreamMessage(message as ArenaStreamMessageMsg);
+                // Stream handling must not block the global message pump.
+                // Running this in the background keeps storage requests
+                // (like arena.loadMessages) responsive while a chat stream is active.
+                void this.handleArenaStreamMessage(message as ArenaStreamMessageMsg);
                 break;
         }
     }
@@ -1671,7 +1689,8 @@ export class MessageHandler {
         try {
             // Deviation A: construct minimal ArenaProviderSettings from provider + apiKey
             const providerSettings = { provider: provider as any, enabled: true, apiKey };
-            const result = await arenaService.validateApiKey(provider as any, providerSettings);
+            const svc = await getArenaService();
+            const result = await svc.validateApiKey(provider as any, providerSettings);
             this.postMessage({ type: 'arena.validateApiKey', requestId, valid: result.valid, error: result.error });
         } catch (error: any) {
             this.postMessage({ type: 'arena.validateApiKey', requestId, valid: false, error: error.message });
@@ -1684,7 +1703,8 @@ export class MessageHandler {
             // Deviation B: load providerSettings from storage so ArenaService can use stored API URL etc.
             const allSettings = await arenaStorageService.loadProviderSettings();
             const providerSettings = (allSettings as any)[provider] ?? { provider, enabled: true };
-            const models = await arenaService.getAvailableModels(provider as any, providerSettings);
+            const svc = await getArenaService();
+            const models = await svc.getAvailableModels(provider as any, providerSettings);
             this.postMessage({ type: 'arena.getAvailableModels', requestId, models });
         } catch (error: any) {
             this.postMessage({ type: 'arena.getAvailableModels', requestId, models: [], error: error.message });
@@ -1701,7 +1721,8 @@ export class MessageHandler {
         const { requestId, request: chatRequest } = message;
 
         try {
-            const response = await arenaService.streamChat(
+            const svc = await getArenaService();
+            const response = await svc.streamChat(
                 chatRequest,
                 () => { /* non-streaming — discard intermediate chunks */ },
             );
@@ -1722,10 +1743,21 @@ export class MessageHandler {
      * An `AbortController` is registered by `streamId` to support cancellation
      * via `arena.cancelChat`.
      */
+    /**
+     * Handles an Arena streaming chat request.
+     *
+     * Heartbeat-first protocol: a heartbeat chunk is posted to the webview
+     * immediately upon receiving the request, before `ArenaService.streamChat()`
+     * is called. This gives the UI instant feedback that the extension host
+     * received the message, regardless of how long the LLM warm-up takes.
+     *
+     * Subsequent chunks are pushed as they arrive from ArenaService.
+     * On completion, `arena.streamComplete` is posted; on error, `arena.streamError`.
+     */
     private async handleArenaStreamMessage(message: ArenaStreamMessageMsg): Promise<void> {
         const { streamId, chatRequest } = message;
 
-        console.info('[Arena] stream start', { streamId, agent: chatRequest.agent });
+        console.info('[Arena] stream start', { streamId, agent: chatRequest.agent, sessionId: chatRequest.sessionId });
 
         // If a stream with this streamId is already in-flight, abort it first
         const existing = this.arenaAbortControllers.get(streamId);
@@ -1734,18 +1766,32 @@ export class MessageHandler {
         const controller = new AbortController();
         this.arenaAbortControllers.set(streamId, controller);
 
+        // Send an immediate heartbeat so the UI spinner starts before the
+        // first LLM token arrives. messageId is unknown at this point — use ''.
+        this.postMessage({
+            type: 'arena.streamChunk',
+            streamId,
+            chunk: { messageId: '', content: '', done: false, heartbeat: true },
+        });
+
+        let chunkIndex = 0;
+
         try {
-            const response = await arenaService.streamChat(
+            const svc = await getArenaService();
+            const response = await svc.streamChat(
                 chatRequest,
                 (chunk) => {
                     // Push each token to the webview — keyed by streamId
+                    console.debug('[Arena] streamChunk', { streamId, chunkIndex });
+                    chunkIndex++;
                     this.postMessage({ type: 'arena.streamChunk', streamId, chunk });
                 },
                 controller.signal,
             );
+            console.info('[Arena] streamComplete', { streamId, sessionId: chatRequest.sessionId });
             this.postMessage({ type: 'arena.streamComplete', streamId, response });
         } catch (error: any) {
-            console.error('[Arena] stream error', { streamId, error: error.message });
+            console.error('[Arena] stream error', { streamId, sessionId: chatRequest.sessionId, error: error.message });
             // Fast-fail: immediately notify the webview so the UI stops streaming
             this.postMessage({ type: 'arena.streamError', streamId, error: error.message });
         } finally {

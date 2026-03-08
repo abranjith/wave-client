@@ -13,6 +13,7 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { StateGraph, END, START } from '@langchain/langgraph';
+import type { LangGraphRunnableConfig } from '@langchain/langgraph';
 import {
   BaseMessage,
   HumanMessage,
@@ -42,6 +43,8 @@ export interface WebExpertAgentConfig {
   vectorStore?: unknown; // Properly typed when vector store is implemented
   /** Optional custom system prompt (overrides MD file) */
   systemPrompt?: string;
+  /** @internal Override the LLM per-call timeout (ms). Defaults to 60 000. Test-only. */
+  _llmTimeoutMs?: number;
 }
 
 interface WebExpertAgentState {
@@ -86,9 +89,31 @@ const WEB_EXPERT_SYSTEM_PROMPT = loadSystemPrompt();
  * 3. **generate** — Invokes the LLM with the system prompt + context
  */
 export function createWebExpertAgent(config: WebExpertAgentConfig) {
-  const { llm, settings = {}, systemPrompt } = config;
+  const { llm, settings = {}, systemPrompt, _llmTimeoutMs = 60_000 } = config;
   const mergedSettings = { ...DEFAULT_ARENA_SETTINGS, ...settings };
   const prompt = systemPrompt ?? WEB_EXPERT_SYSTEM_PROMPT;
+
+  // ---------------------------------------------------------------------------
+  // Signal helpers
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Creates an AbortSignal that aborts when either input signal aborts.
+   * Used to combine a per-call timeout signal with the LangGraph outer signal
+   * so both can trigger cancellation without replacing LangGraph callbacks.
+   */
+  function createCombinedSignal(sig1: AbortSignal, sig2: AbortSignal): AbortSignal {
+    if (sig1.aborted || sig2.aborted) {
+      const c = new AbortController();
+      c.abort();
+      return c.signal;
+    }
+    const controller = new AbortController();
+    const abort = () => controller.abort();
+    sig1.addEventListener('abort', abort, { once: true });
+    sig2.addEventListener('abort', abort, { once: true });
+    return controller.signal;
+  }
 
   // ---------------------------------------------------------------------------
   // State Graph
@@ -119,23 +144,13 @@ export function createWebExpertAgent(config: WebExpertAgentConfig) {
   // Nodes
   // ---------------------------------------------------------------------------
 
-  /** Detect query mode from command prefixes */
+  /** Pass-through: mode is set externally or defaults to 'auto'.
+   * Command-prefix detection removed — Web Expert now accepts free-form input.
+   */
   const routeNode = async (
     state: WebExpertAgentState,
   ): Promise<Partial<WebExpertAgentState>> => {
-    const lastMessage = state.messages[state.messages.length - 1];
-    const content = lastMessage?.content?.toString() ?? '';
-
-    let mode: WebExpertMode = state.mode;
-    if (content.startsWith('/http') || content.startsWith('/rest') || content.startsWith('/websocket') || content.startsWith('/graphql')) {
-      mode = 'web';
-    } else if (content.startsWith('/rfc')) {
-      mode = 'web';
-    } else if (content.startsWith('/learn-local')) {
-      mode = 'local';
-    }
-
-    return { mode };
+    return { mode: state.mode };
   };
 
   /** Retrieve relevant context from the appropriate source */
@@ -145,13 +160,8 @@ export function createWebExpertAgent(config: WebExpertAgentConfig) {
     const lastMessage = state.messages[state.messages.length - 1];
     const query = lastMessage?.content?.toString() ?? '';
 
-    // Strip command prefix from query
-    const cleanQuery = query
-      .replace(
-        /^\/(http|rest|websocket|graphql|rfc|learn-web|learn-local|explain|compare)\s*/i,
-        '',
-      )
-      .trim();
+    // Use the raw message content as the search query
+    const cleanQuery = query.trim();
 
     const context: string[] = [];
     const sources: string[] = [];
@@ -176,6 +186,7 @@ export function createWebExpertAgent(config: WebExpertAgentConfig) {
   /** Generate the final response with the LLM */
   const generateNode = async (
     state: WebExpertAgentState,
+    config?: LangGraphRunnableConfig,
   ): Promise<Partial<WebExpertAgentState>> => {
     const systemMessage = new SystemMessage(prompt);
 
@@ -197,14 +208,29 @@ export function createWebExpertAgent(config: WebExpertAgentConfig) {
       ),
     ];
 
-    const response = await llm.invoke(messagesWithContext);
+    // Merge the per-call timeout signal with the LangGraph outer signal.
+    // Spreading config preserves LangGraph streaming callbacks so that
+    // streamMode: 'messages' tokens are emitted correctly.
+    const timeoutController = new AbortController();
+    const timer = setTimeout(() => timeoutController.abort(), _llmTimeoutMs);
+    try {
+      const combinedSignal = config?.signal
+        ? createCombinedSignal(config.signal as AbortSignal, timeoutController.signal)
+        : timeoutController.signal;
+      const callConfig = config
+        ? { ...config, signal: combinedSignal }
+        : { signal: combinedSignal };
+      const response = await llm.invoke(messagesWithContext, callConfig as RunnableConfig);
 
-    let responseContent = response.content?.toString() ?? '';
-    if (sourcesStr) {
-      responseContent += sourcesStr;
+      let responseContent = response.content?.toString() ?? '';
+      if (sourcesStr) {
+        responseContent += sourcesStr;
+      }
+
+      return { messages: [new AIMessage(responseContent)] };
+    } finally {
+      clearTimeout(timer);
     }
-
-    return { messages: [new AIMessage(responseContent)] };
   };
 
   // ---------------------------------------------------------------------------
@@ -237,6 +263,7 @@ export function createWebExpertAgent(config: WebExpertAgentConfig) {
     async *chat(
       sessionMessages: ChatMessage[],
       userMessage: string,
+      signal?: AbortSignal,
       mode: WebExpertMode = 'auto',
     ): AsyncGenerator<ChatChunk> {
       const messageId = `msg-${Date.now()}`;
@@ -255,28 +282,24 @@ export function createWebExpertAgent(config: WebExpertAgentConfig) {
 
         messages.push(new HumanMessage(userMessage));
 
+        // streamMode: 'messages' emits [AIMessageChunk, metadata] tuples per token,
+        // enabling real-time streaming instead of waiting for the full LLM response.
         const stream = await app.stream(
           { messages, mode },
-          { streamMode: 'values' } as RunnableConfig,
+          { streamMode: 'messages', ...(signal && { signal }) } as RunnableConfig,
         );
 
-        let fullContent = '';
-
-        for await (const state of stream) {
-          const lastMessage = state.messages?.[state.messages.length - 1];
-          if (lastMessage instanceof AIMessage) {
-            const content = lastMessage.content?.toString() ?? '';
-            const newContent = content.slice(fullContent.length);
-
-            if (newContent) {
-              fullContent = content;
-              yield {
-                id: `chunk-${chunkIndex++}`,
-                content: newContent,
-                done: false,
-                messageId,
-              };
-            }
+        for await (const chunk of stream) {
+          // Each chunk is [AIMessageChunk, { langgraph_node, ... }].
+          // Only emit tokens from the generate node (skip route/retrieve).
+          const [messageChunk, metadata] = chunk as [
+            { content?: unknown },
+            Record<string, unknown>,
+          ];
+          if (metadata?.langgraph_node !== 'generate') continue;
+          const content = messageChunk?.content?.toString() ?? '';
+          if (content) {
+            yield { id: `chunk-${chunkIndex++}`, content, done: false, messageId };
           }
         }
 

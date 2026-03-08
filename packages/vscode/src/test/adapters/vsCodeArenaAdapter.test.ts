@@ -592,4 +592,86 @@ describe('createVSCodeArenaAdapter', () => {
             expect(pendingRequests.size).toBe(0);
         }, 1000);
     });
+
+    // =========================================================================
+    // streamMessage — 120 s UI safety timeout (TASK-006)
+    // =========================================================================
+
+    describe('streamMessage — 120 s safety timeout', () => {
+        beforeEach(() => {
+            vi.useFakeTimers();
+        });
+
+        afterEach(() => {
+            vi.useRealTimers();
+        });
+
+        it('fires errorCb after 120 s of silence', () => {
+            const handle = adapter.streamMessage(CHAT_REQUEST);
+
+            let receivedError: string | undefined;
+            handle.onError((e) => { receivedError = e; });
+
+            // Do NOT simulate any incoming stream messages — let the safety timer fire
+            vi.advanceTimersByTime(120_001);
+
+            expect(receivedError).toMatch(/timed out/i);
+        });
+
+        it('resets safety timer on each incoming chunk', () => {
+            const handle = adapter.streamMessage(CHAT_REQUEST);
+            const streamId = (vsCodeApi.postMessage.mock.lastCall![0] as any).streamId;
+
+            let receivedError: string | undefined;
+            handle.onError((e) => { receivedError = e; });
+
+            // Receive a chunk at 119 s (within the 120 s window)
+            vi.advanceTimersByTime(119_000);
+            handleStreamMessage({
+                type: 'arena.streamChunk',
+                streamId,
+                chunk: { messageId: 'm', content: 'hi', done: false },
+            });
+
+            // Advance another 120 s + 1 ms from last chunk — second window should fire
+            vi.advanceTimersByTime(120_001);
+
+            expect(receivedError).toMatch(/timed out/i);
+        });
+
+        it('clears safety timer on streamComplete — no error fires', () => {
+            const handle = adapter.streamMessage(CHAT_REQUEST);
+            const streamId = (vsCodeApi.postMessage.mock.lastCall![0] as any).streamId;
+
+            let receivedError: string | undefined;
+            handle.onError((e) => { receivedError = e; });
+
+            // Complete the stream
+            handleStreamMessage({
+                type: 'arena.streamComplete',
+                streamId,
+                response: { messageId: 'm', content: 'done' },
+            });
+
+            // Advance past 120 s — timer should be cleared, no error
+            vi.advanceTimersByTime(121_000);
+            expect(receivedError).toBeUndefined();
+        });
+
+        it('clears safety timer on streamError — no duplicate error fires', () => {
+            const handle = adapter.streamMessage(CHAT_REQUEST);
+            const streamId = (vsCodeApi.postMessage.mock.lastCall![0] as any).streamId;
+
+            const errors: string[] = [];
+            handle.onError((e) => errors.push(e));
+
+            // Fire a real stream error
+            handleStreamMessage({ type: 'arena.streamError', streamId, error: 'LLM crash' });
+
+            // Advance past 120 s — safety timer should be cleared, no second error
+            vi.advanceTimersByTime(121_000);
+
+            expect(errors).toEqual(['LLM crash']); // only the original error, no timeout duplicate
+        });
+    });
 });
