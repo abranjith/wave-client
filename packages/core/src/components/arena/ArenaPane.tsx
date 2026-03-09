@@ -300,6 +300,10 @@ export function ArenaPane({ className }: ArenaPaneProps): React.ReactElement {
         const handle = arenaAdapter.streamMessage(request);
         activeStreamRef.current = handle;
 
+        // Track whether an error has already been handled via an error chunk so
+        // onDone (which fires after arena.streamComplete) does not overwrite it.
+        let streamErrored = false;
+
         handle.onChunk((chunk) => {
           // Heartbeat: backend acknowledged the request. No content to append.
           // The safety timeout in vsCodeArenaAdapter already resets automatically.
@@ -307,17 +311,27 @@ export function ArenaPane({ className }: ArenaPaneProps): React.ReactElement {
             return;
           }
           if (chunk.error) {
-            // Error chunks carry the error string, not content — display separately
+            // Error chunks carry the error string, not content.
+            // Stop streaming immediately and mark the message as failed so that
+            // the subsequent arena.streamComplete does not overwrite the error.
+            streamErrored = true;
+            activeStreamRef.current = null;
+            setArenaIsStreaming(false);
             updateArenaMessage(assistantMessage.id, {
               status: 'error',
               error: chunk.error,
             });
+            notification.showNotification('error', chunk.error);
             return;
           }
           appendArenaStreamingContent(chunk.content);
         });
 
         handle.onDone(async (response) => {
+          // If an error chunk already ended the stream, ignore the trailing completion.
+          if (streamErrored) {
+            return;
+          }
           activeStreamRef.current = null;
           setArenaIsStreaming(false);
           updateArenaMessage(assistantMessage.id, {

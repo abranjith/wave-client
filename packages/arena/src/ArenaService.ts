@@ -129,7 +129,15 @@ export class ArenaService {
             return { messageId, content: '' };
         }
 
-        const gen = agent.chat(chatHistory, request.message, signal);
+        // Local abort controller for the stream.
+        // The 90 s service timer aborts this to actually terminate a stuck generator,
+        // rather than merely setting a flag that can't be checked while the loop is blocked.
+        const localAbortController = new AbortController();
+        if (signal) {
+            signal.addEventListener('abort', () => localAbortController.abort(), { once: true });
+        }
+
+        const gen = agent.chat(chatHistory, request.message, localAbortController.signal);
         let finished = false;
 
         // Emit a heartbeat before entering the loop so the caller has instant feedback.
@@ -137,9 +145,12 @@ export class ArenaService {
         chunkCount++;
 
         // 90 s overall stream timeout — fires if the agent generator stalls.
+        // Aborts the local controller so the `for await` actually terminates rather
+        // than waiting indefinitely for the next generator value.
         let streamTimedOut = false;
         const streamTimer = setTimeout(() => {
             streamTimedOut = true;
+            localAbortController.abort();
             console.warn('[Arena] stream timeout after 90 s', { sessionId: request.sessionId });
             onChunk({ messageId, content: '', error: 'Request timed out after 90 s', done: true });
             chunkCount++;
@@ -147,7 +158,7 @@ export class ArenaService {
 
         try {
             for await (const chunk of gen) {
-                if (signal?.aborted || streamTimedOut) {
+                if (localAbortController.signal.aborted || streamTimedOut) {
                     break;
                 }
 
@@ -182,7 +193,7 @@ export class ArenaService {
         // If aborted mid-stream (and not timed out), emit a terminal done chunk.
         // The UI already has the accumulated text from prior incremental chunks;
         // the final ArenaChatResponse (returned below) carries the full content.
-        if (!finished && !streamTimedOut) {
+        if (!finished && !streamTimedOut && !localAbortController.signal.aborted) {
             onChunk({ messageId, content: '', done: true });
             chunkCount++;
         }

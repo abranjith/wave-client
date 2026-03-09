@@ -314,8 +314,17 @@ function ArenaMessageBubble({
               {/* Fallback: plain text / markdown content */}
               {!hasBlocks && <MessageContent content={content} />}
 
-              {/* Streaming indicator */}
-              {isStreaming && (
+              {/* Streaming indicator:
+                  - No content yet → show bouncing dots ("thinking" state)
+                  - Content is arriving → show inline cursor after the text */}
+              {isStreaming && !content && (
+                <div className="flex items-center gap-1 py-1">
+                  <span className="w-2 h-2 rounded-full bg-slate-400 dark:bg-slate-500 animate-bounce [animation-delay:-0.3s]" />
+                  <span className="w-2 h-2 rounded-full bg-slate-400 dark:bg-slate-500 animate-bounce [animation-delay:-0.15s]" />
+                  <span className="w-2 h-2 rounded-full bg-slate-400 dark:bg-slate-500 animate-bounce" />
+                </div>
+              )}
+              {isStreaming && content && (
                 <span className="inline-block w-2 h-4 bg-slate-600 dark:bg-slate-400 animate-pulse ml-1" />
               )}
             </>

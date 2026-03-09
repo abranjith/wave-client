@@ -1774,6 +1774,17 @@ export class MessageHandler {
             chunk: { messageId: '', content: '', done: false, heartbeat: true },
         });
 
+        // Keep the webview's 120 s safety timer alive while the LLM processes.
+        // Without these, a slow model (large context, first load, cold start) causes
+        // the webview to fire its safety timeout before any real tokens arrive.
+        const heartbeatInterval = setInterval(() => {
+            this.postMessage({
+                type: 'arena.streamChunk',
+                streamId,
+                chunk: { messageId: '', content: '', done: false, heartbeat: true },
+            });
+        }, 15_000);
+
         let chunkIndex = 0;
 
         try {
@@ -1795,6 +1806,7 @@ export class MessageHandler {
             // Fast-fail: immediately notify the webview so the UI stops streaming
             this.postMessage({ type: 'arena.streamError', streamId, error: error.message });
         } finally {
+            clearInterval(heartbeatInterval);
             this.arenaAbortControllers.delete(streamId);
         }
     }

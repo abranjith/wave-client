@@ -160,7 +160,7 @@ export function ArenaInputBar({
       }
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [showCommands, filteredCommands, selectedCommandIndex, input, activeCommand, isLoading],
+    [showCommands, filteredCommands, selectedCommandIndex, input, activeCommand, isLoading, isStreaming],
   );
 
   // ---- Command selection ------------------------------------------
@@ -180,7 +180,7 @@ export function ArenaInputBar({
   // ---- Send -------------------------------------------------------
   const handleSend = () => {
     const trimmed = input.trim();
-    if (!trimmed || isLoading) return;
+    if (!trimmed || isLoading || isStreaming) return;
 
     let command: ArenaCommandId | undefined;
     let message = trimmed;
