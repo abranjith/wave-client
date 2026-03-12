@@ -1,11 +1,9 @@
-import * as fs from 'fs';
 import * as path from 'path';
 
 import { BaseStorageService } from './BaseStorageService.js';
 import type {
     ArenaSession,
     ArenaMessage,
-    ArenaDocument,
     ArenaReference,
     ArenaSettings,
     ArenaProviderSettingsMap,
@@ -24,12 +22,6 @@ const ARENA_SETTINGS_FILE = 'settings.json';
 /** Sub-directory name for per-session message files. */
 const MESSAGES_SUBDIR = 'messages';
 
-/** Sub-directory name for raw document binary content. */
-const DOCUMENTS_SUBDIR = 'documents';
-
-/** Flat JSON file holding all ArenaDocument metadata. */
-const DOCUMENTS_FILE = 'documents.json';
-
 /** Flat JSON file holding all ArenaSession records. */
 const SESSIONS_FILE = 'sessions.json';
 
@@ -40,8 +32,6 @@ const SESSIONS_FILE = 'sessions.json';
  * ```
  * sessions.json                 — ArenaSession[] (messages stored separately)
  * messages/{sessionId}.json     — ArenaMessage[] per session
- * documents.json                — ArenaDocument[] metadata (deprecated)
- * documents/{documentId}        — raw binary content (Buffer)
  * references.json               — user-added ArenaReference[]
  * provider-settings.json        — ArenaProviderSettingsMap
  * settings.json                 — ArenaSettings
@@ -49,10 +39,6 @@ const SESSIONS_FILE = 'sessions.json';
  *
  * Error handling: missing files return documented defaults; unexpected FS
  * errors (permissions, disk full) are logged then re-thrown.
- *
- * @remarks ArenaDocument-related methods are `@deprecated` — they exist only
- * to satisfy `IArenaAdapter` and will be removed when the adapter interface
- * is cleaned up.
  */
 export class ArenaStorageService extends BaseStorageService {
     private readonly subDir = ARENA_DIR;
@@ -264,114 +250,6 @@ export class ArenaStorageService extends BaseStorageService {
         this.ensureDirectoryExists(arenaDir);
         const filePath = path.join(arenaDir, ARENA_REFERENCES_FILE);
         await this.writeJsonFileSecure(filePath, references);
-    }
-
-    // =========================================================================
-    // TASK-004: Document metadata and binary content storage (deprecated)
-    // =========================================================================
-
-    /**
-     * Loads all document metadata records from `documents.json`.
-     *
-     * @returns `ArenaDocument[]`, or `[]` when the file does not exist.
-     * @deprecated `ArenaDocument` is deprecated. Will be removed when
-     * `IArenaAdapter.uploadDocument` / `loadDocuments` / `deleteDocument`
-     * are cleaned up from the adapter interface.
-     */
-    async loadDocuments(): Promise<ArenaDocument[]> {
-        const arenaDir = await this.getArenaDir();
-        this.ensureDirectoryExists(arenaDir);
-        const filePath = path.join(arenaDir, DOCUMENTS_FILE);
-        return this.readJsonFileSecure<ArenaDocument[]>(filePath, []);
-    }
-
-    /**
-     * Upserts a document metadata record in `documents.json`.
-     *
-     * Finds by `id` and replaces if found; appends otherwise.
-     *
-     * @param document The document metadata to persist.
-     * @deprecated See {@link loadDocuments}.
-     */
-    async saveDocumentMetadata(document: ArenaDocument): Promise<void> {
-        const arenaDir = await this.getArenaDir();
-        this.ensureDirectoryExists(arenaDir);
-        const filePath = path.join(arenaDir, DOCUMENTS_FILE);
-
-        const documents = await this.readJsonFileSecure<ArenaDocument[]>(filePath, []);
-        const index = documents.findIndex((d) => d.id === document.id);
-
-        if (index !== -1) {
-            documents[index] = document;
-        } else {
-            documents.push(document);
-        }
-
-        await this.writeJsonFileSecure(filePath, documents);
-    }
-
-    /**
-     * Removes a document metadata record from `documents.json` and deletes
-     * its binary file at `documents/{documentId}` if it exists.
-     *
-     * No-op when the document `id` is not found in the metadata list.
-     *
-     * @param documentId The ID of the document to delete.
-     * @deprecated See {@link loadDocuments}.
-     */
-    async deleteDocument(documentId: string): Promise<void> {
-        const arenaDir = await this.getArenaDir();
-        this.ensureDirectoryExists(arenaDir);
-        const metaPath = path.join(arenaDir, DOCUMENTS_FILE);
-
-        const documents = await this.readJsonFileSecure<ArenaDocument[]>(metaPath, []);
-        const filtered = documents.filter((d) => d.id !== documentId);
-        await this.writeJsonFileSecure(metaPath, filtered);
-
-        // Remove the binary file if it exists
-        const binaryPath = path.join(arenaDir, DOCUMENTS_SUBDIR, documentId);
-        this.deleteFile(binaryPath);
-    }
-
-    /**
-     * Reads the raw binary content of a document from `documents/{documentId}`.
-     *
-     * @param documentId The ID of the document whose content to retrieve.
-     * @returns The raw file content as a `Buffer`.
-     * @throws `Error` (ENOENT) if the binary file does not exist.
-     * @deprecated See {@link loadDocuments}.
-     */
-    async loadDocumentContent(documentId: string): Promise<Buffer> {
-        const arenaDir = await this.getArenaDir();
-        const filePath = path.join(arenaDir, DOCUMENTS_SUBDIR, documentId);
-        try {
-            return fs.readFileSync(filePath) as Buffer;
-        } catch (error: unknown) {
-            const message = error instanceof Error ? error.message : 'Unknown error';
-            console.error(`Error reading document content ${filePath}:`, message);
-            throw error;
-        }
-    }
-
-    /**
-     * Writes raw binary content for a document to `documents/{documentId}`.
-     *
-     * @param documentId The ID of the document.
-     * @param content    The binary content to write.
-     * @deprecated See {@link loadDocuments}.
-     */
-    async saveDocumentContent(documentId: string, content: Buffer): Promise<void> {
-        const arenaDir = await this.getArenaDir();
-        const documentsDir = path.join(arenaDir, DOCUMENTS_SUBDIR);
-        this.ensureDirectoryExists(documentsDir);
-        const filePath = path.join(documentsDir, documentId);
-        try {
-            fs.writeFileSync(filePath, content);
-        } catch (error: unknown) {
-            const message = error instanceof Error ? error.message : 'Unknown error';
-            console.error(`Error writing document content ${filePath}:`, message);
-            throw error;
-        }
     }
 }
 

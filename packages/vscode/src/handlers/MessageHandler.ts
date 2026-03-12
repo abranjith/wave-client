@@ -39,9 +39,6 @@ import type {
     ArenaLoadMessagesMsg,
     ArenaSaveMessageMsg,
     ArenaClearMessagesMsg,
-    ArenaLoadDocumentsMsg,
-    ArenaUploadDocumentMsg,
-    ArenaDeleteDocumentMsg,
     ArenaLoadSettingsMsg,
     ArenaSaveSettingsMsg,
     ArenaLoadReferencesMsg,
@@ -237,15 +234,6 @@ export class MessageHandler {
                 break;
             case 'arena.clearSessionMessages':
                 await this.handleArenaClearSessionMessages(message as ArenaClearMessagesMsg);
-                break;
-            case 'arena.loadDocuments':
-                await this.handleArenaLoadDocuments(message as ArenaLoadDocumentsMsg);
-                break;
-            case 'arena.uploadDocument':
-                await this.handleArenaUploadDocument(message as ArenaUploadDocumentMsg);
-                break;
-            case 'arena.deleteDocument':
-                await this.handleArenaDeleteDocument(message as ArenaDeleteDocumentMsg);
                 break;
             case 'arena.loadSettings':
                 await this.handleArenaLoadSettings(message as ArenaLoadSettingsMsg);
@@ -1583,40 +1571,6 @@ export class MessageHandler {
             this.postMessage({ type: 'arena.clearSessionMessages', requestId });
         } catch (error: any) {
             this.postMessage({ type: 'arena.clearSessionMessages', requestId, error: error.message });
-        }
-    }
-
-    // ==================== Arena Storage Handlers — Documents ====================
-
-    private async handleArenaLoadDocuments(message: ArenaLoadDocumentsMsg): Promise<void> {
-        const { requestId } = message;
-        try {
-            const documents = await arenaStorageService.loadDocuments();
-            this.postMessage({ type: 'arena.loadDocuments', requestId, documents });
-        } catch (error: any) {
-            this.postMessage({ type: 'arena.loadDocuments', requestId, error: error.message });
-        }
-    }
-
-    private async handleArenaUploadDocument(message: ArenaUploadDocumentMsg): Promise<void> {
-        const { requestId, metadata, contentBase64 } = message;
-        try {
-            const content = Buffer.from(contentBase64, 'base64');
-            await arenaStorageService.saveDocumentContent(metadata.id, content);
-            await arenaStorageService.saveDocumentMetadata(metadata);
-            this.postMessage({ type: 'arena.uploadDocument', requestId, document: metadata });
-        } catch (error: any) {
-            this.postMessage({ type: 'arena.uploadDocument', requestId, error: error.message });
-        }
-    }
-
-    private async handleArenaDeleteDocument(message: ArenaDeleteDocumentMsg): Promise<void> {
-        const { requestId, documentId } = message;
-        try {
-            await arenaStorageService.deleteDocument(documentId);
-            this.postMessage({ type: 'arena.deleteDocument', requestId });
-        } catch (error: any) {
-            this.postMessage({ type: 'arena.deleteDocument', requestId, error: error.message });
         }
     }
 

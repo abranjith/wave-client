@@ -68,10 +68,6 @@ vi.mock('../../services', () => ({
     loadMessages: vi.fn(),
     saveMessages: vi.fn(),
     clearSessionMessages: vi.fn(),
-    loadDocuments: vi.fn(),
-    saveDocumentMetadata: vi.fn(),
-    saveDocumentContent: vi.fn(),
-    deleteDocument: vi.fn(),
     loadSettings: vi.fn(),
     saveSettings: vi.fn(),
     loadReferences: vi.fn(),
@@ -336,37 +332,6 @@ describe('MessageHandler', () => {
       expect(arenaStorageService.clearSessionMessages).toHaveBeenCalledWith('s1');
       expect(mockPanel.webview.postMessage).toHaveBeenCalledWith(
         expect.objectContaining({ type: 'arena.clearSessionMessages', requestId: 'r7' })
-      );
-    });
-
-    // ==================== Storage — Documents ====================
-
-    it('arena.uploadDocument — decodes base64 and calls saveDocumentContent + saveDocumentMetadata', async () => {
-      const { arenaStorageService } = await import('../../services/index.js');
-      (arenaStorageService.saveDocumentContent as any).mockResolvedValue(undefined);
-      (arenaStorageService.saveDocumentMetadata as any).mockResolvedValue(undefined);
-      const metadata = { id: 'doc-1', filename: 'test.pdf', mimeType: 'application/pdf', size: 4, uploadedAt: 0, processed: false };
-      const content = Buffer.from('test');
-      const contentBase64 = content.toString('base64');
-
-      await handler.handleMessage({ type: 'arena.uploadDocument', requestId: 'r8', metadata, contentBase64 });
-
-      expect(arenaStorageService.saveDocumentContent).toHaveBeenCalledWith('doc-1', Buffer.from(contentBase64, 'base64'));
-      expect(arenaStorageService.saveDocumentMetadata).toHaveBeenCalledWith(metadata);
-      expect(mockPanel.webview.postMessage).toHaveBeenCalledWith(
-        expect.objectContaining({ type: 'arena.uploadDocument', requestId: 'r8', document: metadata })
-      );
-    });
-
-    it('arena.deleteDocument — calls deleteDocument(documentId)', async () => {
-      const { arenaStorageService } = await import('../../services/index.js');
-      (arenaStorageService.deleteDocument as any).mockResolvedValue(undefined);
-
-      await handler.handleMessage({ type: 'arena.deleteDocument', requestId: 'r9', documentId: 'doc-1' });
-
-      expect(arenaStorageService.deleteDocument).toHaveBeenCalledWith('doc-1');
-      expect(mockPanel.webview.postMessage).toHaveBeenCalledWith(
-        expect.objectContaining({ type: 'arena.deleteDocument', requestId: 'r9' })
       );
     });
 

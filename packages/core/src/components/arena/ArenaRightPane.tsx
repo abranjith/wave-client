@@ -81,7 +81,6 @@ export interface ArenaRightPaneProps {
 
 const SOURCE_TYPE_ICONS: Record<ArenaSourceType, React.ReactNode> = {
   web: <Globe size={14} />,
-  document: <FileText size={14} />,
   mcp: <Wrench size={14} />,
 };
 

@@ -32,7 +32,6 @@ import type { ValidationRule } from './validation';
 import type {
     ArenaSession,
     ArenaMessage,
-    ArenaDocument,
     ArenaSettings,
     ArenaChatRequest,
     ArenaChatResponse,
@@ -437,23 +436,6 @@ export interface IArenaAdapter {
      */
     clearSessionMessages(sessionId: string): Promise<Result<void, string>>;
 
-    // Document Management
-    /**
-     * Load all uploaded documents metadata
-     */
-    loadDocuments(): Promise<Result<ArenaDocument[], string>>;
-    
-    /**
-     * Upload and process a document for RAG
-     * Returns the document metadata with processing status
-     */
-    uploadDocument(file: File, content: ArrayBuffer): Promise<Result<ArenaDocument, string>>;
-    
-    /**
-     * Delete a document and its embeddings
-     */
-    deleteDocument(documentId: string): Promise<Result<void, string>>;
-
     // Chat Operations
     /**
      * Send a chat message and get a response
@@ -639,7 +621,6 @@ export interface AdapterEventMap {
     // Arena events
     arenaSessionsChanged: void;
     arenaMessagesChanged: { sessionId: string };
-    arenaDocumentsChanged: void;
     arenaSettingsChanged: void;
     arenaStreamChunk: ArenaChatStreamChunk;
 }

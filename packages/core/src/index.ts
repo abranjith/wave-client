@@ -56,7 +56,6 @@ export type {
     ArenaMessageSource,
     ArenaSession,
     ArenaSessionWithMessages,
-    ArenaDocument,
     ArenaProviderType,
     ArenaSettings,
     ArenaState,

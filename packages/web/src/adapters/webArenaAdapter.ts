@@ -2,14 +2,13 @@
  * Web Arena Adapter
  * 
  * Implements IArenaAdapter for the web platform.
- * Uses localStorage for session/document storage and direct LLM API calls.
+ * Uses localStorage for session storage and direct LLM API calls.
  */
 
 import type {
     IArenaAdapter,
     ArenaSession,
     ArenaMessage,
-    ArenaDocument,
     ArenaSettings,
     ArenaChatRequest,
     ArenaChatResponse,
@@ -41,7 +40,6 @@ import {
 const STORAGE_KEYS = {
     SESSIONS: CONFIG_STORAGE_KEYS.SESSIONS,
     MESSAGES: CONFIG_STORAGE_KEYS.MESSAGES,
-    DOCUMENTS: CONFIG_STORAGE_KEYS.DOCUMENTS,
     SETTINGS: CONFIG_STORAGE_KEYS.SETTINGS,
     REFERENCES: CONFIG_STORAGE_KEYS.REFERENCES,
     PROVIDER_SETTINGS: CONFIG_STORAGE_KEYS.PROVIDER_SETTINGS,
@@ -179,92 +177,6 @@ export class WebArenaAdapter implements IArenaAdapter {
             return ok(undefined);
         } catch (error) {
             return err(`Failed to clear messages: ${error}`);
-        }
-    }
-
-    // ========================================================================
-    // Document Management
-    // ========================================================================
-
-    async loadDocuments(): Promise<Result<ArenaDocument[], string>> {
-        try {
-            const documents = loadFromStorage<ArenaDocument[]>(STORAGE_KEYS.DOCUMENTS, []);
-            documents.sort((a, b) => b.uploadedAt - a.uploadedAt);
-            return ok(documents);
-        } catch (error) {
-            return err(`Failed to load documents: ${error}`);
-        }
-    }
-
-    async uploadDocument(file: File, content: ArrayBuffer): Promise<Result<ArenaDocument, string>> {
-        try {
-            const settings = loadFromStorage<ArenaSettings>(STORAGE_KEYS.SETTINGS, DEFAULT_ARENA_SETTINGS);
-            
-            // Check size limit
-            if (content.byteLength > settings.maxDocumentSize) {
-                return err(`File size ${(content.byteLength / 1024 / 1024).toFixed(2)}MB exceeds maximum ${(settings.maxDocumentSize / 1024 / 1024).toFixed(0)}MB`);
-            }
-
-            const document: ArenaDocument = {
-                id: generateId(),
-                filename: file.name,
-                mimeType: file.type || 'application/octet-stream',
-                size: content.byteLength,
-                uploadedAt: Date.now(),
-                processed: false,
-            };
-
-            // Save document metadata
-            const documents = loadFromStorage<ArenaDocument[]>(STORAGE_KEYS.DOCUMENTS, []);
-            documents.push(document);
-            saveToStorage(STORAGE_KEYS.DOCUMENTS, documents);
-
-            // Store content in separate key (base64 encoded)
-            try {
-                const base64Content = btoa(
-                    new Uint8Array(content).reduce(
-                        (data, byte) => data + String.fromCharCode(byte),
-                        ''
-                    )
-                );
-                localStorage.setItem(`wave-arena-doc-${document.id}`, base64Content);
-
-                // Mark as processed
-                document.processed = true;
-                document.chunkCount = 1; // Simplified - in reality would chunk for RAG
-                
-                const index = documents.findIndex(d => d.id === document.id);
-                if (index >= 0) {
-                    documents[index] = document;
-                    saveToStorage(STORAGE_KEYS.DOCUMENTS, documents);
-                }
-            } catch (storageError) {
-                document.error = 'File too large for browser storage';
-                const index = documents.findIndex(d => d.id === document.id);
-                if (index >= 0) {
-                    documents[index] = document;
-                    saveToStorage(STORAGE_KEYS.DOCUMENTS, documents);
-                }
-            }
-
-            return ok(document);
-        } catch (error) {
-            return err(`Failed to upload document: ${error}`);
-        }
-    }
-
-    async deleteDocument(documentId: string): Promise<Result<void, string>> {
-        try {
-            const documents = loadFromStorage<ArenaDocument[]>(STORAGE_KEYS.DOCUMENTS, []);
-            const filtered = documents.filter(d => d.id !== documentId);
-            saveToStorage(STORAGE_KEYS.DOCUMENTS, filtered);
-            
-            // Remove content
-            localStorage.removeItem(`wave-arena-doc-${documentId}`);
-            
-            return ok(undefined);
-        } catch (error) {
-            return err(`Failed to delete document: ${error}`);
         }
     }
 

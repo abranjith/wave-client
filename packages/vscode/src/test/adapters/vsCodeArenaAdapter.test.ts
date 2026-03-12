@@ -13,7 +13,6 @@ import type {
     IAdapterEvents,
     ArenaSession,
     ArenaMessage,
-    ArenaDocument,
     ArenaSettings,
     ArenaReference,
     ArenaProviderSettingsMap,
@@ -72,15 +71,6 @@ const MESSAGE: ArenaMessage = {
     content: 'Hello',
     status: 'sent',
     timestamp: 1000,
-};
-
-const DOCUMENT: ArenaDocument = {
-    id: 'doc-1',
-    filename: 'test.pdf',
-    mimeType: 'application/pdf',
-    size: 1024,
-    uploadedAt: 1000,
-    processed: false,
 };
 
 const SETTINGS: ArenaSettings = {
@@ -237,62 +227,6 @@ describe('createVSCodeArenaAdapter', () => {
                 expect.objectContaining({ type: 'arena.clearSessionMessages', sessionId: 'sess-1' })
             );
             expect(spy).toHaveBeenCalledWith({ sessionId: 'sess-1' });
-        });
-    });
-
-    // =========================================================================
-    // Document Management
-    // =========================================================================
-
-    describe('loadDocuments', () => {
-        it('resolves with documents array', async () => {
-            const promise = adapter.loadDocuments();
-            resolveRequest({ documents: [DOCUMENT] });
-            const result = await promise;
-            expect(result.isOk).toBe(true);
-            expect((result as any).value).toEqual([DOCUMENT]);
-        });
-    });
-
-    describe('uploadDocument', () => {
-        it('posts metadata only (not ArrayBuffer content) and emits arenaDocumentsChanged', async () => {
-            const spy = vi.fn();
-            events.on('arenaDocumentsChanged', spy);
-
-            const file = new File(['data'], 'test.pdf', { type: 'application/pdf' });
-            const content = new ArrayBuffer(4);
-
-            const promise = adapter.uploadDocument(file, content);
-            const posted = vsCodeApi.postMessage.mock.lastCall?.[0] as any;
-
-            // Metadata should be present
-            expect(posted.filename).toBe('test.pdf');
-            expect(posted.mimeType).toBe('application/pdf');
-            expect(posted.size).toBe(4);
-            // Raw ArrayBuffer should NOT be sent
-            expect(posted.content).toBeUndefined();
-
-            resolveRequest({ document: DOCUMENT });
-            const result = await promise;
-            expect(result.isOk).toBe(true);
-            expect((result as any).value).toEqual(DOCUMENT);
-            expect(spy).toHaveBeenCalledOnce();
-        });
-    });
-
-    describe('deleteDocument', () => {
-        it('posts arena.deleteDocument and emits arenaDocumentsChanged', async () => {
-            const spy = vi.fn();
-            events.on('arenaDocumentsChanged', spy);
-
-            const promise = adapter.deleteDocument('doc-1');
-            resolveRequest({});
-            await promise;
-
-            expect(vsCodeApi.postMessage).toHaveBeenCalledWith(
-                expect.objectContaining({ type: 'arena.deleteDocument', documentId: 'doc-1' })
-            );
-            expect(spy).toHaveBeenCalledOnce();
         });
     });
 

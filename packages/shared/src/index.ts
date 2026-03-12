@@ -33,7 +33,6 @@ export type {
     ArenaProviderSettingsMap,
     ArenaSettings,
     ArenaSession,
-    ArenaDocument,
     ArenaReference,
     ModelDefinition,
 } from '@wave-client/core';

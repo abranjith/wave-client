@@ -23,7 +23,6 @@ import type {
     IArenaAdapter,
     ArenaSession,
     ArenaMessage,
-    ArenaDocument,
     ArenaSettings,
     ArenaChatRequest,
     ArenaChatResponse,
@@ -128,9 +127,6 @@ export function createVSCodeArenaAdapter(
                 'arena.loadMessages': 'messages',
                 'arena.saveMessage': '',
                 'arena.clearSessionMessages': '',
-                'arena.loadDocuments': 'documents',
-                'arena.uploadDocument': 'document',
-                'arena.deleteDocument': '',
                 'arena.loadSettings': 'settings',
                 'arena.saveSettings': '',
                 'arena.validateApiKey': 'valid',
@@ -246,30 +242,6 @@ export function createVSCodeArenaAdapter(
         async clearSessionMessages(sessionId: string): Promise<Result<void, string>> {
             const result = await sendAndWait<void>('arena.clearSessionMessages', { sessionId });
             if (result.isOk) { events.emit('arenaMessagesChanged', { sessionId }); }
-            return result;
-        },
-
-        // ── Document Management ──────────────────────────────────────────────
-
-        async loadDocuments(): Promise<Result<ArenaDocument[], string>> {
-            return sendAndWait<ArenaDocument[]>('arena.loadDocuments');
-        },
-
-        async uploadDocument(file: File, content: ArrayBuffer): Promise<Result<ArenaDocument, string>> {
-            // Serialize only serialisable metadata; the extension host creates the ArenaDocument record.
-            const result = await sendAndWait<ArenaDocument>('arena.uploadDocument', {
-                filename: file.name,
-                mimeType: file.type,
-                size: file.size,
-                // content is intentionally omitted (too large for postMessage in MVP)
-            });
-            if (result.isOk) { events.emit('arenaDocumentsChanged', undefined); }
-            return result;
-        },
-
-        async deleteDocument(documentId: string): Promise<Result<void, string>> {
-            const result = await sendAndWait<void>('arena.deleteDocument', { documentId });
-            if (result.isOk) { events.emit('arenaDocumentsChanged', undefined); }
             return result;
         },
 

@@ -15,7 +15,7 @@ import { SecondaryButton } from '../ui/SecondaryButton';
 import { useArenaAdapter, useNotificationAdapter } from '../../hooks/useAdapter';
 import useAppStateStore from '../../hooks/store/useAppStateStore';
 import { createArenaMessage } from '../../hooks/store/createArenaSlice';
-import { createSessionMetadata, mergeReferences, DEFAULT_ARENA_SETTINGS } from '../../config/arenaConfig';
+import { createSessionMetadata, mergeReferences } from '../../config/arenaConfig';
 import type { ArenaAgentId, ArenaReference, ArenaProviderSettingsMap, ArenaSettings as ArenaSettingsConfig } from '../../config/arenaConfig';
 import type { ArenaCommandId } from '../../types/arena';
 import type { StreamHandle } from '../../types/arena';
@@ -92,7 +92,6 @@ export function ArenaPane({ className }: ArenaPaneProps): React.ReactElement {
     model: settings.arena.defaultModel,
     maxSessions: settings.arena.maxSessions,
     maxMessagesPerSession: settings.arena.maxMessagesPerSession,
-    maxDocumentSize: DEFAULT_ARENA_SETTINGS.maxDocumentSize,
     enableStreaming: settings.arena.enableStreaming,
   }), [settings.arena]);
 

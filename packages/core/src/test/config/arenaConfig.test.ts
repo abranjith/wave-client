@@ -190,9 +190,6 @@ describe('STORAGE_KEYS', () => {
     expect(STORAGE_KEYS.PROVIDER_SETTINGS).toBeTruthy();
   });
 
-  it('should still expose DOCUMENTS key (deprecated)', () => {
-    expect(STORAGE_KEYS.DOCUMENTS).toBeTruthy();
-  });
 });
 
 describe('LLM_DEFAULTS', () => {

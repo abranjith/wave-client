@@ -18,7 +18,6 @@ import {
   Plus,
   Trash2,
   Globe,
-  FileText,
   Wrench,
   ExternalLink,
   Shield,
@@ -47,13 +46,11 @@ export interface ArenaReferencesModalProps {
 
 const TYPE_ICONS: Record<ArenaSourceType, React.ReactNode> = {
   web: <Globe size={14} />,
-  document: <FileText size={14} />,
   mcp: <Wrench size={14} />,
 };
 
 const TYPE_LABELS: Record<ArenaSourceType, string> = {
   web: 'Web',
-  document: 'Document',
   mcp: 'MCP Tool',
 };
 
@@ -223,7 +220,6 @@ export function ArenaReferencesModal({
                 className="px-2 py-1.5 text-sm bg-slate-100 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500"
               >
                 <option value="web">Web</option>
-                <option value="document">Document</option>
                 <option value="mcp">MCP</option>
               </select>
             </div>

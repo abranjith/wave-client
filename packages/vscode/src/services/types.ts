@@ -41,7 +41,6 @@ export {
 import type {
     ArenaSession,
     ArenaMessage,
-    ArenaDocument,
     ArenaReference,
     ArenaSettings,
     ArenaProviderSettingsMap,
@@ -59,11 +58,6 @@ export interface ArenaDeleteSessionMsg  { type: 'arena.deleteSession';  requestI
 export interface ArenaLoadMessagesMsg    { type: 'arena.loadMessages';         requestId: string; sessionId: string }
 export interface ArenaSaveMessageMsg     { type: 'arena.saveMessage';          requestId: string; message: ArenaMessage }
 export interface ArenaClearMessagesMsg   { type: 'arena.clearSessionMessages'; requestId: string; sessionId: string }
-
-// Storage — documents
-export interface ArenaLoadDocumentsMsg   { type: 'arena.loadDocuments';   requestId: string }
-export interface ArenaUploadDocumentMsg  { type: 'arena.uploadDocument';  requestId: string; metadata: ArenaDocument; contentBase64: string }
-export interface ArenaDeleteDocumentMsg  { type: 'arena.deleteDocument';  requestId: string; documentId: string }
 
 // Storage — settings & references
 export interface ArenaLoadSettingsMsg         { type: 'arena.loadSettings';         requestId: string }
@@ -95,9 +89,6 @@ export type ArenaPostMessage =
     | ArenaLoadMessagesMsg
     | ArenaSaveMessageMsg
     | ArenaClearMessagesMsg
-    | ArenaLoadDocumentsMsg
-    | ArenaUploadDocumentMsg
-    | ArenaDeleteDocumentMsg
     | ArenaLoadSettingsMsg
     | ArenaSaveSettingsMsg
     | ArenaLoadReferencesMsg

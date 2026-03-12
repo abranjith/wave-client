@@ -8,7 +8,6 @@ import type { AppSettings } from '../../types.js';
 import type {
     ArenaSession,
     ArenaMessage,
-    ArenaDocument,
     ArenaReference,
     ArenaSettings,
     ArenaProviderSettingsMap,
@@ -372,89 +371,4 @@ describe('ArenaStorageService', () => {
         });
     });
 
-    // =========================================================================
-    // TASK-004: Document Storage (deprecated)
-    // =========================================================================
-
-    describe('Document Storage', () => {
-        const doc1: ArenaDocument = {
-            id: 'doc-1',
-            filename: 'report.pdf',
-            mimeType: 'application/pdf',
-            size: 1024,
-            uploadedAt: 3_000,
-            processed: true,
-        };
-
-        const doc2: ArenaDocument = {
-            id: 'doc-2',
-            filename: 'notes.txt',
-            mimeType: 'text/plain',
-            size: 512,
-            uploadedAt: 4_000,
-            processed: false,
-        };
-
-        it('returns [] when documents.json is missing', async () => {
-            const result = await service.loadDocuments();
-            expect(result).toEqual([]);
-        });
-
-        it('saveDocumentMetadata upserts — appends new document', async () => {
-            await service.saveDocumentMetadata(doc1);
-            const result = await service.loadDocuments();
-            expect(result).toHaveLength(1);
-            expect(result[0]).toEqual(doc1);
-        });
-
-        it('saveDocumentMetadata upserts — replaces by id', async () => {
-            await service.saveDocumentMetadata(doc1);
-            const updated: ArenaDocument = { ...doc1, filename: 'report-v2.pdf', processed: true };
-            await service.saveDocumentMetadata(updated);
-            const result = await service.loadDocuments();
-            expect(result).toHaveLength(1);
-            expect(result[0].filename).toBe('report-v2.pdf');
-        });
-
-        it('deleteDocument removes document from metadata list', async () => {
-            await service.saveDocumentMetadata(doc1);
-            await service.saveDocumentMetadata(doc2);
-            await service.deleteDocument('doc-1');
-            const result = await service.loadDocuments();
-            expect(result).toHaveLength(1);
-            expect(result[0].id).toBe('doc-2');
-        });
-
-        it('deleteDocument deletes the binary file if it exists', async () => {
-            const binaryPath = path.join(ARENA_ROOT, 'documents', 'doc-1');
-            mockFs.addDirectory(path.join(ARENA_ROOT, 'documents'));
-            mockFs.setFile(binaryPath, 'binary-data');
-
-            await service.saveDocumentMetadata(doc1);
-            await service.deleteDocument('doc-1');
-
-            expect(mockFs.hasFile(binaryPath)).toBe(false);
-        });
-
-        it('deleteDocument does not throw when document is not in the list', async () => {
-            await expect(service.deleteDocument('non-existent-doc')).resolves.not.toThrow();
-        });
-
-        it('saveDocumentContent writes binary data to documents/{id}', async () => {
-            mockFs.addDirectory(path.join(ARENA_ROOT, 'documents'));
-            const content = Buffer.from('hello binary world');
-            await service.saveDocumentContent('doc-1', content);
-            const binaryPath = path.join(ARENA_ROOT, 'documents', 'doc-1');
-            expect(mockFs.hasFile(binaryPath)).toBe(true);
-        });
-
-        it('loadDocumentContent reads and returns the same buffer that was saved', async () => {
-            mockFs.addDirectory(path.join(ARENA_ROOT, 'documents'));
-            const content = Buffer.from('hello binary world');
-            await service.saveDocumentContent('doc-1', content);
-            const loaded = await service.loadDocumentContent('doc-1');
-            expect(Buffer.isBuffer(loaded)).toBe(true);
-            expect(loaded.toString()).toBe('hello binary world');
-        });
-    });
 });

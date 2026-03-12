@@ -206,7 +206,7 @@ export interface ArenaMessage {
 
 /** Source reference in a message */
 export interface ArenaMessageSource {
-  type: 'web' | 'document' | 'collection' | 'environment' | 'flow';
+  type: 'web' | 'collection' | 'environment' | 'flow';
   title: string;
   url?: string;
   excerpt?: string;
@@ -232,26 +232,6 @@ export interface ArenaSession {
 /** Full session with messages (for display) */
 export interface ArenaSessionWithMessages extends ArenaSession {
   messages: ArenaMessage[];
-}
-
-// ============================================================================
-// Document Types (deprecated — will be removed in future phase)
-// ============================================================================
-
-/**
- * @deprecated The learn-docs agent has been removed. This type is kept
- * temporarily for adapter backward compatibility and will be removed
- * when adapters are refactored (Phase 5).
- */
-export interface ArenaDocument {
-  id: string;
-  filename: string;
-  mimeType: string;
-  size: number;
-  uploadedAt: number;
-  processed: boolean;
-  chunkCount?: number;
-  error?: string;
 }
 
 // ============================================================================

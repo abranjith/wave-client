@@ -127,7 +127,6 @@ describe('ArenaReferencesModal', () => {
   it('should display type labels for each reference', () => {
     const refs = [
       makeDefaultRef({ type: 'web' }),
-      makeUserRef({ type: 'document', id: 'doc-1', name: 'A Doc' }),
       makeUserRef({ type: 'mcp', id: 'mcp-1', name: 'An MCP Tool' }),
     ];
 
@@ -141,7 +140,6 @@ describe('ArenaReferencesModal', () => {
 
     // Type label badges (uppercase in the row)
     expect(screen.getByText('Web')).toBeInTheDocument();
-    expect(screen.getByText('Document')).toBeInTheDocument();
     expect(screen.getByText('MCP Tool')).toBeInTheDocument();
   });
 

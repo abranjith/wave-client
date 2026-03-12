@@ -81,11 +81,8 @@ export function getAgentDefinition(agentId: ArenaAgentId): ArenaAgentDefinition 
 
 /**
  * Source types available to Arena agents.
- *
- * @deprecated 'document' will be removed in a future version.
- *             New code should only use 'web' or 'mcp'.
  */
-export type ArenaSourceType = 'web' | 'document' | 'mcp';
+export type ArenaSourceType = 'web' | 'mcp';
 
 /**
  * An individual source entry surfaced in the toolbar.
@@ -94,8 +91,6 @@ export interface ArenaSourceConfig {
   type: ArenaSourceType;
   label: string;
   url?: string;
-  /** @deprecated Will be removed with document source type. */
-  documentId?: string;
   enabled: boolean;
 }
 
@@ -116,7 +111,7 @@ export interface ArenaReference {
   description?: string;
   /** Grouping category (e.g. "Standards", "Documentation") */
   category?: string;
-  /** Source type: web, document, or mcp */
+  /** Source type: web or mcp */
   type: ArenaSourceType;
   /** True for built-in references that cannot be removed */
   isDefault: boolean;
@@ -359,8 +354,6 @@ export function ollamaTagsUrl(baseUrl: string = OLLAMA_DEFAULT_BASE_URL): string
 export const STORAGE_KEYS = {
   SESSIONS: 'wave-arena-sessions',
   MESSAGES: 'wave-arena-messages',
-  /** @deprecated Document storage will be removed. */
-  DOCUMENTS: 'wave-arena-documents',
   SETTINGS: 'wave-arena-settings',
   REFERENCES: 'wave-arena-references',
   PROVIDER_SETTINGS: 'wave-arena-provider-settings',
@@ -510,8 +503,6 @@ export interface ArenaSettings {
   maxSessions: number;
   /** Max messages per session */
   maxMessagesPerSession: number;
-  /** @deprecated Document uploads will be removed. */
-  maxDocumentSize: number;
   /** Enable streaming responses */
   enableStreaming: boolean;
   /** Custom reference websites for web-expert agent */
@@ -522,7 +513,6 @@ export const DEFAULT_ARENA_SETTINGS: ArenaSettings = {
   provider: 'gemini',
   maxSessions: 5,
   maxMessagesPerSession: 10,
-  maxDocumentSize: 50 * 1024 * 1024, // 50 MB
   enableStreaming: true,
 };
 

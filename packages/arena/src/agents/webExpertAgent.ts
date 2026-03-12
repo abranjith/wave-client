@@ -296,7 +296,7 @@ export function createWebExpertAgent(config: WebExpertAgentConfig) {
             { content?: unknown },
             Record<string, unknown>,
           ];
-          if (metadata?.langgraph_node !== 'generate') continue;
+          if (metadata?.langgraph_node !== 'generate') { continue; }
           const content = messageChunk?.content?.toString() ?? '';
           if (content) {
             yield { id: `chunk-${chunkIndex++}`, content, done: false, messageId };

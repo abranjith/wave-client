@@ -45,7 +45,6 @@ import {
 import type {
     ArenaSession,
     ArenaMessage,
-    ArenaDocument,
     ArenaSettings,
     ArenaChatRequest,
     ArenaChatResponse,
@@ -92,7 +91,6 @@ export interface MockDataStore {
     // Arena data
     arenaSessions: ArenaSession[];
     arenaMessages: ArenaMessage[];
-    arenaDocuments: ArenaDocument[];
     arenaSettings: ArenaSettings;
     arenaReferences: ArenaReference[];
     arenaProviderSettings: ArenaProviderSettingsMap;
@@ -120,7 +118,6 @@ function createDefaultMockStore(): MockDataStore {
         // Arena defaults
         arenaSessions: [],
         arenaMessages: [],
-        arenaDocuments: [],
         arenaSettings: DEFAULT_ARENA_SETTINGS,
         arenaReferences: [],
         arenaProviderSettings: getDefaultProviderSettings(),
@@ -629,30 +626,6 @@ function createMockArenaAdapter(store: MockDataStore): IArenaAdapter {
 
         async clearSessionMessages(sessionId: string): Promise<Result<void, string>> {
             store.arenaMessages = store.arenaMessages.filter(m => m.sessionId !== sessionId);
-            return ok(undefined);
-        },
-
-        // Document Management
-        async loadDocuments(): Promise<Result<ArenaDocument[], string>> {
-            return ok([...store.arenaDocuments]);
-        },
-
-        async uploadDocument(file: File, _content: ArrayBuffer): Promise<Result<ArenaDocument, string>> {
-            const document: ArenaDocument = {
-                id: `doc-${Date.now()}`,
-                filename: file.name,
-                mimeType: file.type || 'application/octet-stream',
-                size: file.size,
-                uploadedAt: Date.now(),
-                processed: true,
-                chunkCount: 1,
-            };
-            store.arenaDocuments.push(document);
-            return ok(document);
-        },
-
-        async deleteDocument(documentId: string): Promise<Result<void, string>> {
-            store.arenaDocuments = store.arenaDocuments.filter(d => d.id !== documentId);
             return ok(undefined);
         },
 
