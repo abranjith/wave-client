@@ -8,17 +8,17 @@
  *   3. Settings — advanced settings (max sessions, streaming, etc.)
  */
 
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Settings, Sparkles, ArrowLeft, PanelRight } from 'lucide-react';
 import { cn } from '../../utils/styling';
 import { SecondaryButton } from '../ui/SecondaryButton';
 import { useArenaAdapter, useNotificationAdapter } from '../../hooks/useAdapter';
 import useAppStateStore from '../../hooks/store/useAppStateStore';
 import { createArenaMessage } from '../../hooks/store/createArenaSlice';
+import { useArenaStreamManager } from '../../hooks/useArenaStreamManager';
 import { createSessionMetadata, mergeReferences } from '../../config/arenaConfig';
 import type { ArenaAgentId, ArenaReference, ArenaProviderSettingsMap, ArenaSettings as ArenaSettingsConfig } from '../../config/arenaConfig';
 import type { ArenaCommandId } from '../../types/arena';
-import type { StreamHandle } from '../../types/arena';
 import type { ArenaAppSettings } from '../../hooks/store/createSettingsSlice';
 import ArenaChatView from './ArenaChatView';
 import ArenaChatToolbar from './ArenaChatToolbar';
@@ -46,8 +46,8 @@ export function ArenaPane({ className }: ArenaPaneProps): React.ReactElement {
   // Local state
   const [showRightPane, setShowRightPane] = useState(true);
 
-  /** Ref to the active StreamHandle so we can cancel from anywhere. */
-  const activeStreamRef = useRef<StreamHandle | null>(null);
+  // Streaming state machine for this pane
+  const { startStream, cancelStream, streamState, streamingContent } = useArenaStreamManager();
   
   // Global state from store
   const {
@@ -55,8 +55,6 @@ export function ArenaPane({ className }: ArenaPaneProps): React.ReactElement {
     arenaActiveSessionId,
     arenaMessages,
     arenaIsLoading,
-    arenaIsStreaming,
-    arenaStreamingContent,
     arenaSelectedAgent,
     arenaView,
     arenaActiveSources,
@@ -72,10 +70,6 @@ export function ArenaPane({ className }: ArenaPaneProps): React.ReactElement {
     addArenaMessage,
     updateArenaMessage,
     setArenaIsLoading,
-    setArenaIsStreaming,
-    setArenaStreamingContent,
-    appendArenaStreamingContent,
-    setArenaStreamingMessageId,
     setArenaError,
     selectArenaAgent,
     setArenaView,
@@ -180,13 +174,7 @@ export function ArenaPane({ className }: ArenaPaneProps): React.ReactElement {
     }
   }, [arenaActiveSessionId]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Cleanup active stream on unmount
-  useEffect(() => {
-    return () => {
-      activeStreamRef.current?.cancel();
-      activeStreamRef.current = null;
-    };
-  }, []);
+  // Cleanup active stream on unmount is handled by useArenaStreamManager
 
   // ============================================================================
   // Handlers
@@ -279,11 +267,6 @@ export function ArenaPane({ className }: ArenaPaneProps): React.ReactElement {
         status: 'streaming',
       });
       addArenaMessage(assistantMessage);
-      setArenaStreamingMessageId(assistantMessage.id);
-
-      // Start streaming
-      setArenaIsStreaming(true);
-      setArenaStreamingContent('');
 
       const request = {
         sessionId: arenaActiveSessionId,
@@ -295,77 +278,32 @@ export function ArenaPane({ className }: ArenaPaneProps): React.ReactElement {
       };
 
       if (arenaSettings.enableStreaming) {
-        // ── Streaming path: use StreamHandle ──────────────────────────────
-        const handle = arenaAdapter.streamMessage(request);
-        activeStreamRef.current = handle;
-
-        // Track whether an error has already been handled via an error chunk so
-        // onDone (which fires after arena.streamComplete) does not overwrite it.
-        let streamErrored = false;
-
-        handle.onChunk((chunk) => {
-          // Heartbeat: backend acknowledged the request. No content to append.
-          // The safety timeout in vsCodeArenaAdapter already resets automatically.
-          if (chunk.heartbeat) {
-            return;
-          }
-          if (chunk.error) {
-            // Error chunks carry the error string, not content.
-            // Stop streaming immediately and mark the message as failed so that
-            // the subsequent arena.streamComplete does not overwrite the error.
-            streamErrored = true;
-            activeStreamRef.current = null;
-            setArenaIsStreaming(false);
-            updateArenaMessage(assistantMessage.id, {
-              status: 'error',
-              error: chunk.error,
+        // ── Streaming path: delegate to useArenaStreamManager ─────────────
+        startStream(request, assistantMessage.id, {
+          onComplete: async (response) => {
+            await arenaAdapter.saveMessage({
+              ...assistantMessage,
+              content: response.content,
+              status: 'complete',
+              sources: response.sources,
+              tokenCount: response.tokenCount,
+              ...(response.blocks ? { blocks: response.blocks } : {}),
             });
-            notification.showNotification('error', chunk.error);
-            return;
-          }
-          appendArenaStreamingContent(chunk.content);
-        });
-
-        handle.onDone(async (response) => {
-          // If an error chunk already ended the stream, ignore the trailing completion.
-          if (streamErrored) {
-            return;
-          }
-          activeStreamRef.current = null;
-          setArenaIsStreaming(false);
-          updateArenaMessage(assistantMessage.id, {
-            content: response.content,
-            status: 'complete',
-            sources: response.sources,
-            tokenCount: response.tokenCount,
-          });
-          await arenaAdapter.saveMessage({
-            ...assistantMessage,
-            content: response.content,
-            status: 'complete',
-            sources: response.sources,
-            tokenCount: response.tokenCount,
-          });
-          // Update metadata after assistant response
-          if (currentMeta) {
-            updateArenaSessionMetadata({
-              messageCount: currentMeta.messageCount + 2,
-              totalTokenCount: currentMeta.totalTokenCount + (response.tokenCount ?? 0),
-              lastActiveAt: Date.now(),
-              durationMs: Date.now() - currentMeta.startedAt,
-            });
-          }
-        });
-
-        handle.onError((error) => {
-          activeStreamRef.current = null;
-          setArenaIsStreaming(false);
-          updateArenaMessage(assistantMessage.id, { status: 'error', error });
-          notification.showNotification('error', error);
+            if (currentMeta) {
+              updateArenaSessionMetadata({
+                messageCount: currentMeta.messageCount + 2,
+                totalTokenCount: currentMeta.totalTokenCount + (response.tokenCount ?? 0),
+                lastActiveAt: Date.now(),
+                durationMs: Date.now() - currentMeta.startedAt,
+              });
+            }
+          },
+          onError: (error) => {
+            notification.showNotification('error', error);
+          },
         });
       } else {
         const result = await arenaAdapter.sendMessage(request);
-        setArenaIsStreaming(false);
 
         if (result.isOk) {
           updateArenaMessage(assistantMessage.id, {
@@ -404,19 +342,15 @@ export function ArenaPane({ className }: ArenaPaneProps): React.ReactElement {
       arenaSessionMetadata,
       addArenaMessage,
       updateArenaMessage,
-      setArenaIsStreaming,
-      setArenaStreamingContent,
-      setArenaStreamingMessageId,
       updateArenaSessionMetadata,
       notification,
+      startStream,
     ],
   );
 
   const handleCancelMessage = useCallback(() => {
-    activeStreamRef.current?.cancel();
-    activeStreamRef.current = null;
-    setArenaIsStreaming(false);
-  }, [setArenaIsStreaming]);
+    cancelStream();
+  }, [cancelStream]);
 
   /** Toolbar settings changes (provider / model / api key) */
   const handleToolbarSettingsChange = useCallback(
@@ -467,14 +401,12 @@ export function ArenaPane({ className }: ArenaPaneProps): React.ReactElement {
 
   /** Navigate back to agent selection */
   const handleBackToAgentSelect = useCallback(() => {
-    activeStreamRef.current?.cancel();
-    activeStreamRef.current = null;
-    setArenaIsStreaming(false);
+    cancelStream();
 
     setArenaMessages([]);
     setArenaView('select-agent');
     setArenaActiveSessionId(null);
-  }, [setArenaIsStreaming, setArenaMessages, setArenaView, setArenaActiveSessionId]);
+  }, [cancelStream, setArenaMessages, setArenaView, setArenaActiveSessionId]);
 
   // ============================================================================
   // Derived state
@@ -577,9 +509,8 @@ export function ArenaPane({ className }: ArenaPaneProps): React.ReactElement {
             <ArenaChatView
               session={activeSession}
               messages={arenaMessages}
-              streamingContent={arenaStreamingContent}
-              isStreaming={arenaIsStreaming}
-              isLoading={arenaIsLoading}
+              streamingContent={streamingContent}
+              streamState={streamState}
               onSendMessage={handleSendMessage}
               onCancelMessage={handleCancelMessage}
             />

@@ -28,6 +28,7 @@ import { cn } from '../../utils/styling';
 import { PrimaryButton } from '../ui/PrimaryButton';
 import { SecondaryButton } from '../ui/SecondaryButton';
 import type { ArenaCommandId, ArenaCommand } from '../../types/arena';
+import type { ArenaStreamState } from '../../types/arenaStreaming';
 import type { ArenaAgentId } from '../../config/arenaConfig';
 import { getAgentDefinition, ARENA_AGENT_IDS } from '../../config/arenaConfig';
 
@@ -44,10 +45,8 @@ export interface ArenaInputBarProps {
   onCancel?: () => void;
   /** Currently selected agent (shown as indicator) */
   agentId?: ArenaAgentId | null;
-  /** Whether the AI is generating a response */
-  isLoading?: boolean;
-  /** Whether the AI is actively streaming tokens */
-  isStreaming?: boolean;
+  /** Current stream lifecycle state (drives busy/stop-button behaviour) */
+  streamState?: ArenaStreamState;
   /** Input placeholder text */
   placeholder?: string;
   /** Additional CSS classes */
@@ -79,8 +78,7 @@ export function ArenaInputBar({
   onSend,
   onCancel,
   agentId,
-  isLoading = false,
-  isStreaming = false,
+  streamState,
   placeholder = 'Ask anything…',
   className,
   suggestedInput,
@@ -160,7 +158,7 @@ export function ArenaInputBar({
       }
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [showCommands, filteredCommands, selectedCommandIndex, input, activeCommand, isLoading, isStreaming],
+    [showCommands, filteredCommands, selectedCommandIndex, input, activeCommand, streamState],
   );
 
   // ---- Command selection ------------------------------------------
@@ -180,7 +178,7 @@ export function ArenaInputBar({
   // ---- Send -------------------------------------------------------
   const handleSend = () => {
     const trimmed = input.trim();
-    if (!trimmed || isLoading || isStreaming) return;
+    if (!trimmed || busy) return;
 
     let command: ArenaCommandId | undefined;
     let message = trimmed;
@@ -226,7 +224,7 @@ export function ArenaInputBar({
     }
   };
 
-  const busy = isLoading || isStreaming;
+  const busy = streamState === 'connecting' || streamState === 'streaming';
 
   return (
     <div
@@ -348,7 +346,7 @@ export function ArenaInputBar({
         </div>
 
         {/* Send / Stop button */}
-        {isStreaming && onCancel ? (
+        {(streamState === 'connecting' || streamState === 'streaming') && onCancel ? (
           <SecondaryButton
             onClick={onCancel}
             size="icon"
@@ -368,7 +366,7 @@ export function ArenaInputBar({
             )}
             aria-label="Send message"
           >
-            {isLoading ? (
+            {streamState === 'connecting' ? (
               <Loader2 size={16} className="animate-spin" />
             ) : (
               <Send size={16} />

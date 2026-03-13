@@ -7,6 +7,13 @@
  * domain / state / adapter types consumed by components and the store.
  */
 
+// Re-export streaming state machine types for convenience
+export type {
+  ArenaStreamState,
+  ArenaStreamManager,
+  ArenaStreamCallbacks,
+} from './arenaStreaming';
+
 // Re-export configuration constants so existing consumers keep working
 // with a single import path.
 export {

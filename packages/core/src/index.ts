@@ -67,6 +67,10 @@ export type {
     StreamHandle,
     StreamUnsubscribe,
     ArenaView,
+    // Streaming state machine types
+    ArenaStreamState,
+    ArenaStreamManager,
+    ArenaStreamCallbacks,
     // Chat block types
     ArenaChatBlock,
     ArenaChatBlockType,
@@ -425,6 +429,7 @@ export { useCollectionRunner } from './hooks/useCollectionRunner';
 export { useFlowRunner } from './hooks/useFlowRunner';
 export { useTestSuiteRunner } from './hooks/useTestSuiteRunner';
 export { useFileUpload } from './hooks/useFileUpload';
+export { useArenaStreamManager } from './hooks/useArenaStreamManager';
 
 export type {
     CollectionRunItem,

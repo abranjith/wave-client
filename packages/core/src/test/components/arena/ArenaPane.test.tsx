@@ -107,8 +107,6 @@ describe('ArenaPane — streaming chunk handling (TASK-007)', () => {
             useAppStateStore.setState({
                 arenaSessions: [],
                 arenaActiveSessionId: null,
-                arenaIsStreaming: false,
-                arenaStreamingContent: '',
                 arenaMessages: [],
             });
         });
@@ -160,16 +158,20 @@ describe('ArenaPane — streaming chunk handling (TASK-007)', () => {
             expect(adapter.arena.streamMessage).toHaveBeenCalledOnce();
         });
 
-        // Ensure streaming started (store reflects it)
-        expect(useAppStateStore.getState().arenaIsStreaming).toBe(true);
+        // Identify the streaming assistant message
+        const assistantMsg = useAppStateStore.getState().arenaMessages.find(
+            (m) => m.role === 'assistant',
+        );
+        expect(assistantMsg).toBeDefined();
 
-        // Push a heartbeat chunk — no content should be appended
+        // Push a heartbeat chunk — no content should be appended to the message
         act(() => {
-            pushChunk({ messageId: 'msg-1', content: '', done: false, heartbeat: true });
+            pushChunk({ messageId: assistantMsg!.id, content: '', done: false, heartbeat: true });
         });
 
-        // arenaStreamingContent must remain empty — heartbeat carries no text
-        expect(useAppStateStore.getState().arenaStreamingContent).toBe('');
+        // The message content must remain empty — heartbeat carries no text
+        const msg = useAppStateStore.getState().arenaMessages.find((m) => m.id === assistantMsg!.id);
+        expect(msg?.content).toBe('');
     });
 
     // ------------------------------------------------------------------
@@ -217,14 +219,21 @@ describe('ArenaPane — streaming chunk handling (TASK-007)', () => {
             expect(adapter.arena.streamMessage).toHaveBeenCalledOnce();
         });
 
-        expect(useAppStateStore.getState().arenaIsStreaming).toBe(true);
+        // Capture the assistant message id before the error
+        const assistantMsg = useAppStateStore.getState().arenaMessages.find(
+            (m) => m.role === 'assistant',
+        );
+        expect(assistantMsg).toBeDefined();
 
         act(() => {
             pushError('Connection dropped');
         });
 
-        // setArenaIsStreaming(false) must be called by onError handler
-        expect(useAppStateStore.getState().arenaIsStreaming).toBe(false);
+        // The assistant message should be marked as error (stream manager called updateArenaMessage)
+        await waitFor(() => {
+            const msg = useAppStateStore.getState().arenaMessages.find((m) => m.id === assistantMsg!.id);
+            expect(msg?.status).toBe('error');
+        });
     });
 
     // ------------------------------------------------------------------
@@ -238,21 +247,29 @@ describe('ArenaPane — streaming chunk handling (TASK-007)', () => {
             expect(adapter.arena.streamMessage).toHaveBeenCalledOnce();
         });
 
-        expect(useAppStateStore.getState().arenaIsStreaming).toBe(true);
+        // Capture the streaming assistant message
+        const assistantMsg = useAppStateStore.getState().arenaMessages.find(
+            (m) => m.role === 'assistant',
+        );
+        expect(assistantMsg).toBeDefined();
 
         const response: ArenaChatResponse = {
-            messageId: 'msg-1',
+            messageId: assistantMsg!.id,
             content: 'Done!',
             tokenCount: 10,
         };
 
         await act(async () => {
             pushDone(response);
-            // Allow async operations inside onDone (e.g. saveMessage) to settle
+            // Allow async operations inside onComplete (e.g. saveMessage) to settle
             await Promise.resolve();
         });
 
-        expect(useAppStateStore.getState().arenaIsStreaming).toBe(false);
+        // The assistant message should be marked as complete
+        await waitFor(() => {
+            const msg = useAppStateStore.getState().arenaMessages.find((m) => m.id === assistantMsg!.id);
+            expect(msg?.status).toBe('complete');
+        });
     });
 });
 

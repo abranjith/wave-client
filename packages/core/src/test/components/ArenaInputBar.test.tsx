@@ -69,14 +69,14 @@ describe('ArenaInputBar', () => {
     expect(sendBtn).toBeInTheDocument();
   });
 
-  it('should display stop button when isStreaming is true', () => {
-    render(<ArenaInputBar {...defaultProps} isStreaming />);
+  it('should display stop button when streamState is streaming', () => {
+    render(<ArenaInputBar {...defaultProps} streamState="streaming" />);
     expect(screen.getByLabelText(/stop/i)).toBeInTheDocument();
   });
 
   it('should call onCancel when stop button is clicked', () => {
     const onCancel = vi.fn();
-    render(<ArenaInputBar {...defaultProps} isStreaming onCancel={onCancel} />);
+    render(<ArenaInputBar {...defaultProps} streamState="streaming" onCancel={onCancel} />);
 
     fireEvent.click(screen.getByLabelText(/stop/i));
     expect(onCancel).toHaveBeenCalledOnce();

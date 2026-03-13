@@ -375,36 +375,40 @@ describe("Test Suite Tools", () => {
 
         it("respects delayBetweenCalls", async () => {
             vi.useFakeTimers();
-            vi.mocked(testSuiteService.getById).mockResolvedValue({
-                ...baseSuite,
-                items: [
-                    { id: "item-1", type: "request", referenceId: "req-1", enabled: true, order: 1 },
-                    { id: "item-2", type: "request", referenceId: "req-2", enabled: true, order: 2 },
-                ],
-                settings: {
-                    ...baseSuite.settings,
-                    delayBetweenCalls: 500,
-                },
-            } as any);
+            try {
+                vi.mocked(testSuiteService.getById).mockResolvedValue({
+                    ...baseSuite,
+                    items: [
+                        { id: "item-1", type: "request", referenceId: "req-1", enabled: true, order: 1 },
+                        { id: "item-2", type: "request", referenceId: "req-2", enabled: true, order: 2 },
+                    ],
+                    settings: {
+                        ...baseSuite.settings,
+                        delayBetweenCalls: 500,
+                    },
+                } as any);
 
-            mockHttpExecute.mockResolvedValue({
-                id: "exec-1",
-                referenceId: "req-1",
-                status: "success",
-                validationStatus: "pass",
-                startedAt: new Date().toISOString(),
-                completedAt: new Date().toISOString(),
-            });
+                mockHttpExecute.mockResolvedValue({
+                    id: "exec-1",
+                    referenceId: "req-1",
+                    status: "success",
+                    validationStatus: "pass",
+                    startedAt: new Date().toISOString(),
+                    completedAt: new Date().toISOString(),
+                });
 
-            const runPromise = runTestSuiteHandler({ suiteId: "suite-1" });
-            await Promise.resolve();
-            expect(mockHttpExecute).toHaveBeenCalledTimes(1);
+                const runPromise = runTestSuiteHandler({ suiteId: "suite-1" });
 
-            await vi.advanceTimersByTimeAsync(500);
-            await runPromise;
-            expect(mockHttpExecute).toHaveBeenCalledTimes(2);
+                await vi.waitFor(() => {
+                    expect(mockHttpExecute).toHaveBeenCalledTimes(1);
+                });
 
-            vi.useRealTimers();
+                await vi.advanceTimersByTimeAsync(500);
+                await runPromise;
+                expect(mockHttpExecute).toHaveBeenCalledTimes(2);
+            } finally {
+                vi.useRealTimers();
+            }
         });
 
         it("handles request test cases", async () => {

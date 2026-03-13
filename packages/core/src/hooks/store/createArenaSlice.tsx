@@ -30,9 +30,6 @@ export interface ArenaSlice {
     arenaActiveSessionId: string | null;
     arenaMessages: ArenaMessage[];
     arenaIsLoading: boolean;
-    arenaIsStreaming: boolean;
-    arenaStreamingContent: string;
-    arenaStreamingMessageId: string | null;
     arenaError: string | null;
     /** Currently selected agent (null = show agent selection page) */
     arenaSelectedAgent: ArenaAgentId | null;
@@ -60,10 +57,6 @@ export interface ArenaSlice {
     
     // UI state actions
     setArenaIsLoading: (isLoading: boolean) => void;
-    setArenaIsStreaming: (isStreaming: boolean) => void;
-    setArenaStreamingContent: (content: string) => void;
-    appendArenaStreamingContent: (chunk: string) => void;
-    setArenaStreamingMessageId: (messageId: string | null) => void;
     setArenaError: (error: string | null) => void;
     
     // Agent / view actions
@@ -180,9 +173,6 @@ const createArenaSlice: StateCreator<ArenaSliceStore, [], [], ArenaSlice> = (set
     arenaActiveSessionId: null,
     arenaMessages: [],
     arenaIsLoading: false,
-    arenaIsStreaming: false,
-    arenaStreamingContent: '',
-    arenaStreamingMessageId: null,
     arenaError: null,
     arenaSelectedAgent: null,
     arenaView: 'select-agent' as ArenaView,
@@ -255,20 +245,6 @@ const createArenaSlice: StateCreator<ArenaSliceStore, [], [], ArenaSlice> = (set
     // UI state actions
     setArenaIsLoading: (isLoading) => set({ arenaIsLoading: isLoading }),
     
-    setArenaIsStreaming: (isStreaming) => set({ 
-        arenaIsStreaming: isStreaming,
-        // Clear streaming content when not streaming
-        ...(isStreaming ? {} : { arenaStreamingContent: '', arenaStreamingMessageId: null }),
-    }),
-    
-    setArenaStreamingContent: (content) => set({ arenaStreamingContent: content }),
-    
-    appendArenaStreamingContent: (chunk) => set((state) => ({
-        arenaStreamingContent: state.arenaStreamingContent + chunk,
-    })),
-    
-    setArenaStreamingMessageId: (messageId) => set({ arenaStreamingMessageId: messageId }),
-    
     setArenaError: (error) => set({ arenaError: error }),
     
     // Agent / view actions
@@ -336,9 +312,6 @@ const createArenaSlice: StateCreator<ArenaSliceStore, [], [], ArenaSlice> = (set
         arenaActiveSessionId: null,
         arenaMessages: [],
         arenaIsLoading: false,
-        arenaIsStreaming: false,
-        arenaStreamingContent: '',
-        arenaStreamingMessageId: null,
         arenaError: null,
         arenaSelectedAgent: null,
         arenaView: 'select-agent' as ArenaView,

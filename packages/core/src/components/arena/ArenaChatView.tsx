@@ -8,6 +8,7 @@ import React, { useRef, useEffect, useCallback, useState } from 'react';
 import { Globe, Zap, User, Bot, ExternalLink, Square, AlertCircle, Cpu, HelpCircle } from 'lucide-react';
 import { cn } from '../../utils/styling';
 import type { ArenaSession, ArenaMessage, ArenaMessageSource, ArenaCommandId, ArenaChatBlock } from '../../types/arena';
+import type { ArenaStreamState } from '../../types/arenaStreaming';
 import { ARENA_COMMAND_DEFINITIONS } from '../../types/arena';
 import { ARENA_AGENT_IDS, getAgentDefinition } from '../../config/arenaConfig';
 import type { ArenaAgentId } from '../../config/arenaConfig';
@@ -24,8 +25,7 @@ export interface ArenaChatViewProps {
   session: ArenaSession;
   messages: ArenaMessage[];
   streamingContent: string;
-  isStreaming: boolean;
-  isLoading?: boolean;
+  streamState: ArenaStreamState;
   onSendMessage: (content: string, command?: ArenaCommandId) => void;
   onCancelMessage: () => void;
   /** Optional callbacks for interactive block components */
@@ -40,12 +40,16 @@ export function ArenaChatView({
   session,
   messages,
   streamingContent,
-  isStreaming,
-  isLoading,
+  streamState,
   onSendMessage,
   onCancelMessage,
   blockCallbacks,
 }: ArenaChatViewProps): React.ReactElement {
+  /** Stop button is shown while actively connecting or streaming. */
+  const isActive = streamState === 'connecting' || streamState === 'streaming';
+  /** Pass down a simple boolean for backward compat (ArenaMessageBubble FEAT-014 will accept streamState directly). */
+  const isStreaming = streamState === 'streaming';
+
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   // Auto-scroll to bottom when new messages arrive
@@ -85,7 +89,7 @@ export function ArenaChatView({
           </h3>
           <p className="text-xs text-slate-500 dark:text-slate-400">{agentName}</p>
         </div>
-        {isStreaming && (
+        {isActive && (
           <SecondaryButton
             size="sm"
             onClick={onCancelMessage}
@@ -99,7 +103,7 @@ export function ArenaChatView({
 
       {/* Messages */}
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
-        {messages.length === 0 && !isStreaming && (
+        {messages.length === 0 && !isActive && (
           <ArenaWelcomeMessage
             agentName={agentName}
             agentIcon={<AgentIcon size={24} className={agentColor} />}
@@ -132,8 +136,7 @@ export function ArenaChatView({
         onSend={onSendMessage}
         onCancel={onCancelMessage}
         agentId={session.agent as ArenaAgentId}
-        isLoading={isLoading}
-        isStreaming={isStreaming}
+        streamState={streamState}
         placeholder={`Ask ${agentName}…`}
         suggestedInput={suggestedInput}
         suggestKey={suggestKey}

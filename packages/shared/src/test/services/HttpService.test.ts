@@ -443,9 +443,9 @@ describe('HttpService', () => {
 
             const result = await service.execute(request);
 
-            expect(result.response.status).toBe(200);
-            expect(result.newCookies).toHaveLength(1);
-            expect(result.newCookies[0].name).toBe('session');
+            expect(result.status).toBe(200);
+            expect(result.cookies).toHaveLength(1);
+            expect(result.cookies[0].name).toBe('session');
             expect(mockCookieService.saveAll).toHaveBeenCalledWith([cookie]);
         });
 
@@ -515,7 +515,10 @@ describe('HttpService', () => {
                 method: 'GET',
                 url: 'https://api.example.com/search',
                 headers: {},
-                params: { q: 'test', page: '1' },
+                params: [
+                    { key: 'q', value: 'test', disabled: false },
+                    { key: 'page', value: '1', disabled: false },
+                ],
             };
 
             await service.execute(request);
@@ -675,8 +678,8 @@ describe('HttpService', () => {
             expect(mockAxios).not.toHaveBeenCalled();
 
             // Should return the internal response
-            expect(result.response.status).toBe(200);
-            expect(result.response.statusText).toBe('OK');
+            expect(result.status).toBe(200);
+            expect(result.statusText).toBe('OK');
         });
 
         it('should throw error when auth fails', async () => {
@@ -714,9 +717,9 @@ describe('HttpService', () => {
             const result = await service.execute(request);
 
             // Should return error response
-            expect(result.response.status).toBe(0);
+            expect(result.status).toBe(0);
             // Body is base64 encoded - decode it to check
-            const decodedBody = Buffer.from(result.response.body, 'base64').toString('utf8');
+            const decodedBody = Buffer.from(result.body, 'base64').toString('utf8');
             expect(decodedBody).toContain('Invalid credentials');
         });
 
@@ -740,9 +743,9 @@ describe('HttpService', () => {
 
             const result = await service.execute(request);
 
-            expect(result.response.status).toBe(500);
-            expect(result.response.statusText).toBe('Internal Server Error');
-            expect(result.newCookies).toHaveLength(0);
+            expect(result.status).toBe(500);
+            expect(result.statusText).toBe('Internal Server Error');
+            expect(result.cookies).toHaveLength(0);
         });
 
         it('should calculate elapsed time', async () => {
@@ -768,7 +771,7 @@ describe('HttpService', () => {
 
             const result = await service.execute(request);
 
-            expect(result.response.elapsedTime).toBeGreaterThanOrEqual(100);
+            expect(result.elapsedTime).toBeGreaterThanOrEqual(100);
         });
 
         it('should calculate response size', async () => {
@@ -790,7 +793,7 @@ describe('HttpService', () => {
 
             const result = await service.execute(request);
 
-            expect(result.response.size).toBe(responseData.byteLength);
+            expect(result.size).toBe(responseData.byteLength);
         });
 
         it('should skip auth when auth is disabled', async () => {
