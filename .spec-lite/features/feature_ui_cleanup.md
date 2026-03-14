@@ -153,9 +153,9 @@ The context circle is an SVG ring that fills clockwise, transitioning from blue 
 
 ## 7. State Tracking
 
-- [ ] TASK-001: Create ContextCircle component
-- [ ] TASK-002: Remove References button and MetadataSection from ArenaChatToolbar
-- [ ] TASK-003: Compute and pass contextWords from ArenaPane
-- [ ] TASK-004: Verify session metadata in ArenaRightPane
+- [x] TASK-001: Create ContextCircle component
+- [x] TASK-002: Remove References button and MetadataSection from ArenaChatToolbar
+- [x] TASK-003: Compute and pass contextWords from ArenaPane
+- [x] TASK-004: Verify session metadata in ArenaRightPane
 
 Legend: [ ] Not started | [/] In progress | [x] Completed

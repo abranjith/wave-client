@@ -1746,7 +1746,9 @@ export class MessageHandler {
             const response = await svc.streamChat(
                 chatRequest,
                 (chunk) => {
-                    // Push each token to the webview — keyed by streamId
+                    // Push each token to the webview — keyed by streamId.
+                    // The chunk object is forwarded verbatim, which preserves the
+                    // `seq` field added by ArenaService for ordered-chunk protocol (FEAT-011).
                     console.debug('[Arena] streamChunk', { streamId, chunkIndex });
                     chunkIndex++;
                     this.postMessage({ type: 'arena.streamChunk', streamId, chunk });

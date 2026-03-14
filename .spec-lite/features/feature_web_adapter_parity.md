@@ -110,8 +110,8 @@ The `ArenaChatStreamChunk` type already has `seq?: number` and `heartbeat?: bool
 
 ## 7. State Tracking
 
-- [ ] TASK-001: Add `seq` numbering to web adapter streaming chunks
-- [ ] TASK-002: Add heartbeat emission to web adapter streaming
-- [ ] TASK-003: Verify StreamHandle is consumed by useArenaStreamManager
+- [x] TASK-001: Add `seq` numbering to web adapter streaming chunks
+- [x] TASK-002: Add heartbeat emission to web adapter streaming
+- [x] TASK-003: Verify StreamHandle is consumed by useArenaStreamManager
 
 Legend: [ ] Not started | [/] In progress | [x] Completed

@@ -453,4 +453,362 @@ describe('useArenaStreamManager', () => {
 
         expect(ctrl.isCancelled()).toBe(true);
     });
+
+    // ══════════════════════════════════════════════════════════════════
+    // FEAT-011 — Ordered Chunk Protocol (reorder buffer)
+    // ══════════════════════════════════════════════════════════════════
+
+    // ──────────────────────────────────────────────────────────────────
+    // 14. Chunks arrive in order (seq 0, 1, 2) → content accumulates correctly
+    // ──────────────────────────────────────────────────────────────────
+
+    it('14 — in-order seq chunks accumulate content correctly', () => {
+        const { result } = setup();
+
+        act(() => { result.current.startStream(TEST_REQUEST, ASSISTANT_MSG_ID); });
+
+        act(() => {
+            ctrl.pushChunk({ messageId: ASSISTANT_MSG_ID, content: 'A', done: false, seq: 0 });
+            ctrl.pushChunk({ messageId: ASSISTANT_MSG_ID, content: 'B', done: false, seq: 1 });
+            ctrl.pushChunk({ messageId: ASSISTANT_MSG_ID, content: 'C', done: false, seq: 2 });
+        });
+
+        expect(result.current.streamingContent).toBe('ABC');
+        expect(result.current.streamState).toBe('streaming');
+    });
+
+    // ──────────────────────────────────────────────────────────────────
+    // 15. Chunks arrive out of order (seq 1, 0, 2) → correct order
+    // ──────────────────────────────────────────────────────────────────
+
+    it('15 — out-of-order seq chunks are reordered before accumulation', () => {
+        const { result } = setup();
+
+        act(() => { result.current.startStream(TEST_REQUEST, ASSISTANT_MSG_ID); });
+
+        // seq 1 arrives first — should be buffered
+        act(() => {
+            ctrl.pushChunk({ messageId: ASSISTANT_MSG_ID, content: 'B', done: false, seq: 1 });
+        });
+        // Content should still be empty — waiting for seq 0
+        expect(result.current.streamingContent).toBe('');
+
+        // seq 0 arrives — processes 0, then drains seq 1 from buffer
+        act(() => {
+            ctrl.pushChunk({ messageId: ASSISTANT_MSG_ID, content: 'A', done: false, seq: 0 });
+        });
+        expect(result.current.streamingContent).toBe('AB');
+
+        // seq 2 arrives in order
+        act(() => {
+            ctrl.pushChunk({ messageId: ASSISTANT_MSG_ID, content: 'C', done: false, seq: 2 });
+        });
+        expect(result.current.streamingContent).toBe('ABC');
+    });
+
+    // ──────────────────────────────────────────────────────────────────
+    // 16. Gap: seq 0, 2 arrive; seq 1 arrives later → all in correct order
+    // ──────────────────────────────────────────────────────────────────
+
+    it('16 — gap: seq 0 and 2 buffered, seq 1 arrives and drains all in order', () => {
+        const { result } = setup();
+
+        act(() => { result.current.startStream(TEST_REQUEST, ASSISTANT_MSG_ID); });
+
+        act(() => {
+            ctrl.pushChunk({ messageId: ASSISTANT_MSG_ID, content: 'A', done: false, seq: 0 });
+            ctrl.pushChunk({ messageId: ASSISTANT_MSG_ID, content: 'C', done: false, seq: 2 });
+        });
+        // seq 0 processed, seq 2 buffered
+        expect(result.current.streamingContent).toBe('A');
+
+        act(() => {
+            ctrl.pushChunk({ messageId: ASSISTANT_MSG_ID, content: 'B', done: false, seq: 1 });
+        });
+        // seq 1 triggers drain: processes 1, then 2
+        expect(result.current.streamingContent).toBe('ABC');
+    });
+
+    // ──────────────────────────────────────────────────────────────────
+    // 17. Gap timeout: seq 0 arrives, seq 1 never arrives, seq 2 in buffer → flush after 5 s
+    // ──────────────────────────────────────────────────────────────────
+
+    it('17 — gap timeout flushes buffered chunks after 5 s', () => {
+        const { result } = setup();
+
+        act(() => { result.current.startStream(TEST_REQUEST, ASSISTANT_MSG_ID); });
+
+        act(() => {
+            ctrl.pushChunk({ messageId: ASSISTANT_MSG_ID, content: 'A', done: false, seq: 0 });
+            ctrl.pushChunk({ messageId: ASSISTANT_MSG_ID, content: 'C', done: false, seq: 2 });
+        });
+        expect(result.current.streamingContent).toBe('A');
+
+        // Advance past the 5s gap timeout — seq 2 should be flushed
+        act(() => {
+            vi.advanceTimersByTime(6_000);
+        });
+
+        expect(result.current.streamingContent).toBe('AC');
+    });
+
+    // ──────────────────────────────────────────────────────────────────
+    // 18. Buffer overflow: >50 out-of-order chunks → flush triggered
+    // ──────────────────────────────────────────────────────────────────
+
+    it('18 — buffer overflow (51 chunks) triggers best-effort flush', () => {
+        const { result } = setup();
+
+        act(() => { result.current.startStream(TEST_REQUEST, ASSISTANT_MSG_ID); });
+
+        act(() => {
+            // Push seq 0 first so the reorder starts expecting seq 1
+            ctrl.pushChunk({ messageId: ASSISTANT_MSG_ID, content: '0', done: false, seq: 0 });
+        });
+        expect(result.current.streamingContent).toBe('0');
+
+        // Push seq 2..52 — none of seq 1 (creates 51 buffered chunks)
+        act(() => {
+            for (let i = 2; i <= 52; i++) {
+                ctrl.pushChunk({ messageId: ASSISTANT_MSG_ID, content: String(i), done: false, seq: i });
+            }
+        });
+
+        // After overflow flush, all 51 buffered chunks should be processed
+        const expectedContent = '0' + Array.from({ length: 51 }, (_, i) => String(i + 2)).join('');
+        expect(result.current.streamingContent).toBe(expectedContent);
+    });
+
+    // ──────────────────────────────────────────────────────────────────
+    // 19. Chunks without seq → processed in arrival order (backward compat)
+    // ──────────────────────────────────────────────────────────────────
+
+    it('19 — chunks without seq are processed in arrival order', () => {
+        const { result } = setup();
+
+        act(() => { result.current.startStream(TEST_REQUEST, ASSISTANT_MSG_ID); });
+
+        act(() => {
+            ctrl.pushChunk({ messageId: ASSISTANT_MSG_ID, content: 'X', done: false });
+            ctrl.pushChunk({ messageId: ASSISTANT_MSG_ID, content: 'Y', done: false });
+            ctrl.pushChunk({ messageId: ASSISTANT_MSG_ID, content: 'Z', done: false });
+        });
+
+        expect(result.current.streamingContent).toBe('XYZ');
+    });
+
+    // ══════════════════════════════════════════════════════════════════
+    // FEAT-012 — Send Guard & single-stream enforcement
+    // ══════════════════════════════════════════════════════════════════
+
+    // ──────────────────────────────────────────────────────────────────
+    // SG-01. After natural completion, starting a new stream does NOT
+    //        call cancel() on the completed handle.
+    // ──────────────────────────────────────────────────────────────────
+
+    it('SG-01 — completed stream: starting new stream does not cancel previous handle', () => {
+        const { adapter } = createMockAdapter();
+
+        const ctrl1 = createControllableHandle();
+        const ctrl2 = createControllableHandle();
+
+        let callCount = 0;
+        vi.spyOn(adapter.arena, 'streamMessage').mockImplementation(() => {
+            callCount++;
+            return callCount === 1 ? ctrl1.handle : ctrl2.handle;
+        });
+
+        // Seed the store so onDone's updateArenaMessage doesn't throw
+        act(() => {
+            useAppStateStore.setState({
+                arenaMessages: [
+                    { id: 'msg-1', sessionId: 'session-1', role: 'assistant',
+                      content: '', status: 'streaming', timestamp: Date.now() },
+                ],
+            });
+        });
+
+        const wrapper = ({ children }: { children: React.ReactNode }) => (
+            <AdapterProvider adapter={adapter}>{children}</AdapterProvider>
+        );
+        const { result } = renderHook(() => useArenaStreamManager(), { wrapper });
+
+        // Start and complete stream A
+        act(() => { result.current.startStream(TEST_REQUEST, 'msg-1'); });
+        act(() => { ctrl1.pushDone({ messageId: 'msg-1', content: 'Done', tokenCount: 1 }); });
+        expect(result.current.streamState).toBe('complete');
+        expect(ctrl1.isCancelled()).toBe(false);
+
+        // Start stream B — the completed handle should NOT be cancelled
+        act(() => { result.current.startStream(TEST_REQUEST, 'msg-2'); });
+
+        expect(ctrl1.isCancelled()).toBe(false);
+        expect(result.current.streamState).toBe('connecting');
+        expect(result.current.streamingMessageId).toBe('msg-2');
+    });
+
+    // ──────────────────────────────────────────────────────────────────
+    // SG-02. Starting a new stream while one is active logs a message
+    //        at info level with prevState and sessionId.
+    // ──────────────────────────────────────────────────────────────────
+
+    it('SG-02 — force-cancelling active stream emits console.info log', () => {
+        const { result } = setup();
+        const infoSpy = vi.spyOn(console, 'info').mockImplementation(() => {});
+
+        act(() => { result.current.startStream(TEST_REQUEST, 'msg-1'); });
+        expect(result.current.streamState).toBe('connecting');
+
+        act(() => { result.current.startStream(TEST_REQUEST, 'msg-2'); });
+
+        expect(infoSpy).toHaveBeenCalledWith(
+            expect.stringContaining('Cancelling previous stream'),
+            expect.objectContaining({ sessionId: TEST_REQUEST.sessionId }),
+        );
+    });
+
+    // ──────────────────────────────────────────────────────────────────
+    // SG-03. isInputBlocked is true during connecting and streaming,
+    //        false after cancel.
+    // ──────────────────────────────────────────────────────────────────
+
+    it('SG-03 — isInputBlocked tracks busy states correctly', () => {
+        const { result } = setup();
+
+        // Idle — not blocked
+        expect(result.current.isInputBlocked).toBe(false);
+
+        // connecting — blocked
+        act(() => { result.current.startStream(TEST_REQUEST, ASSISTANT_MSG_ID); });
+        expect(result.current.isInputBlocked).toBe(true);
+
+        // streaming — still blocked
+        act(() => {
+            ctrl.pushChunk({ messageId: ASSISTANT_MSG_ID, content: 'Hi', done: false });
+        });
+        expect(result.current.isInputBlocked).toBe(true);
+
+        // cancel — unblocked
+        act(() => { result.current.cancelStream(); });
+        expect(result.current.isInputBlocked).toBe(false);
+    });
+
+    // ──────────────────────────────────────────────────────────────────
+    // 20. Duplicate seq → second occurrence ignored
+    // ──────────────────────────────────────────────────────────────────
+
+    it('20 — duplicate seq chunk is ignored', () => {
+        const { result } = setup();
+
+        act(() => { result.current.startStream(TEST_REQUEST, ASSISTANT_MSG_ID); });
+
+        act(() => {
+            ctrl.pushChunk({ messageId: ASSISTANT_MSG_ID, content: 'A', done: false, seq: 0 });
+            ctrl.pushChunk({ messageId: ASSISTANT_MSG_ID, content: 'A_dup', done: false, seq: 0 });
+            ctrl.pushChunk({ messageId: ASSISTANT_MSG_ID, content: 'B', done: false, seq: 1 });
+        });
+
+        // The duplicate seq 0 should be ignored; content is 'AB' not 'AA_dupB'
+        expect(result.current.streamingContent).toBe('AB');
+    });
+
+    // ══════════════════════════════════════════════════════════════════
+    // FEAT-014 — Immediate Feedback & Streaming Lifecycle
+    // ══════════════════════════════════════════════════════════════════
+
+    // ──────────────────────────────────────────────────────────────────
+    // F14-01. Multiple heartbeats then content — streaming only on content
+    // ──────────────────────────────────────────────────────────────────
+
+    it('F14-01 — multiple heartbeats then content: transitions to streaming only on content', () => {
+        const { result } = setup();
+
+        act(() => {
+            result.current.startStream(TEST_REQUEST, ASSISTANT_MSG_ID);
+        });
+        expect(result.current.streamState).toBe('connecting');
+
+        // First heartbeat — state stays connecting
+        act(() => {
+            ctrl.pushChunk({ messageId: ASSISTANT_MSG_ID, content: '', done: false, heartbeat: true });
+        });
+        expect(result.current.streamState).toBe('connecting');
+        expect(result.current.streamingContent).toBe('');
+
+        // Second heartbeat — state still connecting
+        act(() => {
+            ctrl.pushChunk({ messageId: ASSISTANT_MSG_ID, content: '', done: false, heartbeat: true });
+        });
+        expect(result.current.streamState).toBe('connecting');
+        expect(result.current.streamingContent).toBe('');
+
+        // First real content chunk — transitions to streaming
+        act(() => {
+            ctrl.pushChunk({ messageId: ASSISTANT_MSG_ID, content: 'Hello', done: false });
+        });
+        expect(result.current.streamState).toBe('streaming');
+        expect(result.current.streamingContent).toBe('Hello');
+    });
+
+    // ──────────────────────────────────────────────────────────────────
+    // F14-02. onDone without prior chunks — connecting directly to complete
+    // ──────────────────────────────────────────────────────────────────
+
+    it('F14-02 — onDone without prior chunks: connecting transitions directly to complete', () => {
+        const { result } = setup();
+
+        act(() => {
+            useAppStateStore.setState({
+                arenaMessages: [
+                    { id: ASSISTANT_MSG_ID, sessionId: 'session-1', role: 'assistant',
+                      content: '', status: 'streaming', timestamp: Date.now() },
+                ],
+            });
+        });
+
+        act(() => {
+            result.current.startStream(TEST_REQUEST, ASSISTANT_MSG_ID);
+        });
+        expect(result.current.streamState).toBe('connecting');
+
+        // onDone fires without any onChunk — atomic skip of streaming state
+        act(() => {
+            ctrl.pushDone(DONE_RESPONSE);
+        });
+
+        expect(result.current.streamState).toBe('complete');
+        expect(result.current.streamingContent).toBe('');
+        expect(result.current.streamingMessageId).toBeNull();
+    });
+
+    // ──────────────────────────────────────────────────────────────────
+    // F14-03. Safety timeout fires during connecting → error
+    // ──────────────────────────────────────────────────────────────────
+
+    it('F14-03 — safety timeout during connecting phase transitions to error', () => {
+        const { result } = setup();
+
+        act(() => {
+            useAppStateStore.setState({
+                arenaMessages: [
+                    { id: ASSISTANT_MSG_ID, sessionId: 'session-1', role: 'assistant',
+                      content: '', status: 'streaming', timestamp: Date.now() },
+                ],
+            });
+        });
+
+        act(() => {
+            result.current.startStream(TEST_REQUEST, ASSISTANT_MSG_ID);
+        });
+        expect(result.current.streamState).toBe('connecting');
+
+        // No chunks arrive — advance past the safety window
+        act(() => {
+            vi.advanceTimersByTime(121_000);
+        });
+
+        expect(result.current.streamState).toBe('error');
+        expect(result.current.streamError).toContain('timed out');
+        expect(result.current.isInputBlocked).toBe(false);
+    });
 });

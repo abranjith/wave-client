@@ -16,7 +16,7 @@ import { useArenaAdapter, useNotificationAdapter } from '../../hooks/useAdapter'
 import useAppStateStore from '../../hooks/store/useAppStateStore';
 import { createArenaMessage } from '../../hooks/store/createArenaSlice';
 import { useArenaStreamManager } from '../../hooks/useArenaStreamManager';
-import { createSessionMetadata, mergeReferences } from '../../config/arenaConfig';
+import { createSessionMetadata, mergeReferences, isProviderConfigured } from '../../config/arenaConfig';
 import type { ArenaAgentId, ArenaReference, ArenaProviderSettingsMap, ArenaSettings as ArenaSettingsConfig } from '../../config/arenaConfig';
 import type { ArenaCommandId } from '../../types/arena';
 import type { ArenaAppSettings } from '../../hooks/store/createSettingsSlice';
@@ -25,6 +25,7 @@ import ArenaChatToolbar from './ArenaChatToolbar';
 import ArenaSettings from './ArenaSettings';
 import ArenaRightPane from './ArenaRightPane';
 import ArenaWelcomeScreen from './ArenaWelcomeScreen';
+import ArenaReadinessOverlay from './ArenaReadinessOverlay';
 
 // ============================================================================
 // Types
@@ -54,7 +55,7 @@ export function ArenaPane({ className }: ArenaPaneProps): React.ReactElement {
     arenaSessions,
     arenaActiveSessionId,
     arenaMessages,
-    arenaIsLoading,
+    arenaReadiness,
     arenaSelectedAgent,
     arenaView,
     arenaActiveSources,
@@ -69,7 +70,7 @@ export function ArenaPane({ className }: ArenaPaneProps): React.ReactElement {
     setArenaMessages,
     addArenaMessage,
     updateArenaMessage,
-    setArenaIsLoading,
+    setArenaReadiness,
     setArenaError,
     selectArenaAgent,
     setArenaView,
@@ -98,7 +99,8 @@ export function ArenaPane({ className }: ArenaPaneProps): React.ReactElement {
   // Load sessions, settings, and user references on mount
   useEffect(() => {
     async function loadData() {
-      setArenaIsLoading(true);
+      setArenaReadiness('loading');
+      console.info('Arena readiness: idle → loading');
 
       const [sessionsResult, settingsResult, refsResult, providerSettingsResult] = await Promise.all([
         arenaAdapter.loadSessions(),
@@ -128,15 +130,27 @@ export function ArenaPane({ className }: ArenaPaneProps): React.ReactElement {
         setArenaReferences(mergeReferences(refsResult.value));
       }
 
+      // Update provider settings if available; fall back to current store value.
+      const resolvedProviderSettings = providerSettingsResult.isOk
+        ? providerSettingsResult.value
+        : settings.arena.providers;
+
       if (providerSettingsResult.isOk) {
-        updateArenaAppSettings({ providers: providerSettingsResult.value });
+        updateArenaAppSettings({ providers: resolvedProviderSettings });
       }
 
-      setArenaIsLoading(false);
+      // Transition to 'ready' or 'needs-config' — never stay in 'loading'.
+      if (isProviderConfigured(resolvedProviderSettings)) {
+        console.info('Arena readiness: loading → ready');
+        setArenaReadiness('ready');
+      } else {
+        console.info('Arena readiness: loading → needs-config');
+        setArenaReadiness('needs-config');
+      }
     }
 
     loadData();
-  }, [arenaAdapter, setArenaSessions, updateArenaAppSettings, setArenaReferences, setArenaIsLoading, setArenaError]);
+  }, [arenaAdapter, setArenaSessions, updateArenaAppSettings, setArenaReferences, setArenaReadiness, setArenaError]);
 
   // Load messages when active session changes
   useEffect(() => {
@@ -386,6 +400,14 @@ export function ArenaPane({ className }: ArenaPaneProps): React.ReactElement {
           maxMessagesPerSession: newSettings.maxMessagesPerSession,
           providers: newProviderSettings,
         });
+        // Re-evaluate readiness after provider settings change.
+        if (isProviderConfigured(newProviderSettings)) {
+          console.info('Arena readiness: → ready (settings saved)');
+          setArenaReadiness('ready');
+        } else {
+          console.info('Arena readiness: → needs-config (settings saved)');
+          setArenaReadiness('needs-config');
+        }
         notification.showNotification('success', 'Settings saved');
         setArenaView('chat');
       } else {
@@ -396,7 +418,7 @@ export function ArenaPane({ className }: ArenaPaneProps): React.ReactElement {
         notification.showNotification('error', `Failed to save settings: ${errors}`);
       }
     },
-    [arenaAdapter, updateArenaAppSettings, setArenaView, notification],
+    [arenaAdapter, updateArenaAppSettings, setArenaView, setArenaReadiness, notification],
   );
 
   /** Navigate back to agent selection */
@@ -422,6 +444,16 @@ export function ArenaPane({ className }: ArenaPaneProps): React.ReactElement {
         : arenaSessions,
     [arenaSessions, arenaSelectedAgent],
   );
+
+  // Estimate the total word count of the current session for the context circle.
+  // Words are used instead of tokens because they are provider-agnostic and
+  // intuitively understandable by users.
+  const contextWords = useMemo(() => {
+    return arenaMessages.reduce((sum, m) => {
+      const words = m.content.split(/\s+/).filter(Boolean).length;
+      return sum + words;
+    }, 0);
+  }, [arenaMessages]);
 
   // ============================================================================
   // Render
@@ -481,8 +513,13 @@ export function ArenaPane({ className }: ArenaPaneProps): React.ReactElement {
           </div>
         </div>
 
-        {/* View switcher */}
-        {arenaView === 'settings' ? (
+        {/* View switcher — only shown once Arena is ready */}
+        {arenaReadiness !== 'ready' ? (
+          <ArenaReadinessOverlay
+            readiness={arenaReadiness}
+            onOpenSettings={() => setArenaView('settings')}
+          />
+        ) : arenaView === 'settings' ? (
           <ArenaSettings
             settings={arenaSettings}
             providerSettings={arenaProviderSettings}
@@ -494,11 +531,9 @@ export function ArenaPane({ className }: ArenaPaneProps): React.ReactElement {
         ) : activeSession ? (
           <>
             <ArenaChatToolbar
-              referenceCount={arenaReferences.filter((r) => r.enabled).length}
-              onOpenReferences={() => setShowRightPane(true)}
               settings={arenaSettings}
               providerSettings={arenaProviderSettings}
-              metadata={arenaSessionMetadata ?? undefined}
+              contextWords={contextWords}
               onSettingsChange={handleToolbarSettingsChange}
               enableStreaming={arenaSettings.enableStreaming}
               onEnableStreamingChange={(enabled) =>

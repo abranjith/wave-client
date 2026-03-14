@@ -138,10 +138,10 @@ describe('ArenaPane — streaming chunk handling (TASK-007)', () => {
         renderArenaPane(adapter);
 
         // 4. Wait for the mount effect (loadSessions / loadSettings) to finish.
-        //    Once arenaIsLoading transitions back to false the chat input is
+        //    Once arenaReadiness transitions away from 'loading' the chat input is
         //    interactive and sessions are properly reflected in the store.
         await waitFor(() => {
-            expect(useAppStateStore.getState().arenaIsLoading).toBe(false);
+            expect(useAppStateStore.getState().arenaReadiness).not.toBe('loading');
         });
 
         return { adapter, user, pushChunk, pushDone, pushError };

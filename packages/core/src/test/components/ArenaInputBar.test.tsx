@@ -4,7 +4,8 @@
  * Verifies:
  *  - Renders input textarea and send button
  *  - Send button fires onSend with trimmed content
- *  - Stop button renders during streaming and fires onCancel
+ *  - Stop button renders when isBusy and fires onCancel
+ *  - isBusy disables textarea and suppresses Enter key
  *  - Slash-command palette appears when typing "/"
  *  - Agent indicator renders with the correct agent name
  */
@@ -69,14 +70,65 @@ describe('ArenaInputBar', () => {
     expect(sendBtn).toBeInTheDocument();
   });
 
-  it('should display stop button when streamState is streaming', () => {
-    render(<ArenaInputBar {...defaultProps} streamState="streaming" />);
+  // ── TASK-002: isBusy prop tests ────────────────────────────────────
+
+  it('isBusy=false — textarea is enabled and send button is visible', async () => {
+    const user = userEvent.setup();
+    render(<ArenaInputBar {...defaultProps} isBusy={false} />);
+
+    const textarea = screen.getByRole('textbox');
+    expect(textarea).not.toBeDisabled();
+
+    await user.type(textarea, 'Hello');
+    expect(screen.getByLabelText(/send/i)).toBeInTheDocument();
+  });
+
+  it('isBusy=true — textarea is disabled and Enter key does not call onSend', async () => {
+    const user = userEvent.setup();
+    const onSend = vi.fn();
+    render(<ArenaInputBar {...defaultProps} isBusy={true} onSend={onSend} />);
+
+    const textarea = screen.getByRole('textbox');
+    expect(textarea).toBeDisabled();
+
+    // Pressing Enter while busy should not send
+    await user.keyboard('{Enter}');
+    expect(onSend).not.toHaveBeenCalled();
+  });
+
+  it('isBusy=true with onCancel — stop button is visible', () => {
+    render(<ArenaInputBar {...defaultProps} isBusy={true} onCancel={vi.fn()} />);
+    expect(screen.getByLabelText(/stop/i)).toBeInTheDocument();
+  });
+
+  it('isBusy=false with no onCancel — send button is visible, no stop button', async () => {
+    const user = userEvent.setup();
+    render(
+      <ArenaInputBar
+        commands={sampleCommands}
+        onSend={vi.fn()}
+        agentId={ARENA_AGENT_IDS.WAVE_CLIENT}
+        isBusy={false}
+      />,
+    );
+
+    const textarea = screen.getByRole('textbox');
+    await user.type(textarea, 'Hello');
+
+    expect(screen.getByLabelText(/send/i)).toBeInTheDocument();
+    expect(screen.queryByLabelText(/stop/i)).not.toBeInTheDocument();
+  });
+
+  // ── Legacy streamState-compatible behavior ─────────────────────────
+
+  it('should display stop button when isBusy is true', () => {
+    render(<ArenaInputBar {...defaultProps} isBusy={true} />);
     expect(screen.getByLabelText(/stop/i)).toBeInTheDocument();
   });
 
   it('should call onCancel when stop button is clicked', () => {
     const onCancel = vi.fn();
-    render(<ArenaInputBar {...defaultProps} streamState="streaming" onCancel={onCancel} />);
+    render(<ArenaInputBar {...defaultProps} isBusy={true} onCancel={onCancel} />);
 
     fireEvent.click(screen.getByLabelText(/stop/i));
     expect(onCancel).toHaveBeenCalledOnce();

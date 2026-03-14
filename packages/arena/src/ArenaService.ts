@@ -95,6 +95,12 @@ export class ArenaService {
      *     called at least once (heartbeat) and the stream always terminates.
      *  5. Return the accumulated `ArenaChatResponse` when streaming is complete.
      *
+     * ### Sequence numbering
+     * Every content/done chunk is tagged with a monotonically-increasing `seq`
+     * field (0-indexed, starting from 0 for each call). Heartbeat and error
+     * chunks do NOT carry a `seq` value — they are out-of-band signals.
+     * Consumers can use `seq` to reorder chunks that arrive out of order.
+     *
      * @param request  The chat request from the caller.
      * @param onChunk  Callback invoked for every streamed chunk (always called at
      *                 least once with a heartbeat chunk).
@@ -122,10 +128,12 @@ export class ArenaService {
         const messageId = crypto.randomUUID();
         let accContent = '';
         let chunkCount = 0;
+        /** 0-indexed sequence counter; incremented for every content/done chunk emitted. */
+        let seq = 0;
 
         // Handle already-aborted signal before entering the loop
         if (signal?.aborted) {
-            onChunk({ messageId, content: '', done: true });
+            onChunk({ messageId, content: '', done: true, seq: seq++ });
             return { messageId, content: '' };
         }
 
@@ -141,6 +149,7 @@ export class ArenaService {
         let finished = false;
 
         // Emit a heartbeat before entering the loop so the caller has instant feedback.
+        // Heartbeats are out-of-band keep-alives — they do NOT carry a seq number.
         onChunk({ messageId, content: '', done: false, heartbeat: true });
         chunkCount++;
 
@@ -152,6 +161,7 @@ export class ArenaService {
             streamTimedOut = true;
             localAbortController.abort();
             console.warn('[Arena] stream timeout after 90 s', { sessionId: request.sessionId });
+            // Error chunks are terminal and out-of-band — no seq.
             onChunk({ messageId, content: '', error: 'Request timed out after 90 s', done: true });
             chunkCount++;
         }, 90_000);
@@ -166,6 +176,7 @@ export class ArenaService {
                     // Emit the error in a dedicated field with empty content delta.
                     // The UI renders error text separately — not concatenated into the
                     // message body — so we must NOT send the accumulated content here.
+                    // Error chunks are terminal and out-of-band — no seq.
                     onChunk({ messageId, content: '', error: chunk.error, done: true });
                     chunkCount++;
                     finished = true;
@@ -178,7 +189,9 @@ export class ArenaService {
                 }
 
                 accContent += chunk.content;
-                onChunk({ messageId, content: chunk.content, done: chunk.done });
+                // Attach seq to every content/done chunk. seq is incremented for each
+                // emitted content chunk (heartbeats and errors do not consume seq slots).
+                onChunk({ messageId, content: chunk.content, done: chunk.done, seq: seq++ });
                 chunkCount++;
 
                 if (chunk.done) {
@@ -194,7 +207,7 @@ export class ArenaService {
         // The UI already has the accumulated text from prior incremental chunks;
         // the final ArenaChatResponse (returned below) carries the full content.
         if (!finished && !streamTimedOut && !localAbortController.signal.aborted) {
-            onChunk({ messageId, content: '', done: true });
+            onChunk({ messageId, content: '', done: true, seq: seq++ });
             chunkCount++;
         }
 

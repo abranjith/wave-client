@@ -110,8 +110,8 @@ Heartbeat tracking already lives in `useArenaStreamManager` (FEAT-010). This fea
 
 ## 7. State Tracking
 
-- [ ] TASK-001: Clarify connecting → streaming transition in useArenaStreamManager
-- [ ] TASK-002: Update ArenaMessageBubble for lifecycle indicators
-- [ ] TASK-003: Wire streamState to the active assistant bubble
+- [x] TASK-001: Clarify connecting → streaming transition in useArenaStreamManager
+- [x] TASK-002: Update ArenaMessageBubble for lifecycle indicators
+- [x] TASK-003: Wire streamState to the active assistant bubble
 
 Legend: [ ] Not started | [/] In progress | [x] Completed

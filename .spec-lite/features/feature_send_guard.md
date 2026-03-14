@@ -119,9 +119,9 @@ Prevent the user from sending multiple concurrent messages within the same Arena
 
 ## 7. State Tracking
 
-- [ ] TASK-001: Add single-stream enforcement to useArenaStreamManager
-- [ ] TASK-002: Refactor ArenaInputBar to use `isBusy` prop
-- [ ] TASK-003: Update ArenaChatView to use `streamState`
-- [ ] TASK-004: Wire streamState through ArenaPane
+- [x] TASK-001: Add single-stream enforcement to useArenaStreamManager
+- [x] TASK-002: Refactor ArenaInputBar to use `isBusy` prop
+- [x] TASK-003: Update ArenaChatView to use `streamState`
+- [x] TASK-004: Wire streamState through ArenaPane
 
 Legend: [ ] Not started | [/] In progress | [x] Completed

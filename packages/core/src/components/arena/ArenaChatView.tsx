@@ -47,8 +47,8 @@ export function ArenaChatView({
 }: ArenaChatViewProps): React.ReactElement {
   /** Stop button is shown while actively connecting or streaming. */
   const isActive = streamState === 'connecting' || streamState === 'streaming';
-  /** Pass down a simple boolean for backward compat (ArenaMessageBubble FEAT-014 will accept streamState directly). */
-  const isStreaming = streamState === 'streaming';
+  /** Whether the input bar should be blocked (connecting or streaming). */
+  const isBusy = isActive;
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -121,7 +121,9 @@ export function ArenaChatView({
           <ArenaMessageBubble
             key={message.id}
             message={message}
-            isStreaming={isStreaming && message.status === 'streaming'}
+            // Pass the full lifecycle state only to the actively streaming message;
+            // all other messages receive undefined so they render statically.
+            streamState={message.status === 'streaming' ? streamState : undefined}
             streamingContent={message.status === 'streaming' ? streamingContent : undefined}
             blockCallbacks={mergedBlockCallbacks}
           />
@@ -136,7 +138,7 @@ export function ArenaChatView({
         onSend={onSendMessage}
         onCancel={onCancelMessage}
         agentId={session.agent as ArenaAgentId}
-        streamState={streamState}
+        isBusy={isBusy}
         placeholder={`Ask ${agentName}…`}
         suggestedInput={suggestedInput}
         suggestKey={suggestKey}
@@ -239,21 +241,30 @@ function ArenaWelcomeMessage({
 // Message Bubble
 // ============================================================================
 
+/**
+ * Props for ArenaMessageBubble.
+ *
+ * `streamState` is set only on the message that is actively streaming
+ * (`message.status === 'streaming'`).  All other messages receive `undefined`
+ * and render as static content.
+ */
 interface ArenaMessageBubbleProps {
   message: ArenaMessage;
-  isStreaming?: boolean;
+  /** Full lifecycle state for the active streaming message; undefined for static messages. */
+  streamState?: ArenaStreamState;
   streamingContent?: string;
   blockCallbacks?: BlockCallbacks;
 }
 
 function ArenaMessageBubble({
   message,
-  isStreaming,
+  streamState,
   streamingContent,
   blockCallbacks,
 }: ArenaMessageBubbleProps): React.ReactElement {
   const isUser = message.role === 'user';
-  const content = isStreaming ? (streamingContent || '') : message.content;
+  // Show live content from the stream while streaming; fall back to persisted message content.
+  const content = streamState === 'streaming' ? (streamingContent ?? '') : message.content;
 
   /** True if the message has structured block content to render */
   const hasBlocks = message.blocks && message.blocks.length > 0;
@@ -317,17 +328,27 @@ function ArenaMessageBubble({
               {/* Fallback: plain text / markdown content */}
               {!hasBlocks && <MessageContent content={content} />}
 
+              {/* Connecting indicator: pulsing ring + label (before first chunk arrives) */}
+              {streamState === 'connecting' && (
+                <div className="flex items-center gap-2 py-1">
+                  <div className="relative flex items-center justify-center w-4 h-4">
+                    <span className="absolute inline-flex w-full h-full rounded-full bg-slate-400 dark:bg-slate-500 animate-ping opacity-50" />
+                    <span className="relative inline-flex w-2 h-2 rounded-full bg-slate-400 dark:bg-slate-500 animate-pulse" />
+                  </div>
+                  <span className="text-xs text-slate-400">Connecting…</span>
+                </div>
+              )}
               {/* Streaming indicator:
-                  - No content yet → show bouncing dots ("thinking" state)
-                  - Content is arriving → show inline cursor after the text */}
-              {isStreaming && !content && (
+                  - No content yet → bouncing dots ("thinking" animation)
+                  - Content is arriving → inline cursor after the text */}
+              {streamState === 'streaming' && !content && (
                 <div className="flex items-center gap-1 py-1">
                   <span className="w-2 h-2 rounded-full bg-slate-400 dark:bg-slate-500 animate-bounce [animation-delay:-0.3s]" />
                   <span className="w-2 h-2 rounded-full bg-slate-400 dark:bg-slate-500 animate-bounce [animation-delay:-0.15s]" />
                   <span className="w-2 h-2 rounded-full bg-slate-400 dark:bg-slate-500 animate-bounce" />
                 </div>
               )}
-              {isStreaming && content && (
+              {streamState === 'streaming' && content && (
                 <span className="inline-block w-2 h-4 bg-slate-600 dark:bg-slate-400 animate-pulse ml-1" />
               )}
             </>

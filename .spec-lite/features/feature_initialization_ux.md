@@ -155,10 +155,10 @@ Replace the invisible, boolean-driven initialization flow with a visible state m
 
 ## 7. State Tracking
 
-- [ ] TASK-001: Add ArenaReadinessState type
-- [ ] TASK-002: Add isProviderConfigured utility
-- [ ] TASK-003: Replace arenaIsLoading with arenaReadiness in Zustand
-- [ ] TASK-004: Create ArenaReadinessOverlay component
-- [ ] TASK-005: Wire readiness state in ArenaPane
+- [x] TASK-001: Add ArenaReadinessState type
+- [x] TASK-002: Add isProviderConfigured utility
+- [x] TASK-003: Replace arenaIsLoading with arenaReadiness in Zustand
+- [x] TASK-004: Create ArenaReadinessOverlay component
+- [x] TASK-005: Wire readiness state in ArenaPane
 
 Legend: [ ] Not started | [/] In progress | [x] Completed

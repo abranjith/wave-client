@@ -4,27 +4,24 @@
  * Persistent horizontal bar at the top of the chat area (below the header,
  * above the message list). Contains three sections:
  *
- * Left — **References**: single accent-coloured icon. Clicking it opens the
- *   `ArenaReferencesModal` (managed by the parent).
- *
- * Centre — **Provider / Model**: compact dropdown showing the current
+ * Left — **Provider / Model**: compact dropdown showing the current
  *   provider + model. Clicking opens a lightweight popover for provider /
  *   model selection only. All config (API keys, URLs, enable/disable) is
  *   handled in the Settings panel.
  *
- * Right — **Metadata**: live session stats (messages, tokens, duration).
+ * Centre — **Streaming toggle**: enables or disables streaming responses.
+ *
+ * Right — **Context circle**: SVG ring showing how much of the session's
+ *   context-window budget has been consumed.
  */
 
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import {
-  BookOpen,
   ChevronDown,
   X,
-  MessageSquare,
-  Hash,
-  Clock,
   Zap,
 } from 'lucide-react';
+import ContextCircle from './ContextCircle';
 import { cn } from '../../utils/styling';
 import {
   getProviderDefinition,
@@ -32,7 +29,6 @@ import {
 import type {
   ArenaProviderType,
   ArenaSettings,
-  ArenaSessionMetadata,
   ArenaProviderSettingsMap,
   ProviderDefinition,
   ModelDefinition,
@@ -48,16 +44,14 @@ import { SecondaryButton } from '../ui/SecondaryButton';
 // ============================================================================
 
 export interface ArenaChatToolbarProps {
-  /** Number of enabled references (shown as badge on the icon) */
-  referenceCount: number;
-  /** Open the references modal */
-  onOpenReferences: () => void;
   /** Current arena settings (contains provider, model) */
   settings: ArenaSettings;
   /** Per-provider settings (for filtering enabled providers/models) */
   providerSettings: ArenaProviderSettingsMap;
-  /** Session metadata for stats display */
-  metadata?: ArenaSessionMetadata;
+  /** Estimated word count for the current session (drives the context circle) */
+  contextWords: number;
+  /** Context budget in words (default 150 000) */
+  contextBudget?: number;
   /** Callback when provider / model selection changes */
   onSettingsChange: (updates: Partial<ArenaSettings>) => void;
   /** Whether streaming responses are enabled */
@@ -75,11 +69,10 @@ export interface ArenaChatToolbarProps {
 // ============================================================================
 
 export function ArenaChatToolbar({
-  referenceCount,
-  onOpenReferences,
   settings,
   providerSettings,
-  metadata,
+  contextWords,
+  contextBudget,
   onSettingsChange,
   enableStreaming,
   onEnableStreamingChange,
@@ -113,45 +106,7 @@ export function ArenaChatToolbar({
         className,
       )}
     >
-      {/* ---- LEFT: References icon ---- */}
-      <SecondaryButton
-        onClick={onOpenReferences}
-        size="sm"
-        className={cn(
-          'relative inline-flex items-center gap-1.5 px-2.5 py-1',
-          'border border-blue-200 dark:border-blue-700',
-        )}
-        title="Manage references"
-      >
-        <BookOpen size={14} />
-        <span className="text-xs font-medium">References</span>
-        {referenceCount > 0 && (
-          <span className="inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 text-[10px] font-bold rounded-full bg-blue-600 text-white dark:bg-blue-500">
-            {referenceCount}
-          </span>
-        )}
-      </SecondaryButton>
-
-      {/* ---- Spacer ---- */}
-      <div className="flex-1" />
-
-      {/* ---- Streaming Toggle ---- */}
-      <button
-        type="button"
-        onClick={() => onEnableStreamingChange(!enableStreaming)}
-        title={enableStreaming ? 'Streaming enabled' : 'Streaming disabled'}
-        className={cn(
-          'p-1.5 rounded-md transition-colors',
-          enableStreaming
-            ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400'
-            : 'bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400',
-          'hover:bg-opacity-80 dark:hover:bg-opacity-80',
-        )}
-      >
-        <Zap size={16} className={enableStreaming ? 'fill-current' : ''} />
-      </button>
-
-      {/* ---- CENTRE: Provider / Model ---- */}
+      {/* ---- LEFT: Provider / Model ---- */}
       <div className="relative" ref={popoverRef}>
         <SecondaryButton
           onClick={() => setShowProviderPopover((v) => !v)}
@@ -185,39 +140,27 @@ export function ArenaChatToolbar({
         )}
       </div>
 
-      {/* ---- RIGHT: Metadata ---- */}
-      <MetadataSection metadata={metadata} />
-    </div>
-  );
-}
+      {/* ---- Spacer ---- */}
+      <div className="flex-1" />
 
-// ============================================================================
-// Metadata Section
-// ============================================================================
+      {/* ---- Streaming Toggle ---- */}
+      <button
+        type="button"
+        onClick={() => onEnableStreamingChange(!enableStreaming)}
+        title={enableStreaming ? 'Streaming enabled' : 'Streaming disabled'}
+        className={cn(
+          'p-1.5 rounded-md transition-colors',
+          enableStreaming
+            ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400'
+            : 'bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400',
+          'hover:bg-opacity-80 dark:hover:bg-opacity-80',
+        )}
+      >
+        <Zap size={16} className={enableStreaming ? 'fill-current' : ''} />
+      </button>
 
-function MetadataSection({ metadata }: { metadata?: ArenaSessionMetadata }) {
-  if (!metadata) return null;
-
-  const formatDuration = (ms: number): string => {
-    if (ms < 60_000) return `${Math.round(ms / 1000)}s`;
-    if (ms < 3_600_000) return `${Math.floor(ms / 60_000)}m`;
-    return `${Math.floor(ms / 3_600_000)}h ${Math.floor((ms % 3_600_000) / 60_000)}m`;
-  };
-
-  return (
-    <div className="flex items-center gap-3 text-slate-400 dark:text-slate-500 flex-shrink-0">
-      <span className="inline-flex items-center gap-1" title="Messages">
-        <MessageSquare size={12} />
-        {metadata.messageCount}
-      </span>
-      <span className="inline-flex items-center gap-1" title="Estimated tokens">
-        <Hash size={12} />
-        {metadata.totalTokenCount.toLocaleString()}
-      </span>
-      <span className="inline-flex items-center gap-1" title="Session duration">
-        <Clock size={12} />
-        {formatDuration(metadata.durationMs)}
-      </span>
+      {/* ---- RIGHT: Context circle ---- */}
+      <ContextCircle currentWords={contextWords} budgetWords={contextBudget} />
     </div>
   );
 }

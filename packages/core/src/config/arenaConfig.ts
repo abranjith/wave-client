@@ -485,6 +485,27 @@ export function getEnabledModels(
   );
 }
 
+/**
+ * Returns `true` if at least one provider is enabled with valid configuration.
+ *
+ * A provider counts as configured when:
+ * - `enabled === true`, AND
+ * - it requires an API key and `apiKey` is a non-empty string, OR
+ * - it does **not** require an API key (e.g. Ollama) and `apiUrl` is non-empty.
+ */
+export function isProviderConfigured(providerSettings: ArenaProviderSettingsMap): boolean {
+  return Object.values(providerSettings).some((settings) => {
+    if (!settings.enabled) return false;
+    const def = PROVIDER_DEFINITIONS.find((p) => p.id === settings.providerId);
+    if (!def) return false;
+    if (def.requiresApiKey) {
+      return typeof settings.apiKey === 'string' && settings.apiKey.trim().length > 0;
+    }
+    // Local providers (e.g. Ollama) are configured when they have a non-empty base URL.
+    return typeof settings.apiUrl === 'string' && settings.apiUrl.trim().length > 0;
+  });
+}
+
 // ============================================================================
 // General Arena Settings
 // ============================================================================

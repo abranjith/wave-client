@@ -474,12 +474,16 @@ export class WebArenaAdapter implements IArenaAdapter {
             STORAGE_KEYS.PROVIDER_SETTINGS,
             getDefaultProviderSettings(),
         );
-        const apiKey = providerSettings['gemini']?.apiKey!
+        const apiKey = providerSettings['gemini']?.apiKey!;
 
         // Build conversation contents
         const contents = this.buildGeminiContents(history, message);
         const systemPrompt = this.getSystemPrompt(request.agent);
         const messageId = generateId();
+        // 0-indexed per-stream sequence counter. Incremented for every content/done
+        // chunk so the stream manager's reorder buffer can verify delivery order.
+        // Heartbeat chunks are out-of-band keep-alives and do NOT carry a seq value.
+        let seq = 0;
 
         try {
             const response = await fetch(
@@ -510,51 +514,66 @@ export class WebArenaAdapter implements IArenaAdapter {
                 return err('Failed to get response reader');
             }
 
+            // Emit an immediate heartbeat once the connection is established.
+            // This signals to the stream manager that the fetch succeeded, triggering
+            // the 'connecting → streaming' state transition without waiting for content.
+            // Heartbeats are out-of-band keep-alives and do NOT carry a seq value.
+            onChunk({ messageId, content: '', done: false, heartbeat: true });
+            console.debug('[WebArena] heartbeat emitted (connection established)');
+
+            // Periodic heartbeat every 15 s keeps the stream manager's safety timeout
+            // from firing during long pauses between content chunks.
+            const heartbeatInterval = setInterval(() => {
+                onChunk({ messageId, content: '', done: false, heartbeat: true });
+                console.debug('[WebArena] heartbeat emitted (periodic 15s)');
+            }, 15_000);
+
             const decoder = new TextDecoder();
             let fullContent = '';
             let tokenCount = 0;
 
-            while (true) {
-                const { done, value } = await reader.read();
-                if (done) {
-                    break;
-                }
+            try {
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) {
+                        break;
+                    }
 
-                const chunk = decoder.decode(value, { stream: true });
-                const lines = chunk.split('\n');
+                    const chunk = decoder.decode(value, { stream: true });
+                    const lines = chunk.split('\n');
 
-                for (const line of lines) {
-                    if (line.startsWith('data: ')) {
-                        try {
-                            const data = JSON.parse(line.slice(6));
-                            const text = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
-                            
-                            if (text) {
-                                fullContent += text;
-                                onChunk({
-                                    messageId,
-                                    content: text,
-                                    done: false,
-                                });
+                    for (const line of lines) {
+                        if (line.startsWith('data: ')) {
+                            try {
+                                const data = JSON.parse(line.slice(6));
+                                const text = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+
+                                if (text) {
+                                    fullContent += text;
+                                    // Include seq so the stream manager's reorder buffer can
+                                    // verify in-order delivery (web reads sequentially, so seq
+                                    // is always monotonically increasing here).
+                                    onChunk({ messageId, content: text, done: false, seq: seq++ });
+                                    console.debug('[WebArena] content chunk emitted', { seq: seq - 1 });
+                                }
+
+                                if (data.usageMetadata?.totalTokenCount) {
+                                    tokenCount = data.usageMetadata.totalTokenCount;
+                                }
+                            } catch {
+                                // Skip invalid JSON
                             }
-
-                            if (data.usageMetadata?.totalTokenCount) {
-                                tokenCount = data.usageMetadata.totalTokenCount;
-                            }
-                        } catch {
-                            // Skip invalid JSON
                         }
                     }
                 }
+            } finally {
+                // Always clear the heartbeat interval when the read loop exits,
+                // whether normally or due to an error/abort, to prevent leaks.
+                clearInterval(heartbeatInterval);
             }
 
-            // Final chunk
-            onChunk({
-                messageId,
-                content: '',
-                done: true,
-                tokenCount,
-            });
+            // Final done chunk — carries seq for protocol completeness.
+            onChunk({ messageId, content: '', done: true, tokenCount, seq: seq++ });
 
             return ok({
                 messageId,

@@ -108,9 +108,9 @@ Add a `seq` (sequence number) field to `ArenaChatStreamChunk` so that each conte
 
 ## 7. State Tracking
 
-- [ ] TASK-001: Add `seq` field to ArenaChatStreamChunk type
-- [ ] TASK-002: Emit `seq` from ArenaService.streamChat()
-- [ ] TASK-003: Implement reorder buffer in useArenaStreamManager
-- [ ] TASK-004: Verify seq passthrough in VS Code MessageHandler
+- [x] TASK-001: Add `seq` field to ArenaChatStreamChunk type
+- [x] TASK-002: Emit `seq` from ArenaService.streamChat()
+- [x] TASK-003: Implement reorder buffer in useArenaStreamManager
+- [x] TASK-004: Verify seq passthrough in VS Code MessageHandler
 
 Legend: [ ] Not started | [/] In progress | [x] Completed

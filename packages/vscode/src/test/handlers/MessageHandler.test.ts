@@ -524,6 +524,27 @@ describe('MessageHandler', () => {
       );
     });
 
+    it('arena.streamMessage — seq field is preserved verbatim in arena.streamChunk (FEAT-011)', async () => {
+      const { arenaService } = await import('../../services/index.js');
+      const response = { messageId: 'msg-seq', content: 'result' };
+      (arenaService.streamChat as any).mockImplementation(async (_req: any, onChunk: any) => {
+        onChunk({ messageId: 'msg-seq', content: 'token', done: false, seq: 5 });
+        return response;
+      });
+
+      const chatRequest = { sessionId: 'sess-seq', message: 'hi', agent: 'wave-client', history: [], settings: {} };
+      await handler.handleMessage({ type: 'arena.streamMessage', streamId: 'stream-seq', chatRequest });
+      await flushAsync();
+
+      expect(mockPanel.webview.postMessage).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: 'arena.streamChunk',
+          streamId: 'stream-seq',
+          chunk: expect.objectContaining({ seq: 5 }),
+        })
+      );
+    });
+
     it('arena.streamMessage — AbortController is removed from map after completion', async () => {
       const { arenaService } = await import('../../services/index.js');
       (arenaService.streamChat as any).mockResolvedValue({ messageId: 'msg-3', content: 'done' });

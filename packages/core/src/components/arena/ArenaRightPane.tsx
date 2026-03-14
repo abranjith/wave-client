@@ -28,6 +28,7 @@ import {
   Zap,
   Clock,
   Cpu,
+  Hash,
 } from 'lucide-react';
 import { cn } from '../../utils/styling';
 import { PrimaryButton } from '../ui/PrimaryButton';
@@ -78,6 +79,17 @@ export interface ArenaRightPaneProps {
 // ============================================================================
 // Icon helpers
 // ============================================================================
+
+/**
+ * Formats a duration in milliseconds into a human-readable short string.
+ * This is the canonical location for session duration formatting now that
+ * the toolbar only shows the context circle.
+ */
+function formatDuration(ms: number): string {
+  if (ms < 60_000) return `${Math.round(ms / 1000)}s`;
+  if (ms < 3_600_000) return `${Math.floor(ms / 60_000)}m`;
+  return `${Math.floor(ms / 3_600_000)}h ${Math.floor((ms % 3_600_000) / 60_000)}m`;
+}
 
 const SOURCE_TYPE_ICONS: Record<ArenaSourceType, React.ReactNode> = {
   web: <Globe size={14} />,
@@ -303,6 +315,18 @@ export function ArenaRightPane({
                   <span className="flex items-center gap-1">
                     <Clock size={10} />
                     {new Date(activeSession.createdAt).toLocaleTimeString()}
+                  </span>
+                  <span className="flex items-center gap-1" title="Messages">
+                    <MessageSquare size={10} />
+                    {sessionMetadata.messageCount}
+                  </span>
+                  <span className="flex items-center gap-1" title="Estimated tokens">
+                    <Hash size={10} />
+                    {sessionMetadata.totalTokenCount.toLocaleString()}
+                  </span>
+                  <span className="flex items-center gap-1" title="Session duration">
+                    <Clock size={10} />
+                    {formatDuration(sessionMetadata.durationMs)}
                   </span>
                 </div>
               )}

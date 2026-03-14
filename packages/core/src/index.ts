@@ -67,6 +67,7 @@ export type {
     StreamHandle,
     StreamUnsubscribe,
     ArenaView,
+    ArenaReadinessState,
     // Streaming state machine types
     ArenaStreamState,
     ArenaStreamManager,
@@ -117,6 +118,7 @@ export {
     getDefaultProviderSettings,
     getEnabledProviders,
     getEnabledModels,
+    isProviderConfigured,
     geminiGenerateContentUrl,
     geminiStreamUrl,
     geminiModelsUrl,

@@ -5,6 +5,7 @@ import type {
     ArenaCommandId,
     ArenaMessageStatus,
     ArenaView,
+    ArenaReadinessState,
 } from '../../types/arena';
 import type {
     ArenaAgentId,
@@ -29,7 +30,8 @@ export interface ArenaSlice {
     arenaSessions: ArenaSession[];
     arenaActiveSessionId: string | null;
     arenaMessages: ArenaMessage[];
-    arenaIsLoading: boolean;
+    /** Arena initialization readiness state. Default: 'idle'. */
+    arenaReadiness: ArenaReadinessState;
     arenaError: string | null;
     /** Currently selected agent (null = show agent selection page) */
     arenaSelectedAgent: ArenaAgentId | null;
@@ -56,7 +58,7 @@ export interface ArenaSlice {
     clearArenaMessages: () => void;
     
     // UI state actions
-    setArenaIsLoading: (isLoading: boolean) => void;
+    setArenaReadiness: (state: ArenaReadinessState) => void;
     setArenaError: (error: string | null) => void;
     
     // Agent / view actions
@@ -172,7 +174,7 @@ const createArenaSlice: StateCreator<ArenaSliceStore, [], [], ArenaSlice> = (set
     arenaSessions: [],
     arenaActiveSessionId: null,
     arenaMessages: [],
-    arenaIsLoading: false,
+    arenaReadiness: 'idle',
     arenaError: null,
     arenaSelectedAgent: null,
     arenaView: 'select-agent' as ArenaView,
@@ -243,7 +245,7 @@ const createArenaSlice: StateCreator<ArenaSliceStore, [], [], ArenaSlice> = (set
     clearArenaMessages: () => set({ arenaMessages: [] }),
     
     // UI state actions
-    setArenaIsLoading: (isLoading) => set({ arenaIsLoading: isLoading }),
+    setArenaReadiness: (state) => set({ arenaReadiness: state }),
     
     setArenaError: (error) => set({ arenaError: error }),
     
@@ -311,7 +313,7 @@ const createArenaSlice: StateCreator<ArenaSliceStore, [], [], ArenaSlice> = (set
         arenaSessions: [],
         arenaActiveSessionId: null,
         arenaMessages: [],
-        arenaIsLoading: false,
+        arenaReadiness: 'idle',
         arenaError: null,
         arenaSelectedAgent: null,
         arenaView: 'select-agent' as ArenaView,

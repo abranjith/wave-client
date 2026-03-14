@@ -1,22 +1,23 @@
 /**
- * Tests for the ArenaChatToolbar component.
+ * Tests for the ArenaChatToolbar component — updated for FEAT-015.
  *
- * The toolbar displays:
- *  - A "References" icon button (BookOpen) with a badge showing the enabled-reference count
- *  - A provider / model popover
- *  - Metadata stats (messages, tokens) when a session is active
+ * The toolbar now displays:
+ *  - A provider / model popover (left)
+ *  - A streaming toggle (centre)
+ *  - A ContextCircle showing context-window usage (right)
+ *
+ * The References button and MetadataSection have been removed.
  */
 
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import ArenaChatToolbar from '../../components/arena/ArenaChatToolbar';
-import { DEFAULT_ARENA_SETTINGS, createSessionMetadata, getDefaultProviderSettings } from '../../config/arenaConfig';
+import { DEFAULT_ARENA_SETTINGS, getDefaultProviderSettings } from '../../config/arenaConfig';
 
 const defaultProps = {
-  referenceCount: 0,
-  onOpenReferences: vi.fn(),
   settings: DEFAULT_ARENA_SETTINGS,
   providerSettings: getDefaultProviderSettings(),
+  contextWords: 0,
   onSettingsChange: vi.fn(),
   onOpenSettings: vi.fn(),
   enableStreaming: true,
@@ -32,43 +33,26 @@ describe('ArenaChatToolbar', () => {
     expect(screen.getByText('gemini-2.0-flash')).toBeInTheDocument();
   });
 
-  it('should show metadata stats when provided', () => {
-    const metadata = createSessionMetadata('gemini', 'gemini-2.0-flash');
-    metadata.messageCount = 5;
-    metadata.totalTokenCount = 1234;
+  it('should not render metadata stats (MetadataSection removed)', () => {
+    render(<ArenaChatToolbar {...defaultProps} />);
 
-    render(
-      <ArenaChatToolbar
-        {...defaultProps}
-        metadata={metadata}
-      />,
-    );
-
-    // Metadata renders the bare numbers — check by title attributes
-    expect(screen.getByTitle('Messages')).toBeInTheDocument();
-    expect(screen.getByTitle('Estimated tokens')).toBeInTheDocument();
-    expect(screen.getByText('5')).toBeInTheDocument();
-    expect(screen.getByText('1,234')).toBeInTheDocument();
+    // These title-attribute spans were part of MetadataSection and are now gone
+    expect(screen.queryByTitle('Messages')).toBeNull();
+    expect(screen.queryByTitle('Estimated tokens')).toBeNull();
+    expect(screen.queryByTitle('Session duration')).toBeNull();
   });
 
-  it('should display the References button with the enabled count badge', () => {
-    render(<ArenaChatToolbar {...defaultProps} referenceCount={3} />);
+  it('should not render the References button', () => {
+    render(<ArenaChatToolbar {...defaultProps} />);
 
-    // The badge should show the count and the label "References" should be visible
-    expect(screen.getByText('3')).toBeInTheDocument();
-    expect(screen.getByText('References')).toBeInTheDocument();
+    expect(screen.queryByText('References')).toBeNull();
+    expect(screen.queryByTitle('Manage references')).toBeNull();
   });
 
-  it('should call onOpenReferences when the References button is clicked', () => {
-    const onOpenReferences = vi.fn();
-    render(
-      <ArenaChatToolbar {...defaultProps} onOpenReferences={onOpenReferences} />,
-    );
-
-    const referencesBtn = screen.getByText('References');
-    fireEvent.click(referencesBtn);
-
-    expect(onOpenReferences).toHaveBeenCalledOnce();
+  it('should render ContextCircle with the provided contextWords', () => {
+    // 75 000 / 150 000 = 50 %
+    render(<ArenaChatToolbar {...defaultProps} contextWords={75_000} />);
+    expect(screen.getByText('50%')).toBeInTheDocument();
   });
 
   it('should open provider popover when provider/model button is clicked', () => {

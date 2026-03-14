@@ -56,6 +56,7 @@ export {
   getDefaultProviderSettings,
   getEnabledProviders,
   getEnabledModels,
+  isProviderConfigured,
 } from '../config/arenaConfig';
 
 export type {
@@ -255,6 +256,16 @@ export interface ArenaSessionWithMessages extends ArenaSession {
  */
 export type ArenaView = 'chat' | 'select-agent' | 'settings';
 
+/**
+ * Arena initialization readiness state.
+ *
+ * - `'idle'`         — Arena not yet mounted; no data has been requested.
+ * - `'loading'`      — Fetching sessions, settings, provider config, and references.
+ * - `'ready'`        — All data loaded and at least one provider is configured.
+ * - `'needs-config'` — Data loaded but no provider is enabled or configured.
+ */
+export type ArenaReadinessState = 'idle' | 'loading' | 'ready' | 'needs-config';
+
 /** Arena UI state for the Zustand store */
 export interface ArenaState {
   /** All sessions */
@@ -359,6 +370,13 @@ export interface ArenaChatStreamChunk {
    * but must NOT append `content` (which will be empty) to the message body.
    */
   heartbeat?: boolean;
+  /**
+   * 0-indexed per-stream sequence number assigned by `ArenaService.streamChat()`.
+   * Used by `useArenaStreamManager` to reorder chunks that arrive out of order
+   * due to transport anomalies.
+   * Heartbeat and error chunks may omit this field.
+   */
+  seq?: number;
 }
 
 // ============================================================================

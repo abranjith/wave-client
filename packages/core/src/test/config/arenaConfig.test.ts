@@ -25,8 +25,11 @@ import {
   createSessionMetadata,
   getDefaultReferences,
   mergeReferences,
+  getDefaultProviderSettings,
+  isProviderConfigured,
+  OLLAMA_DEFAULT_BASE_URL,
 } from '../../config/arenaConfig';
-import type { ArenaReference } from '../../config/arenaConfig';
+import type { ArenaReference, ArenaProviderSettingsMap } from '../../config/arenaConfig';
 
 // ============================================================================
 // Agent IDs & Definitions
@@ -323,5 +326,55 @@ describe('mergeReferences', () => {
     const defaults = getDefaultReferences();
     // defaults + 1 user ref (the mdn override replaces the default, not added)
     expect(merged).toHaveLength(defaults.length + 1);
+  });
+});
+
+
+// ============================================================================
+// isProviderConfigured
+// ============================================================================
+
+describe('isProviderConfigured', () => {
+  function makeSettings(overrides: Partial<ArenaProviderSettingsMap> = {}): ArenaProviderSettingsMap {
+    return { ...getDefaultProviderSettings(), ...overrides };
+  }
+
+  it('returns false when no providers are enabled', () => {
+    const settings = makeSettings({
+      gemini: { providerId: 'gemini', enabled: false, apiKey: 'key', disabledModels: [] },
+      ollama: { providerId: 'ollama', enabled: false, apiUrl: OLLAMA_DEFAULT_BASE_URL, disabledModels: [] },
+    });
+    expect(isProviderConfigured(settings)).toBe(false);
+  });
+
+  it('returns true when one provider is enabled with an API key', () => {
+    const settings = makeSettings({
+      gemini: { providerId: 'gemini', enabled: true, apiKey: 'my-api-key', disabledModels: [] },
+    });
+    expect(isProviderConfigured(settings)).toBe(true);
+  });
+
+  it('returns false when a provider is enabled but has no API key and requires one', () => {
+    const settings = makeSettings({
+      gemini: { providerId: 'gemini', enabled: true, apiKey: undefined, disabledModels: [] },
+      ollama: { providerId: 'ollama', enabled: false, apiUrl: OLLAMA_DEFAULT_BASE_URL, disabledModels: [] },
+    });
+    expect(isProviderConfigured(settings)).toBe(false);
+  });
+
+  it('returns true for Ollama when enabled with a non-empty apiUrl and no API key', () => {
+    const settings = makeSettings({
+      gemini: { providerId: 'gemini', enabled: false, apiKey: undefined, disabledModels: [] },
+      ollama: { providerId: 'ollama', enabled: true, apiUrl: OLLAMA_DEFAULT_BASE_URL, disabledModels: [] },
+    });
+    expect(isProviderConfigured(settings)).toBe(true);
+  });
+
+  it('returns true when at least one of multiple providers is configured', () => {
+    const settings = makeSettings({
+      gemini: { providerId: 'gemini', enabled: true, apiKey: '', disabledModels: [] },
+      ollama: { providerId: 'ollama', enabled: true, apiUrl: OLLAMA_DEFAULT_BASE_URL, disabledModels: [] },
+    });
+    expect(isProviderConfigured(settings)).toBe(true);
   });
 });
