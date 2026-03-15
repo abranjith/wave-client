@@ -107,9 +107,12 @@ describe('waveClientAgent — LLM timeout', () => {
             if (chunk.done) break;
         }
 
-        // Should have at least a done chunk with no error
+        // Should have a content chunk and a done chunk with no error
         const lastChunk = chunks[chunks.length - 1];
         expect(lastChunk.done).toBe(true);
         expect(lastChunk.error).toBeUndefined();
+        // Content should be captured from the final graph state
+        const contentChunk = chunks.find((c) => !c.done && c.content.length > 0);
+        expect(contentChunk?.content).toBe('mock response');
     }, 5_000);
 });

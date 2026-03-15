@@ -99,6 +99,14 @@ export function createWaveClientAgent(config: WaveClientAgentConfig) {
   const llmWithTools =
     mcpTools.length > 0 ? (llm.bindTools?.(mcpTools) ?? llm) : llm;
 
+  /**
+   * Closure variable to capture the last LLM response content directly.
+   * Both agentNode and generateNode write here so chat() can read it
+   * without depending on LangGraph's state channel reducers.
+   * Reset before each invoke() call.
+   */
+  let _lastLLMContent = '';
+
   // ---------------------------------------------------------------------------
   // Signal helpers
   // ---------------------------------------------------------------------------
@@ -182,6 +190,25 @@ export function createWaveClientAgent(config: WaveClientAgentConfig) {
         ? { ...config, signal: combinedSignal }
         : { signal: combinedSignal };
       const response = await (llmWithTools as BaseChatModel).invoke(messages, callConfig as RunnableConfig);
+
+      // Capture the agent response content. If no tool calls are made,
+      // the graph routes to END and this is the final LLM response.
+      const rawContent = response.content;
+      const hasToolCalls = 'tool_calls' in response && (response as AIMessage).tool_calls?.length;
+      if (!hasToolCalls) {
+        _lastLLMContent = typeof rawContent === 'string'
+          ? rawContent
+          : (rawContent?.toString() ?? '');
+        console.info('[WaveClient/agent] direct response (no tools)', {
+          contentLength: _lastLLMContent.length,
+          contentPreview: _lastLLMContent.substring(0, 120),
+        });
+      } else {
+        console.info('[WaveClient/agent] tool calls requested', {
+          toolCallCount: (response as AIMessage).tool_calls?.length,
+        });
+      }
+
       return { messages: [response] };
     } finally {
       clearTimeout(timer);
@@ -237,6 +264,9 @@ export function createWaveClientAgent(config: WaveClientAgentConfig) {
     state: WaveClientAgentState,
     config?: LangGraphRunnableConfig,
   ): Promise<Partial<WaveClientAgentState>> => {
+    console.info('[WaveClient/generate] node entered', {
+      messageCount: state.messages.length,
+    });
     const systemMessage = new SystemMessage(prompt);
     const messages = [systemMessage, ...state.messages];
     const timeoutController = new AbortController();
@@ -249,6 +279,16 @@ export function createWaveClientAgent(config: WaveClientAgentConfig) {
         ? { ...config, signal: combinedSignal }
         : { signal: combinedSignal };
       const response = await llm.invoke(messages, callConfig as RunnableConfig);
+
+      const rawContent = response.content;
+      _lastLLMContent = typeof rawContent === 'string'
+        ? rawContent
+        : (rawContent?.toString() ?? '');
+      console.info('[WaveClient/generate] LLM response received', {
+        contentLength: _lastLLMContent.length,
+        contentPreview: _lastLLMContent.substring(0, 120),
+      });
+
       return { messages: [response] };
     } finally {
       clearTimeout(timer);
@@ -315,44 +355,52 @@ export function createWaveClientAgent(config: WaveClientAgentConfig) {
 
         messages.push(new HumanMessage(userMessage));
 
-        console.info('[WaveClientAgent] invoking LangGraph stream', {
+        console.info('[WaveClientAgent] invoking LangGraph (invoke mode)', {
           messageId,
           totalMessages: messages.length,
         });
         const streamStartTime = Date.now();
 
-        // streamMode: 'messages' emits [AIMessageChunk, metadata] tuples per token.
-        // This enables real-time streaming rather than waiting for the full LLM response.
-        // Tokens from both 'agent' (direct answers) and 'generate' (post-tool answers)
-        // nodes are emitted; tool-call-only chunks have empty content and are skipped.
-        const stream = await app.stream(
+        // Reset closure before invoke so we capture only this call's output
+        _lastLLMContent = '';
+
+        // Use invoke() to run the full graph.
+        const result = await app.invoke(
           { messages, toolCalls: [] },
-          { streamMode: 'messages', ...(signal && { signal }) } as RunnableConfig,
+          { ...(signal && { signal }) } as RunnableConfig,
         );
 
-        console.info('[WaveClientAgent] stream created, iterating chunks', { messageId });
+        // Primary: use the closure-captured content from agentNode/generateNode.
+        // Fallback: try extracting from the invoke result's messages state.
+        let content = _lastLLMContent;
 
-        for await (const chunk of stream) {
-          // Each chunk is [AIMessageChunk, { langgraph_node, ... }].
-          // Filter on non-empty content to skip tool-call-only chunks.
-          const [messageChunk] = chunk as [{ content?: unknown }, Record<string, unknown>];
-          const content = messageChunk?.content?.toString() ?? '';
+        if (!content) {
+          // Fallback: extract from LangGraph state (may be unreliable)
+          const lastMessage = result.messages?.[result.messages.length - 1];
+          const rawContent = lastMessage?.content;
+          content = typeof rawContent === 'string'
+            ? rawContent
+            : (rawContent?.toString() ?? '');
           if (content) {
-            if (chunkIndex === 0) {
-              console.info('[WaveClientAgent] first token', {
-                messageId,
-                timeToFirstTokenMs: Date.now() - streamStartTime,
-              });
-            }
-            yield { id: `chunk-${chunkIndex++}`, content, done: false, messageId };
+            console.info('[WaveClientAgent] content from state fallback', {
+              messageId,
+              messageCount: result.messages?.length ?? 0,
+              lastMessageType: lastMessage?.constructor?.name ?? 'unknown',
+              contentLength: content.length,
+            });
           }
         }
 
         console.info('[WaveClientAgent] chat complete', {
           messageId,
-          totalChunks: chunkIndex,
           elapsedMs: Date.now() - streamStartTime,
+          contentLength: content.length,
+          contentSource: _lastLLMContent ? 'closure' : 'state-fallback',
         });
+
+        if (content) {
+          yield { id: `chunk-${chunkIndex++}`, content, done: false, messageId };
+        }
 
         yield { id: `chunk-${chunkIndex}`, content: '', done: true, messageId };
       } catch (error) {

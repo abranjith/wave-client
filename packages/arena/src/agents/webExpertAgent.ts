@@ -93,6 +93,14 @@ export function createWebExpertAgent(config: WebExpertAgentConfig) {
   const mergedSettings = { ...DEFAULT_ARENA_SETTINGS, ...settings };
   const prompt = systemPrompt ?? WEB_EXPERT_SYSTEM_PROMPT;
 
+  /**
+   * Closure variable to capture the generate node's LLM response directly.
+   * This bypasses LangGraph's state channel reducers which may silently
+   * lose content depending on the version/configuration.
+   * Reset before each invoke() call.
+   */
+  let _lastGenerateContent = '';
+
   // ---------------------------------------------------------------------------
   // Signal helpers
   // ---------------------------------------------------------------------------
@@ -188,6 +196,12 @@ export function createWebExpertAgent(config: WebExpertAgentConfig) {
     state: WebExpertAgentState,
     config?: LangGraphRunnableConfig,
   ): Promise<Partial<WebExpertAgentState>> => {
+    console.info('[WebExpert/generate] node entered', {
+      messageCount: state.messages.length,
+      contextCount: state.context.length,
+      sourcesCount: state.sources.length,
+    });
+
     const systemMessage = new SystemMessage(prompt);
 
     const contextStr =
@@ -222,10 +236,25 @@ export function createWebExpertAgent(config: WebExpertAgentConfig) {
         : { signal: combinedSignal };
       const response = await llm.invoke(messagesWithContext, callConfig as RunnableConfig);
 
-      let responseContent = response.content?.toString() ?? '';
+      const rawContent = response.content;
+      console.info('[WebExpert/generate] LLM response received', {
+        rawContentType: typeof rawContent,
+        isArray: Array.isArray(rawContent),
+        contentLength: typeof rawContent === 'string' ? rawContent.length : JSON.stringify(rawContent).length,
+        contentPreview: typeof rawContent === 'string'
+          ? rawContent.substring(0, 120)
+          : JSON.stringify(rawContent).substring(0, 120),
+      });
+
+      let responseContent = typeof rawContent === 'string'
+        ? rawContent
+        : (rawContent?.toString() ?? '');
       if (sourcesStr) {
         responseContent += sourcesStr;
       }
+
+      // Capture in closure so chat() can read it directly
+      _lastGenerateContent = responseContent;
 
       return { messages: [new AIMessage(responseContent)] };
     } finally {
@@ -289,43 +318,49 @@ export function createWebExpertAgent(config: WebExpertAgentConfig) {
 
         messages.push(new HumanMessage(userMessage));
 
-        console.info('[WebExpertAgent] invoking LangGraph stream', { messageId });
+        console.info('[WebExpertAgent] invoking LangGraph (invoke mode)', { messageId });
         const streamStartTime = Date.now();
 
-        // streamMode: 'messages' emits [AIMessageChunk, metadata] tuples per token,
-        // enabling real-time streaming instead of waiting for the full LLM response.
-        const stream = await app.stream(
+        // Reset closure before invoke so we capture only this call's output
+        _lastGenerateContent = '';
+
+        // Use invoke() to run the full graph.
+        const result = await app.invoke(
           { messages, mode },
-          { streamMode: 'messages', ...(signal && { signal }) } as RunnableConfig,
+          { ...(signal && { signal }) } as RunnableConfig,
         );
 
-        console.info('[WebExpertAgent] stream created, iterating chunks', { messageId });
+        // Primary: use the closure-captured content from generateNode.
+        // Fallback: try extracting from the invoke result's messages state.
+        let content = _lastGenerateContent;
 
-        for await (const chunk of stream) {
-          // Each chunk is [AIMessageChunk, { langgraph_node, ... }].
-          // Only emit tokens from the generate node (skip route/retrieve).
-          const [messageChunk, metadata] = chunk as [
-            { content?: unknown },
-            Record<string, unknown>,
-          ];
-          if (metadata?.langgraph_node !== 'generate') { continue; }
-          const content = messageChunk?.content?.toString() ?? '';
+        if (!content) {
+          // Fallback: extract from LangGraph state (may be unreliable)
+          const lastMessage = result.messages?.[result.messages.length - 1];
+          const rawContent = lastMessage?.content;
+          content = typeof rawContent === 'string'
+            ? rawContent
+            : (rawContent?.toString() ?? '');
           if (content) {
-            if (chunkIndex === 0) {
-              console.info('[WebExpertAgent] first token', {
-                messageId,
-                timeToFirstTokenMs: Date.now() - streamStartTime,
-              });
-            }
-            yield { id: `chunk-${chunkIndex++}`, content, done: false, messageId };
+            console.info('[WebExpertAgent] content from state fallback', {
+              messageId,
+              messageCount: result.messages?.length ?? 0,
+              lastMessageType: lastMessage?.constructor?.name ?? 'unknown',
+              contentLength: content.length,
+            });
           }
         }
 
         console.info('[WebExpertAgent] chat complete', {
           messageId,
-          totalChunks: chunkIndex,
           elapsedMs: Date.now() - streamStartTime,
+          contentLength: content.length,
+          contentSource: _lastGenerateContent ? 'closure' : 'state-fallback',
         });
+
+        if (content) {
+          yield { id: `chunk-${chunkIndex++}`, content, done: false, messageId };
+        }
 
         yield { id: `chunk-${chunkIndex}`, content: '', done: true, messageId };
       } catch (error) {

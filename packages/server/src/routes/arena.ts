@@ -272,8 +272,14 @@ export async function registerArenaRoutes(fastify: FastifyInstance): Promise<voi
 
         const controller = new AbortController();
 
-        // Abort upon client disconnect
-        request.raw.on('close', () => {
+        // Abort when the client disconnects.
+        // IMPORTANT: Must listen on the underlying socket, NOT request.raw.
+        // request.raw is an IncomingMessage (readable stream) whose 'close'
+        // event fires as soon as the POST body is fully consumed — long before
+        // the SSE response finishes.  The socket 'close' event fires only when
+        // the TCP connection actually drops (client navigates away, tab closed,
+        // explicit abort, etc.).
+        request.raw.socket.on('close', () => {
             controller.abort();
         });
 
