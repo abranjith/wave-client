@@ -78,6 +78,7 @@ function createService(agentChunks: ChatChunk[]) {
 
     const svc = new ArenaService({
         createProviderFactory: vi.fn().mockReturnValue({}) as unknown as typeof import('../providers/factory').createProviderFactory,
+        testProviderConnection: vi.fn().mockResolvedValue({ connected: true }) as unknown as typeof import('../providers/factory').testProviderConnection,
         createWaveClientAgent: vi.fn().mockReturnValue(agent) as unknown as typeof import('../agents/waveClientAgent').createWaveClientAgent,
         createWebExpertAgent: vi.fn().mockReturnValue(agent) as unknown as typeof import('../agents/webExpertAgent').createWebExpertAgent,
     });

@@ -7,6 +7,7 @@
 
 import * as vscode from 'vscode';
 import { securityService } from './services/SecurityService';
+import { MessageHandler } from './handlers/MessageHandler';
 
 let outputChannel: vscode.OutputChannel | undefined;
 
@@ -19,6 +20,7 @@ function log(message: string): void {
  * Called when the extension is first activated.
  */
 export function activate(context: vscode.ExtensionContext) {
+	console.log('[Wave Client] activate() called');
 	outputChannel = vscode.window.createOutputChannel('Wave Client');
 	context.subscriptions.push(outputChannel);
 	log('Activating Wave Client extension...');
@@ -29,19 +31,24 @@ export function activate(context: vscode.ExtensionContext) {
 
 		// Register the main command to open Wave Client
 		const openDisposable = vscode.commands.registerCommand('waveclient.open', async () => {
+			console.log('[Wave Client] waveclient.open command fired');
 			log('Command received: waveclient.open');
 			try {
 				await createWebviewPanel(context);
+				console.log('[Wave Client] Webview panel created successfully');
 			} catch (error) {
 				const message = error instanceof Error ? error.message : String(error);
+				console.error('[Wave Client] createWebviewPanel failed:', message);
 				log(`Failed to open Wave Client webview: ${message}`);
 				vscode.window.showErrorMessage(`Wave Client failed to open: ${message}`);
 			}
 		});
 
 		context.subscriptions.push(openDisposable);
+		console.log('[Wave Client] activation complete, command registered');
 	} catch (error) {
 		const message = error instanceof Error ? error.message : String(error);
+		console.error('[Wave Client] Activation failed:', message);
 		log(`Activation failed: ${message}`);
 		vscode.window.showErrorMessage(`Wave Client activation failed: ${message}`);
 		throw error;
@@ -53,6 +60,7 @@ export function activate(context: vscode.ExtensionContext) {
  * @param context The extension context
  */
 async function createWebviewPanel(context: vscode.ExtensionContext): Promise<vscode.WebviewPanel> {
+	console.log('[Wave Client] createWebviewPanel - extensionUri:', context.extensionUri.toString());
 	const webviewScriptPath = vscode.Uri.joinPath(context.extensionUri, 'dist', 'webview', 'webview.js');
 	const webviewCssPath = vscode.Uri.joinPath(context.extensionUri, 'dist', 'webview', 'index.css');
 
@@ -81,7 +89,7 @@ async function createWebviewPanel(context: vscode.ExtensionContext): Promise<vsc
 	panel.webview.html = getWebviewContent(panel.webview, context.extensionUri);
 
 	// Queue messages the webview sends while the handler is still loading.
-	let messageHandler: InstanceType<typeof import('./handlers/MessageHandler').MessageHandler> | null = null;
+	let messageHandler: MessageHandler | null = null;
 	const messageQueue: unknown[] = [];
 
 	panel.webview.onDidReceiveMessage(
@@ -97,8 +105,18 @@ async function createWebviewPanel(context: vscode.ExtensionContext): Promise<vsc
 	);
 
 	// Dynamically import the handler (pulls in lightweight service deps).
-	const { MessageHandler } = await import('./handlers/MessageHandler');
-	messageHandler = new MessageHandler(panel);
+	try {
+		messageHandler = new MessageHandler(panel);
+	} catch (error) {
+		const message = error instanceof Error ? error.message : String(error);
+		console.error('[Wave Client] Failed to load MessageHandler:', message);
+		log(`Failed to load MessageHandler: ${message}`);
+		panel.webview.postMessage({
+			type: 'bannerError',
+			message: `Extension handler failed to load: ${message}. Try reloading the window.`,
+		});
+		return panel;
+	}
 
 	// Replay any messages that arrived while loading.
 	for (const queued of messageQueue) {

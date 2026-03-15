@@ -293,6 +293,13 @@ export function createWaveClientAgent(config: WaveClientAgentConfig) {
       const messageId = `msg-${Date.now()}`;
       let chunkIndex = 0;
 
+      console.info('[WaveClientAgent] chat start', {
+        messageId,
+        historyLength: sessionMessages.length,
+        messagePreview: userMessage.substring(0, 80),
+        toolCount: mcpTools.length,
+      });
+
       try {
         const messages: BaseMessage[] = sessionMessages.map((msg) => {
           if (msg.role === 'user') {return new HumanMessage(msg.content);}
@@ -308,6 +315,12 @@ export function createWaveClientAgent(config: WaveClientAgentConfig) {
 
         messages.push(new HumanMessage(userMessage));
 
+        console.info('[WaveClientAgent] invoking LangGraph stream', {
+          messageId,
+          totalMessages: messages.length,
+        });
+        const streamStartTime = Date.now();
+
         // streamMode: 'messages' emits [AIMessageChunk, metadata] tuples per token.
         // This enables real-time streaming rather than waiting for the full LLM response.
         // Tokens from both 'agent' (direct answers) and 'generate' (post-tool answers)
@@ -317,24 +330,45 @@ export function createWaveClientAgent(config: WaveClientAgentConfig) {
           { streamMode: 'messages', ...(signal && { signal }) } as RunnableConfig,
         );
 
+        console.info('[WaveClientAgent] stream created, iterating chunks', { messageId });
+
         for await (const chunk of stream) {
           // Each chunk is [AIMessageChunk, { langgraph_node, ... }].
           // Filter on non-empty content to skip tool-call-only chunks.
           const [messageChunk] = chunk as [{ content?: unknown }, Record<string, unknown>];
           const content = messageChunk?.content?.toString() ?? '';
           if (content) {
+            if (chunkIndex === 0) {
+              console.info('[WaveClientAgent] first token', {
+                messageId,
+                timeToFirstTokenMs: Date.now() - streamStartTime,
+              });
+            }
             yield { id: `chunk-${chunkIndex++}`, content, done: false, messageId };
           }
         }
 
+        console.info('[WaveClientAgent] chat complete', {
+          messageId,
+          totalChunks: chunkIndex,
+          elapsedMs: Date.now() - streamStartTime,
+        });
+
         yield { id: `chunk-${chunkIndex}`, content: '', done: true, messageId };
       } catch (error) {
+        const errMsg = error instanceof Error ? error.message : 'Unknown error';
+        console.error('[WaveClientAgent] chat error', {
+          messageId,
+          error: errMsg,
+          errorType: error instanceof Error ? error.constructor.name : typeof error,
+          chunksBeforeError: chunkIndex,
+        });
         yield {
           id: 'chunk-error',
           content: '',
           done: true,
           messageId,
-          error: error instanceof Error ? error.message : 'Unknown error',
+          error: errMsg,
         };
       }
     },

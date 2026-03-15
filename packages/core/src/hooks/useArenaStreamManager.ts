@@ -162,6 +162,14 @@ export function useArenaStreamManager(): ArenaStreamManager {
       setStreamingMessageId(assistantMessageId);
       setStreamError(null);
 
+      console.info('[ArenaStream] starting stream', {
+        provider: request.settings?.provider,
+        model: request.settings?.model,
+        agent: request.agent,
+        sessionId: request.sessionId,
+        assistantMessageId,
+      });
+
       const handle = arenaAdapter.streamMessage(request);
       activeHandleRef.current = handle;
 
@@ -177,7 +185,15 @@ export function useArenaStreamManager(): ArenaStreamManager {
           activeHandleRef.current = null;
           clearGapTimer();
           reorderBufferRef.current.clear();
-          const msg = 'Stream timed out — no response received from server';
+          const msg = `Stream timed out — no response received from server. ` +
+            `Provider: ${request.settings?.provider ?? 'unknown'}, ` +
+            `Model: ${request.settings?.model ?? 'unknown'}. ` +
+            `Check that the LLM service is running and reachable.`;
+          console.error('[ArenaStream] safety timeout fired', {
+            provider: request.settings?.provider,
+            model: request.settings?.model,
+            sessionId: request.sessionId,
+          });
           setStreamState('error');
           setStreamError(msg);
           updateArenaMessage(assistantMessageId, { status: 'error', error: msg });
@@ -296,6 +312,7 @@ export function useArenaStreamManager(): ArenaStreamManager {
 
         if (chunk.heartbeat) {
           // Connection keep-alive; no content — stay in 'connecting' state.
+          console.debug('[ArenaStream] heartbeat received');
           return;
         }
 
@@ -305,6 +322,7 @@ export function useArenaStreamManager(): ArenaStreamManager {
           clearSafetyTimer();
           clearGapTimer();
           reorderBufferRef.current.clear();
+          console.error('[ArenaStream] error chunk received', { error: chunk.error });
           setStreamState('error');
           setStreamError(chunk.error);
           updateArenaMessage(assistantMessageId, { status: 'error', error: chunk.error });
@@ -370,10 +388,11 @@ export function useArenaStreamManager(): ArenaStreamManager {
         clearGapTimer();
         reorderBufferRef.current.clear();
 
-        console.info('[Arena] stream complete', {
+        console.info('[ArenaStream] stream complete', {
           totalChunks: reorderStatsRef.current.totalChunks,
           reorderedChunks: reorderStatsRef.current.reorderedChunks,
           maxBufferDepth: reorderStatsRef.current.maxBufferDepth,
+          contentLength: response.content?.length ?? 0,
         });
 
         updateArenaMessage(assistantMessageId, {
@@ -400,6 +419,7 @@ export function useArenaStreamManager(): ArenaStreamManager {
         clearGapTimer();
         reorderBufferRef.current.clear();
 
+        console.error('[ArenaStream] stream error callback', { error });
         setStreamState('error');
         setStreamError(error);
         updateArenaMessage(assistantMessageId, { status: 'error', error });

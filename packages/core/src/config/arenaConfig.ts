@@ -97,9 +97,6 @@ export interface ArenaSourceConfig {
 /**
  * A reference resource used by Arena agents.
  *
- * Default references (from `DEFAULT_REFERENCE_WEBSITES`) have `isDefault: true`
- * and cannot be removed by the user. User-added references have `isDefault: false`
- * and are persisted in the `.waveclient/arena/` directory.
  */
 export interface ArenaReference {
   id: string;

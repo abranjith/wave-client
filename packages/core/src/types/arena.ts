@@ -36,8 +36,6 @@ export {
   geminiModelsUrl,
   ollamaChatUrl,
   ollamaTagsUrl,
-  // Reference websites
-  DEFAULT_REFERENCE_WEBSITES,
   // Storage
   STORAGE_KEYS,
   ARENA_DIR,

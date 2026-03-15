@@ -269,6 +269,13 @@ export function createWebExpertAgent(config: WebExpertAgentConfig) {
       const messageId = `msg-${Date.now()}`;
       let chunkIndex = 0;
 
+      console.info('[WebExpertAgent] chat start', {
+        messageId,
+        historyLength: sessionMessages.length,
+        messagePreview: userMessage.substring(0, 80),
+        mode,
+      });
+
       try {
         const messages: BaseMessage[] = sessionMessages.map((msg) => {
           if (msg.role === 'user') {
@@ -282,12 +289,17 @@ export function createWebExpertAgent(config: WebExpertAgentConfig) {
 
         messages.push(new HumanMessage(userMessage));
 
+        console.info('[WebExpertAgent] invoking LangGraph stream', { messageId });
+        const streamStartTime = Date.now();
+
         // streamMode: 'messages' emits [AIMessageChunk, metadata] tuples per token,
         // enabling real-time streaming instead of waiting for the full LLM response.
         const stream = await app.stream(
           { messages, mode },
           { streamMode: 'messages', ...(signal && { signal }) } as RunnableConfig,
         );
+
+        console.info('[WebExpertAgent] stream created, iterating chunks', { messageId });
 
         for await (const chunk of stream) {
           // Each chunk is [AIMessageChunk, { langgraph_node, ... }].
@@ -299,18 +311,37 @@ export function createWebExpertAgent(config: WebExpertAgentConfig) {
           if (metadata?.langgraph_node !== 'generate') { continue; }
           const content = messageChunk?.content?.toString() ?? '';
           if (content) {
+            if (chunkIndex === 0) {
+              console.info('[WebExpertAgent] first token', {
+                messageId,
+                timeToFirstTokenMs: Date.now() - streamStartTime,
+              });
+            }
             yield { id: `chunk-${chunkIndex++}`, content, done: false, messageId };
           }
         }
 
+        console.info('[WebExpertAgent] chat complete', {
+          messageId,
+          totalChunks: chunkIndex,
+          elapsedMs: Date.now() - streamStartTime,
+        });
+
         yield { id: `chunk-${chunkIndex}`, content: '', done: true, messageId };
       } catch (error) {
+        const errMsg = error instanceof Error ? error.message : 'Unknown error';
+        console.error('[WebExpertAgent] chat error', {
+          messageId,
+          error: errMsg,
+          errorType: error instanceof Error ? error.constructor.name : typeof error,
+          chunksBeforeError: chunkIndex,
+        });
         yield {
           id: 'chunk-error',
           content: '',
           done: true,
           messageId,
-          error: error instanceof Error ? error.message : 'Unknown error',
+          error: errMsg,
         };
       }
     },

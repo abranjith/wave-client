@@ -16,7 +16,10 @@ const extensionConfig = {
   output: {
     path: path.resolve(__dirname, 'dist'),
     filename: 'extension.js',
-    libraryTarget: 'commonjs2'
+    libraryTarget: 'commonjs2',
+    clean: {
+      keep: /^webview\//,
+    },
   },
   externals: {
     vscode: 'commonjs vscode'

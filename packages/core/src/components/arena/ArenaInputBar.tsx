@@ -317,8 +317,9 @@ export function ArenaInputBar({
         {/* Agent indicator */}
         {agentDef && (
           <div
-            className="flex-shrink-0 flex items-center justify-center h-9 w-9 rounded-lg bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700"
-            title={agentDef.label}
+            className="flex-shrink-0 flex items-center justify-center h-9 w-9 rounded-lg bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 cursor-default"
+            title={`Agent: ${agentDef.label}`}
+            aria-label={`Current agent: ${agentDef.label}`}
           >
             {AGENT_ICON_MAP[agentId ?? ''] ?? <Cpu size={14} />}
           </div>
@@ -335,9 +336,10 @@ export function ArenaInputBar({
             disabled={busy}
             rows={1}
             className={cn(
-              'w-full px-3 py-2 text-sm bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl resize-none',
+              'w-full px-3 py-2.5 text-sm bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl resize-none',
               'focus:outline-none focus:ring-2 focus:ring-blue-500/40 focus:border-blue-500',
               'text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500',
+              'min-h-[88px]',
               busy && 'opacity-50 cursor-not-allowed',
             )}
           />

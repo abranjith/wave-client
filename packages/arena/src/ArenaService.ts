@@ -1,4 +1,4 @@
-import { createProviderFactory } from './providers/factory';
+import { createProviderFactory, testProviderConnection, validateProviderApiKey } from './providers/factory';
 import { createWaveClientAgent } from './agents/waveClientAgent';
 import { createWebExpertAgent } from './agents/webExpertAgent';
 import type { LLMProviderConfig, ChatMessage, ChatChunk } from './types';
@@ -13,7 +13,6 @@ import type {
 } from '@wave-client/shared';
 import {
     ARENA_AGENT_IDS,
-    geminiModelsUrl,
     ollamaTagsUrl,
     getModelsForProvider,
     arenaStorageService,
@@ -35,6 +34,7 @@ interface CachedAgent {
  */
 interface ArenaServiceDeps {
     createProviderFactory?: typeof createProviderFactory;
+    testProviderConnection?: typeof testProviderConnection;
     createWaveClientAgent?: typeof createWaveClientAgent;
     createWebExpertAgent?: typeof createWebExpertAgent;
 }
@@ -70,11 +70,13 @@ export class ArenaService {
     private readonly agentCache = new Map<string, CachedAgent>();
 
     private readonly _createProviderFactory: typeof createProviderFactory;
+    private readonly _testProviderConnection: typeof testProviderConnection;
     private readonly _createWaveClientAgent: typeof createWaveClientAgent;
     private readonly _createWebExpertAgent: typeof createWebExpertAgent;
 
     constructor(deps: ArenaServiceDeps = {}) {
         this._createProviderFactory = deps.createProviderFactory ?? createProviderFactory;
+        this._testProviderConnection = deps.testProviderConnection ?? testProviderConnection;
         this._createWaveClientAgent = deps.createWaveClientAgent ?? createWaveClientAgent;
         this._createWebExpertAgent = deps.createWebExpertAgent ?? createWebExpertAgent;
     }
@@ -114,16 +116,50 @@ export class ArenaService {
         signal?: AbortSignal,
     ): Promise<ArenaChatResponse> {
         const providerConfig = await this.buildProviderConfig(request);
+        const providerName = providerConfig.provider;
+        const modelName = (providerConfig as { model?: string }).model ?? 'default';
 
         console.info('[Arena] streamChat start', {
-            provider: providerConfig.provider,
-            model: (providerConfig as { model?: string }).model,
+            provider: providerName,
+            model: modelName,
             agent: request.agent,
             sessionId: request.sessionId,
         });
 
-        const llm = this._createProviderFactory(providerConfig);
-        const agent = await this.getOrCreateAgent(request, llm);
+        // ── Pre-flight connectivity check ────────────────────────────────────
+        // Fail fast with a clear error instead of waiting for a 60–90 s timeout
+        // when the provider endpoint is not reachable.
+        console.info('[Arena] pre-flight connectivity check', { provider: providerName, model: modelName });
+        const connResult = await this._testProviderConnection(providerConfig);
+        if (!connResult.connected) {
+            const errMsg = `Cannot connect to ${providerName}: ${connResult.error ?? 'unknown error'}. ` +
+                (providerName === 'ollama'
+                    ? 'Make sure Ollama is running ("ollama serve") and the URL is correct.'
+                    : 'Check your provider configuration and credentials.');
+            console.error('[Arena] pre-flight check failed', { provider: providerName, error: connResult.error });
+            throw new Error(errMsg);
+        }
+        console.info('[Arena] provider reachable', { provider: providerName });
+
+        let llm;
+        try {
+            llm = this._createProviderFactory(providerConfig);
+            console.info('[Arena] LLM provider created', { provider: providerName, model: modelName });
+        } catch (err) {
+            const errMsg = `Failed to create ${providerName} provider: ${err instanceof Error ? err.message : String(err)}`;
+            console.error('[Arena] provider creation failed', { provider: providerName, error: errMsg });
+            throw new Error(errMsg);
+        }
+
+        let agent;
+        try {
+            agent = await this.getOrCreateAgent(request, llm);
+            console.info('[Arena] agent ready', { agent: request.agent, cached: this.agentCache.has(this.buildCacheKey(request)) });
+        } catch (err) {
+            const errMsg = `Failed to create agent '${request.agent}': ${err instanceof Error ? err.message : String(err)}`;
+            console.error('[Arena] agent creation failed', { agent: request.agent, error: errMsg });
+            throw new Error(errMsg);
+        }
         const chatHistory = this.convertHistory(request.history);
         const messageId = crypto.randomUUID();
         let accContent = '';
@@ -160,15 +196,23 @@ export class ArenaService {
         const streamTimer = setTimeout(() => {
             streamTimedOut = true;
             localAbortController.abort();
-            console.warn('[Arena] stream timeout after 90 s', { sessionId: request.sessionId });
+            const errMsg = `Request to ${providerName}/${modelName} timed out after 90 s — the model may be loading or unresponsive`;
+            console.warn('[Arena] stream timeout', {
+                provider: providerName,
+                model: modelName,
+                sessionId: request.sessionId,
+                chunksSoFar: chunkCount,
+            });
             // Error chunks are terminal and out-of-band — no seq.
-            onChunk({ messageId, content: '', error: 'Request timed out after 90 s', done: true });
+            onChunk({ messageId, content: '', error: errMsg, done: true });
             chunkCount++;
         }, 90_000);
 
+        const streamStartTime = Date.now();
         try {
             for await (const chunk of gen) {
                 if (localAbortController.signal.aborted || streamTimedOut) {
+                    console.info('[Arena] stream loop exited', { aborted: localAbortController.signal.aborted, timedOut: streamTimedOut });
                     break;
                 }
 
@@ -177,6 +221,12 @@ export class ArenaService {
                     // The UI renders error text separately — not concatenated into the
                     // message body — so we must NOT send the accumulated content here.
                     // Error chunks are terminal and out-of-band — no seq.
+                    console.error('[Arena] agent error chunk', {
+                        provider: providerName,
+                        model: modelName,
+                        error: chunk.error,
+                        elapsedMs: Date.now() - streamStartTime,
+                    });
                     onChunk({ messageId, content: '', error: chunk.error, done: true });
                     chunkCount++;
                     finished = true;
@@ -186,6 +236,15 @@ export class ArenaService {
                 // Tool-call-only chunks carry no displayable text; skip silently.
                 if (chunk.toolCall) {
                     continue;
+                }
+
+                // Log the first content chunk for timing diagnostics
+                if (chunkCount === 1) {
+                    console.info('[Arena] first content chunk', {
+                        provider: providerName,
+                        model: modelName,
+                        timeToFirstChunkMs: Date.now() - streamStartTime,
+                    });
                 }
 
                 accContent += chunk.content;
@@ -198,6 +257,22 @@ export class ArenaService {
                     finished = true;
                     break;
                 }
+            }
+        } catch (streamErr) {
+            // Catch errors from the async generator iteration itself (e.g. LangGraph
+            // failures, network errors not caught inside the agent's catch block).
+            const errMsg = streamErr instanceof Error ? streamErr.message : String(streamErr);
+            console.error('[Arena] stream iteration error', {
+                provider: providerName,
+                model: modelName,
+                error: errMsg,
+                elapsedMs: Date.now() - streamStartTime,
+                chunksSoFar: chunkCount,
+            });
+            if (!streamTimedOut) {
+                onChunk({ messageId, content: '', error: `${providerName} error: ${errMsg}`, done: true });
+                chunkCount++;
+                finished = true;
             }
         } finally {
             clearTimeout(streamTimer);
@@ -223,8 +298,8 @@ export class ArenaService {
     /**
      * Validates a provider API key / connectivity without touching the agent.
      *
-     * Uses `httpService.send()` (axios-based) so that the user's proxy and
-     * certificate settings are respected automatically.
+     * Delegates to the provider-specific implementation in the provider factory,
+     * keeping ArenaService free of per-provider logic.
      *
      * @param provider         The provider type to validate.
      * @param providerSettings The provider settings (must include `apiKey` for cloud).
@@ -234,42 +309,7 @@ export class ArenaService {
         provider: ArenaProviderType,
         providerSettings: ArenaProviderSettings,
     ): Promise<{ valid: boolean; error?: string }> {
-        try {
-            if (provider === 'gemini') {
-                const apiKey = providerSettings.apiKey ?? '';
-                if (!apiKey) {
-                    return { valid: false, error: 'API key is empty' };
-                }
-                const result = await httpService.send({
-                    method: 'GET',
-                    url: geminiModelsUrl(apiKey),
-                    headers: {},
-                    validateStatus: true,
-                });
-                const status = result.response.status;
-                return status >= 200 && status < 400
-                    ? { valid: true }
-                    : { valid: false, error: `Gemini returned status ${status}` };
-            }
-
-            if (provider === 'ollama') {
-                const baseUrl = providerSettings.apiUrl ?? OLLAMA_DEFAULT_BASE_URL;
-                const result = await httpService.send({
-                    method: 'GET',
-                    url: ollamaTagsUrl(baseUrl),
-                    headers: {},
-                    validateStatus: true,
-                });
-                const status = result.response.status;
-                return status >= 200 && status < 400
-                    ? { valid: true }
-                    : { valid: false, error: `Ollama returned status ${status}` };
-            }
-
-            return { valid: false, error: `Provider '${provider}' validation is not supported` };
-        } catch (err) {
-            return { valid: false, error: err instanceof Error ? err.message : String(err) };
-        }
+        return validateProviderApiKey(provider, providerSettings);
     }
 
     /**

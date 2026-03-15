@@ -431,7 +431,7 @@ const SettingsWizard: React.FC<SettingsWizardProps> = ({
               className="w-full mt-1 px-2 py-1.5 text-sm bg-slate-100 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500"
             >
               {getModelsForProvider(arenaDefaultProvider)
-                .filter((m) => !arenaProviders[arenaDefaultProvider]?.disabledModels.includes(m.id))
+                .filter((m) => !arenaProviders[arenaDefaultProvider]?.disabledModels?.includes(m.id))
                 .map((m) => (
                   <option key={m.id} value={m.id}>
                     {m.label}{m.note ? ` (${m.note})` : ''}

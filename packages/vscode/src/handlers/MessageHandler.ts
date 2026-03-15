@@ -1,6 +1,11 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
 import * as os from 'os';
+
+// Import services directly from @wave-client/shared and SecurityService,
+// bypassing the services barrel (../services/index.ts) which re-exports
+// @wave-client/arena. This prevents the heavy arena + langchain dependency
+// tree from being evaluated synchronously at module load time.
 import {
     httpService,
     collectionService,
@@ -9,13 +14,13 @@ import {
     cookieService,
     storeService,
     settingsService,
-    securityService,
     flowService,
     testSuiteService,
     fileService,
     arenaStorageService,
-} from '../services';
-import type { ArenaService } from '../services';
+} from '@wave-client/shared';
+import { securityService } from '../services/SecurityService';
+import type { ArenaService } from '@wave-client/arena';
 
 /**
  * Lazy singleton for ArenaService. The `@wave-client/arena` package (and its
@@ -26,7 +31,7 @@ import type { ArenaService } from '../services';
 let _arenaService: InstanceType<typeof ArenaService> | null = null;
 async function getArenaService(): Promise<InstanceType<typeof ArenaService>> {
     if (!_arenaService) {
-        const { arenaService } = await import('../services');
+        const { arenaService } = await import('@wave-client/arena');
         _arenaService = arenaService;
     }
     return _arenaService!;
@@ -271,6 +276,11 @@ export class MessageHandler {
                 // Running this in the background keeps storage requests
                 // (like arena.loadMessages) responsive while a chat stream is active.
                 void this.handleArenaStreamMessage(message as ArenaStreamMessageMsg);
+                break;
+            default:
+                if (message.type) {
+                    console.debug('[MessageHandler] unhandled message type:', message.type);
+                }
                 break;
         }
     }
@@ -1710,8 +1720,16 @@ export class MessageHandler {
      */
     private async handleArenaStreamMessage(message: ArenaStreamMessageMsg): Promise<void> {
         const { streamId, chatRequest } = message;
+        const provider = chatRequest.settings?.provider ?? 'unknown';
+        const model = chatRequest.settings?.model ?? 'unknown';
 
-        console.info('[Arena] stream start', { streamId, agent: chatRequest.agent, sessionId: chatRequest.sessionId });
+        console.info('[Arena] stream start', {
+            streamId,
+            agent: chatRequest.agent,
+            sessionId: chatRequest.sessionId,
+            provider,
+            model,
+        });
 
         // If a stream with this streamId is already in-flight, abort it first
         const existing = this.arenaAbortControllers.get(streamId);
@@ -1727,6 +1745,7 @@ export class MessageHandler {
             streamId,
             chunk: { messageId: '', content: '', done: false, heartbeat: true },
         });
+        console.info('[Arena] heartbeat posted', { streamId });
 
         // Keep the webview's 120 s safety timer alive while the LLM processes.
         // Without these, a slow model (large context, first load, cold start) causes
@@ -1742,23 +1761,43 @@ export class MessageHandler {
         let chunkIndex = 0;
 
         try {
+            console.info('[Arena] loading ArenaService', { streamId });
             const svc = await getArenaService();
+            console.info('[Arena] ArenaService ready, calling streamChat', { streamId, provider, model });
+
             const response = await svc.streamChat(
                 chatRequest,
                 (chunk) => {
                     // Push each token to the webview — keyed by streamId.
                     // The chunk object is forwarded verbatim, which preserves the
                     // `seq` field added by ArenaService for ordered-chunk protocol (FEAT-011).
-                    console.debug('[Arena] streamChunk', { streamId, chunkIndex });
+                    if (chunk.error) {
+                        console.error('[Arena] streamChunk error', { streamId, chunkIndex, error: chunk.error });
+                    } else {
+                        console.debug('[Arena] streamChunk', { streamId, chunkIndex, hasContent: !!chunk.content, done: chunk.done });
+                    }
                     chunkIndex++;
                     this.postMessage({ type: 'arena.streamChunk', streamId, chunk });
                 },
                 controller.signal,
             );
-            console.info('[Arena] streamComplete', { streamId, sessionId: chatRequest.sessionId });
+            console.info('[Arena] streamComplete', {
+                streamId,
+                sessionId: chatRequest.sessionId,
+                totalChunks: chunkIndex,
+                contentLength: response.content?.length ?? 0,
+            });
             this.postMessage({ type: 'arena.streamComplete', streamId, response });
         } catch (error: any) {
-            console.error('[Arena] stream error', { streamId, sessionId: chatRequest.sessionId, error: error.message });
+            console.error('[Arena] stream error', {
+                streamId,
+                sessionId: chatRequest.sessionId,
+                provider,
+                model,
+                error: error.message,
+                stack: error.stack?.split('\n').slice(0, 5).join('\n'),
+                chunksBeforeError: chunkIndex,
+            });
             // Fast-fail: immediately notify the webview so the UI stops streaming
             this.postMessage({ type: 'arena.streamError', streamId, error: error.message });
         } finally {

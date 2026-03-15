@@ -8,8 +8,6 @@
  *   - Add new references (name + URL)
  *   - Remove non-default (user-added) references
  *
- * Default references (from `DEFAULT_REFERENCE_WEBSITES`) are marked with a
- * badge and cannot be deleted.
  */
 
 import React, { useState, useCallback, useRef, useEffect } from 'react';

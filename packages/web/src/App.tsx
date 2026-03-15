@@ -140,6 +140,7 @@ function WaveClientUI() {
   const setValidationRules = useAppStateStore((state) => state.setValidationRules);
   const settings = useAppStateStore((state) => state.settings);
   const setSettings = useAppStateStore((state) => state.setSettings);
+  const updateSettings = useAppStateStore((state) => state.updateSettings);
   const getCollectionRequest = useAppStateStore((state) => state.getCollectionRequest);
   const setIsHistoryLoading = useAppStateStore((state) => state.setIsHistoryLoading);
   const setHistory = useAppStateStore((state) => state.setHistory);
@@ -258,7 +259,10 @@ function WaveClientUI() {
       // Load settings
       const settingsResult = await storage.loadSettings();
       if (settingsResult.isOk) {
-        setSettings(settingsResult.value as any);
+        // Use updateSettings (shallow merge) rather than setSettings (full replace) so
+        // client-only fields like `arena` — absent from the server-side AppSettings type
+        // — are not wiped out of the store.
+        updateSettings(settingsResult.value as any);
       }
 
       // Load flows

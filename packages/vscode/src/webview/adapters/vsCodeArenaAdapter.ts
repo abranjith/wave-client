@@ -80,7 +80,7 @@ export function createVSCodeArenaAdapter(
     vsCodeApi: VSCodeAPI,
     pendingRequests: Map<string, PendingRequest<unknown>>,
     events: IAdapterEvents,
-    defaultTimeout: number = 120000
+    defaultTimeout: number = 180000
 ): { adapter: IArenaAdapter; handleStreamMessage: (message: any) => boolean } {
     let requestIdCounter = 0;
 
@@ -89,9 +89,9 @@ export function createVSCodeArenaAdapter(
         chunkCbs: Set<(chunk: ArenaChatStreamChunk) => void>;
         doneCbs: Set<(response: ArenaChatResponse) => void>;
         errorCbs: Set<(error: string) => void>;
-        /** Reset the 120 s safety timer — called on every incoming chunk. */
+        /** Reset the 180 s safety timer — called on every incoming chunk. */
         resetSafetyTimer: () => void;
-        /** Clear the 120 s safety timer — called on stream completion or error. */
+        /** Clear the 180 s safety timer — called on stream completion or error. */
         clearSafetyTimer: () => void;
     }>();
 
@@ -170,7 +170,10 @@ export function createVSCodeArenaAdapter(
         if (!streamId) { return false; }
 
         const listeners = activeStreams.get(streamId);
-        if (!listeners) { return false; }
+        if (!listeners) {
+            console.warn('[ArenaAdapter] stream message for unknown streamId', { streamId, type: message.type, activeStreamIds: [...activeStreams.keys()] });
+            return false;
+        }
 
         switch (message.type) {
             case 'arena.streamChunk':
@@ -261,6 +264,12 @@ export function createVSCodeArenaAdapter(
             const doneCbs = new Set<(response: ArenaChatResponse) => void>();
             const errorCbs = new Set<(error: string) => void>();
 
+            console.info('[ArenaAdapter] streamMessage start', {
+                streamId,
+                provider: (request as any).settings?.provider,
+                model: (request as any).settings?.model,
+            });
+
             // ── 120 s UI-side safety timeout ──────────────────────────────────
             // Fires if no events (chunks, complete, error) arrive within 120 s.
             // The timer resets on every incoming `arena.streamChunk` so an
@@ -268,8 +277,13 @@ export function createVSCodeArenaAdapter(
             let safetyTimer: ReturnType<typeof setTimeout> | null = null;
 
             function resetSafetyTimer() {
-                if (safetyTimer) clearTimeout(safetyTimer);
+                if (safetyTimer) { clearTimeout(safetyTimer); }
                 safetyTimer = setTimeout(() => {
+                    console.warn('[ArenaAdapter] safety timeout fired — no chunks received in 120 s', {
+                        streamId,
+                        provider: (request as any).settings?.provider,
+                        model: (request as any).settings?.model,
+                    });
                     const activeListeners = activeStreams.get(streamId);
                     if (activeListeners) {
                         activeListeners.errorCbs.forEach((cb) => {

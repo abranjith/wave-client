@@ -5,9 +5,13 @@
  */
 
 import type { BaseChatModel } from '@langchain/core/language_models/chat_models';
-import { createGeminiProvider } from './gemini';
-import { createOllamaProvider, testOllamaConnection } from './ollama';
+import { createGeminiProvider, testGeminiConnection, validateGeminiApiKey } from './gemini';
+import { createOllamaProvider, testOllamaConnection, validateOllamaApiKey } from './ollama';
 import type { LLMProviderConfig, ProviderStatus, LLMProvider } from '../types';
+import type { ArenaProviderType, ArenaProviderSettings } from '@wave-client/shared';
+
+/** Default Ollama base URL used when no URL is configured. */
+const OLLAMA_DEFAULT_BASE_URL = 'http://localhost:11434';
 
 export interface ProviderConfig {
   provider: LLMProvider;
@@ -42,6 +46,38 @@ export function createProviderFactory(config: LLMProviderConfig): BaseChatModel 
     
     default:
       throw new Error(`Unknown provider: ${(config as LLMProviderConfig).provider}`);
+  }
+}
+
+/**
+ * Pre-flight connectivity test for any supported provider.
+ *
+ * Returns `{ connected: true }` when the provider's endpoint is reachable and
+ * the credentials (if applicable) are accepted.  Otherwise returns
+ * `{ connected: false, error: '<reason>' }`.
+ *
+ * Used by ArenaService.streamChat() to fail fast with a clear message instead
+ * of waiting for the LLM invocation to time out.
+ */
+export async function testProviderConnection(
+  config: LLMProviderConfig,
+): Promise<{ connected: boolean; error?: string }> {
+  switch (config.provider) {
+    case 'gemini':
+      return testGeminiConnection(config.apiKey);
+
+    case 'ollama':
+      return testOllamaConnection(config.baseUrl);
+
+    case 'openai':
+    case 'anthropic':
+    case 'azure-openai':
+      // Not yet implemented — skip pre-flight check so the normal LLM
+      // timeout path handles failures.
+      return { connected: true };
+
+    default:
+      return { connected: true };
   }
 }
 
@@ -110,6 +146,32 @@ export async function checkProviderStatus(config: LLMProviderConfig): Promise<Pr
       ...baseStatus,
       error: error instanceof Error ? error.message : 'Unknown error',
     };
+  }
+}
+
+/**
+ * Validates provider credentials/connectivity without instantiating an agent.
+ *
+ * Dispatches to the provider-specific implementation so `ArenaService` retains
+ * no knowledge of individual providers.
+ *
+ * @param provider  The provider type to validate.
+ * @param settings  The provider settings (must include `apiKey` for cloud providers).
+ * @returns `{ valid: true }` on success or `{ valid: false, error: string }`.
+ */
+export async function validateProviderApiKey(
+  provider: ArenaProviderType,
+  settings: ArenaProviderSettings,
+): Promise<{ valid: boolean; error?: string }> {
+  switch (provider) {
+    case 'gemini':
+      return validateGeminiApiKey(settings.apiKey ?? '');
+
+    case 'ollama':
+      return validateOllamaApiKey(settings.apiUrl ?? OLLAMA_DEFAULT_BASE_URL);
+
+    default:
+      return { valid: false, error: `Provider '${provider}' validation is not supported` };
   }
 }
 

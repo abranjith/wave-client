@@ -7,6 +7,7 @@
 import { ChatOllama } from '@langchain/ollama';
 import type { BaseChatModel } from '@langchain/core/language_models/chat_models';
 import type { OllamaConfig } from '../types';
+import { httpService } from '@wave-client/shared';
 
 export interface OllamaProviderConfig {
   baseUrl: string;
@@ -36,6 +37,8 @@ export function createOllamaProvider(config: OllamaProviderConfig): BaseChatMode
     throw new Error('Ollama base URL is required');
   }
 
+  console.info('[Ollama] creating provider', { baseUrl, model, temperature, numCtx, streaming });
+
   return new ChatOllama({
     baseUrl,
     model,
@@ -61,6 +64,22 @@ export function validateOllamaConfig(config: OllamaConfig): { valid: boolean; er
   }
 
   return { valid: true };
+}
+
+/**
+ * Validate Ollama connectivity by probing the tags endpoint via the proxy-aware HTTP service.
+ */
+export async function validateOllamaApiKey(baseUrl: string): Promise<{ valid: boolean; error?: string }> {
+  try {
+    const url = new URL('/api/tags', baseUrl).toString();
+    const result = await httpService.send({ method: 'GET', url, headers: {}, validateStatus: true });
+    const { status } = result.response;
+    return status >= 200 && status < 400
+      ? { valid: true }
+      : { valid: false, error: `Ollama returned status ${status}` };
+  } catch (err) {
+    return { valid: false, error: err instanceof Error ? err.message : String(err) };
+  }
 }
 
 /**

@@ -821,6 +821,9 @@ export function createVSCodeAdapter(
         if (message.streamId && arenaHandleStreamMessage(message)) {
             return;
         }
+        if (message.streamId) {
+            console.warn('[vsCodeAdapter] stream message NOT routed', { streamId: message.streamId, type: message.type });
+        }
 
         // 2. Handle request/response messages (with requestId)
         if (message.requestId) {

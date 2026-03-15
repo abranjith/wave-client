@@ -49,7 +49,18 @@ export function ArenaSettings({
   onCancel,
 }: ArenaSettingsProps): React.ReactElement {
   const [formState, setFormState] = useState<ArenaSettingsType>({ ...settings });
-  const [providerState, setProviderState] = useState<ArenaProviderSettingsMap>({ ...providerSettings });
+  // Merge with defaults so that providers missing from persisted data (e.g.
+  // newly added providers or fields like `disabledModels`) have safe values.
+  const [providerState, setProviderState] = useState<ArenaProviderSettingsMap>(() => {
+    const defaults = getDefaultProviderSettings();
+    const merged = { ...defaults };
+    for (const key of Object.keys(providerSettings) as ArenaProviderType[]) {
+      if (providerSettings[key]) {
+        merged[key] = { ...defaults[key], ...providerSettings[key], disabledModels: providerSettings[key]?.disabledModels ?? defaults[key]?.disabledModels ?? [] };
+      }
+    }
+    return merged;
+  });
   const [isSaving, setIsSaving] = useState(false);
   const [expandedProvider, setExpandedProvider] = useState<ArenaProviderType | null>(null);
 
@@ -80,7 +91,7 @@ export function ArenaSettings({
     (providerId: ArenaProviderType, modelId: string) => {
       setProviderState((prev) => {
         const current = prev[providerId];
-        const disabled = new Set(current.disabledModels);
+        const disabled = new Set(current?.disabledModels ?? []);
         if (disabled.has(modelId)) {
           disabled.delete(modelId);
         } else {
@@ -176,7 +187,7 @@ export function ArenaSettings({
                 className="w-full px-2 py-1.5 text-sm bg-slate-100 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500"
               >
                 {getModelsForProvider(formState.provider)
-                  .filter((m) => !providerState[formState.provider]?.disabledModels.includes(m.id))
+                  .filter((m) => !(providerState[formState.provider]?.disabledModels ?? []).includes(m.id))
                   .map((m) => (
                     <option key={m.id} value={m.id}>
                       {m.label}{m.note ? ` (${m.note})` : ''}
@@ -320,7 +331,7 @@ function ProviderCard({
 }: ProviderCardProps) {
   const [showApiKey, setShowApiKey] = useState(false);
   const models = getModelsForProvider(provider.id);
-  const disabledSet = new Set(providerConfig.disabledModels);
+  const disabledSet = new Set(providerConfig?.disabledModels ?? []);
 
   return (
     <div

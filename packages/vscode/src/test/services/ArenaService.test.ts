@@ -22,6 +22,7 @@ const mockCreateWebExpertAgent = vi.fn(() => ({ chat: mockChatFn }));
 function makeService(): ArenaService {
     return new ArenaService({
         createProviderFactory: mockCreateProviderFactory as never,
+        testProviderConnection: vi.fn().mockResolvedValue({ connected: true }),
         createWaveClientAgent: mockCreateWaveClientAgent as never,
         createWebExpertAgent: mockCreateWebExpertAgent as never,
     });

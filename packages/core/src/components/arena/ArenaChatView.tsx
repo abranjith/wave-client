@@ -5,7 +5,7 @@
  */
 
 import React, { useRef, useEffect, useCallback, useState } from 'react';
-import { Globe, Zap, User, Bot, ExternalLink, Square, AlertCircle, Cpu, HelpCircle } from 'lucide-react';
+import { Globe, Zap, User, Bot, ExternalLink, AlertCircle, Cpu, HelpCircle } from 'lucide-react';
 import { cn } from '../../utils/styling';
 import type { ArenaSession, ArenaMessage, ArenaMessageSource, ArenaCommandId, ArenaChatBlock } from '../../types/arena';
 import type { ArenaStreamState } from '../../types/arenaStreaming';
@@ -80,27 +80,6 @@ export function ArenaChatView({
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
-      {/* Header */}
-      <div className="flex items-center gap-3 px-4 py-3 border-b border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900">
-        <AgentIcon size={20} className={agentColor} />
-        <div className="flex-1 min-w-0">
-          <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100 truncate">
-            {session.title}
-          </h3>
-          <p className="text-xs text-slate-500 dark:text-slate-400">{agentName}</p>
-        </div>
-        {isActive && (
-          <SecondaryButton
-            size="sm"
-            onClick={onCancelMessage}
-            colorTheme="error"
-          >
-            <Square size={12} />
-            Stop
-          </SecondaryButton>
-        )}
-      </div>
-
       {/* Messages */}
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
         {messages.length === 0 && !isActive && (

@@ -23,6 +23,7 @@ import { registerFlowRoutes } from './routes/flows.js';
 import { registerTestSuiteRoutes } from './routes/test-suites.js';
 import { registerWebSocketRoutes } from './routes/websocket.js';
 import { registerFileRoutes } from './routes/files.js';
+import { registerArenaRoutes } from './routes/arena.js';
 import { initializeServices } from './services/init.js';
 
 //TODO: Make PORT and HOST configurable via environment variables or config file
@@ -66,6 +67,7 @@ async function main() {
     await registerTestSuiteRoutes(fastify);
     await registerWebSocketRoutes(fastify);
     await registerFileRoutes(fastify);
+    await registerArenaRoutes(fastify);
 
     // Start server
     try {

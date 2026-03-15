@@ -84,13 +84,15 @@ async function isServerHealthy(port, maxAttempts = 30, delayMs = 1000) {
 // Spawn a process and return it
 function spawnProcess(command, args, options = {}) {
   console.log(`📦 Starting: ${command} ${args.join(' ')}`);
-  const proc = spawn(command, args, {
-    stdio: 'inherit',
-    shell: process.platform === 'win32',
-    ...options,
-  });
+  
+  const spawnOptions = { stdio: 'inherit', ...options };
 
-  return proc;
+  if (process.platform === 'win32') {
+    // pnpm/.cmd scripts on Windows require a shell to execute.
+    spawnOptions.shell = true;
+  }
+
+  return spawn(command, args, spawnOptions);
 }
 
 // Main startup function
@@ -108,7 +110,7 @@ async function main() {
     // Start the backend server
     console.log('1️⃣  Starting backend server...');
     const serverProcess = spawnProcess('pnpm', ['dev'], {
-      cwd: join(__dirname, '../../../server'),
+      cwd: join(__dirname, '../../server'),
       env: {
         ...process.env,
         PORT: config.serverPort,

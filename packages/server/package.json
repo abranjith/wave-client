@@ -19,6 +19,7 @@
   },
   "dependencies": {
     "@wave-client/core": "workspace:*",
+    "@wave-client/arena": "workspace:*",
     "@wave-client/shared": "workspace:*",
     "fastify": "^5.2.1",
     "@fastify/cors": "^10.0.2",

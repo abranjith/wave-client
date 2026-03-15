@@ -195,7 +195,7 @@ function ProviderPopover({ settings, providerSettings, onSettingsChange, onClose
   return (
     <div
       className={cn(
-        'absolute right-0 top-full mt-2 z-50 w-72 rounded-lg shadow-lg',
+        'absolute left-0 top-full mt-2 z-50 w-72 rounded-lg shadow-lg',
         'bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-600',
       )}
     >

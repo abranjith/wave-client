@@ -14,7 +14,6 @@ import type {
   ISecretAdapter,
   ISecurityAdapter,
   INotificationAdapter,
-  IArenaAdapter,
   HttpRequestConfig,
   HttpResponseResult,
   AppSettings,
@@ -717,7 +716,7 @@ class WebHttpAdapter implements IHttpAdapter {
     try {
       const response = await api.post('/api/http/execute', config);
       if (response.data.isOk) {
-        return ok(response.data.value.response);
+        return ok(response.data.value);
       }
       return err(response.data.error || 'Request failed');
     } catch (error) {
@@ -1052,7 +1051,7 @@ export function createWebAdapter(): IPlatformAdapter {
     secret: new WebSecretAdapter(),
     security: new WebSecurityAdapter(),
     notification: new WebNotificationAdapter(),
-    arena: createWebArenaAdapter(),
+    arena: createWebArenaAdapter(events),
     events,
     platform: 'web',
 

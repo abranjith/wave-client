@@ -513,13 +513,10 @@ export function ArenaPane({ className }: ArenaPaneProps): React.ReactElement {
           </div>
         </div>
 
-        {/* View switcher — only shown once Arena is ready */}
-        {arenaReadiness !== 'ready' ? (
-          <ArenaReadinessOverlay
-            readiness={arenaReadiness}
-            onOpenSettings={() => setArenaView('settings')}
-          />
-        ) : arenaView === 'settings' ? (
+        {/* View switcher.
+             - Settings and agent-select are always accessible, no data needed.
+             - Readiness overlays (loading/needs-config) guard the chat view only. */}
+        {arenaView === 'settings' ? (
           <ArenaSettings
             settings={arenaSettings}
             providerSettings={arenaProviderSettings}
@@ -528,6 +525,16 @@ export function ArenaPane({ className }: ArenaPaneProps): React.ReactElement {
           />
         ) : arenaView === 'select-agent' ? (
           <ArenaWelcomeScreen onSelectAgent={handleSelectAgent} />
+        ) : arenaReadiness === 'loading' ? (
+          <ArenaReadinessOverlay
+            readiness={arenaReadiness}
+            onOpenSettings={() => setArenaView('settings')}
+          />
+        ) : arenaReadiness === 'needs-config' ? (
+          <ArenaReadinessOverlay
+            readiness={arenaReadiness}
+            onOpenSettings={() => setArenaView('settings')}
+          />
         ) : activeSession ? (
           <>
             <ArenaChatToolbar

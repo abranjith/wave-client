@@ -12,8 +12,11 @@ vi.mock('vscode', async () => {
   };
 });
 
-// Mock all service modules
-vi.mock('../../services', () => ({
+// Mock @wave-client/shared — MessageHandler imports services directly from here
+// (not via the services barrel). The barrel at ../../services/index.ts re-exports
+// from @wave-client/shared, so test-side `await import('../../services/index.js')`
+// also receives these mocks.
+vi.mock('@wave-client/shared', () => ({
   httpService: {
     execute: vi.fn(),
     send: vi.fn(),
@@ -53,14 +56,6 @@ vi.mock('../../services', () => ({
     loadSettings: vi.fn(),
     saveSettings: vi.fn(),
   },
-  securityService: {
-    getEncryptionStatus: vi.fn(),
-    enableEncryption: vi.fn(),
-    disableEncryption: vi.fn(),
-    changePassword: vi.fn(),
-    exportRecoveryKey: vi.fn(),
-    recoverWithKey: vi.fn(),
-  },
   arenaStorageService: {
     loadSessions: vi.fn(),
     saveSession: vi.fn(),
@@ -75,10 +70,42 @@ vi.mock('../../services', () => ({
     loadProviderSettings: vi.fn(),
     saveProviderSettings: vi.fn(),
   },
+  flowService: {
+    loadAll: vi.fn(),
+    save: vi.fn(),
+    delete: vi.fn(),
+  },
+  testSuiteService: {
+    loadAll: vi.fn(),
+    save: vi.fn(),
+    delete: vi.fn(),
+  },
+  fileService: {
+    readFile: vi.fn(),
+    readFileAsBinary: vi.fn(),
+    writeFile: vi.fn(),
+    writeBinaryFile: vi.fn(),
+  },
+}));
+
+// Mock @wave-client/arena — lazy-loaded by MessageHandler via await import()
+vi.mock('@wave-client/arena', () => ({
   arenaService: {
     validateApiKey: vi.fn(),
     getAvailableModels: vi.fn(),
     streamChat: vi.fn(),
+  },
+}));
+
+// Mock SecurityService — imported by MessageHandler from ../services/SecurityService
+vi.mock('../../services/SecurityService', () => ({
+  securityService: {
+    getEncryptionStatus: vi.fn(),
+    encryptAllFiles: vi.fn(),
+    decryptAllFiles: vi.fn(),
+    reEncryptAllFiles: vi.fn(),
+    exportRecoveryKey: vi.fn(),
+    recoverWithKeyFile: vi.fn(),
   },
 }));
 
