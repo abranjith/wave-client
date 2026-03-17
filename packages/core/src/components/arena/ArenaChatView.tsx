@@ -14,7 +14,7 @@ import { ARENA_AGENT_IDS, getAgentDefinition } from '../../config/arenaConfig';
 import type { ArenaAgentId } from '../../config/arenaConfig';
 import { SecondaryButton } from '../ui/SecondaryButton';
 import ArenaInputBar from './ArenaInputBar';
-import { ArenaBlockRenderer } from './blocks';
+import { ArenaBlockRenderer, MarkdownRenderer } from './blocks';
 import type { BlockCallbacks } from './blocks/ArenaBlockRenderer';
 
 // ============================================================================
@@ -304,8 +304,8 @@ function ArenaMessageBubble({
                 </div>
               )}
 
-              {/* Fallback: plain text / markdown content */}
-              {!hasBlocks && <MessageContent content={content} />}
+              {/* Fallback: render markdown content */}
+              {!hasBlocks && <MarkdownRenderer content={content} />}
 
               {/* Connecting indicator: pulsing ring + label (before first chunk arrives) */}
               {streamState === 'connecting' && (
@@ -352,66 +352,7 @@ function ArenaMessageBubble({
   );
 }
 
-// ============================================================================
-// Message Content (simple markdown rendering)
-// ============================================================================
 
-interface MessageContentProps {
-  content: string;
-}
-
-function MessageContent({ content }: MessageContentProps): React.ReactElement {
-  // Simple markdown-like rendering
-  const lines = content.split('\n');
-
-  return (
-    <div className="prose prose-sm dark:prose-invert max-w-none">
-      {lines.map((line, idx) => {
-        // Code blocks
-        if (line.startsWith('```')) {
-          return null; // Simplified - would need proper code block handling
-        }
-
-        // Headers
-        if (line.startsWith('### ')) {
-          return <h3 key={idx} className="text-base font-semibold mt-2">{line.substring(4)}</h3>;
-        }
-        if (line.startsWith('## ')) {
-          return <h2 key={idx} className="text-lg font-semibold mt-2">{line.substring(3)}</h2>;
-        }
-        if (line.startsWith('# ')) {
-          return <h1 key={idx} className="text-xl font-bold mt-2">{line.substring(2)}</h1>;
-        }
-
-        // Bullet points
-        if (line.startsWith('- ') || line.startsWith('* ')) {
-          return <li key={idx} className="ml-4">{line.substring(2)}</li>;
-        }
-
-        // Empty lines
-        if (line.trim() === '') {
-          return <br key={idx} />;
-        }
-
-        // Regular text with inline code
-        const parts = line.split(/`([^`]+)`/);
-        return (
-          <p key={idx}>
-            {parts.map((part, i) =>
-              i % 2 === 1 ? (
-                <code key={i} className="px-1 py-0.5 bg-slate-200 dark:bg-slate-700 rounded text-xs">
-                  {part}
-                </code>
-              ) : (
-                part
-              )
-            )}
-          </p>
-        );
-      })}
-    </div>
-  );
-}
 
 // ============================================================================
 // Source Badge

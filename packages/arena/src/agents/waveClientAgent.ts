@@ -404,6 +404,14 @@ export function createWaveClientAgent(config: WaveClientAgentConfig) {
 
         yield { id: `chunk-${chunkIndex}`, content: '', done: true, messageId };
       } catch (error) {
+        const isAbortError = error instanceof Error && error.name === 'AbortError';
+
+        // Intentional cancellation from the caller — clean exit, no error chunk.
+        if (isAbortError && signal?.aborted) {
+          console.info('[WaveClientAgent] chat cancelled by caller signal');
+          return;
+        }
+
         const errMsg = error instanceof Error ? error.message : 'Unknown error';
         console.error('[WaveClientAgent] chat error', {
           messageId,
@@ -411,12 +419,19 @@ export function createWaveClientAgent(config: WaveClientAgentConfig) {
           errorType: error instanceof Error ? error.constructor.name : typeof error,
           chunksBeforeError: chunkIndex,
         });
+
+        // Replace the opaque browser AbortError message with a human-readable timeout message.
+        // This fires when the internal per-call LLM timeout (_llmTimeoutMs) expires.
+        const displayError = isAbortError
+          ? `LLM request timed out after ${_llmTimeoutMs / 1_000}s — the model may be loading or unresponsive`
+          : errMsg;
+
         yield {
           id: 'chunk-error',
           content: '',
           done: true,
           messageId,
-          error: errMsg,
+          error: displayError,
         };
       }
     },

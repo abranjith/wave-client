@@ -16,3 +16,4 @@ export { EnvSelectorBlock } from './EnvSelectorBlock';
 export { TableBlock } from './TableBlock';
 export { ConfirmationBlock } from './ConfirmationBlock';
 export { ProgressBlock } from './ProgressBlock';
+export { MarkdownRenderer } from './MarkdownRenderer';

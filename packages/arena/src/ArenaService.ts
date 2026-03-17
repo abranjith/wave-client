@@ -261,18 +261,31 @@ export class ArenaService {
         } catch (streamErr) {
             // Catch errors from the async generator iteration itself (e.g. LangGraph
             // failures, network errors not caught inside the agent's catch block).
-            const errMsg = streamErr instanceof Error ? streamErr.message : String(streamErr);
-            console.error('[Arena] stream iteration error', {
-                provider: providerName,
-                model: modelName,
-                error: errMsg,
-                elapsedMs: Date.now() - streamStartTime,
-                chunksSoFar: chunkCount,
-            });
-            if (!streamTimedOut) {
-                onChunk({ messageId, content: '', error: `${providerName} error: ${errMsg}`, done: true });
-                chunkCount++;
-                finished = true;
+            //
+            // If the external abort signal fired (client disconnect / explicit cancel)
+            // the error is expected — suppress it so the UI never shows a spurious
+            // 'This operation was aborted' message.
+            const isCancelled = localAbortController.signal.aborted && !streamTimedOut;
+            if (isCancelled) {
+                console.info('[Arena] stream cancelled externally — suppressing abort error', {
+                    provider: providerName,
+                    model: modelName,
+                    sessionId: request.sessionId,
+                });
+            } else {
+                const errMsg = streamErr instanceof Error ? streamErr.message : String(streamErr);
+                console.error('[Arena] stream iteration error', {
+                    provider: providerName,
+                    model: modelName,
+                    error: errMsg,
+                    elapsedMs: Date.now() - streamStartTime,
+                    chunksSoFar: chunkCount,
+                });
+                if (!streamTimedOut) {
+                    onChunk({ messageId, content: '', error: `${providerName} error: ${errMsg}`, done: true });
+                    chunkCount++;
+                    finished = true;
+                }
             }
         } finally {
             clearTimeout(streamTimer);
