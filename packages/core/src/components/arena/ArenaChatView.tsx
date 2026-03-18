@@ -305,7 +305,7 @@ function ArenaMessageBubble({
               )}
 
               {/* Fallback: render markdown content */}
-              {!hasBlocks && <MarkdownRenderer content={content} />}
+              {!hasBlocks && <MarkdownRenderer content={content} streaming={streamState === 'streaming'} />}
 
               {/* Connecting indicator: pulsing ring + label (before first chunk arrives) */}
               {streamState === 'connecting' && (

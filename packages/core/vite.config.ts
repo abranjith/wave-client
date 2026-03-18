@@ -44,7 +44,18 @@ export default defineConfig({
       fileName: (format) => `index.${format === 'es' ? 'js' : 'cjs'}`,
     },
     rollupOptions: {
-      external: ['react', 'react-dom', 'react/jsx-runtime'],
+      external: [
+        'react',
+        'react-dom',
+        'react/jsx-runtime',
+        // react-markdown and plugins are browser-only (decode-named-character-reference
+        // uses `document.createElement` at init time). Keep them external so they're
+        // resolved by the final bundler (webpack/Vite) in the correct environment,
+        // and don't crash Node.js consumers that import @wave-client/core for types/utils.
+        'react-markdown',
+        'remark-gfm',
+        'rehype-highlight',
+      ],
       output: {
         globals: {
           react: 'React',

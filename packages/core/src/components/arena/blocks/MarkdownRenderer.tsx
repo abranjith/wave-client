@@ -9,11 +9,47 @@
  * looks native in both the VS Code webview and the standalone web app.
  */
 
-import React, { useMemo } from 'react';
+import React, { Component, useMemo } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeHighlight from 'rehype-highlight';
 import type { Components } from 'react-markdown';
+
+// ============================================================================
+// Error Boundary — catches react-markdown runtime failures
+// ============================================================================
+
+interface MarkdownErrorBoundaryProps {
+  fallback: React.ReactNode;
+  children: React.ReactNode;
+}
+
+interface MarkdownErrorBoundaryState {
+  hasError: boolean;
+}
+
+/**
+ * Catches errors thrown during react-markdown rendering and falls back
+ * to displaying the raw content as plain text.
+ */
+class MarkdownErrorBoundary extends Component<MarkdownErrorBoundaryProps, MarkdownErrorBoundaryState> {
+  state: MarkdownErrorBoundaryState = { hasError: false };
+
+  static getDerivedStateFromError(): MarkdownErrorBoundaryState {
+    return { hasError: true };
+  }
+
+  componentDidCatch(error: Error, info: React.ErrorInfo): void {
+    console.error('[MarkdownRenderer] react-markdown error:', error, info.componentStack);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return this.props.fallback;
+    }
+    return this.props.children;
+  }
+}
 
 // ============================================================================
 // Props
@@ -22,6 +58,8 @@ import type { Components } from 'react-markdown';
 interface MarkdownRendererProps {
   /** Raw markdown string to render */
   content: string;
+  /** When true, skips rehype-highlight to avoid errors on incomplete code fences */
+  streaming?: boolean;
 }
 
 // ============================================================================
@@ -167,24 +205,39 @@ const markdownComponents: Components = {
 /**
  * Renders markdown content with full GFM support and syntax highlighting.
  * Uses VS Code theme CSS variables for native look-and-feel.
+ *
+ * Wrapped in an error boundary: if react-markdown throws at runtime
+ * (e.g. ESM resolution / bundler edge case), the raw content is shown
+ * as plain text and the error is logged to `console.error`.
  */
-export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({ content }) => {
+export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({ content, streaming = false }) => {
+  const rehypePlugins = streaming ? [] : [rehypeHighlight];
+
   const element = useMemo(
     () => (
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
-        rehypePlugins={[rehypeHighlight]}
+        rehypePlugins={rehypePlugins}
         components={markdownComponents}
       >
         {content}
       </ReactMarkdown>
     ),
-    [content],
+    [content, streaming],
+  );
+
+  // Plain-text fallback: preserve whitespace so the raw markdown stays legible
+  const fallback = (
+    <div className="text-sm text-[var(--vscode-foreground)] leading-relaxed whitespace-pre-wrap">
+      {content}
+    </div>
   );
 
   return (
     <div className="text-sm text-[var(--vscode-foreground)] leading-relaxed">
-      {element}
+      <MarkdownErrorBoundary fallback={fallback}>
+        {element}
+      </MarkdownErrorBoundary>
     </div>
   );
 };

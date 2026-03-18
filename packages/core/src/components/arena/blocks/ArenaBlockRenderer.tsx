@@ -8,7 +8,7 @@
 
 import React from 'react';
 import type { ArenaChatBlock } from '../../../types/arenaChatBlocks';
-import { TextBlock } from './TextBlock';
+import { MarkdownRenderer } from './MarkdownRenderer';
 import { CodeBlock } from './CodeBlock';
 import { JsonViewerBlock } from './JsonViewerBlock';
 import { RequestFormBlock } from './RequestFormBlock';
@@ -52,7 +52,7 @@ export const ArenaBlockRenderer: React.FC<ArenaBlockRendererProps> = ({
 }) => {
   switch (block.type) {
     case 'text':
-      return <TextBlock content={block.content} />;
+      return <MarkdownRenderer content={block.content} />;
 
     case 'code':
       return (
