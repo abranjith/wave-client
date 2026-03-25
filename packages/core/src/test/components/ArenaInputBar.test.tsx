@@ -49,13 +49,8 @@ describe('ArenaInputBar', () => {
   it('should render a textarea placeholder', () => {
     render(<ArenaInputBar {...defaultProps} />);
     expect(
-      screen.getByPlaceholderText(/Ask anything/i),
+      screen.getByPlaceholderText(/Type \/ for commands/i),
     ).toBeInTheDocument();
-  });
-
-  it('should render the agent indicator text', () => {
-    render(<ArenaInputBar {...defaultProps} />);
-    expect(screen.getByText('Wave Client')).toBeInTheDocument();
   });
 
   it('should display send button when there is input text', async () => {
@@ -132,12 +127,6 @@ describe('ArenaInputBar', () => {
 
     fireEvent.click(screen.getByLabelText(/stop/i));
     expect(onCancel).toHaveBeenCalledOnce();
-  });
-
-  it('should render quick-action command chips', () => {
-    render(<ArenaInputBar {...defaultProps} />);
-    // Command chips show display names, not slash prefixes
-    expect(screen.getByText('Get help')).toBeInTheDocument();
   });
 
   it('should apply additional className', () => {

@@ -11,14 +11,14 @@
  *   - Loading / streaming state awareness
  */
 
-import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
-import { Send, Loader2, Command, X, StopCircle } from 'lucide-react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
+import { Send, Loader2, X, StopCircle } from 'lucide-react';
+import ContextCircle from './ContextCircle';
 import { cn } from '../../utils/styling';
 import { PrimaryButton } from '../ui/PrimaryButton';
 import { SecondaryButton } from '../ui/SecondaryButton';
 import type { ArenaCommandId, ArenaCommand } from '../../types/arena';
 import type { ArenaAgentId } from '../../config/arenaConfig';
-import { getAgentDefinition } from '../../config/arenaConfig';
 
 // ============================================================================
 // Types
@@ -50,6 +50,10 @@ export interface ArenaInputBarProps {
    * suggestion can be applied twice in a row (avoids stale dependency trap).
    */
   suggestKey?: number;
+  /** Estimated word count for the current session (drives the context circle) */
+  contextWords?: number;
+  /** Context budget in words (default 150 000) */
+  contextBudget?: number;
 }
 
 // ============================================================================
@@ -62,16 +66,16 @@ export function ArenaInputBar({
   onCancel,
   agentId,
   isBusy = false,
-  placeholder = 'Ask anything…',
+  placeholder = 'Type / for commands…',
   className,
   suggestedInput,
   suggestKey,
+  contextWords,
+  contextBudget,
 }: ArenaInputBarProps): React.ReactElement {
   const [input, setInput] = useState('');
   const [activeCommand, setActiveCommand] = useState<ArenaCommand | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-
-  const agentDef = agentId ? getAgentDefinition(agentId) : null;
 
   // Sync suggested input into the textarea whenever suggestKey increments
   useEffect(() => {
@@ -87,9 +91,6 @@ export function ArenaInputBar({
   // suggestKey intentionally included so clicking the same chip twice re-fires the effect
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [suggestKey]);
-
-  // ---- Quick-action commands (first 4 for current agent) ----------
-  const quickCommands = useMemo(() => commands.slice(0, 4), [commands]);
 
   // ---- Keyboard navigation ----------------------------------------
   const handleKeyDown = useCallback(
@@ -155,16 +156,6 @@ export function ArenaInputBar({
     el.style.height = `${Math.min(el.scrollHeight, 200)}px`;
   };
 
-  // ---- Quick action click -----------------------------------------
-  const handleQuickCommand = (cmd: ArenaCommand) => {
-    // If the command has a placeholder, select it; otherwise just send it
-    if (cmd.placeholder) {
-      selectCommand(cmd);
-    } else {
-      onSend(cmd.id, cmd.id);
-    }
-  };
-
   const busy = isBusy;
 
   return (
@@ -174,22 +165,6 @@ export function ArenaInputBar({
         className,
       )}
     >
-      {/* Quick-action chips (only when input is empty and no active chat) */}
-      {!busy && !input && !activeCommand && quickCommands.length > 0 && (
-        <div className="flex items-center gap-1.5 px-4 pt-3 pb-1 overflow-x-auto">
-          {quickCommands.map((cmd) => (
-            <button
-              key={cmd.id}
-              type="button"
-              onClick={() => handleQuickCommand(cmd)}
-              className="flex-shrink-0 inline-flex items-center gap-1 px-2.5 py-1 text-[11px] font-medium rounded-full border border-slate-200 dark:border-slate-600 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
-            >
-              <Command size={10} />
-              {cmd.label}
-            </button>
-          ))}
-        </div>
-      )}
 
       {/* Active command badge */}
       {activeCommand && (
@@ -238,49 +213,47 @@ export function ArenaInputBar({
           )}
         </div>
 
-        {/* Send / Stop button */}
-        {isBusy && onCancel ? (
-          <SecondaryButton
-            onClick={onCancel}
-            size="icon"
-            className="h-9 w-9 flex-shrink-0 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20"
-            aria-label="Stop generating"
-          >
-            <StopCircle size={18} />
-          </SecondaryButton>
-        ) : (
-          <PrimaryButton
-            onClick={handleSend}
-            disabled={busy || !input.trim()}
-            size="icon"
-            className={cn(
-              'h-9 w-9 flex-shrink-0',
-              !(input.trim() && !busy) && 'opacity-40 cursor-not-allowed',
-            )}
-            aria-label="Send message"
-          >
-            {isBusy ? (
-              <Loader2 size={16} className="animate-spin" />
-            ) : (
-              <Send size={16} />
-            )}
-          </PrimaryButton>
-        )}
+        {/* Send / Stop button + Context circle — stacked, aligned with the textarea */}
+        <div className="flex flex-col items-center gap-1.5 flex-shrink-0">
+          {isBusy && onCancel ? (
+            <SecondaryButton
+              onClick={onCancel}
+              size="icon"
+              className="h-9 w-9 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20"
+              aria-label="Stop generating"
+            >
+              <StopCircle size={18} />
+            </SecondaryButton>
+          ) : (
+            <PrimaryButton
+              onClick={handleSend}
+              disabled={busy || !input.trim()}
+              size="icon"
+              className={cn(
+                'h-9 w-9',
+                !(input.trim() && !busy) && 'opacity-40 cursor-not-allowed',
+              )}
+              aria-label="Send message"
+            >
+              {isBusy ? (
+                <Loader2 size={16} className="animate-spin" />
+              ) : (
+                <Send size={16} />
+              )}
+            </PrimaryButton>
+          )}
+          <ContextCircle currentWords={contextWords ?? 0} budgetWords={contextBudget} className="h-9 w-9" />
+        </div>
       </div>
 
-      {/* Bottom hint */}
-      <div className="flex items-center justify-between px-4 pb-2 text-[10px] text-slate-400">
+      {/* Bottom row: keyboard hints */}
+      <div className="flex items-center px-4 pb-2 text-[10px] text-slate-400">
         <span>
           <kbd className="px-1 py-0.5 bg-slate-100 dark:bg-slate-700 rounded text-[9px]">/</kbd>{' '}
           commands · <kbd className="px-1 py-0.5 bg-slate-100 dark:bg-slate-700 rounded text-[9px]">↵</kbd>{' '}
           send · <kbd className="px-1 py-0.5 bg-slate-100 dark:bg-slate-700 rounded text-[9px]">⇧↵</kbd>{' '}
           newline
         </span>
-        {agentDef && (
-          <span className="text-slate-300 dark:text-slate-600">
-            {agentDef.label}
-          </span>
-        )}
       </div>
     </div>
   );

@@ -1,27 +1,26 @@
 /**
- * Tests for the ArenaChatToolbar component — updated for FEAT-015.
+ * Tests for the ArenaChatToolbar component.
  *
- * The toolbar now displays:
- *  - A provider / model popover (left)
- *  - A streaming toggle (centre)
- *  - A ContextCircle showing context-window usage (right)
- *
- * The References button and MetadataSection have been removed.
+ * The toolbar displays:
+ *  - Back button + agent name/icon (left)
+ *  - Provider / model popover, streaming toggle, context-panel toggle (right)
  */
 
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
-import ArenaChatToolbar from '../../components/arena/ArenaChatToolbar';
-import { DEFAULT_ARENA_SETTINGS, getDefaultProviderSettings } from '../../config/arenaConfig';
+import { ArenaChatToolbar } from '../../components/arena/ArenaChatToolbar';
+import { DEFAULT_ARENA_SETTINGS, getDefaultProviderSettings, ARENA_AGENT_IDS } from '../../config/arenaConfig';
 
 const defaultProps = {
   settings: DEFAULT_ARENA_SETTINGS,
   providerSettings: getDefaultProviderSettings(),
-  contextWords: 0,
   onSettingsChange: vi.fn(),
-  onOpenSettings: vi.fn(),
   enableStreaming: true,
   onEnableStreamingChange: vi.fn(),
+  onBack: vi.fn(),
+  agentId: ARENA_AGENT_IDS.WAVE_CLIENT,
+  showRightPane: false,
+  onToggleRightPane: vi.fn(),
 };
 
 describe('ArenaChatToolbar', () => {
@@ -47,12 +46,6 @@ describe('ArenaChatToolbar', () => {
 
     expect(screen.queryByText('References')).toBeNull();
     expect(screen.queryByTitle('Manage references')).toBeNull();
-  });
-
-  it('should render ContextCircle with the provided contextWords', () => {
-    // 75 000 / 150 000 = 50 %
-    render(<ArenaChatToolbar {...defaultProps} contextWords={75_000} />);
-    expect(screen.getByText('50%')).toBeInTheDocument();
   });
 
   it('should open provider popover when provider/model button is clicked', () => {

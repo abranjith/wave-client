@@ -68,6 +68,7 @@ export type {
     StreamUnsubscribe,
     ArenaView,
     ArenaReadinessState,
+    McpStatus,
     // Streaming state machine types
     ArenaStreamState,
     ArenaStreamManager,

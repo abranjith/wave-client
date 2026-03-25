@@ -112,6 +112,9 @@ export const ARENA_COMMANDS = {
   ENVIRONMENTS: '/environments',
   FLOWS: '/flows',
   TESTS: '/tests',
+  PROTOCOLS: '/protocols',
+  SECURITY: '/security',
+  STANDARDS: '/standards',
 } as const;
 
 export type ArenaCommandId = typeof ARENA_COMMANDS[keyof typeof ARENA_COMMANDS];
@@ -145,30 +148,51 @@ export const ARENA_COMMAND_DEFINITIONS: ArenaCommand[] = [
   {
     id: ARENA_COMMANDS.COLLECTIONS,
     label: 'Collections',
-    description: 'Manage and explore your request collections',
+    description: 'List, search, and inspect API collections',
     agent: 'wave-client',
     placeholder: 'Ask about collections...',
   },
   {
     id: ARENA_COMMANDS.ENVIRONMENTS,
     label: 'Environments',
-    description: 'Manage environments and variables',
+    description: 'List environments and inspect variables',
     agent: 'wave-client',
     placeholder: 'Ask about environments...',
   },
   {
     id: ARENA_COMMANDS.FLOWS,
     label: 'Flows',
-    description: 'Create and run request flows',
+    description: 'List and execute automation flows',
     agent: 'wave-client',
     placeholder: 'Ask about flows...',
   },
   {
     id: ARENA_COMMANDS.TESTS,
     label: 'Tests',
-    description: 'Create and run test suites',
+    description: 'List and run test suites',
     agent: 'wave-client',
     placeholder: 'Ask about tests...',
+  },
+  {
+    id: ARENA_COMMANDS.PROTOCOLS,
+    label: 'Protocols',
+    description: 'Ask about HTTP, WebSocket, gRPC, GraphQL, and transport protocols',
+    agent: 'web-expert',
+    placeholder: 'Ask about protocols...',
+  },
+  {
+    id: ARENA_COMMANDS.SECURITY,
+    label: 'Security',
+    description: 'Ask about TLS, OAuth, CORS, CSP, and web security',
+    agent: 'web-expert',
+    placeholder: 'Ask about security...',
+  },
+  {
+    id: ARENA_COMMANDS.STANDARDS,
+    label: 'Standards',
+    description: 'Ask about RFCs, W3C specs, WHATWG standards, and API design',
+    agent: 'web-expert',
+    placeholder: 'Ask about standards...',
   },
 ];
 
@@ -264,6 +288,16 @@ export type ArenaView = 'chat' | 'select-agent' | 'settings';
  */
 export type ArenaReadinessState = 'idle' | 'loading' | 'ready' | 'needs-config';
 
+/**
+ * MCP server connection status (wave-client agent only).
+ *
+ * - `'disconnected'` — MCP server not running
+ * - `'connecting'`   — MCP server starting / reconnecting
+ * - `'connected'`    — MCP server running and responding
+ * - `'error'`        — MCP server failed to start or lost connection
+ */
+export type McpStatus = 'disconnected' | 'connecting' | 'connected' | 'error';
+
 /** Arena UI state for the Zustand store */
 export interface ArenaState {
   /** All sessions */
@@ -288,6 +322,8 @@ export interface ArenaState {
   arenaView: ArenaView;
   /** Active sources for the current agent */
   activeSources: import('../config/arenaConfig').ArenaSourceConfig[];
+  /** MCP server connection status (relevant for wave-client agent) */
+  mcpStatus: McpStatus;
 }
 
 /** Arena actions for the Zustand store */
@@ -311,6 +347,9 @@ export interface ArenaActions {
   selectAgent(agentId: import('../config/arenaConfig').ArenaAgentId): void;
   setArenaView(view: ArenaView): void;
   setActiveSources(sources: import('../config/arenaConfig').ArenaSourceConfig[]): void;
+
+  // MCP
+  setMcpStatus(status: McpStatus): void;
 
   // Utilities
   clearError(): void;

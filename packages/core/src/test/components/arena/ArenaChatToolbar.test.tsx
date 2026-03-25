@@ -1,9 +1,8 @@
 /**
- * Unit tests for ArenaChatToolbar — FEAT-015 TASK-002
+ * Unit tests for ArenaChatToolbar
  *
- * Verifies the toolbar renders without the References button and
- * MetadataSection, displays the ContextCircle with the supplied word count,
- * and that the provider/model dropdown and streaming toggle still work.
+ * Verifies the toolbar renders the back button, agent name, provider/model
+ * dropdown, streaming toggle, and context-panel toggle.
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
@@ -11,7 +10,7 @@ import { render, screen, fireEvent } from '@testing-library/react';
 import React from 'react';
 import { ArenaChatToolbar } from '../../../components/arena/ArenaChatToolbar';
 import type { ArenaChatToolbarProps } from '../../../components/arena/ArenaChatToolbar';
-import { getDefaultProviderSettings } from '../../../config/arenaConfig';
+import { getDefaultProviderSettings, ARENA_AGENT_IDS } from '../../../config/arenaConfig';
 import { DEFAULT_ARENA_SETTINGS } from '../../../types/arena';
 
 // ============================================================================
@@ -21,10 +20,13 @@ import { DEFAULT_ARENA_SETTINGS } from '../../../types/arena';
 const defaultProps: ArenaChatToolbarProps = {
   settings: { ...DEFAULT_ARENA_SETTINGS, provider: 'gemini', model: 'gemini-2.0-flash' },
   providerSettings: getDefaultProviderSettings(),
-  contextWords: 0,
   onSettingsChange: vi.fn(),
   enableStreaming: true,
   onEnableStreamingChange: vi.fn(),
+  onBack: vi.fn(),
+  agentId: ARENA_AGENT_IDS.WAVE_CLIENT,
+  showRightPane: false,
+  onToggleRightPane: vi.fn(),
 };
 
 beforeEach(() => {
@@ -55,23 +57,33 @@ describe('ArenaChatToolbar (FEAT-015)', () => {
     expect(screen.queryByTitle('Session duration')).toBeNull();
   });
 
-  it('renders ContextCircle showing the provided contextWords percentage', () => {
-    // 75 000 / 150 000 = 50%
-    render(<ArenaChatToolbar {...defaultProps} contextWords={75_000} />);
-    expect(screen.getByText('50%')).toBeInTheDocument();
+  it('renders the back button', () => {
+    render(<ArenaChatToolbar {...defaultProps} />);
+    expect(screen.getByLabelText('Back to agents')).toBeInTheDocument();
   });
 
-  it('renders ContextCircle at 0% when contextWords is 0', () => {
-    render(<ArenaChatToolbar {...defaultProps} contextWords={0} />);
-    expect(screen.getByText('0%')).toBeInTheDocument();
+  it('calls onBack when back button is clicked', () => {
+    const onBack = vi.fn();
+    render(<ArenaChatToolbar {...defaultProps} onBack={onBack} />);
+    fireEvent.click(screen.getByLabelText('Back to agents'));
+    expect(onBack).toHaveBeenCalledOnce();
   });
 
-  it('uses contextBudget when provided for the context circle', () => {
-    // 25 000 / 50 000 = 50%
-    render(
-      <ArenaChatToolbar {...defaultProps} contextWords={25_000} contextBudget={50_000} />,
-    );
-    expect(screen.getByText('50%')).toBeInTheDocument();
+  it('renders the agent name for the current agent', () => {
+    render(<ArenaChatToolbar {...defaultProps} agentId={ARENA_AGENT_IDS.WAVE_CLIENT} />);
+    expect(screen.getByText('Wave Client')).toBeInTheDocument();
+  });
+
+  it('renders the context panel toggle button', () => {
+    render(<ArenaChatToolbar {...defaultProps} />);
+    expect(screen.getByTitle('Toggle context panel')).toBeInTheDocument();
+  });
+
+  it('calls onToggleRightPane when context panel toggle is clicked', () => {
+    const onToggle = vi.fn();
+    render(<ArenaChatToolbar {...defaultProps} onToggleRightPane={onToggle} />);
+    fireEvent.click(screen.getByTitle('Toggle context panel'));
+    expect(onToggle).toHaveBeenCalledOnce();
   });
 
   it('renders provider and model in the dropdown button', () => {

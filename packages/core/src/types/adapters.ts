@@ -497,6 +497,19 @@ export interface IArenaAdapter {
      * Save per-provider settings.
      */
     saveProviderSettings(settings: ArenaProviderSettingsMap): Promise<Result<void, string>>;
+
+    // MCP Server Lifecycle
+    /**
+     * Check the current MCP server status.
+     * Returns the current connection state.
+     */
+    checkMcpStatus?(): Promise<Result<import('./arena').McpStatus, string>>;
+
+    /**
+     * Start or restart the MCP server.
+     * Returns the new status after attempting to start.
+     */
+    startMcpServer?(): Promise<Result<import('./arena').McpStatus, string>>;
 }
 
 // ============================================================================

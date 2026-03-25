@@ -30,6 +30,8 @@ export interface ArenaChatViewProps {
   onCancelMessage: () => void;
   /** Optional callbacks for interactive block components */
   blockCallbacks?: BlockCallbacks;
+  /** Estimated word count for the current session (passed to input bar context circle) */
+  contextWords?: number;
 }
 
 // ============================================================================
@@ -44,6 +46,7 @@ export function ArenaChatView({
   onSendMessage,
   onCancelMessage,
   blockCallbacks,
+  contextWords,
 }: ArenaChatViewProps): React.ReactElement {
   /** Stop button is shown while actively connecting or streaming. */
   const isActive = streamState === 'connecting' || streamState === 'streaming';
@@ -118,9 +121,10 @@ export function ArenaChatView({
         onCancel={onCancelMessage}
         agentId={session.agent as ArenaAgentId}
         isBusy={isBusy}
-        placeholder={`Ask ${agentName}…`}
+        placeholder={`Ask ${agentName}… (Type / for commands)`}
         suggestedInput={suggestedInput}
         suggestKey={suggestKey}
+        contextWords={contextWords}
       />
     </div>
   );
@@ -165,8 +169,8 @@ function ArenaWelcomeMessage({
   onCommandClick,
 }: ArenaWelcomeMessageProps): React.ReactElement {
   const examples = AGENT_EXAMPLE_QUESTIONS[agentId] ?? [];
-  // Only show command chips for wave-client (web-expert has no agent-specific commands)
-  const agentSpecificCommands = commands.filter(cmd => !cmd.universal);
+  // Show agent-specific command chips (filter by current agent, exclude universal)
+  const agentSpecificCommands = commands.filter(cmd => !cmd.universal && cmd.agent === agentId);
 
   return (
     <div className="text-center py-8">

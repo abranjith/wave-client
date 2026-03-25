@@ -149,15 +149,46 @@ export function createWebExpertAgent(config: WebExpertAgentConfig) {
   });
 
   // ---------------------------------------------------------------------------
-  // Nodes
+  // Command prefix → context focus mapping
   // ---------------------------------------------------------------------------
 
-  /** Pass-through: mode is set externally or defaults to 'auto'.
-   * Command-prefix detection removed — Web Expert now accepts free-form input.
+  const COMMAND_FOCUS: Record<string, string> = {
+    '/protocols': 'Focus on HTTP, WebSocket, gRPC, GraphQL, and transport protocols.',
+    '/security': 'Focus on TLS, OAuth, CORS, CSP, OWASP, cryptography, and web security.',
+    '/standards': 'Focus on RFCs, W3C specs, WHATWG standards, OpenAPI, and API design.',
+    '/http': 'Focus on HTTP protocol details (HTTP/1.1, HTTP/2, HTTP/3).',
+    '/ws': 'Focus on WebSocket, WebTransport, and real-time protocol guidance.',
+    '/api': 'Focus on REST, GraphQL, gRPC, and AsyncAPI design guidance.',
+    '/network': 'Focus on TCP/IP, UDP, QUIC, DNS, and transport-layer topics.',
+    '/crypto': 'Focus on Web Crypto API, JOSE, hashing, and post-quantum cryptography.',
+  };
+
+  /**
+   * Detect command prefixes (e.g. `/protocols How does HTTP/2 work?`) and
+   * strip the prefix from the message while adding a context-focus hint.
    */
   const routeNode = async (
     state: WebExpertAgentState,
   ): Promise<Partial<WebExpertAgentState>> => {
+    const lastMessage = state.messages[state.messages.length - 1];
+    const text = lastMessage?.content?.toString().trim() ?? '';
+
+    for (const [prefix, focus] of Object.entries(COMMAND_FOCUS)) {
+      if (text.startsWith(prefix)) {
+        const stripped = text.slice(prefix.length).trim();
+        // Replace the last message with the stripped text
+        const updatedMessages = [
+          ...state.messages.slice(0, -1),
+          new HumanMessage(stripped || `Tell me about ${prefix.slice(1)}`),
+        ];
+        return {
+          mode: state.mode,
+          messages: updatedMessages,
+          context: [focus],
+        };
+      }
+    }
+
     return { mode: state.mode };
   };
 

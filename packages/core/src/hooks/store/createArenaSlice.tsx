@@ -43,6 +43,8 @@ export interface ArenaSlice {
     arenaSessionMetadata: ArenaSessionMetadata | null;
     /** All references (default + user-added, already merged) */
     arenaReferences: ArenaReference[];
+    /** MCP server connection status (wave-client agent) */
+    arenaMcpStatus: import('../../types/arena').McpStatus;
     
     // Session actions
     setArenaSessions: (sessions: ArenaSession[]) => void;
@@ -75,6 +77,9 @@ export interface ArenaSlice {
     addArenaReference: (ref: ArenaReference) => void;
     removeArenaReference: (refId: string) => void;
     toggleArenaReference: (refId: string) => void;
+
+    // MCP actions
+    setArenaMcpStatus: (status: import('../../types/arena').McpStatus) => void;
     
     // Utility actions
     resetArenaState: () => void;
@@ -181,6 +186,7 @@ const createArenaSlice: StateCreator<ArenaSliceStore, [], [], ArenaSlice> = (set
     arenaActiveSources: [],
     arenaSessionMetadata: null,
     arenaReferences: getDefaultReferences(),
+    arenaMcpStatus: 'disconnected' as import('../../types/arena').McpStatus,
     
     // Session actions
     setArenaSessions: (sessions) => set({ arenaSessions: sessions }),
@@ -307,6 +313,9 @@ const createArenaSlice: StateCreator<ArenaSliceStore, [], [], ArenaSlice> = (set
             r.id === refId ? { ...r, enabled: !r.enabled } : r,
         ),
     })),
+
+    // MCP actions
+    setArenaMcpStatus: (status) => set({ arenaMcpStatus: status }),
     
     // Utility actions
     resetArenaState: () => set({
@@ -320,6 +329,7 @@ const createArenaSlice: StateCreator<ArenaSliceStore, [], [], ArenaSlice> = (set
         arenaActiveSources: [],
         arenaSessionMetadata: null,
         arenaReferences: getDefaultReferences(),
+        arenaMcpStatus: 'disconnected' as import('../../types/arena').McpStatus,
     }),
     
     getActiveArenaSession: () => {

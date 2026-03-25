@@ -2,31 +2,30 @@
  * ArenaChatToolbar Component
  *
  * Persistent horizontal bar at the top of the chat area (below the header,
- * above the message list). Contains three sections:
+ * above the message list). Layout (left → right):
  *
- * Left — **Provider / Model**: compact dropdown showing the current
- *   provider + model. Clicking opens a lightweight popover for provider /
- *   model selection only. All config (API keys, URLs, enable/disable) is
- *   handled in the Settings panel.
- *
- * Centre — **Streaming toggle**: enables or disables streaming responses.
- *
- * Right — **Context circle**: SVG ring showing how much of the session's
- *   context-window budget has been consumed.
+ * Left  — **Back button** (arrow) + **Agent name & icon**
+ * Right — **Provider / Model selector**, **Streaming toggle**,
+ *          **Context-panel toggle** (PanelRight icon)
  */
 
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import {
+  ArrowLeft,
   ChevronDown,
   X,
   Zap,
+  Globe,
+  PanelRight,
+  Cpu,
 } from 'lucide-react';
-import ContextCircle from './ContextCircle';
 import { cn } from '../../utils/styling';
 import {
   getProviderDefinition,
+  getAgentDefinition,
 } from '../../config/arenaConfig';
 import type {
+  ArenaAgentId,
   ArenaProviderType,
   ArenaSettings,
   ArenaProviderSettingsMap,
@@ -48,18 +47,24 @@ export interface ArenaChatToolbarProps {
   settings: ArenaSettings;
   /** Per-provider settings (for filtering enabled providers/models) */
   providerSettings: ArenaProviderSettingsMap;
-  /** Estimated word count for the current session (drives the context circle) */
-  contextWords: number;
-  /** Context budget in words (default 150 000) */
-  contextBudget?: number;
   /** Callback when provider / model selection changes */
   onSettingsChange: (updates: Partial<ArenaSettings>) => void;
   /** Whether streaming responses are enabled */
   enableStreaming: boolean;
   /** Callback to toggle streaming */
   onEnableStreamingChange: (enabled: boolean) => void;
-  /** Open the full settings panel (gear icon) */
-  onOpenSettings?: () => void;
+  /** Navigate back to agent selection screen */
+  onBack: () => void;
+  /** Current agent id (for agent name & icon display) */
+  agentId: ArenaAgentId | null;
+  /** Whether the right context panel is open */
+  showRightPane: boolean;
+  /** Toggle the right context panel */
+  onToggleRightPane: () => void;
+  /** MCP server connection status (wave-client only) */
+  mcpStatus?: import('../../types/arena').McpStatus;
+  /** Callback when MCP status indicator is clicked (reconnect) */
+  onMcpReconnect?: () => void;
   /** Optional CSS class name */
   className?: string;
 }
@@ -71,12 +76,15 @@ export interface ArenaChatToolbarProps {
 export function ArenaChatToolbar({
   settings,
   providerSettings,
-  contextWords,
-  contextBudget,
   onSettingsChange,
   enableStreaming,
   onEnableStreamingChange,
-  onOpenSettings,
+  onBack,
+  agentId,
+  showRightPane,
+  onToggleRightPane,
+  mcpStatus,
+  onMcpReconnect,
   className,
 }: ArenaChatToolbarProps): React.ReactElement {
   const [showProviderPopover, setShowProviderPopover] = useState(false);
@@ -97,6 +105,12 @@ export function ArenaChatToolbar({
 
   const currentProvider = getProviderDefinition(settings.provider);
   const currentModel = settings.model || currentProvider?.defaultModel || '';
+  const agentDef = agentId ? getAgentDefinition(agentId) : null;
+
+  const AGENT_ICON_MAP: Record<string, React.ReactNode> = {
+    'wave-client': <Zap size={14} className="text-violet-500" />,
+    'web-expert': <Globe size={14} className="text-emerald-500" />,
+  };
 
   return (
     <div
@@ -106,7 +120,55 @@ export function ArenaChatToolbar({
         className,
       )}
     >
-      {/* ---- LEFT: Provider / Model ---- */}
+      {/* ---- LEFT: Back + Agent Name ---- */}
+      <SecondaryButton
+        onClick={onBack}
+        size="icon"
+        variant="ghost"
+        className="h-7 w-7 p-0 text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200"
+        title="Back to agents"
+        aria-label="Back to agents"
+      >
+        <ArrowLeft size={16} />
+      </SecondaryButton>
+
+      {agentDef && (
+        <div className="flex items-center gap-1.5">
+          {AGENT_ICON_MAP[agentId ?? ''] ?? <Cpu size={14} />}
+          <span className="text-xs font-semibold text-slate-700 dark:text-slate-200">
+            {agentDef.label}
+          </span>
+          {/* MCP status dot — wave-client only */}
+          {agentId === 'wave-client' && mcpStatus && (
+            <button
+              type="button"
+              onClick={onMcpReconnect}
+              title={
+                mcpStatus === 'connected'
+                  ? 'MCP connected'
+                  : mcpStatus === 'connecting'
+                    ? 'MCP connecting…'
+                    : mcpStatus === 'error'
+                      ? 'MCP error — click to reconnect'
+                      : 'MCP disconnected — click to connect'
+              }
+              className={cn(
+                'w-2 h-2 rounded-full flex-shrink-0',
+                mcpStatus === 'connected' && 'bg-emerald-500',
+                mcpStatus === 'connecting' && 'bg-yellow-500 animate-pulse',
+                mcpStatus === 'error' && 'bg-red-500',
+                mcpStatus === 'disconnected' && 'bg-slate-400',
+                (mcpStatus === 'disconnected' || mcpStatus === 'error') && 'cursor-pointer',
+              )}
+            />
+          )}
+        </div>
+      )}
+
+      {/* ---- Spacer ---- */}
+      <div className="flex-1" />
+
+      {/* ---- Provider / Model ---- */}
       <div className="relative" ref={popoverRef}>
         <SecondaryButton
           onClick={() => setShowProviderPopover((v) => !v)}
@@ -122,14 +184,13 @@ export function ArenaChatToolbar({
           <span className="font-medium text-slate-700 dark:text-slate-300">
             {currentProvider?.label ?? settings.provider}
           </span>
-          <span className="text-slate-400 dark:text-slate-500">·</span>
+          <span className="text-slate-400 dark:text-slate-500">&middot;</span>
           <span className="text-slate-500 dark:text-slate-400 max-w-[120px] truncate">
             {currentModel}
           </span>
           <ChevronDown size={12} className="text-slate-400" />
         </SecondaryButton>
 
-        {/* ---- Provider popover ---- */}
         {showProviderPopover && (
           <ProviderPopover
             settings={settings}
@@ -139,9 +200,6 @@ export function ArenaChatToolbar({
           />
         )}
       </div>
-
-      {/* ---- Spacer ---- */}
-      <div className="flex-1" />
 
       {/* ---- Streaming Toggle ---- */}
       <button
@@ -159,8 +217,22 @@ export function ArenaChatToolbar({
         <Zap size={16} className={enableStreaming ? 'fill-current' : ''} />
       </button>
 
-      {/* ---- RIGHT: Context circle ---- */}
-      <ContextCircle currentWords={contextWords} budgetWords={contextBudget} />
+      {/* ---- Context Panel Toggle ---- */}
+      <SecondaryButton
+        onClick={onToggleRightPane}
+        size="icon"
+        variant="ghost"
+        className={cn(
+          'h-7 w-7 p-0',
+          showRightPane
+            ? 'text-blue-500 dark:text-blue-400'
+            : 'text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200',
+        )}
+        title="Toggle context panel"
+        aria-label="Toggle context panel"
+      >
+        <PanelRight size={16} />
+      </SecondaryButton>
     </div>
   );
 }

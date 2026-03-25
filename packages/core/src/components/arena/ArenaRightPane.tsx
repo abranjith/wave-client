@@ -19,7 +19,6 @@ import {
   Plus,
   Trash2,
   Globe,
-  FileText,
   Wrench,
   ChevronDown,
   ChevronUp,
@@ -89,6 +88,18 @@ function formatDuration(ms: number): string {
   if (ms < 60_000) return `${Math.round(ms / 1000)}s`;
   if (ms < 3_600_000) return `${Math.floor(ms / 60_000)}m`;
   return `${Math.floor(ms / 3_600_000)}h ${Math.floor((ms % 3_600_000) / 60_000)}m`;
+}
+
+/**
+ * Formats a timestamp into a short relative or date string.
+ * < 1 minute: "just now", < 1 hour: "Xm ago", < 24h: "Xh ago", else: short date.
+ */
+function formatRelativeTime(timestamp: number): string {
+  const delta = Date.now() - timestamp;
+  if (delta < 60_000) return 'just now';
+  if (delta < 3_600_000) return `${Math.floor(delta / 60_000)}m ago`;
+  if (delta < 86_400_000) return `${Math.floor(delta / 3_600_000)}h ago`;
+  return new Date(timestamp).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 }
 
 const SOURCE_TYPE_ICONS: Record<ArenaSourceType, React.ReactNode> = {
@@ -334,8 +345,110 @@ export function ArenaRightPane({
           </Section>
         )}
 
-        {/* ======== Active Sources ======== */}
-        {activeSources.length > 0 && (
+        {/* ======== Sources (merged: replaces old Sources + References) ======== */}
+        {/* For web-expert: show reference websites (default + user-added) with toggles + Add Custom.
+            For wave-client: show MCP Tools as read-only source list.
+            Fallback: show generic sources toggles. */}
+        {selectedAgent === 'web-expert' ? (
+          <Section
+            title="Sources"
+            icon={<Globe size={12} />}
+            badge={`${enabledRefs}/${references.length}`}
+          >
+            {references.length === 0 ? (
+              <p className="text-xs text-slate-400 italic">No references configured</p>
+            ) : (
+              <div className="space-y-1 max-h-52 overflow-y-auto">
+                {references.map((ref) => (
+                  <div
+                    key={ref.id}
+                    className={cn(
+                      'flex items-center gap-2 px-2 py-1.5 rounded text-xs transition-colors group',
+                      ref.enabled
+                        ? 'text-slate-700 dark:text-slate-300'
+                        : 'text-slate-400 dark:text-slate-500',
+                    )}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={ref.enabled}
+                      onChange={() => handleToggleRef(ref.id)}
+                      className="accent-blue-600 flex-shrink-0"
+                    />
+                    {SOURCE_TYPE_ICONS[ref.type] ?? <Globe size={14} />}
+                    <span className="truncate flex-1">{ref.name}</span>
+
+                    {ref.url && (
+                      <a
+                        href={ref.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="hidden group-hover:block text-slate-400 hover:text-blue-500"
+                        aria-label={`Open ${ref.name}`}
+                      >
+                        <ExternalLink size={10} />
+                      </a>
+                    )}
+
+                    {!ref.isDefault && (
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveRef(ref.id)}
+                        className="hidden group-hover:block text-slate-400 hover:text-red-500"
+                        aria-label={`Remove ${ref.name}`}
+                      >
+                        <Trash2 size={10} />
+                      </button>
+                    )}
+
+                    {ref.isDefault && (
+                      <span className="text-[9px] px-1 py-0.5 rounded bg-slate-100 dark:bg-slate-700 text-slate-400">
+                        default
+                      </span>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Add custom reference */}
+            <div className="mt-2">
+              {showAddRef ? (
+                <AddReferenceForm onAdd={handleAddRef} />
+              ) : (
+                <SecondaryButton
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => setShowAddRef(true)}
+                  className="w-full text-xs justify-center"
+                >
+                  <Plus size={12} /> Add Custom
+                </SecondaryButton>
+              )}
+            </div>
+          </Section>
+        ) : selectedAgent === 'wave-client' ? (
+          <Section
+            title="Sources"
+            icon={<Wrench size={12} />}
+            badge={activeSources.filter((s) => s.enabled).length}
+          >
+            <div className="space-y-1">
+              {activeSources.map((src, idx) => (
+                <div
+                  key={idx}
+                  className="flex items-center gap-2 px-2 py-1.5 rounded text-xs text-slate-700 dark:text-slate-300"
+                >
+                  {SOURCE_TYPE_ICONS[src.type] ?? <Wrench size={14} />}
+                  <span className="truncate flex-1">{src.label}</span>
+                  <span className="text-[9px] px-1 py-0.5 rounded bg-slate-100 dark:bg-slate-700 text-slate-400">
+                    MCP
+                  </span>
+                </div>
+              ))}
+            </div>
+          </Section>
+        ) : activeSources.length > 0 ? (
           <Section
             title="Sources"
             icon={<Globe size={12} />}
@@ -364,89 +477,7 @@ export function ArenaRightPane({
               ))}
             </div>
           </Section>
-        )}
-
-        {/* ======== References ======== */}
-        <Section
-          title="References"
-          icon={<FileText size={12} />}
-          badge={`${enabledRefs}/${references.length}`}
-        >
-          {references.length === 0 ? (
-            <p className="text-xs text-slate-400 italic">No references configured</p>
-          ) : (
-            <div className="space-y-1 max-h-52 overflow-y-auto">
-              {references.map((ref) => (
-                <div
-                  key={ref.id}
-                  className={cn(
-                    'flex items-center gap-2 px-2 py-1.5 rounded text-xs transition-colors group',
-                    ref.enabled
-                      ? 'text-slate-700 dark:text-slate-300'
-                      : 'text-slate-400 dark:text-slate-500',
-                  )}
-                >
-                  <input
-                    type="checkbox"
-                    checked={ref.enabled}
-                    onChange={() => handleToggleRef(ref.id)}
-                    className="accent-blue-600 flex-shrink-0"
-                  />
-                  {SOURCE_TYPE_ICONS[ref.type] ?? <Globe size={14} />}
-                  <span className="truncate flex-1">{ref.name}</span>
-
-                  {/* External link */}
-                  {ref.url && (
-                    <a
-                      href={ref.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="hidden group-hover:block text-slate-400 hover:text-blue-500"
-                      aria-label={`Open ${ref.name}`}
-                    >
-                      <ExternalLink size={10} />
-                    </a>
-                  )}
-
-                  {/* Delete (user-added only) */}
-                  {!ref.isDefault && (
-                    <button
-                      type="button"
-                      onClick={() => handleRemoveRef(ref.id)}
-                      className="hidden group-hover:block text-slate-400 hover:text-red-500"
-                      aria-label={`Remove ${ref.name}`}
-                    >
-                      <Trash2 size={10} />
-                    </button>
-                  )}
-
-                  {/* Default badge */}
-                  {ref.isDefault && (
-                    <span className="text-[9px] px-1 py-0.5 rounded bg-slate-100 dark:bg-slate-700 text-slate-400">
-                      default
-                    </span>
-                  )}
-                </div>
-              ))}
-            </div>
-          )}
-
-          {/* Add reference toggle */}
-          <div className="mt-2">
-            {showAddRef ? (
-              <AddReferenceForm onAdd={handleAddRef} />
-            ) : (
-              <SecondaryButton
-                size="sm"
-                variant="ghost"
-                onClick={() => setShowAddRef(true)}
-                className="w-full text-xs justify-center"
-              >
-                <Plus size={12} /> Add Reference
-              </SecondaryButton>
-            )}
-          </div>
-        </Section>
+        ) : null}
 
         {/* ======== Sessions ======== */}
         <Section
@@ -477,7 +508,7 @@ export function ArenaRightPane({
                     <div className="flex-1 min-w-0">
                       <p className="truncate font-medium">{s.title}</p>
                       <p className="text-[10px] text-slate-400">
-                        {sDef?.label} · {s.messageCount} msgs
+                        {sDef?.label} · {s.messageCount} msgs · {formatRelativeTime(s.updatedAt)}
                       </p>
                     </div>
                     <button

@@ -9,20 +9,20 @@
  */
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Settings, Sparkles, ArrowLeft, PanelRight } from 'lucide-react';
+import { Sparkles } from 'lucide-react';
 import { cn } from '../../utils/styling';
-import { SecondaryButton } from '../ui/SecondaryButton';
+
 import { useArenaAdapter, useNotificationAdapter } from '../../hooks/useAdapter';
 import useAppStateStore from '../../hooks/store/useAppStateStore';
 import { createArenaMessage } from '../../hooks/store/createArenaSlice';
 import { useArenaStreamManager } from '../../hooks/useArenaStreamManager';
 import { createSessionMetadata, mergeReferences, isProviderConfigured } from '../../config/arenaConfig';
-import type { ArenaAgentId, ArenaReference, ArenaProviderSettingsMap, ArenaSettings as ArenaSettingsConfig } from '../../config/arenaConfig';
+import type { ArenaAgentId, ArenaReference, ArenaSettings as ArenaSettingsConfig } from '../../config/arenaConfig';
 import type { ArenaCommandId } from '../../types/arena';
 import type { ArenaAppSettings } from '../../hooks/store/createSettingsSlice';
 import ArenaChatView from './ArenaChatView';
 import ArenaChatToolbar from './ArenaChatToolbar';
-import ArenaSettings from './ArenaSettings';
+
 import ArenaRightPane from './ArenaRightPane';
 import ArenaWelcomeScreen from './ArenaWelcomeScreen';
 import ArenaReadinessOverlay from './ArenaReadinessOverlay';
@@ -45,7 +45,7 @@ export function ArenaPane({ className }: ArenaPaneProps): React.ReactElement {
   const notification = useNotificationAdapter();
   
   // Local state
-  const [showRightPane, setShowRightPane] = useState(true);
+  const [showRightPane, setShowRightPane] = useState(false);
 
   // Streaming state machine for this pane
   const { startStream, cancelStream, streamState, streamingContent } = useArenaStreamManager();
@@ -65,6 +65,7 @@ export function ArenaPane({ className }: ArenaPaneProps): React.ReactElement {
     updateArenaSettings: updateArenaAppSettings,
     setArenaSessions,
     removeArenaSession,
+    updateArenaSession,
     startNewArenaSession,
     setArenaActiveSessionId,
     setArenaMessages,
@@ -78,6 +79,8 @@ export function ArenaPane({ className }: ArenaPaneProps): React.ReactElement {
     setArenaSessionMetadata,
     updateArenaSessionMetadata,
     setArenaReferences,
+    arenaMcpStatus,
+    setArenaMcpStatus,
   } = useAppStateStore();
 
   // Derive ArenaSettings (arenaConfig format) from the settings slice for
@@ -266,6 +269,13 @@ export function ArenaPane({ className }: ArenaPaneProps): React.ReactElement {
       addArenaMessage(userMessage);
       await arenaAdapter.saveMessage(userMessage);
 
+      // Auto-name session from first user message (strip special chars, max 30 chars)
+      if (activeSession.messageCount === 0) {
+        const autoTitle = content.replace(/[^a-zA-Z0-9\s]/g, '').trim().slice(0, 30).trim() || 'Chat';
+        updateArenaSession(arenaActiveSessionId, { title: autoTitle });
+        arenaAdapter.saveSession({ ...activeSession, title: autoTitle, updatedAt: Date.now() });
+      }
+
       // Update metadata (message count)
       const currentMeta = arenaSessionMetadata;
       if (currentMeta) {
@@ -356,6 +366,7 @@ export function ArenaPane({ className }: ArenaPaneProps): React.ReactElement {
       arenaSessionMetadata,
       addArenaMessage,
       updateArenaMessage,
+      updateArenaSession,
       updateArenaSessionMetadata,
       notification,
       startStream,
@@ -384,42 +395,7 @@ export function ArenaPane({ className }: ArenaPaneProps): React.ReactElement {
     [arenaSettings, updateArenaAppSettings, arenaAdapter],
   );
 
-  const handleSaveAdvancedSettings = useCallback(
-    async (newSettings: ArenaSettingsConfig, newProviderSettings: ArenaProviderSettingsMap) => {
-      const [settingsResult, providerResult] = await Promise.all([
-        arenaAdapter.saveSettings(newSettings),
-        arenaAdapter.saveProviderSettings(newProviderSettings),
-      ]);
 
-      if (settingsResult.isOk && providerResult.isOk) {
-        updateArenaAppSettings({
-          defaultProvider: newSettings.provider,
-          defaultModel: newSettings.model || '',
-          enableStreaming: newSettings.enableStreaming,
-          maxSessions: newSettings.maxSessions,
-          maxMessagesPerSession: newSettings.maxMessagesPerSession,
-          providers: newProviderSettings,
-        });
-        // Re-evaluate readiness after provider settings change.
-        if (isProviderConfigured(newProviderSettings)) {
-          console.info('Arena readiness: → ready (settings saved)');
-          setArenaReadiness('ready');
-        } else {
-          console.info('Arena readiness: → needs-config (settings saved)');
-          setArenaReadiness('needs-config');
-        }
-        notification.showNotification('success', 'Settings saved');
-        setArenaView('chat');
-      } else {
-        const errors = [
-          settingsResult.isErr ? settingsResult.error : null,
-          providerResult.isErr ? providerResult.error : null,
-        ].filter(Boolean).join('; ');
-        notification.showNotification('error', `Failed to save settings: ${errors}`);
-      }
-    },
-    [arenaAdapter, updateArenaAppSettings, setArenaView, setArenaReadiness, notification],
-  );
 
   /** Navigate back to agent selection */
   const handleBackToAgentSelect = useCallback(() => {
@@ -429,6 +405,34 @@ export function ArenaPane({ className }: ArenaPaneProps): React.ReactElement {
     setArenaView('select-agent');
     setArenaActiveSessionId(null);
   }, [cancelStream, setArenaMessages, setArenaView, setArenaActiveSessionId]);
+
+  /** Attempt to (re)connect the MCP server for wave-client agent */
+  const handleMcpReconnect = useCallback(async () => {
+    if (!arenaAdapter.startMcpServer) return;
+    setArenaMcpStatus('connecting');
+    const result = await arenaAdapter.startMcpServer();
+    if (result.isOk) {
+      setArenaMcpStatus(result.value);
+    } else {
+      setArenaMcpStatus('error');
+      notification.showNotification('error', `MCP error: ${result.error}`);
+    }
+  }, [arenaAdapter, setArenaMcpStatus, notification]);
+
+  // Auto-check MCP status when switching to wave-client agent
+  useEffect(() => {
+    if (arenaSelectedAgent !== 'wave-client') return;
+    const checkStatus = arenaAdapter.checkMcpStatus;
+    if (!checkStatus) return;
+    let cancelled = false;
+    (async () => {
+      const result = await checkStatus();
+      if (!cancelled && result.isOk) {
+        setArenaMcpStatus(result.value);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [arenaSelectedAgent, arenaAdapter, setArenaMcpStatus]);
 
   // ============================================================================
   // Derived state
@@ -463,67 +467,20 @@ export function ArenaPane({ className }: ArenaPaneProps): React.ReactElement {
     <div className={cn('flex h-full w-full overflow-hidden', className)}>
       {/* ---- Main Content Column ---- */}
       <div className="flex-1 flex flex-col overflow-hidden">
-        {/* Top bar — always visible */}
-        <div className="flex items-center justify-between px-4 py-2 border-b border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900">
-          <div className="flex items-center gap-2">
-            {arenaView === 'chat' && arenaActiveSessionId && (
-              <SecondaryButton
-                onClick={handleBackToAgentSelect}
-                size="icon"
-                variant="ghost"
-                className="h-7 w-7 p-0 text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200"
-                title="Back to agents"
-                aria-label="Back to agents"
-              >
-                <ArrowLeft size={16} />
-              </SecondaryButton>
-            )}
+        {/* Top bar — only visible on non-chat views (select-agent, loading) */}
+        {arenaView !== 'chat' || !activeSession ? (
+          <div className="flex items-center justify-between px-4 py-2 border-b border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900">
             <h2 className="text-sm font-semibold text-slate-800 dark:text-slate-100 flex items-center gap-2">
               <Sparkles size={14} className="text-blue-500" />
               Wave Arena
             </h2>
           </div>
-
-          <div className="flex items-center gap-1">
-            <SecondaryButton
-              onClick={() => setShowRightPane((v) => !v)}
-              size="icon"
-              variant="ghost"
-              className={cn(
-                'h-7 w-7 p-0',
-                showRightPane
-                  ? 'text-blue-500 dark:text-blue-400'
-                  : 'text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200',
-              )}
-              title="Toggle context panel"
-              aria-label="Toggle context panel"
-            >
-              <PanelRight size={16} />
-            </SecondaryButton>
-            <SecondaryButton
-              onClick={() => setArenaView(arenaView === 'settings' ? 'chat' : 'settings')}
-              size="icon"
-              variant="ghost"
-              className="h-7 w-7 p-0 text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200"
-              title="Arena settings"
-              aria-label="Arena settings"
-            >
-              <Settings size={16} />
-            </SecondaryButton>
-          </div>
-        </div>
+        ) : null}
 
         {/* View switcher.
-             - Settings and agent-select are always accessible, no data needed.
+             - Agent-select is always accessible, no data needed.
              - Readiness overlays (loading/needs-config) guard the chat view only. */}
-        {arenaView === 'settings' ? (
-          <ArenaSettings
-            settings={arenaSettings}
-            providerSettings={arenaProviderSettings}
-            onSave={handleSaveAdvancedSettings}
-            onCancel={() => setArenaView(arenaSelectedAgent ? 'chat' : 'select-agent')}
-          />
-        ) : arenaView === 'select-agent' ? (
+        {arenaView === 'select-agent' ? (
           <ArenaWelcomeScreen onSelectAgent={handleSelectAgent} />
         ) : arenaReadiness === 'loading' ? (
           <ArenaReadinessOverlay
@@ -540,13 +497,17 @@ export function ArenaPane({ className }: ArenaPaneProps): React.ReactElement {
             <ArenaChatToolbar
               settings={arenaSettings}
               providerSettings={arenaProviderSettings}
-              contextWords={contextWords}
               onSettingsChange={handleToolbarSettingsChange}
               enableStreaming={arenaSettings.enableStreaming}
               onEnableStreamingChange={(enabled) =>
                 handleToolbarSettingsChange({ enableStreaming: enabled })
               }
-              onOpenSettings={() => setArenaView('settings')}
+              onBack={handleBackToAgentSelect}
+              agentId={arenaSelectedAgent}
+              showRightPane={showRightPane}
+              onToggleRightPane={() => setShowRightPane((v) => !v)}
+              mcpStatus={arenaSelectedAgent === 'wave-client' ? arenaMcpStatus : undefined}
+              onMcpReconnect={handleMcpReconnect}
             />
             <ArenaChatView
               session={activeSession}
@@ -555,6 +516,7 @@ export function ArenaPane({ className }: ArenaPaneProps): React.ReactElement {
               streamState={streamState}
               onSendMessage={handleSendMessage}
               onCancelMessage={handleCancelMessage}
+              contextWords={contextWords}
             />
           </>
         ) : (
