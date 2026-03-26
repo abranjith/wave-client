@@ -11,9 +11,9 @@
         "test": "vitest run"
     },
     "dependencies": {
-        "@modelcontextprotocol/sdk": "^0.6.0",
-        "@wave-client/shared": "workspace:*",
+        "@modelcontextprotocol/sdk": "^1.28.0",
         "@wave-client/core": "workspace:*",
+        "@wave-client/shared": "workspace:*",
         "axios": "^1.7.0",
         "zod": "^3.22.4"
     },
