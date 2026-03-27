@@ -27,6 +27,7 @@
     "@langchain/google-genai": "^0.1.0",
     "@langchain/ollama": "^0.1.0",
     "@wave-client/core": "workspace:*",
+    "@wave-client/mcp-server": "workspace:*",
     "@wave-client/shared": "workspace:*",
     "hnswlib-node": "^3.0.0"
   },

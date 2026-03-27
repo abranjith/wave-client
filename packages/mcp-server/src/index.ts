@@ -2,35 +2,11 @@ import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { CallToolRequestSchema, ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
 import { z } from "zod";
-import { initializeServices } from "./config.js";
 import {
-    ListCollectionsSchema,
-    listCollectionsHandler,
-    GetCollectionSchema,
-    getCollectionHandler,
-    SearchRequestsSchema,
-    searchRequestsHandler
-} from "./tools/collections.js";
-import {
-    GetEnvironmentVariablesSchema,
-    getEnvironmentVariablesHandler
-} from "./tools/environments.js";
-import {
-    ListEnvironmentsSchema,
-    listEnvironmentsHandler
-} from "./tools/environments.js";
-import {
-    ListFlowsSchema,
-    listFlowsHandler,
-    RunFlowSchema,
-    runFlowHandler
-} from "./tools/flows.js";
-import {
-    ListTestSuitesSchema,
-    listTestSuitesHandler,
-    RunTestSuiteSchema,
-    runTestSuiteHandler
-} from "./tools/testSuites.js";
+    getMcpRuntimeTools,
+    executeMcpToolCall,
+    startMcpRuntime,
+} from "./runtime.js";
 
 // Initialize server
 const server = new Server(
@@ -48,97 +24,29 @@ const server = new Server(
 // List tools
 server.setRequestHandler(ListToolsRequestSchema, async () => {
     return {
-        tools: [
-            {
-                name: "list_collections",
-                description: "List all available API collections with summary information.",
-                inputSchema: zodToJsonSchema(ListCollectionsSchema),
-            },
-            {
-                name: "get_collection",
-                description: "Retrieve Key details of a specific collection by name or ID, including all requests.",
-                inputSchema: zodToJsonSchema(GetCollectionSchema),
-            },
-            {
-                name: "search_requests",
-                description: "Search for specific API requests across all collections.",
-                inputSchema: zodToJsonSchema(SearchRequestsSchema),
-            },
-            {
-                name: "list_environments",
-                description: "List all available environments.",
-                inputSchema: zodToJsonSchema(ListEnvironmentsSchema),
-            },
-            {
-                name: "get_environment_variables",
-                description: "Retrieve Key variables for a specific environment.",
-                inputSchema: zodToJsonSchema(GetEnvironmentVariablesSchema),
-            },
-            {
-                name: "list_flows",
-                description: "List all available flows (request orchestration chains).",
-                inputSchema: zodToJsonSchema(ListFlowsSchema),
-            },
-            {
-                name: "run_flow",
-                description: "Execute a flow by ID.",
-                inputSchema: zodToJsonSchema(RunFlowSchema),
-            },
-            {
-                name: "list_test_suites",
-                description: "List all available test suites with metadata (supports nameQuery and tagQuery filters).",
-                inputSchema: zodToJsonSchema(ListTestSuitesSchema),
-            },
-            {
-                name: "run_test_suite",
-                description: "Execute a test suite by ID.",
-                inputSchema: zodToJsonSchema(RunTestSuiteSchema),
-            }
-        ],
+        tools: getMcpRuntimeTools().map((tool) => ({
+            name: tool.name,
+            description: tool.description,
+            inputSchema: zodToJsonSchema(tool.schema),
+        })),
     };
 });
 
 // Call tool
 server.setRequestHandler(CallToolRequestSchema, async (request) => {
     try {
-        if (request.params.name === "list_collections") {
-            const args = ListCollectionsSchema.parse(request.params.arguments);
-            return await listCollectionsHandler(args);
-        }
-        if (request.params.name === "get_collection") {
-            const args = GetCollectionSchema.parse(request.params.arguments);
-            return await getCollectionHandler(args);
-        }
-        if (request.params.name === "search_requests") {
-            const args = SearchRequestsSchema.parse(request.params.arguments);
-            return await searchRequestsHandler(args);
-        }
-        if (request.params.name === "list_environments") {
-            const args = ListEnvironmentsSchema.parse(request.params.arguments);
-            return await listEnvironmentsHandler(args);
-        }
-        if (request.params.name === "get_environment_variables") {
-            const args = GetEnvironmentVariablesSchema.parse(request.params.arguments);
-            return await getEnvironmentVariablesHandler(args);
-        }
-        if (request.params.name === "list_flows") {
-            const args = ListFlowsSchema.parse(request.params.arguments);
-            return await listFlowsHandler(args);
-        }
-        if (request.params.name === "run_flow") {
-            const args = RunFlowSchema.parse(request.params.arguments);
-            return await runFlowHandler(args);
-        }
-        if (request.params.name === "list_test_suites") {
-            const args = ListTestSuitesSchema.parse(request.params.arguments);
-            return await listTestSuitesHandler(args);
-        }
-        if (request.params.name === "run_test_suite") {
-            const args = RunTestSuiteSchema.parse(request.params.arguments);
-            return await runTestSuiteHandler(args);
-        }
-
-        throw new Error(`Tool not found: ${request.params.name}`);
+        const result = await executeMcpToolCall(
+            request.params.name,
+            (request.params.arguments ?? {}) as Record<string, unknown>,
+        );
+        return {
+            content: [
+                {
+                    type: 'text',
+                    text: typeof result === 'string' ? result : JSON.stringify(result, null, 2),
+                },
+            ],
+        };
     } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         return {
@@ -193,7 +101,7 @@ function zodToJsonSchema(schema: z.ZodType<any>): any {
 
 // Start server
 async function run() {
-    await initializeServices();
+    await startMcpRuntime();
     const transport = new StdioServerTransport();
     await server.connect(transport);
     console.error("Wave Client MCP Server running on stdio");

@@ -133,17 +133,17 @@ export function createWebArenaAdapter(events: IAdapterEvents): IArenaAdapter {
 
             const controller = new AbortController();
 
-            // ── 120 s safety timeout ──────────────────────────────────────────
-            // Fires if no events arrive within 120 s. Resets on every chunk.
+            // ── 180 s safety timeout ──────────────────────────────────────────
+            // Fires if no events arrive within 180 s. Resets on every chunk.
             let safetyTimer: ReturnType<typeof setTimeout> | null = null;
 
             function resetSafetyTimer() {
                 if (safetyTimer) { clearTimeout(safetyTimer); }
                 safetyTimer = setTimeout(() => {
-                    console.warn('[WebArena] safety timeout fired — no events in 120 s');
-                    emitError('Stream timed out — no response received within 120 s');
+                    console.warn('[WebArena] safety timeout fired — no events in 180 s');
+                    emitError('Stream timed out — no response received within 180 s');
                     controller.abort();
-                }, 120_000);
+                }, 180_000);
             }
 
             function clearSafetyTimer() {
@@ -316,6 +316,14 @@ export function createWebArenaAdapter(events: IAdapterEvents): IArenaAdapter {
             return serverRequest<{ id: string; label: string }[]>(
                 'GET', `/api/arena/models/${encodeURIComponent(provider)}`,
             );
+        },
+
+        async checkMcpStatus(): Promise<Result<import('@wave-client/core').McpStatus, string>> {
+            return serverRequest<import('@wave-client/core').McpStatus>('GET', '/api/arena/mcp/status');
+        },
+
+        async startMcpServer(): Promise<Result<import('@wave-client/core').McpStatus, string>> {
+            return serverRequest<import('@wave-client/core').McpStatus>('POST', '/api/arena/mcp/start');
         },
 
         // ====================================================================

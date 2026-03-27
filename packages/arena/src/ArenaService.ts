@@ -1,6 +1,7 @@
 import { createProviderFactory, testProviderConnection, validateProviderApiKey } from './providers/factory';
 import { createWaveClientAgent } from './agents/waveClientAgent';
 import { createWebExpertAgent } from './agents/webExpertAgent';
+import { createMcpBridge } from './tools/mcpBridge';
 import type { LLMProviderConfig, ChatMessage, ChatChunk } from './types';
 import type {
     ArenaChatRequest,
@@ -25,6 +26,33 @@ const OLLAMA_DEFAULT_BASE_URL = 'http://localhost:11434';
 /** Minimal interface for a cached agent instance. */
 interface CachedAgent {
     chat(history: ChatMessage[], message: string, signal?: AbortSignal): AsyncGenerator<ChatChunk>;
+}
+
+type McpStatus = 'disconnected' | 'connecting' | 'connected' | 'error';
+
+interface McpRuntimeModule {
+    startMcpRuntime: () => Promise<McpStatus>;
+    getMcpRuntimeStatus: () => McpStatus;
+    getMcpRuntimeTools: () => ReadonlyArray<{
+        name: string;
+        description: string;
+        schema: unknown;
+    }>;
+    executeMcpToolCall: (toolName: string, args: Record<string, unknown>) => Promise<unknown>;
+}
+
+let _mcpRuntimeModulePromise: Promise<McpRuntimeModule | null> | null = null;
+
+async function getMcpRuntimeModule(): Promise<McpRuntimeModule | null> {
+    if (!_mcpRuntimeModulePromise) {
+        _mcpRuntimeModulePromise = import('@wave-client/mcp-server/runtime')
+            .then((mod) => mod as unknown as McpRuntimeModule)
+            .catch((error) => {
+                console.warn('[Arena] MCP runtime unavailable', error);
+                return null;
+            });
+    }
+    return _mcpRuntimeModulePromise;
 }
 
 /**
@@ -174,7 +202,7 @@ export class ArenaService {
         }
 
         // Local abort controller for the stream.
-        // The 90 s service timer aborts this to actually terminate a stuck generator,
+        // The 120 s service timer aborts this to actually terminate a stuck generator,
         // rather than merely setting a flag that can't be checked while the loop is blocked.
         const localAbortController = new AbortController();
         if (signal) {
@@ -189,14 +217,14 @@ export class ArenaService {
         onChunk({ messageId, content: '', done: false, heartbeat: true });
         chunkCount++;
 
-        // 90 s overall stream timeout — fires if the agent generator stalls.
+        // 120 s overall stream timeout — fires if the agent generator stalls.
         // Aborts the local controller so the `for await` actually terminates rather
         // than waiting indefinitely for the next generator value.
         let streamTimedOut = false;
         const streamTimer = setTimeout(() => {
             streamTimedOut = true;
             localAbortController.abort();
-            const errMsg = `Request to ${providerName}/${modelName} timed out after 90 s — the model may be loading or unresponsive`;
+            const errMsg = `Request to ${providerName}/${modelName} timed out after 120 s — the model may be loading or unresponsive`;
             console.warn('[Arena] stream timeout', {
                 provider: providerName,
                 model: modelName,
@@ -206,7 +234,7 @@ export class ArenaService {
             // Error chunks are terminal and out-of-band — no seq.
             onChunk({ messageId, content: '', error: errMsg, done: true });
             chunkCount++;
-        }, 90_000);
+        }, 120_000);
 
         const streamStartTime = Date.now();
         try {
@@ -306,6 +334,29 @@ export class ArenaService {
         });
 
         return { messageId, content: accContent };
+    }
+
+    /** Returns current MCP runtime status used by wave-client agent. */
+    async checkMcpStatus(): Promise<McpStatus> {
+        const mod = await getMcpRuntimeModule();
+        if (!mod) {
+            return 'disconnected';
+        }
+        return mod.getMcpRuntimeStatus();
+    }
+
+    /** Starts MCP runtime and clears wave-client cache entries so new tools are picked up immediately. */
+    async startMcpServer(): Promise<McpStatus> {
+        const mod = await getMcpRuntimeModule();
+        if (!mod) {
+            return 'error';
+        }
+
+        const status = await mod.startMcpRuntime();
+        if (status === 'connected') {
+            this.clearWaveClientAgentCache();
+        }
+        return status;
     }
 
     /**
@@ -416,6 +467,28 @@ export class ArenaService {
      * @throws `Error` for unknown agent IDs.
      */
     private async getOrCreateAgent(request: ArenaChatRequest, llm: ReturnType<typeof createProviderFactory>): Promise<CachedAgent> {
+        // Wave Client agent depends on dynamic MCP availability and should not reuse
+        // stale cached instances created before MCP is connected.
+        if (request.agent === ARENA_AGENT_IDS.WAVE_CLIENT) {
+            const mcpStatus = await this.checkMcpStatus();
+            const runtime = await getMcpRuntimeModule();
+            const toolDefinitions = runtime
+                ? runtime.getMcpRuntimeTools().map((tool) => ({
+                    name: tool.name,
+                    description: tool.description,
+                    inputSchema: tool.schema,
+                }))
+                : [];
+            const mcpTools = mcpStatus === 'connected' && runtime
+                ? createMcpBridge({
+                    executeToolCall: async (toolName, args) => runtime.executeMcpToolCall(toolName, args),
+                    toolDefinitions,
+                })
+                : [];
+
+            return this._createWaveClientAgent({ llm, mcpTools });
+        }
+
         const cacheKey = this.buildCacheKey(request);
         const cached = this.agentCache.get(cacheKey);
         if (cached) {
@@ -424,10 +497,6 @@ export class ArenaService {
 
         let agent: CachedAgent;
         switch (request.agent) {
-            case ARENA_AGENT_IDS.WAVE_CLIENT:
-                agent = this._createWaveClientAgent({ llm });
-                break;
-
             case ARENA_AGENT_IDS.WEB_EXPERT:
                 agent = this._createWebExpertAgent({ llm });
                 break;
@@ -446,6 +515,15 @@ export class ArenaService {
     private buildCacheKey(request: ArenaChatRequest): string {
         const { provider, model } = request.settings;
         return `${provider}:${model ?? 'default'}:${request.agent}`;
+    }
+
+    /** Removes cached wave-client agents after MCP state changes. */
+    private clearWaveClientAgentCache(): void {
+        for (const key of this.agentCache.keys()) {
+            if (key.endsWith(`:${ARENA_AGENT_IDS.WAVE_CLIENT}`)) {
+                this.agentCache.delete(key);
+            }
+        }
     }
 
     /**

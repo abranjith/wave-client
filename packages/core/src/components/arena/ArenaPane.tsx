@@ -227,8 +227,20 @@ export function ArenaPane({ className }: ArenaPaneProps): React.ReactElement {
           console.warn('Failed to persist session:', result.error);
         }
       });
+
+      // Auto-start MCP as soon as wave-client agent is selected.
+      if (agentId === 'wave-client' && arenaAdapter.startMcpServer) {
+        setArenaMcpStatus('connecting');
+        void arenaAdapter.startMcpServer().then((result) => {
+          if (result.isOk) {
+            setArenaMcpStatus(result.value);
+          } else {
+            setArenaMcpStatus('error');
+          }
+        });
+      }
     },
-    [arenaAdapter, startNewArenaSession],
+    [arenaAdapter, startNewArenaSession, setArenaMcpStatus],
   );
 
   const handleDeleteSession = useCallback(
@@ -264,16 +276,59 @@ export function ArenaPane({ className }: ArenaPaneProps): React.ReactElement {
       const activeSession = arenaSessions.find((s) => s.id === arenaActiveSessionId);
       if (!activeSession) return;
 
+      const effectiveContent = command ? `${command} ${content}`.trim() : content;
+
       // Create user message
-      const userMessage = createArenaMessage(arenaActiveSessionId, 'user', content, { command });
+      const userMessage = createArenaMessage(arenaActiveSessionId, 'user', effectiveContent, { command });
       addArenaMessage(userMessage);
       await arenaAdapter.saveMessage(userMessage);
 
       // Auto-name session from first user message (strip special chars, max 30 chars)
       if (activeSession.messageCount === 0) {
-        const autoTitle = content.replace(/[^a-zA-Z0-9\s]/g, '').trim().slice(0, 30).trim() || 'Chat';
+        const autoTitle = effectiveContent.replace(/[^a-zA-Z0-9\s]/g, '').trim().slice(0, 30).trim() || 'Chat';
         updateArenaSession(arenaActiveSessionId, { title: autoTitle });
         arenaAdapter.saveSession({ ...activeSession, title: autoTitle, updatedAt: Date.now() });
+      }
+
+      // Wave Client agent must run against MCP data. Ensure runtime is connected.
+      if (
+        activeSession.agent === 'wave-client' &&
+        arenaAdapter.checkMcpStatus &&
+        arenaAdapter.startMcpServer
+      ) {
+        const statusResult = await arenaAdapter.checkMcpStatus();
+        if (statusResult.isOk) {
+          setArenaMcpStatus(statusResult.value);
+        }
+
+        const currentStatus = statusResult.isOk ? statusResult.value : 'error';
+        if (currentStatus !== 'connected') {
+          setArenaMcpStatus('connecting');
+          const startResult = await arenaAdapter.startMcpServer();
+
+          if (!startResult.isOk || startResult.value !== 'connected') {
+            setArenaMcpStatus(startResult.isOk ? startResult.value : 'error');
+
+            const mcpErrorMessage = createArenaMessage(
+              arenaActiveSessionId,
+              'assistant',
+              'Wave Client MCP server is unavailable. I can only answer with MCP-backed data. Please start/reconnect MCP and retry.',
+              { status: 'error' },
+            );
+            addArenaMessage(mcpErrorMessage);
+            await arenaAdapter.saveMessage(mcpErrorMessage);
+
+            notification.showNotification(
+              'error',
+              startResult.isOk
+                ? 'MCP is not connected'
+                : `MCP error: ${startResult.error}`,
+            );
+            return;
+          }
+
+          setArenaMcpStatus('connected');
+        }
       }
 
       // Update metadata (message count)
@@ -294,7 +349,7 @@ export function ArenaPane({ className }: ArenaPaneProps): React.ReactElement {
 
       const request = {
         sessionId: arenaActiveSessionId,
-        message: content,
+        message: effectiveContent,
         command,
         agent: activeSession.agent,
         history: arenaMessages.slice(-10),
@@ -364,6 +419,7 @@ export function ArenaPane({ className }: ArenaPaneProps): React.ReactElement {
       arenaSettings,
       arenaAdapter,
       arenaSessionMetadata,
+      setArenaMcpStatus,
       addArenaMessage,
       updateArenaMessage,
       updateArenaSession,
@@ -429,6 +485,21 @@ export function ArenaPane({ className }: ArenaPaneProps): React.ReactElement {
       const result = await checkStatus();
       if (!cancelled && result.isOk) {
         setArenaMcpStatus(result.value);
+
+        if (
+          (result.value === 'disconnected' || result.value === 'error') &&
+          arenaAdapter.startMcpServer
+        ) {
+          setArenaMcpStatus('connecting');
+          const startResult = await arenaAdapter.startMcpServer();
+          if (!cancelled) {
+            if (startResult.isOk) {
+              setArenaMcpStatus(startResult.value);
+            } else {
+              setArenaMcpStatus('error');
+            }
+          }
+        }
       }
     })();
     return () => { cancelled = true; };

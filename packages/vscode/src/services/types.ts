@@ -72,6 +72,8 @@ export interface ArenaSaveProviderSettingsMsg { type: 'arena.saveProviderSetting
 export interface ArenaValidateApiKeyMsg     { type: 'arena.validateApiKey';    requestId: string; provider: string; apiKey: string }
 // Deviation B: adapter sends only { provider }; handler loads providerSettings from arenaStorageService
 export interface ArenaGetAvailableModelsMsg { type: 'arena.getAvailableModels'; requestId: string; provider: string }
+export interface ArenaCheckMcpStatusMsg   { type: 'arena.checkMcpStatus'; requestId: string }
+export interface ArenaStartMcpServerMsg   { type: 'arena.startMcpServer'; requestId: string }
 
 // Streaming
 /** Non-streaming chat request — extension processes and returns result in one response. */
@@ -97,6 +99,8 @@ export type ArenaPostMessage =
     | ArenaSaveProviderSettingsMsg
     | ArenaValidateApiKeyMsg
     | ArenaGetAvailableModelsMsg
+    | ArenaCheckMcpStatusMsg
+    | ArenaStartMcpServerMsg
     | ArenaSendMessageMsg
     | ArenaStreamMessageMsg
     | ArenaCancelChatMsg;

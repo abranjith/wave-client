@@ -42,6 +42,8 @@ export interface WaveClientAgentConfig {
   systemPrompt?: string;
   /** @internal Override the LLM per-call timeout (ms). Defaults to 60 000. Test-only. */
   _llmTimeoutMs?: number;
+  /** Enforce MCP-backed responses only for wave-client agent. */
+  requireMcpTools?: boolean;
 }
 
 interface WaveClientAgentState {
@@ -91,7 +93,14 @@ const WAVE_CLIENT_SYSTEM_PROMPT = loadSystemPrompt();
  * - Otherwise → route to END (agent response is the final answer)
  */
 export function createWaveClientAgent(config: WaveClientAgentConfig) {
-  const { llm, mcpTools = [], settings = {}, systemPrompt, _llmTimeoutMs = 60_000 } = config;
+  const {
+    llm,
+    mcpTools = [],
+    settings = {},
+    systemPrompt,
+    _llmTimeoutMs = 60_000,
+    requireMcpTools = true,
+  } = config;
   const mergedSettings = { ...DEFAULT_ARENA_SETTINGS, ...settings };
   const prompt = systemPrompt ?? WAVE_CLIENT_SYSTEM_PROMPT;
 
@@ -196,9 +205,13 @@ export function createWaveClientAgent(config: WaveClientAgentConfig) {
       const rawContent = response.content;
       const hasToolCalls = 'tool_calls' in response && (response as AIMessage).tool_calls?.length;
       if (!hasToolCalls) {
-        _lastLLMContent = typeof rawContent === 'string'
-          ? rawContent
-          : (rawContent?.toString() ?? '');
+        if (requireMcpTools && mcpTools.length > 0) {
+          _lastLLMContent = 'I can only answer using Wave Client MCP tool data. Please ask me to inspect collections, environments, flows, or test suites so I can query MCP first.';
+        } else {
+          _lastLLMContent = typeof rawContent === 'string'
+            ? rawContent
+            : (rawContent?.toString() ?? '');
+        }
         console.info('[WaveClient/agent] direct response (no tools)', {
           contentLength: _lastLLMContent.length,
           contentPreview: _lastLLMContent.substring(0, 120),
@@ -332,6 +345,17 @@ export function createWaveClientAgent(config: WaveClientAgentConfig) {
     ): AsyncGenerator<ChatChunk> {
       const messageId = `msg-${Date.now()}`;
       let chunkIndex = 0;
+
+      if (requireMcpTools && mcpTools.length === 0) {
+        yield {
+          id: `chunk-${chunkIndex++}`,
+          content: 'Wave Client MCP server is unavailable. I can only respond with MCP-backed data. Start/reconnect MCP and try again.',
+          done: false,
+          messageId,
+        };
+        yield { id: `chunk-${chunkIndex}`, content: '', done: true, messageId };
+        return;
+      }
 
       console.info('[WaveClientAgent] chat start', {
         messageId,

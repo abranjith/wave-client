@@ -231,6 +231,36 @@ export async function registerArenaRoutes(fastify: FastifyInstance): Promise<voi
     });
 
     // ========================================================================
+    // MCP Lifecycle
+    // ========================================================================
+
+    fastify.get('/api/arena/mcp/status', async (_request: FastifyRequest, reply: FastifyReply) => {
+        try {
+            const svc = await getArenaService();
+            const status = typeof (svc as any).checkMcpStatus === 'function'
+                ? await (svc as any).checkMcpStatus()
+                : 'disconnected';
+            return reply.send({ isOk: true, value: status });
+        } catch (error) {
+            const message = error instanceof Error ? error.message : 'Unknown error';
+            return reply.status(500).send({ isOk: false, error: message });
+        }
+    });
+
+    fastify.post('/api/arena/mcp/start', async (_request: FastifyRequest, reply: FastifyReply) => {
+        try {
+            const svc = await getArenaService();
+            const status = typeof (svc as any).startMcpServer === 'function'
+                ? await (svc as any).startMcpServer()
+                : 'error';
+            return reply.send({ isOk: true, value: status });
+        } catch (error) {
+            const message = error instanceof Error ? error.message : 'Unknown error';
+            return reply.status(500).send({ isOk: false, error: message });
+        }
+    });
+
+    // ========================================================================
     // Non-streaming Chat
     // ========================================================================
 

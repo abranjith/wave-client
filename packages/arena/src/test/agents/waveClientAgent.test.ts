@@ -74,6 +74,7 @@ describe('waveClientAgent — LLM timeout', () => {
         const agent = createWaveClientAgent({
             llm: mockLLM,
             _llmTimeoutMs: TEST_TIMEOUT_MS,
+            requireMcpTools: false,
         });
 
         const gen = agent.chat([], 'test message');
@@ -97,6 +98,7 @@ describe('waveClientAgent — LLM timeout', () => {
         const agent = createWaveClientAgent({
             llm: mockLLM,
             _llmTimeoutMs: TEST_TIMEOUT_MS,
+            requireMcpTools: false,
         });
 
         const gen = agent.chat([], 'test message');

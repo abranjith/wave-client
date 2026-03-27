@@ -36,7 +36,6 @@ async function getArenaService(): Promise<InstanceType<typeof ArenaService>> {
     }
     return _arenaService!;
 }
-import type { RequestValidation } from '@wave-client/shared';
 import type {
     ArenaLoadSessionsMsg,
     ArenaSaveSessionMsg,
@@ -52,6 +51,8 @@ import type {
     ArenaSaveProviderSettingsMsg,
     ArenaValidateApiKeyMsg,
     ArenaGetAvailableModelsMsg,
+    ArenaCheckMcpStatusMsg,
+    ArenaStartMcpServerMsg,
     ArenaSendMessageMsg,
     ArenaStreamMessageMsg,
     ArenaCancelChatMsg,
@@ -267,6 +268,12 @@ export class MessageHandler {
                 break;
             case 'arena.getAvailableModels':
                 await this.handleArenaGetAvailableModels(message as ArenaGetAvailableModelsMsg);
+                break;
+            case 'arena.checkMcpStatus':
+                await this.handleArenaCheckMcpStatus(message as ArenaCheckMcpStatusMsg);
+                break;
+            case 'arena.startMcpServer':
+                await this.handleArenaStartMcpServer(message as ArenaStartMcpServerMsg);
                 break;
             case 'arena.sendMessage':
                 await this.handleArenaSendMessage(message as ArenaSendMessageMsg);
@@ -1672,6 +1679,28 @@ export class MessageHandler {
             this.postMessage({ type: 'arena.getAvailableModels', requestId, models });
         } catch (error: any) {
             this.postMessage({ type: 'arena.getAvailableModels', requestId, models: [], error: error.message });
+        }
+    }
+
+    private async handleArenaCheckMcpStatus(message: ArenaCheckMcpStatusMsg): Promise<void> {
+        const { requestId } = message;
+        try {
+            const svc = await getArenaService();
+            const status = await svc.checkMcpStatus();
+            this.postMessage({ type: 'arena.checkMcpStatus', requestId, status });
+        } catch (error: any) {
+            this.postMessage({ type: 'arena.checkMcpStatus', requestId, error: error.message });
+        }
+    }
+
+    private async handleArenaStartMcpServer(message: ArenaStartMcpServerMsg): Promise<void> {
+        const { requestId } = message;
+        try {
+            const svc = await getArenaService();
+            const status = await svc.startMcpServer();
+            this.postMessage({ type: 'arena.startMcpServer', requestId, status });
+        } catch (error: any) {
+            this.postMessage({ type: 'arena.startMcpServer', requestId, error: error.message });
         }
     }
 

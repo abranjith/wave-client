@@ -30,14 +30,14 @@ import type { ArenaStreamState, ArenaStreamManager, ArenaStreamCallbacks } from 
 // ============================================================================
 
 /** Cancel stream if no chunk / heartbeat arrives within this window (ms). */
-const SAFETY_TIMEOUT_MS = 120_000;
+const SAFETY_TIMEOUT_MS = 180_000;
 
 /**
  * Maximum number of out-of-order chunks held in the reorder buffer before a
  * best-effort flush is triggered. Prevents unbounded memory growth when a
  * large gap develops during transport.
  */
-const MAX_BUFFER_SIZE = 50;
+const MAX_BUFFER_SIZE = 100;
 
 /**
  * How long (ms) to wait for the next expected sequence number before flushing

@@ -4,6 +4,18 @@
     "description": "MCP Server for Wave Client",
     "main": "dist/index.js",
     "types": "dist/index.d.ts",
+    "exports": {
+        ".": {
+            "types": "./dist/index.d.ts",
+            "require": "./dist/index.js",
+            "default": "./dist/index.js"
+        },
+        "./runtime": {
+            "types": "./dist/runtime.d.ts",
+            "require": "./dist/runtime.js",
+            "default": "./dist/runtime.js"
+        }
+    },
     "scripts": {
         "build": "tsc",
         "dev": "tsc --watch",

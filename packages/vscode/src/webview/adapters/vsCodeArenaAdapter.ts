@@ -136,6 +136,8 @@ export function createVSCodeArenaAdapter(
                 'arena.saveProviderSettings': '',
                 'arena.getAvailableModels': 'models',
                 'arena.sendMessage': 'response',
+                'arena.checkMcpStatus': 'status',
+                'arena.startMcpServer': 'status',
             };
 
             pendingRequests.set(requestId, {
@@ -393,6 +395,14 @@ export function createVSCodeArenaAdapter(
 
         async getAvailableModels(provider: string): Promise<Result<{ id: string; label: string }[], string>> {
             return sendAndWait<{ id: string; label: string }[]>('arena.getAvailableModels', { provider });
+        },
+
+        async checkMcpStatus(): Promise<Result<import('@wave-client/core').McpStatus, string>> {
+            return sendAndWait<import('@wave-client/core').McpStatus>('arena.checkMcpStatus');
+        },
+
+        async startMcpServer(): Promise<Result<import('@wave-client/core').McpStatus, string>> {
+            return sendAndWait<import('@wave-client/core').McpStatus>('arena.startMcpServer');
         },
     };
 

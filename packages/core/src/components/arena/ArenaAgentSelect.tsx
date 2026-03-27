@@ -12,7 +12,7 @@ import { Globe, FileText, Zap, ArrowRight } from 'lucide-react';
 import { cn } from '../../utils/styling';
 import { SecondaryButton } from '../ui/SecondaryButton';
 import { ARENA_AGENT_DEFINITIONS } from '../../config/arenaConfig';
-import type { ArenaAgentId, ArenaAgentDefinition } from '../../config/arenaConfig';
+import type { ArenaAgentId } from '../../config/arenaConfig';
 
 // ============================================================================
 // Icon resolver
