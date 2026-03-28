@@ -47,7 +47,7 @@ async function serverRequest<T>(
     try {
         const init: RequestInit = {
             method,
-            headers: { 'Content-Type': 'application/json' },
+            headers: body !== undefined ? { 'Content-Type': 'application/json' } : {},
         };
         if (body !== undefined) {
             init.body = JSON.stringify(body);

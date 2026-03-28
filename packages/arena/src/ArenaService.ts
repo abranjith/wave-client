@@ -486,6 +486,13 @@ export class ArenaService {
                 })
                 : [];
 
+            console.info('[Arena] wave-client agent MCP bridge', {
+                mcpStatus,
+                runtimeAvailable: runtime !== null,
+                toolDefinitionCount: toolDefinitions.length,
+                mcpToolCount: mcpTools.length,
+            });
+
             return this._createWaveClientAgent({ llm, mcpTools });
         }
 

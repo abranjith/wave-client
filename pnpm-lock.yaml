@@ -192,6 +192,9 @@ importers:
       '@wave-client/core':
         specifier: workspace:*
         version: link:../core
+      '@wave-client/mcp-server':
+        specifier: workspace:*
+        version: link:../mcp-server
       '@wave-client/shared':
         specifier: workspace:*
         version: link:../shared

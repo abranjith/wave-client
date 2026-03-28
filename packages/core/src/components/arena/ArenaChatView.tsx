@@ -81,6 +81,10 @@ export function ArenaChatView({
   const [suggestedInput, setSuggestedInput] = useState('');
   const [suggestKey, setSuggestKey] = useState(0);
 
+  // Suggested command state — populated when user clicks a command chip
+  const [suggestedCommand, setSuggestedCommand] = useState<typeof ARENA_COMMAND_DEFINITIONS[number] | undefined>(undefined);
+  const [suggestCommandKey, setSuggestCommandKey] = useState(0);
+
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
       {/* Messages */}
@@ -95,7 +99,13 @@ export function ArenaChatView({
               setSuggestedInput(q);
               setSuggestKey(k => k + 1);
             }}
-            onCommandClick={(cmd) => onSendMessage(`${cmd} `)}
+            onCommandClick={(cmd) => {
+              const cmdDef = agentCommands.find(c => c.id === cmd);
+              if (cmdDef) {
+                setSuggestedCommand(cmdDef);
+                setSuggestCommandKey(k => k + 1);
+              }
+            }}
           />
         )}
 
@@ -124,6 +134,8 @@ export function ArenaChatView({
         placeholder={`Ask ${agentName}… (Type / for commands)`}
         suggestedInput={suggestedInput}
         suggestKey={suggestKey}
+        suggestedCommand={suggestedCommand}
+        suggestCommandKey={suggestCommandKey}
         contextWords={contextWords}
       />
     </div>

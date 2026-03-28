@@ -198,20 +198,68 @@ export function createWaveClientAgent(config: WaveClientAgentConfig) {
       const callConfig = config
         ? { ...config, signal: combinedSignal }
         : { signal: combinedSignal };
-      const response = await (llmWithTools as BaseChatModel).invoke(messages, callConfig as RunnableConfig);
+      let response = await (llmWithTools as BaseChatModel).invoke(messages, callConfig as RunnableConfig);
 
-      // Capture the agent response content. If no tool calls are made,
-      // the graph routes to END and this is the final LLM response.
-      const rawContent = response.content;
-      const hasToolCalls = 'tool_calls' in response && (response as AIMessage).tool_calls?.length;
-      if (!hasToolCalls) {
-        if (requireMcpTools && mcpTools.length > 0) {
-          _lastLLMContent = 'I can only answer using Wave Client MCP tool data. Please ask me to inspect collections, environments, flows, or test suites so I can query MCP first.';
-        } else {
-          _lastLLMContent = typeof rawContent === 'string'
-            ? rawContent
-            : (rawContent?.toString() ?? '');
+      let rawContent = response.content;
+      let hasToolCalls = 'tool_calls' in response && (response as AIMessage).tool_calls?.length;
+
+      // Self-correction: if MCP tools are available but the LLM chose not to call any,
+      // retry once with an explicit instruction so it uses the tools.
+      if (!hasToolCalls && requireMcpTools && mcpTools.length > 0) {
+        console.info('[WaveClient/agent] no tool calls on first attempt — retrying with correction', {
+          firstResponseLength: typeof rawContent === 'string' ? rawContent.length : 0,
+          toolCount: mcpTools.length,
+        });
+
+        const correctionMessages = [
+          systemMessage,
+          ...state.messages,
+          response, // include the first (non-tool) response as context
+          new HumanMessage(
+            'CORRECTION: You must call one of your available MCP tools to answer this ' +
+            'question. Do NOT answer from your own training data. ' +
+            'Use the appropriate tool (e.g. list_collections, list_environments) now.',
+          ),
+        ];
+
+        const retryTimeoutController = new AbortController();
+        const retryTimer = setTimeout(() => retryTimeoutController.abort(), _llmTimeoutMs);
+        try {
+          const retryCombinedSignal = config?.signal
+            ? createCombinedSignal(config.signal as AbortSignal, retryTimeoutController.signal)
+            : retryTimeoutController.signal;
+          const retryCallConfig = config
+            ? { ...config, signal: retryCombinedSignal }
+            : { signal: retryCombinedSignal };
+          const retryResponse = await (llmWithTools as BaseChatModel).invoke(
+            correctionMessages,
+            retryCallConfig as RunnableConfig,
+          );
+          const retryHasToolCalls = 'tool_calls' in retryResponse && (retryResponse as AIMessage).tool_calls?.length;
+          if (retryHasToolCalls) {
+            // Retry produced tool calls — use this response for dispatch.
+            response = retryResponse;
+            rawContent = retryResponse.content;
+            hasToolCalls = retryHasToolCalls;
+            console.info('[WaveClient/agent] retry succeeded: tool calls made', {
+              toolCallCount: (retryResponse as AIMessage).tool_calls?.length,
+            });
+          } else {
+            // Both attempts produced no tool calls — fall back to the retry response text
+            // (may still be useful for conceptual / how-to questions).
+            rawContent = retryResponse.content;
+            console.info('[WaveClient/agent] retry also produced no tool calls');
+          }
+        } finally {
+          clearTimeout(retryTimer);
         }
+      }
+
+      // Capture the final content for the chat() caller.
+      if (!hasToolCalls) {
+        _lastLLMContent = typeof rawContent === 'string'
+          ? rawContent
+          : (rawContent?.toString() ?? '');
         console.info('[WaveClient/agent] direct response (no tools)', {
           contentLength: _lastLLMContent.length,
           contentPreview: _lastLLMContent.substring(0, 120),
