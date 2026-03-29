@@ -18,6 +18,7 @@ import { createArenaMessage } from '../../hooks/store/createArenaSlice';
 import { useArenaStreamManager } from '../../hooks/useArenaStreamManager';
 import { createSessionMetadata, mergeReferences, isProviderConfigured } from '../../config/arenaConfig';
 import type { ArenaAgentId, ArenaReference, ArenaSettings as ArenaSettingsConfig } from '../../config/arenaConfig';
+import { ARENA_COMMAND_DEFINITIONS } from '../../types/arena';
 import type { ArenaCommandId } from '../../types/arena';
 import type { ArenaAppSettings } from '../../hooks/store/createSettingsSlice';
 import ArenaChatView from './ArenaChatView';
@@ -278,6 +279,15 @@ export function ArenaPane({ className }: ArenaPaneProps): React.ReactElement {
 
       const effectiveContent = command ? `${command} ${content}`.trim() : content;
 
+      // Resolve the agent: if the command targets a specific agent, use that;
+      // otherwise fall back to the session's current agent.
+      const commandDef = command
+        ? ARENA_COMMAND_DEFINITIONS.find((c) => c.id === command)
+        : undefined;
+      const effectiveAgent = (commandDef && !commandDef.universal
+        ? commandDef.agent
+        : activeSession.agent) as ArenaAgentId;
+
       // Create user message
       const userMessage = createArenaMessage(arenaActiveSessionId, 'user', effectiveContent, { command });
       addArenaMessage(userMessage);
@@ -292,7 +302,7 @@ export function ArenaPane({ className }: ArenaPaneProps): React.ReactElement {
 
       // Wave Client agent must run against MCP data. Ensure runtime is connected.
       if (
-        activeSession.agent === 'wave-client' &&
+        effectiveAgent === 'wave-client' &&
         arenaAdapter.checkMcpStatus &&
         arenaAdapter.startMcpServer
       ) {
@@ -351,9 +361,10 @@ export function ArenaPane({ className }: ArenaPaneProps): React.ReactElement {
         sessionId: arenaActiveSessionId,
         message: effectiveContent,
         command,
-        agent: activeSession.agent,
+        agent: effectiveAgent,
         history: arenaMessages.slice(-10),
         settings: arenaSettings,
+        references: arenaReferences.filter((r: ArenaReference) => r.enabled),
       };
 
       if (arenaSettings.enableStreaming) {

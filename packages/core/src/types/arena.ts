@@ -373,6 +373,8 @@ export interface ArenaChatRequest {
   history: ArenaMessage[];
   /** Settings for the request */
   settings: import('../config/arenaConfig').ArenaSettings;
+  /** Enabled reference resources (web sites, docs) for the agent to consult */
+  references?: import('../config/arenaConfig').ArenaReference[];
 }
 
 /** Response from a chat request */

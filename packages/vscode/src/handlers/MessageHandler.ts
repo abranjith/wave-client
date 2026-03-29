@@ -27,12 +27,16 @@ import type { ArenaService } from '@wave-client/arena';
  * heavy `@langchain/*` transitive deps) is imported on first use — not at
  * module load — so the extension activates instantly and the main REST-client
  * features are never blocked by the AI agent bundle.
+ *
+ * On first access, initializes the in-process MCP bridge so the wave-client
+ * agent can discover and call MCP tools.
  */
 let _arenaService: InstanceType<typeof ArenaService> | null = null;
 async function getArenaService(): Promise<InstanceType<typeof ArenaService>> {
     if (!_arenaService) {
-        const { arenaService } = await import('@wave-client/arena');
-        _arenaService = arenaService;
+        const arenaModule = await import('@wave-client/arena');
+        _arenaService = arenaModule.arenaService;
+        await _arenaService.initMcpBridge();
     }
     return _arenaService!;
 }

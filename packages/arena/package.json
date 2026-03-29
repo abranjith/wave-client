@@ -23,12 +23,14 @@
   },
   "dependencies": {
     "@langchain/core": "^0.3.0",
-    "@langchain/langgraph": "^0.2.0",
     "@langchain/google-genai": "^0.1.0",
+    "@langchain/langgraph": "^0.2.0",
     "@langchain/ollama": "^0.1.0",
+    "@modelcontextprotocol/sdk": "^1.28.0",
     "@wave-client/core": "workspace:*",
     "@wave-client/mcp-server": "workspace:*",
     "@wave-client/shared": "workspace:*",
+    "cheerio": "^1.2.0",
     "hnswlib-node": "^3.0.0"
   },
   "devDependencies": {

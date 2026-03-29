@@ -285,7 +285,7 @@ describe('ArenaService', () => {
     // -------------------------------------------------------------------------
 
     describe('streamChat — agent caching', () => {
-        it('calls createWaveClientAgent only once for two requests with identical settings', async () => {
+        it('calls createWaveClientAgent for every wave-client request (not cached — MCP tools may change)', async () => {
             mockChatFn
                 .mockReturnValueOnce(makeChunks([{ content: 'first', done: true }]))
                 .mockReturnValueOnce(makeChunks([{ content: 'second', done: true }]));
@@ -296,7 +296,22 @@ describe('ArenaService', () => {
             await service.streamChat(request, () => {});
             await service.streamChat(request, () => {});
 
-            expect(mockCreateWaveClientAgent).toHaveBeenCalledOnce();
+            // Wave-client agent is intentionally recreated per request so that
+            // freshly-connected MCP tools are always picked up (not stale cache).
+            expect(mockCreateWaveClientAgent).toHaveBeenCalledTimes(2);
+        });
+
+        it('caches web-expert agent across requests with identical settings', async () => {
+            mockChatFn
+                .mockReturnValue(makeChunks([{ content: 'ok', done: true }]));
+
+            const service = makeService();
+            const request = makeRequest({ agent: ARENA_AGENT_IDS.WEB_EXPERT });
+
+            await service.streamChat(request, () => {});
+            await service.streamChat(request, () => {});
+
+            expect(mockCreateWebExpertAgent).toHaveBeenCalledOnce();
         });
     });
 
@@ -468,8 +483,9 @@ describe('ArenaService', () => {
             const chunks: ArenaChatStreamChunk[] = [];
             await service.streamChat(makeRequest(), (c) => chunks.push(c));
 
-            // Advance past the 90 s threshold — no error chunk should appear
-            vi.advanceTimersByTime(91_000);
+            // Advance well past the 120 s stream timeout — no error chunk should appear
+            // because the timer was cleared on normal completion.
+            vi.advanceTimersByTime(121_000);
 
             expect(chunks.every((c) => !c.error)).toBe(true);
 
@@ -477,8 +493,8 @@ describe('ArenaService', () => {
         });
     });
 
-    describe('streamChat — 90 s stream timeout', () => {
-        it('emits error chunk and returns after 90 s of generator silence', async () => {
+    describe('streamChat — 120 s stream timeout', () => {
+        it('emits error chunk and returns after 120 s of generator silence', async () => {
             vi.useFakeTimers();
 
             // Generator that never yields (simulates a completely stalled LLM)
@@ -492,7 +508,7 @@ describe('ArenaService', () => {
 
             // Do NOT await — the generator is permanently stuck so streamChat
             // will never resolve.  We only verify the side-effect: onChunk is
-            // called with an error chunk when the 90 s timer fires.
+            // called with an error chunk when the 120 s timer fires.
             service.streamChat(makeRequest(), (c) => chunks.push(c)); // intentionally unawaited
 
             // Flush enough microtask ticks to let streamChat complete its async
@@ -503,8 +519,8 @@ describe('ArenaService', () => {
             await Promise.resolve();
             await Promise.resolve(); // extra buffer
 
-            // Advance fake timers past the 90 s stream timeout
-            vi.advanceTimersByTime(90_001);
+            // Advance fake timers past the 120 s stream timeout
+            vi.advanceTimersByTime(120_001);
 
             const timeoutChunk = chunks.find((c) => c.error);
             expect(timeoutChunk).toBeDefined();

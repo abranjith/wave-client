@@ -27,8 +27,10 @@ import type {
   ChatChunk,
   WebExpertMode,
   ArenaSettings,
+  ReferenceWebsite,
 } from '../types';
 import { DEFAULT_ARENA_SETTINGS } from '../types';
+import { createWebFetcher } from '../tools/webFetcher';
 
 // ============================================================================
 // Types
@@ -37,6 +39,8 @@ import { DEFAULT_ARENA_SETTINGS } from '../types';
 export interface WebExpertAgentConfig {
   /** LLM instance to use for generation */
   llm: BaseChatModel;
+  /** Reference websites to consult during retrieval */
+  references?: ReferenceWebsite[];
   /** Override arena settings */
   settings?: Partial<ArenaSettings>;
   /** Vector store instance for local document search */
@@ -89,9 +93,15 @@ const WEB_EXPERT_SYSTEM_PROMPT = loadSystemPrompt();
  * 3. **generate** — Invokes the LLM with the system prompt + context
  */
 export function createWebExpertAgent(config: WebExpertAgentConfig) {
-  const { llm, settings = {}, systemPrompt, _llmTimeoutMs = 60_000 } = config;
+  const { llm, references, settings = {}, systemPrompt, _llmTimeoutMs = 60_000 } = config;
   const mergedSettings = { ...DEFAULT_ARENA_SETTINGS, ...settings };
   const prompt = systemPrompt ?? WEB_EXPERT_SYSTEM_PROMPT;
+
+  /** Web fetcher for reference website retrieval */
+  const webFetcher = createWebFetcher({
+    websites: references ?? mergedSettings.referenceWebsites,
+    rateLimitPerDomain: mergedSettings.rateLimitPerDomain,
+  });
 
   /**
    * Closure variable to capture the generate node's LLM response directly.
@@ -130,7 +140,7 @@ export function createWebExpertAgent(config: WebExpertAgentConfig) {
   const workflow = new StateGraph<WebExpertAgentState>({
     channels: {
       messages: {
-        value: (x: BaseMessage[], y: BaseMessage[]) => x.concat(y),
+        value: (_x: BaseMessage[], y: BaseMessage[]) => y,
         default: () => [],
       },
       mode: {
@@ -182,41 +192,96 @@ export function createWebExpertAgent(config: WebExpertAgentConfig) {
           new HumanMessage(stripped || `Tell me about ${prefix.slice(1)}`),
         ];
         return {
-          mode: state.mode,
           messages: updatedMessages,
           context: [focus],
         };
       }
     }
 
-    return { mode: state.mode };
+    // No prefix match — return empty update to preserve current state
+    return {};
   };
+
+  // ---------------------------------------------------------------------------
+  // Query → category mapping for retrieve
+  // ---------------------------------------------------------------------------
+
+  /** Maps query keywords to reference website categories for targeted retrieval. */
+  const QUERY_CATEGORY_KEYWORDS: Record<string, string[]> = {
+    rfc: ['rfc', 'standards'],
+    http: ['http', 'protocols', 'standards'],
+    websocket: ['protocols', 'web'],
+    grpc: ['protocols', 'api'],
+    graphql: ['api', 'web'],
+    tls: ['standards', 'protocols'],
+    oauth: ['standards', 'web'],
+    cors: ['http', 'web'],
+    rest: ['rest', 'api', 'http'],
+    openapi: ['api', 'rest'],
+    dns: ['protocols', 'standards'],
+    quic: ['protocols', 'standards'],
+    fetch: ['fetch', 'web'],
+    dom: ['dom', 'web'],
+    html: ['html', 'web'],
+    css: ['css', 'web'],
+    crypto: ['web', 'standards'],
+  };
+
+  /** RFC number pattern: "RFC 1234", "rfc1234", "RFC-1234" */
+  const RFC_PATTERN = /\brfc[\s-]?(\d{1,5})\b/i;
+
+  /**
+   * Detect categories relevant to the query by scanning for known keywords.
+   */
+  function detectCategories(query: string): string[] {
+    const lowerQuery = query.toLowerCase();
+    const categories = new Set<string>();
+    for (const [keyword, cats] of Object.entries(QUERY_CATEGORY_KEYWORDS)) {
+      if (lowerQuery.includes(keyword)) {
+        for (const c of cats) { categories.add(c); }
+      }
+    }
+    return [...categories];
+  }
 
   /** Retrieve relevant context from the appropriate source */
   const retrieveNode = async (
     state: WebExpertAgentState,
   ): Promise<Partial<WebExpertAgentState>> => {
     const lastMessage = state.messages[state.messages.length - 1];
-    const query = lastMessage?.content?.toString() ?? '';
+    const query = lastMessage?.content?.toString().trim() ?? '';
 
-    // Use the raw message content as the search query
-    const cleanQuery = query.trim();
-
-    const context: string[] = [];
+    const context: string[] = [...state.context];
     const sources: string[] = [];
 
     if (state.mode === 'web' || state.mode === 'auto') {
-      // TODO: Wire web fetcher retrieval (search curated sites)
-      context.push(
-        `[Web search for: "${cleanQuery}" — web fetcher not yet wired]`,
-      );
+      // Check for explicit RFC reference
+      const rfcMatch = query.match(RFC_PATTERN);
+      if (rfcMatch) {
+        try {
+          const result = await webFetcher.fetchRfc(rfcMatch[1]);
+          context.push(`[RFC ${rfcMatch[1]}] ${result.title}\n${result.content}`);
+          sources.push(result.url);
+        } catch (error) {
+          console.warn(`[WebExpert/retrieve] Failed to fetch RFC ${rfcMatch[1]}:`, error);
+        }
+      }
+
+      // Search reference websites by detected categories
+      const categories = detectCategories(query);
+      try {
+        const results = await webFetcher.search(query, categories.length > 0 ? categories : undefined);
+        for (const result of results) {
+          context.push(`[${result.title}] (${result.url})\n${result.content}`);
+          sources.push(result.url);
+        }
+      } catch (error) {
+        console.warn('[WebExpert/retrieve] Web search failed:', error);
+      }
     }
 
     if (state.mode === 'local' || state.mode === 'auto') {
-      // TODO: Wire vector store retrieval (local docs)
-      context.push(
-        `[Local search for: "${cleanQuery}" — vector store not yet wired]`,
-      );
+      // TODO: Wire vector store retrieval (local docs) — deferred
     }
 
     return { context, sources };
@@ -287,7 +352,7 @@ export function createWebExpertAgent(config: WebExpertAgentConfig) {
       // Capture in closure so chat() can read it directly
       _lastGenerateContent = responseContent;
 
-      return { messages: [new AIMessage(responseContent)] };
+      return { messages: [...state.messages, new AIMessage(responseContent)] };
     } finally {
       clearTimeout(timer);
     }

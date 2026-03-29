@@ -10,10 +10,10 @@
             "require": "./dist/index.js",
             "default": "./dist/index.js"
         },
-        "./runtime": {
-            "types": "./dist/runtime.d.ts",
-            "require": "./dist/runtime.js",
-            "default": "./dist/runtime.js"
+        "./server": {
+            "types": "./dist/server.d.ts",
+            "require": "./dist/server.js",
+            "default": "./dist/server.js"
         }
     },
     "scripts": {

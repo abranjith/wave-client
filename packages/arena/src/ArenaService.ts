@@ -2,7 +2,8 @@ import { createProviderFactory, testProviderConnection, validateProviderApiKey }
 import { createWaveClientAgent } from './agents/waveClientAgent';
 import { createWebExpertAgent } from './agents/webExpertAgent';
 import { createMcpBridge } from './tools/mcpBridge';
-import type { LLMProviderConfig, ChatMessage, ChatChunk } from './types';
+import { McpClientManager } from './tools/mcpClient';
+import type { LLMProviderConfig, ChatMessage, ChatChunk, ReferenceWebsite } from './types';
 import type {
     ArenaChatRequest,
     ArenaChatResponse,
@@ -10,6 +11,7 @@ import type {
     ArenaMessage,
     ArenaProviderType,
     ArenaProviderSettings,
+    ArenaReference,
     ModelDefinition,
 } from '@wave-client/shared';
 import {
@@ -28,31 +30,14 @@ interface CachedAgent {
     chat(history: ChatMessage[], message: string, signal?: AbortSignal): AsyncGenerator<ChatChunk>;
 }
 
-type McpStatus = 'disconnected' | 'connecting' | 'connected' | 'error';
+export type McpStatus = 'disconnected' | 'connecting' | 'connected' | 'error';
 
-interface McpRuntimeModule {
-    startMcpRuntime: () => Promise<McpStatus>;
-    getMcpRuntimeStatus: () => McpStatus;
-    getMcpRuntimeTools: () => ReadonlyArray<{
-        name: string;
-        description: string;
-        schema: unknown;
-    }>;
-    executeMcpToolCall: (toolName: string, args: Record<string, unknown>) => Promise<unknown>;
-}
-
-let _mcpRuntimeModulePromise: Promise<McpRuntimeModule | null> | null = null;
-
-async function getMcpRuntimeModule(): Promise<McpRuntimeModule | null> {
-    if (!_mcpRuntimeModulePromise) {
-        _mcpRuntimeModulePromise = import('@wave-client/mcp-server/runtime')
-            .then((mod) => mod as unknown as McpRuntimeModule)
-            .catch((error) => {
-                console.warn('[Arena] MCP runtime unavailable', error);
-                return null;
-            });
-    }
-    return _mcpRuntimeModulePromise;
+/** Tracks the in-process MCP server + client bridge. */
+interface McpBridgeState {
+    /** The MCP protocol server (wraps tool registry). */
+    server: { close(): Promise<void> };
+    /** The MCP client manager (wraps SDK Client). */
+    client: McpClientManager;
 }
 
 /**
@@ -65,6 +50,15 @@ interface ArenaServiceDeps {
     testProviderConnection?: typeof testProviderConnection;
     createWaveClientAgent?: typeof createWaveClientAgent;
     createWebExpertAgent?: typeof createWebExpertAgent;
+    /** Optional MCP client for tool discovery (injected by platform layer). */
+    mcpClient?: McpClientManager;
+    /**
+     * @internal Override the MCP bridge builder for testing.
+     * When provided, `initMcpBridge()` / `startMcpServer()` delegate to this
+     * instead of dynamically importing `@wave-client/mcp-server` and
+     * `@modelcontextprotocol/sdk`.
+     */
+    _buildMcpBridge?: () => Promise<McpBridgeState>;
 }
 
 /**
@@ -101,12 +95,36 @@ export class ArenaService {
     private readonly _testProviderConnection: typeof testProviderConnection;
     private readonly _createWaveClientAgent: typeof createWaveClientAgent;
     private readonly _createWebExpertAgent: typeof createWebExpertAgent;
+    private _mcpClient: McpClientManager | null;
+    private _mcpBridge: McpBridgeState | null = null;
+    private readonly _overrideBuildMcpBridge?: () => Promise<McpBridgeState>;
 
     constructor(deps: ArenaServiceDeps = {}) {
         this._createProviderFactory = deps.createProviderFactory ?? createProviderFactory;
         this._testProviderConnection = deps.testProviderConnection ?? testProviderConnection;
         this._createWaveClientAgent = deps.createWaveClientAgent ?? createWaveClientAgent;
         this._createWebExpertAgent = deps.createWebExpertAgent ?? createWebExpertAgent;
+        this._mcpClient = deps.mcpClient ?? null;
+        this._overrideBuildMcpBridge = deps._buildMcpBridge;
+    }
+
+    /**
+     * Initializes the in-process MCP bridge.
+     *
+     * Creates an MCP server (from `@wave-client/mcp-server`), connects it to
+     * a `McpClientManager` via `InMemoryTransport`, and registers the client
+     * for tool discovery by the Wave Client agent.
+     *
+     * This is idempotent — calling it after the bridge is already established
+     * is a no-op.  Use `startMcpServer()` to force a teardown + rebuild.
+     *
+     * @returns The resulting MCP status.
+     */
+    async initMcpBridge(): Promise<McpStatus> {
+        if (this._mcpClient?.isConnected()) {
+            return 'connected';
+        }
+        return this.buildMcpBridge();
     }
 
     // =========================================================================
@@ -336,27 +354,26 @@ export class ArenaService {
         return { messageId, content: accContent };
     }
 
-    /** Returns current MCP runtime status used by wave-client agent. */
+    /** Returns current MCP connection status. */
     async checkMcpStatus(): Promise<McpStatus> {
-        const mod = await getMcpRuntimeModule();
-        if (!mod) {
+        if (!this._mcpClient) {
             return 'disconnected';
         }
-        return mod.getMcpRuntimeStatus();
+        return this._mcpClient.isConnected() ? 'connected' : 'disconnected';
     }
 
-    /** Starts MCP runtime and clears wave-client cache entries so new tools are picked up immediately. */
+    /**
+     * Tears down any existing MCP bridge and rebuilds it from scratch.
+     *
+     * Use this for manual reconnection from the UI.  After a successful
+     * rebuild the wave-client agent cache is cleared so the next chat
+     * request picks up the fresh tool set.
+     *
+     * @returns The resulting MCP status.
+     */
     async startMcpServer(): Promise<McpStatus> {
-        const mod = await getMcpRuntimeModule();
-        if (!mod) {
-            return 'error';
-        }
-
-        const status = await mod.startMcpRuntime();
-        if (status === 'connected') {
-            this.clearWaveClientAgentCache();
-        }
-        return status;
+        await this.teardownMcpBridge();
+        return this.buildMcpBridge();
     }
 
     /**
@@ -422,6 +439,68 @@ export class ArenaService {
     // =========================================================================
 
     /**
+     * Creates the in-process MCP server + client bridge from scratch.
+     *
+     * Dynamically imports `@wave-client/mcp-server/server` and
+     * `@modelcontextprotocol/sdk/inMemory.js` so the heavy MCP + transport
+     * modules are only loaded when the arena AI feature is actually used.
+     *
+     * @returns `'connected'` on success, `'error'` on failure.
+     */
+    private async buildMcpBridge(): Promise<McpStatus> {
+        try {
+            let bridge: McpBridgeState;
+
+            if (this._overrideBuildMcpBridge) {
+                bridge = await this._overrideBuildMcpBridge();
+            } else {
+                const [mcpServerModule, mcpSdkModule] = await Promise.all([
+                    import('@wave-client/mcp-server/server'),
+                    import('@modelcontextprotocol/sdk/inMemory.js'),
+                ]);
+
+                const { server, initialize } = mcpServerModule.createMcpServer();
+                await initialize();
+
+                const [clientTransport, serverTransport] =
+                    mcpSdkModule.InMemoryTransport.createLinkedPair();
+                await server.connect(serverTransport);
+
+                const mcpClient = new McpClientManager();
+                await mcpClient.connect(clientTransport);
+
+                bridge = { server, client: mcpClient };
+            }
+
+            this._mcpClient = bridge.client;
+            this._mcpBridge = bridge;
+            this.clearWaveClientAgentCache();
+
+            console.info('[Arena] MCP in-process bridge established');
+            return 'connected';
+        } catch (err) {
+            console.warn('[Arena] Failed to set up MCP bridge — wave-client agent will run without tools', err);
+            return 'error';
+        }
+    }
+
+    /**
+     * Tears down the existing MCP bridge (if any).
+     *
+     * Disconnects the client and closes the server so a fresh bridge can be
+     * created via `buildMcpBridge()`.
+     */
+    private async teardownMcpBridge(): Promise<void> {
+        if (this._mcpBridge) {
+            try { await this._mcpBridge.client.disconnect(); } catch { /* swallow */ }
+            try { await this._mcpBridge.server.close(); } catch { /* swallow */ }
+            this._mcpBridge = null;
+            this._mcpClient = null;
+            this.clearWaveClientAgentCache();
+        }
+    }
+
+    /**
      * Resolves the `LLMProviderConfig` from current stored provider settings and
      * the request's active provider / model.
      *
@@ -462,34 +541,30 @@ export class ArenaService {
     /**
      * Returns a cached agent or creates, caches, and returns a new one.
      *
+     * The wave-client agent is always recreated (not cached) because MCP
+     * tools can change between requests.  Other agents are cached normally.
+     *
      * @param request The current chat request (used for agent type and cache key).
      * @param llm     The `BaseChatModel` instance to pass to the agent factory.
      * @throws `Error` for unknown agent IDs.
      */
     private async getOrCreateAgent(request: ArenaChatRequest, llm: ReturnType<typeof createProviderFactory>): Promise<CachedAgent> {
-        // Wave Client agent depends on dynamic MCP availability and should not reuse
-        // stale cached instances created before MCP is connected.
+        // Wave Client agent uses dynamically discovered MCP tools.
         if (request.agent === ARENA_AGENT_IDS.WAVE_CLIENT) {
-            const mcpStatus = await this.checkMcpStatus();
-            const runtime = await getMcpRuntimeModule();
-            const toolDefinitions = runtime
-                ? runtime.getMcpRuntimeTools().map((tool) => ({
-                    name: tool.name,
-                    description: tool.description,
-                    inputSchema: tool.schema,
-                }))
-                : [];
-            const mcpTools = mcpStatus === 'connected' && runtime
-                ? createMcpBridge({
-                    executeToolCall: async (toolName, args) => runtime.executeMcpToolCall(toolName, args),
-                    toolDefinitions,
-                })
-                : [];
+            let mcpTools: Awaited<ReturnType<typeof createMcpBridge>> = [];
+
+            if (this._mcpClient?.isConnected()) {
+                try {
+                    mcpTools = await createMcpBridge(this._mcpClient);
+                } catch (err) {
+                    console.warn('[Arena] MCP bridge creation failed', {
+                        error: err instanceof Error ? err.message : String(err),
+                    });
+                }
+            }
 
             console.info('[Arena] wave-client agent MCP bridge', {
-                mcpStatus,
-                runtimeAvailable: runtime !== null,
-                toolDefinitionCount: toolDefinitions.length,
+                mcpConnected: this._mcpClient?.isConnected() ?? false,
                 mcpToolCount: mcpTools.length,
             });
 
@@ -504,9 +579,21 @@ export class ArenaService {
 
         let agent: CachedAgent;
         switch (request.agent) {
-            case ARENA_AGENT_IDS.WEB_EXPERT:
-                agent = this._createWebExpertAgent({ llm });
+            case ARENA_AGENT_IDS.WEB_EXPERT: {
+                // Map ArenaReference[] (core) → ReferenceWebsite[] (arena)
+                const references: ReferenceWebsite[] | undefined = request.references
+                    ?.filter((r: ArenaReference) => r.type === 'web')
+                    .map((r: ArenaReference) => ({
+                        id: r.id,
+                        name: r.name,
+                        url: r.url,
+                        description: r.description ?? '',
+                        categories: r.category ? [r.category] : [],
+                        enabled: r.enabled,
+                    }));
+                agent = this._createWebExpertAgent({ llm, references });
                 break;
+            }
 
             default:
                 throw new Error(`Unknown agent: ${request.agent}`);

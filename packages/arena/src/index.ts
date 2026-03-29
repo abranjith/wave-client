@@ -21,11 +21,12 @@ export { createGeminiProvider, type GeminiProviderConfig } from './providers/gem
 export { createProviderFactory, type ProviderConfig } from './providers/factory';
 
 // Tools
-export { createMcpBridge, type McpBridgeConfig } from './tools/mcpBridge';
+export { McpClientManager, type McpToolDefinition } from './tools/mcpClient';
+export { createMcpBridge } from './tools/mcpBridge';
 
 // Utils
 export { createVectorStore, type VectorStoreConfig } from './utils/vectorStore';
 export { createRateLimiter, type RateLimiterConfig } from './utils/rateLimiter';
 
 // Arena service — orchestrates provider config, agent lifecycle, and chat streaming
-export { ArenaService, arenaService } from './ArenaService';
+export { ArenaService, arenaService, type McpStatus } from './ArenaService';

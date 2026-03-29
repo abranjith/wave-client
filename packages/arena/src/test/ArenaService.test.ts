@@ -203,3 +203,121 @@ describe('ArenaService.streamChat() — sequence numbering', () => {
         expect(run2Content[0].seq).toBe(0);
     });
 });
+
+// ============================================================================
+// MCP Bridge lifecycle tests
+// ============================================================================
+
+describe('ArenaService — MCP bridge lifecycle', () => {
+    /** Creates a fake McpClientManager-like object for testing. */
+    function createFakeMcpClient(connected = true) {
+        return {
+            connect: vi.fn().mockResolvedValue(undefined),
+            disconnect: vi.fn().mockResolvedValue(undefined),
+            isConnected: vi.fn().mockReturnValue(connected),
+            listTools: vi.fn().mockResolvedValue([]),
+            callTool: vi.fn(),
+            refreshTools: vi.fn(),
+        };
+    }
+
+    /** Creates a fake MCP bridge builder that succeeds. */
+    function createFakeBridgeBuilder() {
+        const fakeClient = createFakeMcpClient(true);
+        const fakeServer = { close: vi.fn().mockResolvedValue(undefined) };
+        const builder = vi.fn().mockResolvedValue({ server: fakeServer, client: fakeClient });
+        return { builder, fakeClient, fakeServer };
+    }
+
+    /** Creates a fake MCP bridge builder that throws. */
+    function createFailingBridgeBuilder() {
+        return vi.fn().mockRejectedValue(new Error('MCP init failure'));
+    }
+
+    /** Creates a service with the given MCP bridge builder injected. */
+    function createBareService(buildMcpBridge?: () => Promise<unknown>) {
+        return new ArenaService({
+            createProviderFactory: vi.fn().mockReturnValue({}) as any,
+            testProviderConnection: vi.fn().mockResolvedValue({ connected: true }) as any,
+            createWaveClientAgent: vi.fn().mockReturnValue(makeAgent([])) as any,
+            createWebExpertAgent: vi.fn().mockReturnValue(makeAgent([])) as any,
+            _buildMcpBridge: buildMcpBridge as any,
+        });
+    }
+
+    it('initMcpBridge returns "connected" on success', async () => {
+        const { builder } = createFakeBridgeBuilder();
+        const svc = createBareService(builder);
+
+        const status = await svc.initMcpBridge();
+
+        expect(status).toBe('connected');
+        expect(builder).toHaveBeenCalledTimes(1);
+    });
+
+    it('initMcpBridge is idempotent — second call returns "connected" without rebuilding', async () => {
+        const { builder } = createFakeBridgeBuilder();
+        const svc = createBareService(builder);
+
+        await svc.initMcpBridge();
+        const status2 = await svc.initMcpBridge();
+
+        expect(status2).toBe('connected');
+        // Builder should have been called only once
+        expect(builder).toHaveBeenCalledTimes(1);
+    });
+
+    it('initMcpBridge returns "error" when MCP setup fails', async () => {
+        const builder = createFailingBridgeBuilder();
+        const svc = createBareService(builder);
+
+        const status = await svc.initMcpBridge();
+
+        expect(status).toBe('error');
+    });
+
+    it('checkMcpStatus returns "disconnected" before initialization', async () => {
+        const svc = createBareService();
+
+        const status = await svc.checkMcpStatus();
+
+        expect(status).toBe('disconnected');
+    });
+
+    it('checkMcpStatus returns "connected" after successful initMcpBridge', async () => {
+        const { builder } = createFakeBridgeBuilder();
+        const svc = createBareService(builder);
+
+        await svc.initMcpBridge();
+        const status = await svc.checkMcpStatus();
+
+        expect(status).toBe('connected');
+    });
+
+    it('startMcpServer tears down and rebuilds the bridge', async () => {
+        const { builder, fakeServer } = createFakeBridgeBuilder();
+        const svc = createBareService(builder);
+
+        // Initial setup
+        await svc.initMcpBridge();
+        expect(builder).toHaveBeenCalledTimes(1);
+
+        // Reconnect — tears down first bridge then builds a new one
+        const status = await svc.startMcpServer();
+        expect(status).toBe('connected');
+        // Builder called twice (init + reconnect)
+        expect(builder).toHaveBeenCalledTimes(2);
+        // Old server should have been closed during teardown
+        expect(fakeServer.close).toHaveBeenCalled();
+    });
+
+    it('startMcpServer works even without prior initialization', async () => {
+        const { builder } = createFakeBridgeBuilder();
+        const svc = createBareService(builder);
+
+        const status = await svc.startMcpServer();
+
+        expect(status).toBe('connected');
+        expect(builder).toHaveBeenCalledTimes(1);
+    });
+});

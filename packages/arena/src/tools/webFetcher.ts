@@ -2,8 +2,10 @@
  * Web Fetcher
  * 
  * Fetches and parses content from reference websites with rate limiting and caching.
+ * Uses cheerio for robust HTML parsing.
  */
 
+import * as cheerio from 'cheerio';
 import type { ReferenceWebsite } from '../types';
 import { DEFAULT_REFERENCE_WEBSITES } from '../types';
 
@@ -111,32 +113,66 @@ export function createWebFetcher(config: WebFetcherConfig = {}) {
   };
 
   /**
-   * Extract text content from HTML
-   * Simple extraction - in production would use proper HTML parser
+   * Extract meaningful text content from HTML using cheerio.
+   * Strips navigation, scripts, styles, and other non-content elements.
    */
   const extractTextFromHtml = (html: string): string => {
-    // Remove script and style tags
-    let text = html
-      .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
-      .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
-      .replace(/<[^>]+>/g, ' ')
-      .replace(/\s+/g, ' ')
-      .trim();
-    
+    const $ = cheerio.load(html);
+
+    // Remove non-content elements
+    $('script, style, nav, footer, header, aside, iframe, noscript, svg').remove();
+    // Remove hidden elements
+    $('[aria-hidden="true"], [hidden], [style*="display:none"], [style*="display: none"]').remove();
+
+    // Prefer main/article content if available
+    let $content = $('main, article, [role="main"]');
+    if ($content.length === 0) {
+      $content = $('body');
+    }
+
+    let text = $content.text();
+    // Collapse whitespace
+    text = text.replace(/\s+/g, ' ').trim();
+
     // Limit content length
-    if (text.length > 10000) {
-      text = text.substring(0, 10000) + '...';
+    const MAX_CONTENT_LENGTH = 15_000;
+    if (text.length > MAX_CONTENT_LENGTH) {
+      text = text.substring(0, MAX_CONTENT_LENGTH) + '...';
     }
     
     return text;
   };
 
   /**
-   * Extract title from HTML
+   * Extract page title from HTML using cheerio.
    */
   const extractTitle = (html: string): string => {
-    const titleMatch = html.match(/<title[^>]*>([^<]*)<\/title>/i);
-    return titleMatch ? titleMatch[1].trim() : 'Untitled';
+    const $ = cheerio.load(html);
+    const title = $('title').first().text().trim();
+    return title || 'Untitled';
+  };
+
+  /**
+   * Build query-aware search URLs for a reference website.
+   * Maps known site IDs to their search endpoints; falls back to homepage for unknown sites.
+   */
+  const buildSearchUrls = (site: ReferenceWebsite, query: string): string[] => {
+    const q = encodeURIComponent(query);
+    switch (site.id) {
+      case 'mdn':
+        return [`https://developer.mozilla.org/en-US/search?q=${q}`];
+      case 'ietf':
+        return [`https://datatracker.ietf.org/doc/search/?name=${q}&activeDrafts=on&rfcs=on`];
+      case 'rfc-editor':
+        return [`https://www.rfc-editor.org/search/rfc_search_detail.php?title=${q}`];
+      case 'httpwg':
+        return [`https://httpwg.org/specs/`];
+      case 'w3c':
+        return [`https://www.w3.org/search/?q=${q}`];
+      default:
+        // Unknown site — just fetch the homepage
+        return [site.url];
+    }
   };
 
   return {
@@ -198,10 +234,10 @@ export function createWebFetcher(config: WebFetcherConfig = {}) {
     },
 
     /**
-     * Search reference websites for a query
-     * Returns relevant content from enabled websites
+     * Search reference websites for a query.
+     * Builds query-aware URLs for known sites and fetches relevant pages.
      */
-    async search(_query: string, categories?: string[]): Promise<FetchResult[]> {
+    async search(query: string, categories?: string[]): Promise<FetchResult[]> {
       const results: FetchResult[] = [];
       const enabledSites = websites.filter(w => w.enabled);
       
@@ -210,14 +246,20 @@ export function createWebFetcher(config: WebFetcherConfig = {}) {
         ? enabledSites.filter(w => w.categories.some(c => categories.includes(c)))
         : enabledSites;
 
-      // For MVP, we'll just fetch the main pages
-      // In production, we'd implement proper search APIs for each source
-      for (const site of sitesToSearch) {
-        try {
-          const result = await this.fetch(site.url);
-          results.push(result);
-        } catch (error) {
-          console.warn(`Failed to fetch ${site.url}:`, error);
+      // Build query-aware URLs for known reference sites
+      const targets = sitesToSearch.flatMap(site => buildSearchUrls(site, query));
+
+      // Fetch in parallel (limited to 3 concurrent to be polite)
+      const CONCURRENCY = 3;
+      for (let i = 0; i < targets.length; i += CONCURRENCY) {
+        const batch = targets.slice(i, i + CONCURRENCY);
+        const settled = await Promise.allSettled(
+          batch.map(url => this.fetch(url)),
+        );
+        for (const r of settled) {
+          if (r.status === 'fulfilled') {
+            results.push(r.value);
+          }
         }
       }
 

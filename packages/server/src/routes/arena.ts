@@ -27,13 +27,21 @@ import { emitStateChange } from '../services/websocket.js';
 // ---------------------------------------------------------------------------
 
 let _arenaServicePromise: Promise<typeof import('@wave-client/arena')> | null = null;
+let _mcpInitialized = false;
 
 async function getArenaService() {
     if (!_arenaServicePromise) {
         _arenaServicePromise = import('@wave-client/arena');
     }
     const mod = await _arenaServicePromise;
-    return mod.arenaService;
+    const svc = mod.arenaService;
+
+    if (!_mcpInitialized) {
+        _mcpInitialized = true;
+        await svc.initMcpBridge();
+    }
+
+    return svc;
 }
 
 // ---------------------------------------------------------------------------
