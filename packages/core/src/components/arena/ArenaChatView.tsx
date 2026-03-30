@@ -152,9 +152,9 @@ export function ArenaChatView({
 
 const AGENT_EXAMPLE_QUESTIONS: Record<string, readonly string[]> = {
   [ARENA_AGENT_IDS.WAVE_CLIENT]: [
-    'How do I set up an environment for staging?',
-    'Create a new collection from an OpenAPI spec',
-    'Run my test suite and show the results',
+    'List all available API collections with summary information',
+    'I need to understand more about the GitHub API. Can you show me the details of the "GitHub REST API" collection?',
+    'Run test suite "User API tests" and show me the results',
   ],
   [ARENA_AGENT_IDS.WEB_EXPERT]: [
     'Explain HTTP/2 server push and when to use it',

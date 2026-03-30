@@ -25,6 +25,10 @@ function makeService(): ArenaService {
         testProviderConnection: vi.fn().mockResolvedValue({ connected: true }),
         createWaveClientAgent: mockCreateWaveClientAgent as never,
         createWebExpertAgent: mockCreateWebExpertAgent as never,
+        // Fast-failing mock prevents real dynamic import('@wave-client/mcp-server')
+        // from running in tests — avoids fake-timer issues with async imports.
+        _buildMcpBridge: vi.fn().mockRejectedValue(new Error('no MCP in test')),
+        _createDirectToolBridge: vi.fn().mockRejectedValue(new Error('no direct bridge in test')),
     });
 }
 
@@ -512,12 +516,9 @@ describe('ArenaService', () => {
             service.streamChat(makeRequest(), (c) => chunks.push(c)); // intentionally unawaited
 
             // Flush enough microtask ticks to let streamChat complete its async
-            // setup (buildProviderConfig + getOrCreateAgent = 3 awaits) and
-            // register the streamTimer before we advance fake timers.
-            await Promise.resolve();
-            await Promise.resolve();
-            await Promise.resolve();
-            await Promise.resolve(); // extra buffer
+            // setup (buildProviderConfig + initMcpBridge retry + getOrCreateAgent)
+            // and register the streamTimer before we advance fake timers.
+            for (let i = 0; i < 10; i++) await Promise.resolve();
 
             // Advance fake timers past the 120 s stream timeout
             vi.advanceTimersByTime(120_001);

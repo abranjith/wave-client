@@ -91,6 +91,7 @@ vi.mock('@wave-client/shared', () => ({
 // Mock @wave-client/arena — lazy-loaded by MessageHandler via await import()
 vi.mock('@wave-client/arena', () => ({
   arenaService: {
+    initMcpBridge: vi.fn().mockResolvedValue('connected'),
     validateApiKey: vi.fn(),
     getAvailableModels: vi.fn(),
     streamChat: vi.fn(),

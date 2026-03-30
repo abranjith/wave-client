@@ -16,6 +16,28 @@ import type { McpClientManager } from './mcpClient';
 export type { McpToolDefinition } from './mcpClient';
 
 // ============================================================================
+// Helpers
+// ============================================================================
+
+/**
+ * Strips `null` values from a plain object, replacing them with `undefined`.
+ *
+ * LLMs (especially Ollama/Llama) frequently emit `null` for optional tool
+ * parameters.  Zod's `.optional()` accepts `undefined` but rejects `null`,
+ * causing LangGraph's `ToolNode` to return a schema-mismatch error.  This
+ * pre-processing step normalizes `null → undefined` so the Zod parse succeeds.
+ */
+function stripNullValues(obj: Record<string, unknown>): Record<string, unknown> {
+  const cleaned: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(obj)) {
+    if (value !== null) {
+      cleaned[key] = value;
+    }
+  }
+  return cleaned;
+}
+
+// ============================================================================
 // JSON Schema → Zod conversion
 // ============================================================================
 
@@ -96,10 +118,11 @@ export async function createMcpBridge(
       new DynamicStructuredTool({
         name: toolDef.name,
         description: toolDef.description,
-        schema: jsonSchemaToZod(toolDef.inputSchema),
+        schema: wrapSchemaWithNullStripping(jsonSchemaToZod(toolDef.inputSchema)),
         func: async (args: Record<string, unknown>) => {
           try {
-            const result = await client.callTool(toolDef.name, args);
+            const cleaned = stripNullValues(args);
+            const result = await client.callTool(toolDef.name, cleaned);
             return typeof result === 'string' ? result : JSON.stringify(result, null, 2);
           } catch (error) {
             return `Error executing ${toolDef.name}: ${error instanceof Error ? error.message : 'Unknown error'}`;
@@ -115,4 +138,79 @@ export async function createMcpBridge(
 export async function getMcpToolNames(client: McpClientManager): Promise<string[]> {
   const tools = await client.listTools();
   return tools.map((t) => t.name);
+}
+
+// ============================================================================
+// Direct Tool Bridge (fallback — no MCP protocol overhead)
+// ============================================================================
+
+/**
+ * Wraps a Zod schema with preprocessing that strips `null` values.
+ *
+ * LLMs send `null` for optional fields, but `z.optional()` only accepts
+ * `undefined`.  This wrapper runs `stripNullValues` before the inner
+ * schema validates, avoiding ToolNode schema-mismatch errors.
+ *
+ * The result is cast to `ZodObject` because `DynamicStructuredTool`
+ * requires that type — the preprocessing layer is transparent.
+ */
+function wrapSchemaWithNullStripping(
+  schema: z.ZodTypeAny,
+): z.ZodObject<Record<string, z.ZodTypeAny>> {
+  return z.preprocess(
+    (val) => {
+      if (val && typeof val === 'object' && !Array.isArray(val)) {
+        return stripNullValues(val as Record<string, unknown>);
+      }
+      return val;
+    },
+    schema,
+  ) as unknown as z.ZodObject<Record<string, z.ZodTypeAny>>;
+}
+
+/**
+ * Creates LangChain tools **directly** from the mcp-server tool registry,
+ * bypassing the MCP server → transport → client chain entirely.
+ *
+ * This is used as a fallback when the full MCP bridge fails to initialize
+ * (e.g. due to InMemoryTransport issues, dynamic import problems, or SDK
+ * version mismatches).  The tools execute the same handlers — just without
+ * the MCP protocol envelope.
+ *
+ * Platform-agnostic: works identically in VS Code, web server, and any
+ * future platform because it only depends on `@wave-client/mcp-server`.
+ *
+ * @returns Array of LangChain tools ready for `llm.bindTools()`.
+ * @throws  If the mcp-server module cannot be imported or the runtime fails
+ *          to start.
+ */
+export async function createDirectToolBridge(): Promise<DynamicStructuredTool[]> {
+  const { getMcpRuntimeTools, startMcpRuntime, executeMcpToolCall } =
+    await import('@wave-client/mcp-server/server');
+
+  // Ensure shared services (storage, settings, etc.) are initialized
+  const status = await startMcpRuntime();
+  if (status !== 'connected') {
+    throw new Error(`MCP runtime failed to start (status: ${status})`);
+  }
+
+  const registryTools = getMcpRuntimeTools();
+
+  return registryTools.map(
+    (tool) =>
+      new DynamicStructuredTool({
+        name: tool.name,
+        description: tool.description,
+        schema: wrapSchemaWithNullStripping(tool.schema),
+        func: async (args: Record<string, unknown>) => {
+          try {
+            const cleaned = stripNullValues(args);
+            const result = await executeMcpToolCall(tool.name, cleaned);
+            return typeof result === 'string' ? result : JSON.stringify(result, null, 2);
+          } catch (error) {
+            return `Error executing ${tool.name}: ${error instanceof Error ? error.message : 'Unknown error'}`;
+          }
+        },
+      }),
+  );
 }

@@ -32,6 +32,12 @@ import {
   startMcpRuntime,
 } from './toolRegistry.js';
 
+// Re-export runtime API so consumers of `@wave-client/mcp-server/server`
+// can interact with the tool registry directly (e.g. direct tool bridge
+// that bypasses the MCP protocol for in-process use).
+export { getMcpRuntimeTools, executeMcpToolCall, startMcpRuntime };
+export type { McpRuntimeTool, McpRuntimeStatus } from './toolRegistry.js';
+
 // ---------------------------------------------------------------------------
 // Zod → JSON Schema converter
 // ---------------------------------------------------------------------------

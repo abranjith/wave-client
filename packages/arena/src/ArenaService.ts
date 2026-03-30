@@ -1,7 +1,7 @@
 import { createProviderFactory, testProviderConnection, validateProviderApiKey } from './providers/factory';
 import { createWaveClientAgent } from './agents/waveClientAgent';
 import { createWebExpertAgent } from './agents/webExpertAgent';
-import { createMcpBridge } from './tools/mcpBridge';
+import { createMcpBridge, createDirectToolBridge } from './tools/mcpBridge';
 import { McpClientManager } from './tools/mcpClient';
 import type { LLMProviderConfig, ChatMessage, ChatChunk, ReferenceWebsite } from './types';
 import type {
@@ -59,6 +59,12 @@ interface ArenaServiceDeps {
      * `@modelcontextprotocol/sdk`.
      */
     _buildMcpBridge?: () => Promise<McpBridgeState>;
+    /**
+     * @internal Override the direct tool bridge for testing.
+     * When provided, `getOrCreateAgent()` calls this instead of
+     * `createDirectToolBridge()` (which does a dynamic import).
+     */
+    _createDirectToolBridge?: typeof createDirectToolBridge;
 }
 
 /**
@@ -98,6 +104,7 @@ export class ArenaService {
     private _mcpClient: McpClientManager | null;
     private _mcpBridge: McpBridgeState | null = null;
     private readonly _overrideBuildMcpBridge?: () => Promise<McpBridgeState>;
+    private readonly _createDirectToolBridge: typeof createDirectToolBridge;
 
     constructor(deps: ArenaServiceDeps = {}) {
         this._createProviderFactory = deps.createProviderFactory ?? createProviderFactory;
@@ -106,6 +113,7 @@ export class ArenaService {
         this._createWebExpertAgent = deps.createWebExpertAgent ?? createWebExpertAgent;
         this._mcpClient = deps.mcpClient ?? null;
         this._overrideBuildMcpBridge = deps._buildMcpBridge;
+        this._createDirectToolBridge = deps._createDirectToolBridge ?? createDirectToolBridge;
     }
 
     /**
@@ -454,13 +462,16 @@ export class ArenaService {
             if (this._overrideBuildMcpBridge) {
                 bridge = await this._overrideBuildMcpBridge();
             } else {
+                console.info('[Arena] buildMcpBridge: loading MCP modules…');
                 const [mcpServerModule, mcpSdkModule] = await Promise.all([
                     import('@wave-client/mcp-server/server'),
                     import('@modelcontextprotocol/sdk/inMemory.js'),
                 ]);
+                console.info('[Arena] buildMcpBridge: modules loaded, creating server…');
 
                 const { server, initialize } = mcpServerModule.createMcpServer();
                 await initialize();
+                console.info('[Arena] buildMcpBridge: server initialized');
 
                 const [clientTransport, serverTransport] =
                     mcpSdkModule.InMemoryTransport.createLinkedPair();
@@ -468,6 +479,14 @@ export class ArenaService {
 
                 const mcpClient = new McpClientManager();
                 await mcpClient.connect(clientTransport);
+                console.info('[Arena] buildMcpBridge: client connected');
+
+                // Verify tools are discoverable right away
+                const verifyTools = await mcpClient.listTools();
+                console.info('[Arena] buildMcpBridge: discovered tools:', {
+                    count: verifyTools.length,
+                    names: verifyTools.map(t => t.name),
+                });
 
                 bridge = { server, client: mcpClient };
             }
@@ -479,7 +498,10 @@ export class ArenaService {
             console.info('[Arena] MCP in-process bridge established');
             return 'connected';
         } catch (err) {
-            console.warn('[Arena] Failed to set up MCP bridge — wave-client agent will run without tools', err);
+            console.error('[Arena] buildMcpBridge FAILED — wave-client agent will run without tools', {
+                error: err instanceof Error ? err.message : String(err),
+                stack: err instanceof Error ? err.stack : undefined,
+            });
             return 'error';
         }
     }
@@ -551,22 +573,55 @@ export class ArenaService {
     private async getOrCreateAgent(request: ArenaChatRequest, llm: ReturnType<typeof createProviderFactory>): Promise<CachedAgent> {
         // Wave Client agent uses dynamically discovered MCP tools.
         if (request.agent === ARENA_AGENT_IDS.WAVE_CLIENT) {
+            // Proactively ensure MCP bridge is connected.  The initial
+            // initMcpBridge() call (in getArenaService) may have failed
+            // transiently — retry here so the agent always gets tools if
+            // the bridge can be established.
+            if (!this._mcpClient?.isConnected()) {
+                console.info('[Arena] MCP not connected — attempting bridge init before creating wave-client agent');
+                const retryStatus = await this.initMcpBridge();
+                console.info('[Arena] MCP bridge retry result:', retryStatus);
+            }
+
             let mcpTools: Awaited<ReturnType<typeof createMcpBridge>> = [];
 
+            // Strategy 1: Full MCP bridge (server → transport → client)
             if (this._mcpClient?.isConnected()) {
                 try {
                     mcpTools = await createMcpBridge(this._mcpClient);
+                    console.info('[Arena] MCP tools via protocol bridge', {
+                        count: mcpTools.length,
+                        names: mcpTools.map(t => t.name),
+                    });
                 } catch (err) {
-                    console.warn('[Arena] MCP bridge creation failed', {
+                    console.warn('[Arena] MCP protocol bridge failed', {
                         error: err instanceof Error ? err.message : String(err),
                     });
                 }
             }
 
-            console.info('[Arena] wave-client agent MCP bridge', {
-                mcpConnected: this._mcpClient?.isConnected() ?? false,
-                mcpToolCount: mcpTools.length,
-            });
+            // Strategy 2: Direct tool bridge (bypasses MCP protocol, calls
+            // tool handlers directly).  Used when the full MCP bridge is
+            // unavailable — works identically on every platform.
+            if (mcpTools.length === 0) {
+                console.info('[Arena] Falling back to direct tool bridge (bypassing MCP protocol)');
+                try {
+                    mcpTools = await this._createDirectToolBridge();
+                    console.info('[Arena] Direct tool bridge created', {
+                        count: mcpTools.length,
+                        names: mcpTools.map(t => t.name),
+                    });
+                } catch (err) {
+                    console.error('[Arena] Direct tool bridge ALSO failed — agent will run without tools', {
+                        error: err instanceof Error ? err.message : String(err),
+                        stack: err instanceof Error ? err.stack : undefined,
+                    });
+                }
+            }
+
+            if (mcpTools.length === 0) {
+                console.error('[Arena] CRITICAL: wave-client agent has 0 tools — all tool bridge strategies failed');
+            }
 
             return this._createWaveClientAgent({ llm, mcpTools });
         }

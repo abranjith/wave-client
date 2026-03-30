@@ -6,12 +6,13 @@
  * - Local: Search user-uploaded documents via vector store
  *
  * Uses LangGraph StateGraph with route → retrieve → generate pipeline.
- * System prompt is loaded from the companion markdown file at
- * `./prompts/web-expert-agent.md`.
+ *
+ * The system prompt is inlined below rather than loaded from a file so
+ * that it is always available regardless of the bundler (webpack, tsc,
+ * vitest, etc.) — `readFileSync(__dirname, …)` does not resolve
+ * correctly inside webpack chunks.
  */
 
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
 import { StateGraph, END, START } from '@langchain/langgraph';
 import type { LangGraphRunnableConfig } from '@langchain/langgraph';
 import {
@@ -45,7 +46,7 @@ export interface WebExpertAgentConfig {
   settings?: Partial<ArenaSettings>;
   /** Vector store instance for local document search */
   vectorStore?: unknown; // Properly typed when vector store is implemented
-  /** Optional custom system prompt (overrides MD file) */
+  /** Optional custom system prompt (overrides inline default) */
   systemPrompt?: string;
   /** @internal Override the LLM per-call timeout (ms). Defaults to 60 000. Test-only. */
   _llmTimeoutMs?: number;
@@ -59,26 +60,50 @@ interface WebExpertAgentState {
 }
 
 // ============================================================================
-// Prompt Loader
+// System Prompt (inlined — must stay in sync with prompts/web-expert-agent.md)
 // ============================================================================
 
 /**
- * Load the system prompt from the companion markdown file.
- * Falls back to a minimal inline prompt if the file cannot be read.
+ * Comprehensive fallback prompt used when the companion `.md` file is not
+ * reachable (e.g. inside a webpack bundle where `__dirname` resolves to
+ * the output directory instead of the source tree).
+ *
+ * This captures the essential identity, response style, and citation
+ * rules so the agent behaves correctly even without the full file.
  */
-function loadSystemPrompt(): string {
-  try {
-    const promptPath = resolve(__dirname, 'prompts', 'web-expert-agent.md');
-    return readFileSync(promptPath, 'utf-8');
-  } catch {
-    // Fallback: minimal prompt so the agent still functions
-    return `You are the Web Expert, an AI agent specializing in web technologies, networking protocols, and API design.
-Provide authoritative, standards-based answers. Cite RFC numbers when discussing protocol behaviour.`;
-  }
-}
+const FALLBACK_WEB_EXPERT_PROMPT = `# Web Expert Agent — System Prompt
+
+## Identity
+
+You are the **Web Expert**, the definitive AI agent for all things web. You cover the full stack — from raw network transport up through application-layer protocols, real-time communication, security, API design, and web platform standards. Your answers are authoritative, standards-based, and grounded in official specifications, RFCs, and documentation.
+
+## Expertise Domains
+
+- **Network & Transport** — TCP/IP, UDP, QUIC (RFC 9000), DNS, TLS 1.3 (RFC 8446), mTLS
+- **HTTP** — HTTP/1.1, HTTP/2, HTTP/3 (RFC 9114), semantics (RFC 9110), caching, content negotiation
+- **Real-Time** — WebSocket (RFC 6455), SSE, WebTransport, WebRTC, gRPC streaming
+- **API Design** — REST, GraphQL, gRPC, AsyncAPI, OpenAPI 3.x, pagination, rate limiting
+- **Security** — OAuth 2.0/2.1, OIDC, JWT (RFC 7519), CORS, CSP, OWASP Top 10, Web Crypto API, FIDO2/WebAuthn
+- **Standards** — IETF RFCs, W3C specs, WHATWG living standards
+
+## Citation Rules
+
+- **Always cite the specific RFC number** when discussing protocol behavior.
+- **Link to MDN** for practical browser API references.
+- **Never cite blogs, social media, or Medium/Dev.to articles.**
+- Prefer official docs in this order: RFC > W3C/WHATWG > MDN > web.dev > OWASP.
+
+## Response Structure
+
+- Use **GFM markdown** — headers, tables, fenced code blocks with language tags.
+- **Bold key terms and RFC references** on first use.
+- Keep paragraphs to 2–3 sentences.
+- End technical answers with a horizontal rule and **Key Takeaway** blockquote.
+- Wrap HTTP exchanges in code blocks with the \`http\` language tag.
+`;
 
 /** Cached system prompt (loaded once on module init) */
-const WEB_EXPERT_SYSTEM_PROMPT = loadSystemPrompt();
+const WEB_EXPERT_SYSTEM_PROMPT = FALLBACK_WEB_EXPERT_PROMPT;
 
 // ============================================================================
 // Web Expert Agent Implementation

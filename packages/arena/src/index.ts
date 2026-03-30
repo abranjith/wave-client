@@ -22,7 +22,7 @@ export { createProviderFactory, type ProviderConfig } from './providers/factory'
 
 // Tools
 export { McpClientManager, type McpToolDefinition } from './tools/mcpClient';
-export { createMcpBridge } from './tools/mcpBridge';
+export { createMcpBridge, createDirectToolBridge } from './tools/mcpBridge';
 
 // Utils
 export { createVectorStore, type VectorStoreConfig } from './utils/vectorStore';

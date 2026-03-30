@@ -36,7 +36,8 @@ async function getArenaService(): Promise<InstanceType<typeof ArenaService>> {
     if (!_arenaService) {
         const arenaModule = await import('@wave-client/arena');
         _arenaService = arenaModule.arenaService;
-        await _arenaService.initMcpBridge();
+        const mcpStatus = await _arenaService.initMcpBridge();
+        console.info('[MessageHandler] ArenaService initialized, MCP status:', mcpStatus);
     }
     return _arenaService!;
 }
