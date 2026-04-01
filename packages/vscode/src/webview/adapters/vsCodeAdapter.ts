@@ -29,6 +29,7 @@ import {
     type ISecurityAdapter,
     type INotificationAdapter,
     type IArenaAdapter,
+    type IClipboardAdapter,
     type IAdapterEvents,
     type HttpRequestConfig,
     type HttpResponseResult,
@@ -760,6 +761,56 @@ function createVSCodeNotificationAdapter(events: IAdapterEvents): INotificationA
 }
 
 // ============================================================================
+// VS Code Clipboard Adapter
+// ============================================================================
+
+/**
+ * Routes clipboard operations through the extension host using the existing
+ * sendAndWait pattern. The extension host uses `vscode.env.clipboard` which
+ * works reliably regardless of webview focus or browser permission state.
+ */
+function createVSCodeClipboardAdapter(
+    vsCodeApi: VSCodeAPI,
+    pendingRequests: Map<string, PendingRequest<unknown>>,
+    defaultTimeout: number
+): IClipboardAdapter {
+    function sendAndWait<T>(type: string, data?: Record<string, unknown>): Promise<Result<T, string>> {
+        return new Promise((resolve) => {
+            const requestId = generateRequestId();
+
+            const timeout = setTimeout(() => {
+                pendingRequests.delete(requestId);
+                resolve(err(`Request timed out: ${type}`));
+            }, defaultTimeout);
+
+            pendingRequests.set(requestId, {
+                resolve: (value) => {
+                    const response = value as any;
+                    if (response && response.error) {
+                        resolve(err(response.error as string));
+                    } else {
+                        resolve(ok(response.data as T));
+                    }
+                },
+                reject: (error) => resolve(err(error.message)),
+                timeout,
+            });
+
+            vsCodeApi.postMessage({ type, requestId, ...data });
+        });
+    }
+
+    return {
+        async readText() {
+            return sendAndWait<string>('clipboard.readText');
+        },
+        async writeText(value) {
+            return sendAndWait<void>('clipboard.writeText', { data: { value } });
+        },
+    };
+}
+
+// ============================================================================
 // Create VS Code Adapter Factory
 // ============================================================================
 
@@ -803,6 +854,7 @@ export function createVSCodeAdapter(
     const secret = createVSCodeSecretAdapter(vsCodeApi);
     const security = createVSCodeSecurityAdapter(vsCodeApi);
     const notification = createVSCodeNotificationAdapter(events);
+    const clipboard = createVSCodeClipboardAdapter(vsCodeApi, pendingRequests, defaultTimeout);
     const { adapter: arena, handleStreamMessage: arenaHandleStreamMessage } =
         createVSCodeArenaAdapter(vsCodeApi, pendingRequests, events, defaultTimeout);
 
@@ -912,6 +964,7 @@ export function createVSCodeAdapter(
         security,
         notification,
         arena,
+        clipboard,
         events,
 
         initialize: async () => {

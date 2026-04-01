@@ -1,13 +1,17 @@
 import React, { useState, useEffect, useMemo, JSX } from 'react';
-import { Trash2Icon, PlusIcon } from 'lucide-react';
+import { Trash2Icon, PlusIcon, CopyIcon, ClipboardPasteIcon } from 'lucide-react';
+import { Button } from '../ui/button';
 import { SecondaryButton } from '../ui/SecondaryButton';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
 import { Switch } from '../ui/switch';
 import StyledInput from "../ui/styled-input";
 import StyledAutocompleteInput from '../ui/styled-autocomplete-input';
+import { Tooltip, TooltipTrigger, TooltipContent } from '../ui/tooltip';
 import useAppStateStore from '../../hooks/store/useAppStateStore';
+import { useClipboardAdapter, useNotificationAdapter } from '../../hooks/useAdapter';
 import { renderParameterizedText } from '../../utils/styling';
 import { getCommonHeaderNames } from '../../utils/common';
+import { serializeRowsForClipboard, parseRequestClipboard } from '../../utils/requestClipboard';
 import { HeaderRow } from '../../types/collection';
 
 const RequestHeaders: React.FC = () => {
@@ -19,6 +23,8 @@ const RequestHeaders: React.FC = () => {
   const toggleHeaderEnabled = useAppStateStore((state) => state.toggleHeaderEnabled);
   const getActiveEnvVariableKeys = useAppStateStore((state) => state.getActiveEnvVariableKeys);
   const settingsCommonHeaderNames = useAppStateStore((state) => state.settings.commonHeaderNames);
+  const clipboard = useClipboardAdapter();
+  const notification = useNotificationAdapter();
   
   // Memoize merged header names from default list and user settings, removing duplicates
   const mergedHeaderNames = useMemo(() => {
@@ -107,6 +113,32 @@ const RequestHeaders: React.FC = () => {
     }
   };
 
+  const copyHeaders = async () => {
+    const text = serializeRowsForClipboard(headers);
+    const result = await clipboard.writeText(text);
+    if (!result.isOk) {
+      notification.showNotification('error', result.error);
+    }
+  };
+
+  const pasteHeaders = async () => {
+    const readResult = await clipboard.readText();
+    if (!readResult.isOk) {
+      notification.showNotification('error', readResult.error);
+      return;
+    }
+    const parseResult = parseRequestClipboard(readResult.value);
+    if (!parseResult.isOk) {
+      notification.showNotification('error', parseResult.error);
+      return;
+    }
+    for (const entry of parseResult.value.entries) {
+      upsertHeader(crypto.randomUUID(), entry.key, entry.value);
+    }
+  };
+
+  const copyEnabled = headers.some((h) => !h.disabled && h.key.trim() !== '');
+
   return (
     <div className="space-y-0">
       <div className="overflow-x-auto border border-slate-200 dark:border-slate-700 rounded-t-lg">
@@ -181,7 +213,7 @@ const RequestHeaders: React.FC = () => {
         </Table>
       </div>
       
-      <div className="flex justify-start border border-t-0 border-slate-200 dark:border-slate-700 rounded-b-lg p-3 bg-slate-50 dark:bg-slate-800">
+      <div className="flex items-center justify-between border border-t-0 border-slate-200 dark:border-slate-700 rounded-b-lg p-3 bg-slate-50 dark:bg-slate-800">
         <SecondaryButton
           size="sm"
           onClick={addEmptyHeader}
@@ -189,6 +221,35 @@ const RequestHeaders: React.FC = () => {
           icon={<PlusIcon />}
           text="Add Header"
         />
+        <div className="flex items-center gap-2">
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={copyHeaders}
+                disabled={!copyEnabled}
+                className="h-9 w-9 p-0 flex items-center justify-center"
+              >
+                <CopyIcon size={16} />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent className="px-2 py-1 text-xs">Copy headers</TooltipContent>
+          </Tooltip>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={pasteHeaders}
+                className="h-9 w-9 p-0 flex items-center justify-center"
+              >
+                <ClipboardPasteIcon size={16} />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent className="px-2 py-1 text-xs">Paste headers</TooltipContent>
+          </Tooltip>
+        </div>
       </div>
     </div>
   );

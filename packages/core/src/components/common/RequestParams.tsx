@@ -1,11 +1,15 @@
 import React, { useState, useEffect, JSX } from 'react';
-import { Trash2Icon, PlusIcon } from 'lucide-react';
+import { Trash2Icon, PlusIcon, CopyIcon, ClipboardPasteIcon } from 'lucide-react';
+import { Button } from '../ui/button';
 import { SecondaryButton } from '../ui/SecondaryButton';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
 import { Switch } from '../ui/switch';
-import StyledInput from "../ui/styled-input"
+import StyledInput from "../ui/styled-input";
+import { Tooltip, TooltipTrigger, TooltipContent } from '../ui/tooltip';
 import useAppStateStore from '../../hooks/store/useAppStateStore';
+import { useClipboardAdapter, useNotificationAdapter } from '../../hooks/useAdapter';
 import { renderParameterizedText } from '../../utils/styling';
+import { serializeRowsForClipboard, parseRequestClipboard } from '../../utils/requestClipboard';
 import { ParamRow } from '../../types/collection';
 
 const RequestParams: React.FC = () => {
@@ -16,6 +20,8 @@ const RequestParams: React.FC = () => {
   const removeParam = useAppStateStore((state) => state.removeParam);
   const toggleParamEnabled = useAppStateStore((state) => state.toggleParamEnabled);
   const getActiveEnvVariableKeys = useAppStateStore((state) => state.getActiveEnvVariableKeys);
+  const clipboard = useClipboardAdapter();
+  const notification = useNotificationAdapter();
   
   // Get merged environment variables (global + tab's environment)
   const activeEnvVariables = React.useMemo(() => {
@@ -96,6 +102,32 @@ const RequestParams: React.FC = () => {
     }
   };
 
+  const copyParams = async () => {
+    const text = serializeRowsForClipboard(params);
+    const result = await clipboard.writeText(text);
+    if (!result.isOk) {
+      notification.showNotification('error', result.error);
+    }
+  };
+
+  const pasteParams = async () => {
+    const readResult = await clipboard.readText();
+    if (!readResult.isOk) {
+      notification.showNotification('error', readResult.error);
+      return;
+    }
+    const parseResult = parseRequestClipboard(readResult.value);
+    if (!parseResult.isOk) {
+      notification.showNotification('error', parseResult.error);
+      return;
+    }
+    for (const entry of parseResult.value.entries) {
+      upsertParam(crypto.randomUUID(), entry.key, entry.value);
+    }
+  };
+
+  const copyEnabled = params.some((p) => !p.disabled && p.key.trim() !== '');
+
   return (
     <div className="space-y-0">
       <div className="overflow-x-auto border border-slate-200 dark:border-slate-700 rounded-t-lg">
@@ -169,7 +201,7 @@ const RequestParams: React.FC = () => {
         </Table>
       </div>
       
-      <div className="flex justify-start border border-t-0 border-slate-200 dark:border-slate-700 rounded-b-lg p-3 bg-slate-50 dark:bg-slate-800">
+      <div className="flex items-center justify-between border border-t-0 border-slate-200 dark:border-slate-700 rounded-b-lg p-3 bg-slate-50 dark:bg-slate-800">
         <SecondaryButton
           size="sm"
           onClick={addEmptyParam}
@@ -177,6 +209,35 @@ const RequestParams: React.FC = () => {
           icon={<PlusIcon />}
           text="Add Parameter"
         />
+        <div className="flex items-center gap-2">
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={copyParams}
+                disabled={!copyEnabled}
+                className="h-9 w-9 p-0 flex items-center justify-center"
+              >
+                <CopyIcon size={16} />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent className="px-2 py-1 text-xs">Copy parameters</TooltipContent>
+          </Tooltip>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={pasteParams}
+                className="h-9 w-9 p-0 flex items-center justify-center"
+              >
+                <ClipboardPasteIcon size={16} />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent className="px-2 py-1 text-xs">Paste parameters</TooltipContent>
+          </Tooltip>
+        </div>
       </div>
     </div>
   );

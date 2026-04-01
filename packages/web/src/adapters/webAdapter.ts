@@ -14,6 +14,7 @@ import type {
   ISecretAdapter,
   ISecurityAdapter,
   INotificationAdapter,
+  IClipboardAdapter,
   HttpRequestConfig,
   HttpResponseResult,
   AppSettings,
@@ -1038,6 +1039,33 @@ class WebNotificationAdapter implements INotificationAdapter {
 }
 
 /**
+ * Clipboard adapter using the browser Clipboard API.
+ */
+class WebClipboardAdapter implements IClipboardAdapter {
+  async readText(): Promise<Result<string, string>> {
+    try {
+      const text = await navigator.clipboard.readText();
+      return ok(text);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      console.error('[WebClipboardAdapter] readText failed:', message);
+      return err(`Failed to read clipboard: ${message}`);
+    }
+  }
+
+  async writeText(value: string): Promise<Result<void, string>> {
+    try {
+      await navigator.clipboard.writeText(value);
+      return ok(undefined);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      console.error('[WebClipboardAdapter] writeText failed:', message);
+      return err(`Failed to write clipboard: ${message}`);
+    }
+  }
+}
+
+/**
  * Create the web adapter with server communication
  */
 export function createWebAdapter(): IPlatformAdapter {
@@ -1052,6 +1080,7 @@ export function createWebAdapter(): IPlatformAdapter {
     security: new WebSecurityAdapter(),
     notification: new WebNotificationAdapter(),
     arena: createWebArenaAdapter(events),
+    clipboard: new WebClipboardAdapter(),
     events,
     platform: 'web',
 

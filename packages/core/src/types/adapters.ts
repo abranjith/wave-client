@@ -513,6 +513,34 @@ export interface IArenaAdapter {
 }
 
 // ============================================================================
+// Clipboard Adapter
+// ============================================================================
+
+/**
+ * Platform clipboard adapter for reading and writing clipboard text.
+ *
+ * Implementations use platform-appropriate APIs:
+ * - Web: browser `navigator.clipboard`
+ * - VS Code: `vscode.env.clipboard` via the extension host bridge
+ *
+ * All methods return `Result` so callers can handle failures without try/catch.
+ */
+export interface IClipboardAdapter {
+    /**
+     * Read plain text from the platform clipboard.
+     * Returns an error result if the clipboard cannot be read (e.g., permission
+     * denied or focus requirements not met in the current environment).
+     */
+    readText(): Promise<Result<string, string>>;
+
+    /**
+     * Write plain text to the platform clipboard.
+     * Returns an error result if the write fails.
+     */
+    writeText(value: string): Promise<Result<void, string>>;
+}
+
+// ============================================================================
 // Combined Platform Adapter Interface
 // ============================================================================
 
@@ -528,6 +556,9 @@ export interface IPlatformAdapter {
     security: ISecurityAdapter;
     notification: INotificationAdapter;
     arena: IArenaAdapter;
+
+    /** Platform clipboard adapter — routes read/write through the active platform. */
+    clipboard: IClipboardAdapter;
 
     /**
      * Event emitter for push notifications from the platform.

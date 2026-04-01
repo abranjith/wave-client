@@ -5,6 +5,7 @@ import { Textarea } from '../ui/textarea';
 import { Tooltip, TooltipTrigger, TooltipContent } from '../ui/tooltip';
 import { CopyIcon, ClipboardPasteIcon, InfoIcon, FileTextIcon } from 'lucide-react';
 import useAppStateStore from '../../hooks/store/useAppStateStore';
+import { useClipboardAdapter, useNotificationAdapter } from '../../hooks/useAdapter';
 import { RawBodyLanguage } from '../../types/collection';
 import { renderParameterizedText } from '../../utils/styling'; 
 
@@ -110,6 +111,8 @@ const TextBody: React.FC<TextBodyProps> = ({ dropdownElement }) => {
   const activeTab = useAppStateStore((state) => state.getActiveTab());
   const updateBody = useAppStateStore((state) => state.updateRawBody);
   const body = activeTab?.body;
+  const clipboard = useClipboardAdapter();
+  const notification = useNotificationAdapter();
   const [showExamples, setShowExamples] = useState(false);
   
   // Get raw content from the new body structure
@@ -224,26 +227,26 @@ const TextBody: React.FC<TextBodyProps> = ({ dropdownElement }) => {
   };
 
   const copyToClipboard = async () => {
-    try {
-      await navigator.clipboard.writeText(rawContent);
-    } catch (err) {
-      console.error('Failed to copy:', err);
+    const result = await clipboard.writeText(rawContent);
+    if (!result.isOk) {
+      notification.showNotification('error', result.error);
     }
   };
 
   const pasteFromClipboard = async () => {
-    try {
-      const text = await navigator.clipboard.readText();
-      const detectedType = getBodyType(text);
-      setBodyContent(text);
-      setBodyTypeInfo(getTypeInfo(detectedType));
-      const language = detectedType !== 'unknown' && detectedType !== 'text' 
-        ? detectedType as RawBodyLanguage
-        : undefined;
-      updateBody(text, language);
-    } catch (err) {
-      console.error('Failed to paste:', err);
+    const readResult = await clipboard.readText();
+    if (!readResult.isOk) {
+      notification.showNotification('error', readResult.error);
+      return;
     }
+    const text = readResult.value;
+    const detectedType = getBodyType(text);
+    setBodyContent(text);
+    setBodyTypeInfo(getTypeInfo(detectedType));
+    const language = detectedType !== 'unknown' && detectedType !== 'text'
+      ? detectedType as RawBodyLanguage
+      : undefined;
+    updateBody(text, language);
   };
 
   const loadExample = (type: string) => {

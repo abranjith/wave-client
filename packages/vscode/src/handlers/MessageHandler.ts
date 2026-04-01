@@ -289,6 +289,13 @@ export class MessageHandler {
                 // (like arena.loadMessages) responsive while a chat stream is active.
                 void this.handleArenaStreamMessage(message as ArenaStreamMessageMsg);
                 break;
+            // Clipboard handlers
+            case 'clipboard.readText':
+                await this.handleClipboardReadText(message);
+                break;
+            case 'clipboard.writeText':
+                await this.handleClipboardWriteText(message);
+                break;
             default:
                 if (message.type) {
                     console.debug('[MessageHandler] unhandled message type:', message.type);
@@ -1848,6 +1855,28 @@ export class MessageHandler {
             this.arenaAbortControllers.delete(message.streamId);
         }
         // Fire-and-forget: no response
+    }
+
+    // ==================== Clipboard Handlers ====================
+
+    private async handleClipboardReadText(message: any): Promise<void> {
+        const requestId = message.requestId;
+        try {
+            const text = await vscode.env.clipboard.readText();
+            this.postMessage({ type: 'clipboard.readTextResponse', requestId, data: text });
+        } catch (error: any) {
+            this.postMessage({ type: 'clipboard.readTextResponse', requestId, error: error.message });
+        }
+    }
+
+    private async handleClipboardWriteText(message: any): Promise<void> {
+        const requestId = message.requestId;
+        try {
+            await vscode.env.clipboard.writeText(message.data?.value ?? '');
+            this.postMessage({ type: 'clipboard.writeTextResponse', requestId, data: undefined });
+        } catch (error: any) {
+            this.postMessage({ type: 'clipboard.writeTextResponse', requestId, error: error.message });
+        }
     }
 
     // ==================== Helper Methods ====================

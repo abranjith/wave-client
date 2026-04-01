@@ -182,6 +182,15 @@ export function useArenaAdapter() {
 }
 
 /**
+ * Hook to access the platform clipboard adapter.
+ * All clipboard operations must go through this hook — never call
+ * `navigator.clipboard` directly from core components.
+ */
+export function useClipboardAdapter() {
+    return useAdapter().clipboard;
+}
+
+/**
  * Hook to get the current platform.
  */
 export function usePlatform() {

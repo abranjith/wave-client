@@ -7,7 +7,9 @@ import { Switch } from '../ui/switch';
 import StyledInput from "../ui/styled-input";
 import { Tooltip, TooltipTrigger, TooltipContent } from '../ui/tooltip';
 import useAppStateStore from '../../hooks/store/useAppStateStore';
+import { useClipboardAdapter, useNotificationAdapter } from '../../hooks/useAdapter';
 import { renderParameterizedText } from '../../utils/styling';
+import { serializeRowsForClipboard, parseRequestClipboard } from '../../utils/requestClipboard';
 import { FormField } from '../../types/collection';
 
 interface FormBodyProps {
@@ -20,6 +22,8 @@ const FormBody: React.FC<FormBodyProps> = ({ dropdownElement }) => {
   const toggleFormFieldEnabled = useAppStateStore((state) => state.toggleFormFieldEnabled);
   const body = activeTab?.body;
   const getActiveEnvVariableKeys = useAppStateStore((state) => state.getActiveEnvVariableKeys);
+  const clipboard = useClipboardAdapter();
+  const notification = useNotificationAdapter();
   
   // Get merged environment variables (global + tab's environment)
   const activeEnvVariables = useMemo(() => {
@@ -140,38 +144,35 @@ const FormBody: React.FC<FormBodyProps> = ({ dropdownElement }) => {
   };
 
   const copyFormData = async () => {
-    const data = formFields
-      .filter((field: FormField) => field.key.trim() && field.value?.trim())
-      .map((field: FormField) => `${field.key}=${field.value}`)
-      .join('&');
-    
-    try {
-      await navigator.clipboard.writeText(data);
-    } catch (err) {
-      console.error('Failed to copy:', err);
+    const text = serializeRowsForClipboard(formFields);
+    const result = await clipboard.writeText(text);
+    if (!result.isOk) {
+      notification.showNotification('error', result.error);
     }
   };
 
   const pasteFormData = async () => {
-    try {
-      const text = await navigator.clipboard.readText();
-      // Parse URL-encoded form data
-      const pairs = text.split('&').map(pair => {
-        const [key, value] = pair.split('=');
-        return {
-          id: crypto.randomUUID(),
-          key: decodeURIComponent(key || ''),
-          value: decodeURIComponent(value || ''),
-          disabled: false
-        };
-      }).filter(pair => pair.key);
-
-      if (pairs.length > 0) {
-        updateBody([...pairs, { id: crypto.randomUUID(), key: '', value: '', disabled: false }]);
-      }
-    } catch (err) {
-      console.error('Failed to paste:', err);
+    const readResult = await clipboard.readText();
+    if (!readResult.isOk) {
+      notification.showNotification('error', readResult.error);
+      return;
     }
+    const parseResult = parseRequestClipboard(readResult.value);
+    if (!parseResult.isOk) {
+      notification.showNotification('error', parseResult.error);
+      return;
+    }
+    // Append parsed rows after existing non-empty rows
+    const existingNonEmpty = formFields.filter(
+      (f: FormField) => f.key.trim() || f.value?.trim()
+    );
+    const newRows = parseResult.value.entries.map((entry) => ({
+      id: crypto.randomUUID(),
+      key: entry.key,
+      value: entry.value,
+      disabled: false,
+    }));
+    updateBody([...existingNonEmpty, ...newRows, { id: crypto.randomUUID(), key: '', value: '', disabled: false }]);
   };
 
   const hasData = formFields.some((field: FormField) => field.key.trim() || field.value?.trim());

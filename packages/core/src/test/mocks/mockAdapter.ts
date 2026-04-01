@@ -33,6 +33,7 @@ import {
     type ISecurityAdapter,
     type INotificationAdapter,
     type IArenaAdapter,
+    type IClipboardAdapter,
     type IAdapterEvents,
     type HttpRequestConfig,
     type HttpResponseResult,
@@ -733,6 +734,56 @@ function createMockArenaAdapter(store: MockDataStore): IArenaAdapter {
 }
 
 // ============================================================================
+// Mock Clipboard Adapter
+// ============================================================================
+
+export interface MockClipboardOptions {
+    /**
+     * Initial clipboard text (read by readText). Defaults to empty string.
+     */
+    initialText?: string;
+    /**
+     * If true, readText and writeText will return error results.
+     * Useful for testing failure-handling paths.
+     */
+    failOnRead?: boolean;
+    failOnWrite?: boolean;
+}
+
+/**
+ * Creates a mock clipboard adapter backed by a simple in-memory string.
+ * Exposes `getText()` and `setText()` helpers for test assertions.
+ */
+function createMockClipboardAdapter(options: MockClipboardOptions = {}): IClipboardAdapter & {
+    getText(): string;
+    setText(value: string): void;
+} {
+    let text = options.initialText ?? '';
+
+    return {
+        async readText() {
+            if (options.failOnRead) {
+                return err('Mock clipboard read failure');
+            }
+            return ok(text);
+        },
+        async writeText(value) {
+            if (options.failOnWrite) {
+                return err('Mock clipboard write failure');
+            }
+            text = value;
+            return ok(undefined);
+        },
+        getText() {
+            return text;
+        },
+        setText(value: string) {
+            text = value;
+        },
+    };
+}
+
+// ============================================================================
 // Mock Notification Adapter
 // ============================================================================
 
@@ -782,6 +833,10 @@ export interface CreateMockAdapterOptions {
      * Notification log (for assertions in tests)
      */
     notificationLog?: MockNotificationLog[];
+    /**
+     * Clipboard options for controlling read/write behavior in tests
+     */
+    clipboard?: MockClipboardOptions;
 }
 
 /**
@@ -792,6 +847,7 @@ export function createMockAdapter(options: CreateMockAdapterOptions = {}): {
     adapter: IPlatformAdapter;
     store: MockDataStore;
     notificationLog: MockNotificationLog[];
+    clipboard: ReturnType<typeof createMockClipboardAdapter>;
 } {
     const store: MockDataStore = {
         ...createDefaultMockStore(),
@@ -801,6 +857,7 @@ export function createMockAdapter(options: CreateMockAdapterOptions = {}): {
     };
 
     const notificationLog = options.notificationLog ?? [];
+    const clipboard = createMockClipboardAdapter(options.clipboard);
 
     const adapter: IPlatformAdapter = {
         platform: 'test',
@@ -812,9 +869,10 @@ export function createMockAdapter(options: CreateMockAdapterOptions = {}): {
         notification: createMockNotificationAdapter(notificationLog),
         arena: createMockArenaAdapter(store),
         events: createAdapterEventEmitter(),
+        clipboard,
     };
 
-    return { adapter, store, notificationLog };
+    return { adapter, store, notificationLog, clipboard };
 }
 
 // ============================================================================
