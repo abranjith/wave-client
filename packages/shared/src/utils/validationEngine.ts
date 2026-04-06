@@ -3,6 +3,8 @@
  * Evaluates validation rules against HTTP responses.
  */
 
+import { JSONPath } from 'jsonpath-plus';
+import Ajv from 'ajv';
 import type {
     ValidationRule,
     ValidationResult,
@@ -15,6 +17,10 @@ import type {
     GlobalValidationRule,
     ResponseData
 } from '../types';
+
+// Module-level Ajv instance — instantiated once and reused for performance.
+// allErrors: true collects all validation errors, not just the first.
+const ajv = new Ajv({ allErrors: true });
 
 // Type guards for validation rules
 function isStatusRule(rule: ValidationRule): rule is StatusValidationRule {
@@ -365,49 +371,64 @@ function evaluateHeaderRule(
 }
 
 /**
- * Evaluates JSON path expression against response body
+ * Evaluates a JSONPath expression against a JSON response body.
+ * Uses jsonpath-plus for full JSONPath spec support including recursive
+ * descent, wildcards, filter expressions, and array slicing.
+ *
+ * Security: eval is set to false to block script injection via crafted
+ * JSONPath filter expressions (equivalent to `preventEval: true` in older versions).
+ *
+ * When multiple results are returned (e.g., wildcards), the first result
+ * is used for scalar comparisons (json_path_equals, json_path_contains).
+ *
+ * @param body - The raw response body string (must be valid JSON)
+ * @param jsonPath - The JSONPath expression (e.g., "$.data.users[0].id")
+ * @returns Object with found flag, matched value(s), and optional error
  */
-//TODO use something like jsonpath-plus for more robust JSON path support
-function evaluateJsonPath(body: string, jsonPath: string): { value: any; found: boolean; error?: string } {
+function evaluateJsonPath(body: string, jsonPath: string): { value: unknown; found: boolean; error?: string } {
     try {
-        const json = JSON.parse(body);
-        
-        // Simple JSON path implementation supporting dot notation and array access
-        // e.g., "$.data.items[0].name" or "data.id"
-        let path = jsonPath.startsWith('$.') ? jsonPath.slice(2) : jsonPath;
-        path = path.startsWith('.') ? path.slice(1) : path;
-        
-        const parts = path.split(/\.|\[|\]/).filter(p => p !== '');
-        let current: any = json;
-        
-        for (const part of parts) {
-            if (current === undefined || current === null) {
-                return { value: undefined, found: false };
-            }
-            current = current[part];
-        }
-        
-        return { value: current, found: current !== undefined };
-    } catch (error: any) {
-        return { value: undefined, found: false, error: error.message };
+        const json: unknown = JSON.parse(body);
+        const results = JSONPath({ path: jsonPath, json: json as object, eval: false });
+        const found = Array.isArray(results) && results.length > 0;
+        // Return the first result for scalar comparisons; full array is available via results
+        return { value: found ? results[0] : undefined, found };
+    } catch (error: unknown) {
+        const message = error instanceof Error ? error.message : String(error);
+        return { value: undefined, found: false, error: message };
     }
 }
 
 /**
- * Validates JSON against a JSON schema (basic implementation)
+ * Validates a JSON response body against a JSON Schema string.
+ * Uses ajv for full JSON Schema validation (draft-07 compatible by default).
+ *
+ * The allErrors flag on the module-level ajv instance collects all validation
+ * errors rather than stopping at the first, providing richer error messages.
+ *
+ * @param body - Raw JSON response body string
+ * @param schema - JSON Schema as a string (will be parsed internally)
+ * @returns Object with `valid` flag and `error` message if validation fails
  */
-//TODO need a full JSON Schema validator like Ajv for complete support. Also what input should we support?
 function validateJsonSchema(body: string, schema: string): { valid: boolean; error?: string } {
     try {
-        JSON.parse(body); // Validate body is JSON
-        JSON.parse(schema); // Validate schema is JSON
-        
-        // Note: Full JSON Schema validation would require a library like Ajv
-        // For now, we just validate that both are valid JSON
-        // TODO: Implement full JSON Schema validation with Ajv
+        const parsedBody: unknown = JSON.parse(body);
+        const parsedSchema: unknown = JSON.parse(schema);
+
+        const validate = ajv.compile(parsedSchema as object);
+        const valid = validate(parsedBody) as boolean;
+
+        if (!valid && validate.errors) {
+            // Collect all errors into a readable summary
+            const errorMessages = validate.errors
+                .map(e => `${e.instancePath || '(root)'} ${e.message}`)
+                .join('; ');
+            return { valid: false, error: errorMessages };
+        }
+
         return { valid: true };
-    } catch (error: any) {
-        return { valid: false, error: error.message };
+    } catch (error: unknown) {
+        const message = error instanceof Error ? error.message : String(error);
+        return { valid: false, error: message };
     }
 }
 
@@ -699,6 +720,48 @@ export function executeValidation(
         results,
         executedAt: new Date().toISOString()
     };
+}
+
+/**
+ * Validates whether a string is a well-formed JSON Schema.
+ * Intended for UI-side pre-validation — call this before saving a rule
+ * to give the user immediate feedback if their schema is malformed.
+ *
+ * Checks two things:
+ *   1. The string is valid JSON (parses without error).
+ *   2. The parsed JSON is a valid JSON Schema (ajv can compile it).
+ *
+ * Note: An empty string is treated as invalid.
+ *
+ * @param schemaString - The user-provided JSON Schema string to validate
+ * @returns Object with `valid` flag and `errors` array of human-readable messages
+ *
+ * @example
+ * validateJsonSchemaString('{"type": "object"}') // { valid: true }
+ * validateJsonSchemaString('not json')            // { valid: false, errors: ['Invalid JSON: ...'] }
+ * validateJsonSchemaString('{"type": "bad"}')     // { valid: false, errors: ['Invalid JSON Schema: ...'] }
+ */
+export function validateJsonSchemaString(schemaString: string): { valid: boolean; errors?: string[] } {
+    if (!schemaString || !schemaString.trim()) {
+        return { valid: false, errors: ['Schema cannot be empty'] };
+    }
+
+    let parsedSchema: unknown;
+    try {
+        parsedSchema = JSON.parse(schemaString);
+    } catch (error: unknown) {
+        const message = error instanceof Error ? error.message : String(error);
+        return { valid: false, errors: [`Invalid JSON: ${message}`] };
+    }
+
+    try {
+        // Attempt to compile the schema — ajv will throw if the schema itself is invalid
+        ajv.compile(parsedSchema as object);
+        return { valid: true };
+    } catch (error: unknown) {
+        const message = error instanceof Error ? error.message : String(error);
+        return { valid: false, errors: [`Invalid JSON Schema: ${message}`] };
+    }
 }
 
 /**

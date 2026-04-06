@@ -11,8 +11,8 @@ export * from './types';
 // Export all services
 export * from './services/index';
 
-// Export validation engine utilities
-export { executeValidation, createGlobalRulesMap, createEnvVarsMap } from './utils/validationEngine';
+// Export validation engine utilities (including UI pre-validation helper)
+export { executeValidation, createGlobalRulesMap, createEnvVarsMap, validateJsonSchemaString } from './utils/validationEngine';
 
 // ---------------------------------------------------------------------------
 // Arena types and constants re-exported from @wave-client/core so that the

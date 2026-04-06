@@ -2,8 +2,6 @@ import React, { useState, useMemo } from 'react';
 import { Trash2Icon, PlusIcon, PencilIcon, LinkIcon, UnlinkIcon, XIcon, SaveIcon, CheckIcon } from 'lucide-react';
 import { PrimaryButton } from '../ui/PrimaryButton';
 import { SecondaryButton } from '../ui/SecondaryButton';
-import { Input } from '../ui/input';
-import { Label } from '../ui/label';
 import { Switch } from '../ui/switch';
 import {
     Dialog,
@@ -14,13 +12,6 @@ import {
     DialogHeader,
     DialogTitle,
 } from '../ui/dialog';
-import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
-} from '../ui/select';
 import {
     Table,
     TableBody,
@@ -35,12 +26,6 @@ import {
     ValidationRule, 
     ValidationRuleRef, 
     ValidationRuleCategory,
-    NumericOperator,
-    StatusOperator,
-    StringOperator,
-    ExistenceOperator,
-    BodyOperator,
-    GlobalValidationRule,
     createEmptyStatusRule,
     createEmptyHeaderRule,
     createEmptyBodyRule,
@@ -50,6 +35,7 @@ import {
     isBodyRule,
     isTimeRule
 } from '../../types/validation';
+import { ValidationRuleEditor, BODY_OPERATORS } from './ValidationRuleEditor';
 
 // Helper function to generate a simple ID
 const generateId = () => `rule_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
@@ -61,84 +47,6 @@ const CATEGORY_LABELS: Record<ValidationRuleCategory, string> = {
     body: 'Body',
     time: 'Response Time'
 };
-
-// Status operator labels (includes numeric + status-specific)
-const STATUS_OPERATOR_LABELS: Record<StatusOperator, string> = {
-    equals: 'Equals',
-    not_equals: 'Not Equals',
-    greater_than: 'Greater Than',
-    greater_than_or_equal: 'Greater Than or Equal',
-    less_than: 'Less Than',
-    less_than_or_equal: 'Less Than or Equal',
-    between: 'Between',
-    in: 'In',
-    not_in: 'Not In',
-    is_success: 'Is Success (2xx)',
-    is_not_success: 'Is Not Success'
-};
-
-// Numeric operator labels
-const NUMERIC_OPERATOR_LABELS: Record<NumericOperator, string> = {
-    equals: 'Equals',
-    not_equals: 'Not Equals',
-    greater_than: 'Greater Than',
-    greater_than_or_equal: 'Greater Than or Equal',
-    less_than: 'Less Than',
-    less_than_or_equal: 'Less Than or Equal',
-    between: 'Between',
-    in: 'In',
-    not_in: 'Not In'
-};
-
-// String operator labels
-const STRING_OPERATOR_LABELS: Record<StringOperator, string> = {
-    equals: 'Equals',
-    not_equals: 'Not Equals',
-    contains: 'Contains',
-    not_contains: 'Does Not Contain',
-    starts_with: 'Starts With',
-    ends_with: 'Ends With',
-    matches_regex: 'Matches Regex',
-    in: 'In',
-    not_in: 'Not In'
-};
-
-// Existence operator labels
-const EXISTENCE_OPERATOR_LABELS: Record<ExistenceOperator, string> = {
-    exists: 'Exists',
-    not_exists: 'Does Not Exist'
-};
-
-// Body operator labels (includes string operators + body-specific)
-const BODY_OPERATOR_LABELS: Record<BodyOperator, string> = {
-    ...STRING_OPERATOR_LABELS,
-    is_json: 'Is Valid JSON',
-    is_xml: 'Is Valid XML',
-    is_html: 'Is Valid HTML',
-    json_path_equals: 'JSON Path Equals',
-    json_path_contains: 'JSON Path Contains',
-    json_path_exists: 'JSON Path Exists',
-    json_schema_matches: 'Matches JSON Schema'
-};
-
-// Get operator options for a category
-function getOperatorsForCategory(category: ValidationRuleCategory): { value: string; label: string }[] {
-    switch (category) {
-        case 'status':
-            return Object.entries(STATUS_OPERATOR_LABELS).map(([value, label]) => ({ value, label }));
-        case 'time':
-            return Object.entries(NUMERIC_OPERATOR_LABELS).map(([value, label]) => ({ value, label }));
-        case 'header':
-            return [
-                ...Object.entries(EXISTENCE_OPERATOR_LABELS).map(([value, label]) => ({ value, label })),
-                ...Object.entries(STRING_OPERATOR_LABELS).map(([value, label]) => ({ value, label }))
-            ];
-        case 'body':
-            return Object.entries(BODY_OPERATOR_LABELS).map(([value, label]) => ({ value, label }));
-        default:
-            return [];
-    }
-}
 
 // Create empty rule for a category
 function createEmptyRule(category: ValidationRuleCategory): ValidationRule {
@@ -179,7 +87,8 @@ function getRuleDescription(rule: ValidationRule): string {
     
     if (isBodyRule(rule)) {
         if (['is_json', 'is_xml', 'is_html'].includes(rule.operator)) {
-            return `Body ${BODY_OPERATOR_LABELS[rule.operator as BodyOperator]}`;
+            const opLabel = BODY_OPERATORS.find(op => op.value === rule.operator)?.label ?? rule.operator.replace(/_/g, ' ');
+            return `Body ${opLabel}`;
         }
         if (rule.operator.startsWith('json_path_')) {
             return `JSON path '${rule.jsonPath ?? '?'}' ${rule.operator.replace('json_path_', '').replace(/_/g, ' ')} '${rule.value ?? ''}'`;
@@ -206,220 +115,39 @@ interface RuleEditorDialogProps {
 }
 
 /**
- * Dialog for editing a validation rule
+ * Dialog for editing a validation rule.
+ * All form field rendering is delegated to `ValidationRuleEditor`.
  */
 const RuleEditorDialog: React.FC<RuleEditorDialogProps> = ({ rule, isOpen, onClose, onSave, title }) => {
     const [editedRule, setEditedRule] = useState<ValidationRule | null>(rule);
-    
+
     React.useEffect(() => {
         setEditedRule(rule);
     }, [rule]);
-    
+
     if (!editedRule) return null;
-    
-    const handleCategoryChange = (category: ValidationRuleCategory) => {
-        const newRule = createEmptyRule(category);
-        newRule.id = editedRule.id;
-        newRule.name = editedRule.name;
-        newRule.description = editedRule.description;
-        newRule.enabled = editedRule.enabled;
-        setEditedRule(newRule);
-    };
-    
+
     const handleSave = () => {
         if (editedRule) {
             onSave(editedRule);
         }
         onClose();
     };
-    
-    const operators = getOperatorsForCategory(editedRule.category);
-    const needsValue = !['exists', 'not_exists', 'is_json', 'is_xml', 'is_html'].includes(
-        isHeaderRule(editedRule) || isBodyRule(editedRule) ? editedRule.operator : ''
-    );
-    const needsValue2 = (isStatusRule(editedRule) || isTimeRule(editedRule)) && editedRule.operator === 'between';
-    const needsHeaderName = isHeaderRule(editedRule);
-    const needsJsonPath = isBodyRule(editedRule) && editedRule.operator.startsWith('json_path_');
-    const needsValues = (isStatusRule(editedRule) || isHeaderRule(editedRule)) && 
-        ['in', 'not_in'].includes(editedRule.operator);
-    
+
     return (
         <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-            <DialogContent className="sm:max-w-lg">
+            <DialogContent className="sm:max-w-lg max-h-[85vh] overflow-y-auto">
                 <DialogHeader>
                     <DialogTitle className="text-lg font-semibold text-slate-800 dark:text-slate-200">{title}</DialogTitle>
                     <DialogDescription>
                         Configure the validation rule settings.
                     </DialogDescription>
                 </DialogHeader>
-                
-                <div className="grid gap-4 py-4">
-                    {/* Rule Name */}
-                    <div className="grid gap-2">
-                        <Label htmlFor="ruleName">Rule Name</Label>
-                        <Input
-                            id="ruleName"
-                            value={editedRule.name}
-                            onChange={(e) => setEditedRule({ ...editedRule, name: e.target.value })}
-                            placeholder="Enter rule name"
-                        />
-                    </div>
-                    
-                    {/* Description */}
-                    <div className="grid gap-2">
-                        <Label htmlFor="ruleDescription">Description (optional)</Label>
-                        <Input
-                            id="ruleDescription"
-                            value={editedRule.description || ''}
-                            onChange={(e) => setEditedRule({ ...editedRule, description: e.target.value })}
-                            placeholder="Enter description"
-                        />
-                    </div>
-                    
-                    {/* Category */}
-                    <div className="grid gap-2">
-                        <Label htmlFor="ruleCategory">Category</Label>
-                        <Select 
-                            value={editedRule.category} 
-                            onValueChange={(value) => handleCategoryChange(value as ValidationRuleCategory)}
-                        >
-                            <SelectTrigger id="ruleCategory">
-                                <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                                {Object.entries(CATEGORY_LABELS).map(([value, label]) => (
-                                    <SelectItem key={value} value={value}>{label}</SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
-                    </div>
-                    
-                    {/* Header Name (for header rules) */}
-                    {needsHeaderName && (
-                        <div className="grid gap-2">
-                            <Label htmlFor="headerName">Header Name</Label>
-                            <Input
-                                id="headerName"
-                                value={(editedRule as any).headerName || ''}
-                                onChange={(e) => setEditedRule({ ...editedRule, headerName: e.target.value } as any)}
-                                placeholder="e.g., Content-Type"
-                            />
-                        </div>
-                    )}
-                    
-                    {/* Operator */}
-                    <div className="grid gap-2">
-                        <Label htmlFor="ruleOperator">Operator</Label>
-                        <Select 
-                            value={editedRule.operator} 
-                            onValueChange={(value) => setEditedRule({ ...editedRule, operator: value } as any)}
-                        >
-                            <SelectTrigger id="ruleOperator">
-                                <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                                {operators.map(({ value, label }) => (
-                                    <SelectItem key={value} value={value}>{label}</SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
-                    </div>
-                    
-                    {/* JSON Path (for body rules with json_path operators) */}
-                    {needsJsonPath && (
-                        <div className="grid gap-2">
-                            <Label htmlFor="jsonPath">JSON Path</Label>
-                            <Input
-                                id="jsonPath"
-                                value={(editedRule as any).jsonPath || ''}
-                                onChange={(e) => setEditedRule({ ...editedRule, jsonPath: e.target.value } as any)}
-                                placeholder="e.g., $.data.id"
-                            />
-                        </div>
-                    )}
-                    
-                    {/* Value */}
-                    {needsValue && !needsValues && (
-                        <div className="grid gap-2">
-                            <Label htmlFor="ruleValue">
-                                {isStatusRule(editedRule) || isTimeRule(editedRule) ? 'Value' : 'Expected Value'}
-                                {isTimeRule(editedRule) && ' (ms)'}
-                            </Label>
-                            <Input
-                                id="ruleValue"
-                                type={isStatusRule(editedRule) || isTimeRule(editedRule) ? 'number' : 'text'}
-                                value={(editedRule as any).value ?? ''}
-                                onChange={(e) => {
-                                    const val = isStatusRule(editedRule) || isTimeRule(editedRule) 
-                                        ? parseInt(e.target.value) || 0 
-                                        : e.target.value;
-                                    setEditedRule({ ...editedRule, value: val } as any);
-                                }}
-                                placeholder={isTimeRule(editedRule) ? 'e.g., 1000' : 'Enter expected value'}
-                            />
-                        </div>
-                    )}
-                    
-                    {/* Value2 (for between operator) */}
-                    {needsValue2 && (
-                        <div className="grid gap-2">
-                            <Label htmlFor="ruleValue2">
-                                End Value{isTimeRule(editedRule) && ' (ms)'}
-                            </Label>
-                            <Input
-                                id="ruleValue2"
-                                type="number"
-                                value={(editedRule as any).value2 ?? ''}
-                                onChange={(e) => setEditedRule({ ...editedRule, value2: parseInt(e.target.value) || 0 } as any)}
-                                placeholder="Enter end value"
-                            />
-                        </div>
-                    )}
-                    
-                    {/* Values (for in/not_in operators) */}
-                    {needsValues && (
-                        <div className="grid gap-2">
-                            <Label htmlFor="ruleValues">
-                                Values (comma-separated)
-                            </Label>
-                            <Input
-                                id="ruleValues"
-                                value={(editedRule as any).values?.join(', ') || ''}
-                                onChange={(e) => {
-                                    const vals = e.target.value.split(',').map(v => {
-                                        const trimmed = v.trim();
-                                        return isStatusRule(editedRule) ? parseInt(trimmed) || 0 : trimmed;
-                                    });
-                                    setEditedRule({ ...editedRule, values: vals } as any);
-                                }}
-                                placeholder={isStatusRule(editedRule) ? 'e.g., 200, 201, 204' : 'e.g., value1, value2'}
-                            />
-                        </div>
-                    )}
-                    
-                    {/* Case Sensitive (for header and body rules) */}
-                    {(isHeaderRule(editedRule) || isBodyRule(editedRule)) && needsValue && (
-                        <div className="flex items-center gap-2">
-                            <Switch
-                                id="caseSensitive"
-                                checked={(editedRule as any).caseSensitive ?? false}
-                                onCheckedChange={(checked: boolean) => setEditedRule({ ...editedRule, caseSensitive: checked } as any)}
-                            />
-                            <Label htmlFor="caseSensitive">Case Sensitive</Label>
-                        </div>
-                    )}
-                    
-                    {/* Enabled */}
-                    <div className="flex items-center gap-2">
-                        <Switch
-                            id="ruleEnabled"
-                            checked={editedRule.enabled}
-                            onCheckedChange={(checked: boolean) => setEditedRule({ ...editedRule, enabled: checked })}
-                        />
-                        <Label htmlFor="ruleEnabled">Enabled</Label>
-                    </div>
+
+                <div className="py-4">
+                    <ValidationRuleEditor rule={editedRule} onChange={setEditedRule} />
                 </div>
-                
+
                 <DialogFooter>
                     <DialogClose asChild>
                         <SecondaryButton
@@ -846,5 +574,7 @@ const RequestValidation: React.FC = () => {
             </Dialog>        </div>
     );
 };
+
+export { RuleEditorDialog };
 
 export default RequestValidation;

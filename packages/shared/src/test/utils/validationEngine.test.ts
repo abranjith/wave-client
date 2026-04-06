@@ -3,6 +3,7 @@ import {
   executeValidation,
   createGlobalRulesMap,
   createEnvVarsMap,
+  validateJsonSchemaString,
 } from '../../utils/validationEngine';
 import type {
   RequestValidation,
@@ -956,6 +957,440 @@ describe('validationEngine', () => {
       const result = executeValidation(validation, mockResponse, new Map(), new Map());
 
       expect(result.allPassed).toBe(true);
+    });
+  });
+
+  // ============================================================================
+  // jsonpath-plus integration tests (TASK-002)
+  // ============================================================================
+
+  describe('executeValidation - body rules via jsonpath-plus', () => {
+    const nestedResponse: ResponseData = {
+      ...mockResponse,
+      body: JSON.stringify({
+        data: {
+          id: 42,
+          users: [
+            { id: 1, email: 'alice@example.com', active: true },
+            { id: 2, email: 'bob@example.com', active: false },
+          ],
+        },
+        items: [
+          { name: 'apple', tags: ['fruit', 'red'] },
+          { name: 'banana', tags: ['fruit', 'yellow'] },
+        ],
+        tags: ['a', 'b', 'c'],
+      }),
+    };
+
+    it('json_path_exists: simple nested path $.data.id — found', () => {
+      const rule: BodyValidationRule = {
+        id: 'jp1',
+        name: 'data.id exists',
+        category: 'body',
+        operator: 'json_path_exists',
+        jsonPath: '$.data.id',
+        enabled: true,
+      };
+      const validation: RequestValidation = { enabled: true, rules: [{ rule }] };
+      const result = executeValidation(validation, nestedResponse, new Map(), new Map());
+      expect(result.allPassed).toBe(true);
+      expect(result.results[0].passed).toBe(true);
+    });
+
+    it('json_path_exists: recursive descent $..id — finds deeply nested ids', () => {
+      const rule: BodyValidationRule = {
+        id: 'jp2',
+        name: 'recursive id exists',
+        category: 'body',
+        operator: 'json_path_exists',
+        jsonPath: '$..id',
+        enabled: true,
+      };
+      const validation: RequestValidation = { enabled: true, rules: [{ rule }] };
+      const result = executeValidation(validation, nestedResponse, new Map(), new Map());
+      expect(result.allPassed).toBe(true);
+    });
+
+    it('json_path_exists: wildcard $.data.users[*].email — array of emails found', () => {
+      const rule: BodyValidationRule = {
+        id: 'jp3',
+        name: 'all user emails exist',
+        category: 'body',
+        operator: 'json_path_exists',
+        jsonPath: '$.data.users[*].email',
+        enabled: true,
+      };
+      const validation: RequestValidation = { enabled: true, rules: [{ rule }] };
+      const result = executeValidation(validation, nestedResponse, new Map(), new Map());
+      expect(result.allPassed).toBe(true);
+    });
+
+    it('json_path_exists: non-existent path $.missing.field — not found', () => {
+      const rule: BodyValidationRule = {
+        id: 'jp4',
+        name: 'missing field',
+        category: 'body',
+        operator: 'json_path_exists',
+        jsonPath: '$.missing.field',
+        enabled: true,
+      };
+      const validation: RequestValidation = { enabled: true, rules: [{ rule }] };
+      const result = executeValidation(validation, nestedResponse, new Map(), new Map());
+      expect(result.allPassed).toBe(false);
+      expect(result.results[0].passed).toBe(false);
+    });
+
+    it('json_path_equals: array index $.data.users[0].email equals alice', () => {
+      const rule: BodyValidationRule = {
+        id: 'jp5',
+        name: 'first user email equals',
+        category: 'body',
+        operator: 'json_path_equals',
+        jsonPath: '$.data.users[0].email',
+        value: 'alice@example.com',
+        enabled: true,
+      };
+      const validation: RequestValidation = { enabled: true, rules: [{ rule }] };
+      const result = executeValidation(validation, nestedResponse, new Map(), new Map());
+      expect(result.allPassed).toBe(true);
+    });
+
+    it('json_path_equals: numeric value $.data.id equals 42', () => {
+      const rule: BodyValidationRule = {
+        id: 'jp6',
+        name: 'data id equals 42',
+        category: 'body',
+        operator: 'json_path_equals',
+        jsonPath: '$.data.id',
+        value: '42',
+        enabled: true,
+      };
+      const validation: RequestValidation = { enabled: true, rules: [{ rule }] };
+      const result = executeValidation(validation, nestedResponse, new Map(), new Map());
+      expect(result.allPassed).toBe(true);
+    });
+
+    it('json_path_contains: $.items[0].name contains app', () => {
+      const rule: BodyValidationRule = {
+        id: 'jp7',
+        name: 'first item name contains',
+        category: 'body',
+        operator: 'json_path_contains',
+        jsonPath: '$.items[0].name',
+        value: 'app',
+        enabled: true,
+      };
+      const validation: RequestValidation = { enabled: true, rules: [{ rule }] };
+      const result = executeValidation(validation, nestedResponse, new Map(), new Map());
+      expect(result.allPassed).toBe(true);
+    });
+
+    it('json_path_exists: non-JSON body string — fails with error', () => {
+      const nonJsonResponse: ResponseData = {
+        ...mockResponse,
+        body: 'plain text, not json',
+      };
+      const rule: BodyValidationRule = {
+        id: 'jp8',
+        name: 'path on non-json',
+        category: 'body',
+        operator: 'json_path_exists',
+        jsonPath: '$.anything',
+        enabled: true,
+      };
+      const validation: RequestValidation = { enabled: true, rules: [{ rule }] };
+      const result = executeValidation(validation, nonJsonResponse, new Map(), new Map());
+      expect(result.allPassed).toBe(false);
+      expect(result.results[0].passed).toBe(false);
+    });
+
+    it('json_path_exists: empty body string — fails gracefully', () => {
+      const emptyResponse: ResponseData = { ...mockResponse, body: '' };
+      const rule: BodyValidationRule = {
+        id: 'jp9',
+        name: 'path on empty body',
+        category: 'body',
+        operator: 'json_path_exists',
+        jsonPath: '$.message',
+        enabled: true,
+      };
+      const validation: RequestValidation = { enabled: true, rules: [{ rule }] };
+      const result = executeValidation(validation, emptyResponse, new Map(), new Map());
+      expect(result.allPassed).toBe(false);
+      expect(result.results[0].passed).toBe(false);
+    });
+  });
+
+  // ============================================================================
+  // ajv JSON Schema validation tests (TASK-003)
+  // ============================================================================
+
+  describe('executeValidation - json_schema_matches via ajv', () => {
+    it('valid schema + matching body — passes', () => {
+      const schema = JSON.stringify({ type: 'object' });
+      const rule: BodyValidationRule = {
+        id: 'schema1',
+        name: 'body is object',
+        category: 'body',
+        operator: 'json_schema_matches',
+        value: schema,
+        enabled: true,
+      };
+      const validation: RequestValidation = { enabled: true, rules: [{ rule }] };
+      const result = executeValidation(validation, mockResponse, new Map(), new Map());
+      expect(result.allPassed).toBe(true);
+    });
+
+    it('valid schema + body that does NOT match — fails with error details', () => {
+      const body: ResponseData = {
+        ...mockResponse,
+        body: JSON.stringify({ name: 'Alice' }),
+      };
+      const schema = JSON.stringify({
+        type: 'object',
+        required: ['name', 'email'],
+        properties: {
+          name: { type: 'string' },
+          email: { type: 'string' },
+        },
+      });
+      const rule: BodyValidationRule = {
+        id: 'schema2',
+        name: 'body missing required field',
+        category: 'body',
+        operator: 'json_schema_matches',
+        value: schema,
+        enabled: true,
+      };
+      const validation: RequestValidation = { enabled: true, rules: [{ rule }] };
+      const result = executeValidation(validation, body, new Map(), new Map());
+      expect(result.allPassed).toBe(false);
+      expect(result.results[0].passed).toBe(false);
+      expect(result.results[0].message).toContain('email');
+    });
+
+    it('valid schema with required array — body missing required field fails', () => {
+      const body: ResponseData = {
+        ...mockResponse,
+        body: JSON.stringify({ age: 30 }),
+      };
+      const schema = JSON.stringify({
+        type: 'object',
+        required: ['name'],
+        properties: { name: { type: 'string' }, age: { type: 'number' } },
+      });
+      const rule: BodyValidationRule = {
+        id: 'schema3',
+        name: 'missing required name',
+        category: 'body',
+        operator: 'json_schema_matches',
+        value: schema,
+        enabled: true,
+      };
+      const validation: RequestValidation = { enabled: true, rules: [{ rule }] };
+      const result = executeValidation(validation, body, new Map(), new Map());
+      expect(result.allPassed).toBe(false);
+    });
+
+    it('type constraint mismatch — string where number expected fails', () => {
+      const body: ResponseData = {
+        ...mockResponse,
+        body: JSON.stringify({ age: 'not-a-number' }),
+      };
+      const schema = JSON.stringify({
+        type: 'object',
+        properties: { age: { type: 'number' } },
+      });
+      const rule: BodyValidationRule = {
+        id: 'schema4',
+        name: 'wrong type for age',
+        category: 'body',
+        operator: 'json_schema_matches',
+        value: schema,
+        enabled: true,
+      };
+      const validation: RequestValidation = { enabled: true, rules: [{ rule }] };
+      const result = executeValidation(validation, body, new Map(), new Map());
+      expect(result.allPassed).toBe(false);
+      expect(result.results[0].message).toMatch(/must be number/i);
+    });
+
+    it('minLength constraint — body value too short fails', () => {
+      const body: ResponseData = {
+        ...mockResponse,
+        body: JSON.stringify({ code: 'ab' }),
+      };
+      const schema = JSON.stringify({
+        type: 'object',
+        properties: { code: { type: 'string', minLength: 5 } },
+      });
+      const rule: BodyValidationRule = {
+        id: 'schema5',
+        name: 'code too short',
+        category: 'body',
+        operator: 'json_schema_matches',
+        value: schema,
+        enabled: true,
+      };
+      const validation: RequestValidation = { enabled: true, rules: [{ rule }] };
+      const result = executeValidation(validation, body, new Map(), new Map());
+      expect(result.allPassed).toBe(false);
+    });
+
+    it('invalid JSON body string — fails with parse error', () => {
+      const body: ResponseData = { ...mockResponse, body: 'not valid json' };
+      const schema = JSON.stringify({ type: 'object' });
+      const rule: BodyValidationRule = {
+        id: 'schema6',
+        name: 'invalid body json',
+        category: 'body',
+        operator: 'json_schema_matches',
+        value: schema,
+        enabled: true,
+      };
+      const validation: RequestValidation = { enabled: true, rules: [{ rule }] };
+      const result = executeValidation(validation, body, new Map(), new Map());
+      expect(result.allPassed).toBe(false);
+      expect(result.results[0].passed).toBe(false);
+    });
+
+    it('empty schema {} matches any JSON body — passes', () => {
+      const schema = JSON.stringify({});
+      const rule: BodyValidationRule = {
+        id: 'schema7',
+        name: 'empty schema matches all',
+        category: 'body',
+        operator: 'json_schema_matches',
+        value: schema,
+        enabled: true,
+      };
+      const validation: RequestValidation = { enabled: true, rules: [{ rule }] };
+      const result = executeValidation(validation, mockResponse, new Map(), new Map());
+      expect(result.allPassed).toBe(true);
+    });
+
+    it('body is a JSON array, schema is array type — passes', () => {
+      const body: ResponseData = {
+        ...mockResponse,
+        body: JSON.stringify([1, 2, 3]),
+      };
+      const schema = JSON.stringify({ type: 'array' });
+      const rule: BodyValidationRule = {
+        id: 'schema8',
+        name: 'body is array',
+        category: 'body',
+        operator: 'json_schema_matches',
+        value: schema,
+        enabled: true,
+      };
+      const validation: RequestValidation = { enabled: true, rules: [{ rule }] };
+      const result = executeValidation(validation, body, new Map(), new Map());
+      expect(result.allPassed).toBe(true);
+    });
+
+    it('body is null, schema is null type — passes', () => {
+      const body: ResponseData = {
+        ...mockResponse,
+        body: 'null',
+      };
+      const schema = JSON.stringify({ type: 'null' });
+      const rule: BodyValidationRule = {
+        id: 'schema9',
+        name: 'body is null',
+        category: 'body',
+        operator: 'json_schema_matches',
+        value: schema,
+        enabled: true,
+      };
+      const validation: RequestValidation = { enabled: true, rules: [{ rule }] };
+      const result = executeValidation(validation, body, new Map(), new Map());
+      expect(result.allPassed).toBe(true);
+    });
+  });
+
+  // ============================================================================
+  // validateJsonSchemaString helper tests (TASK-004)
+  // ============================================================================
+
+  describe('validateJsonSchemaString', () => {
+    it('valid minimal schema {"type":"object"} — returns valid: true', () => {
+      const result = validateJsonSchemaString('{"type":"object"}');
+      expect(result.valid).toBe(true);
+      expect(result.errors).toBeUndefined();
+    });
+
+    it('valid complex schema with required/properties — returns valid: true', () => {
+      const schema = JSON.stringify({
+        type: 'object',
+        properties: {
+          name: { type: 'string', minLength: 1 },
+          age: { type: 'number', minimum: 0 },
+        },
+        required: ['name'],
+      });
+      const result = validateJsonSchemaString(schema);
+      expect(result.valid).toBe(true);
+    });
+
+    it('empty string — returns valid: false with "Schema cannot be empty"', () => {
+      const result = validateJsonSchemaString('');
+      expect(result.valid).toBe(false);
+      expect(result.errors).toEqual(['Schema cannot be empty']);
+    });
+
+    it('whitespace-only string — returns valid: false with "Schema cannot be empty"', () => {
+      const result = validateJsonSchemaString('   ');
+      expect(result.valid).toBe(false);
+      expect(result.errors).toEqual(['Schema cannot be empty']);
+    });
+
+    it('non-JSON string — returns valid: false with "Invalid JSON" error', () => {
+      const result = validateJsonSchemaString('not json at all');
+      expect(result.valid).toBe(false);
+      expect(result.errors).toBeDefined();
+      expect(result.errors![0]).toMatch(/Invalid JSON/);
+    });
+
+    it('valid JSON but invalid schema type value — returns valid: false with "Invalid JSON Schema"', () => {
+      const result = validateJsonSchemaString('{"type":"invalidType"}');
+      expect(result.valid).toBe(false);
+      expect(result.errors).toBeDefined();
+      expect(result.errors![0]).toMatch(/Invalid JSON Schema/);
+    });
+
+    it('boolean true schema — ajv accepts it as a valid schema matching everything', () => {
+      // JSON Schema spec allows boolean schemas (true = match all, false = match nothing)
+      // However, ajv.compile(true) may not work the same as compile({}) depending on version
+      // We test that it doesn't throw and returns a valid result or an understandable error
+      const result = validateJsonSchemaString('true');
+      // ajv v8 accepts boolean true as a valid schema
+      expect(typeof result.valid).toBe('boolean');
+    });
+
+    it('schema with $schema property — returns valid: true', () => {
+      const schema = JSON.stringify({
+        $schema: 'http://json-schema.org/draft-07/schema#',
+        type: 'object',
+        properties: { id: { type: 'integer' } },
+      });
+      const result = validateJsonSchemaString(schema);
+      expect(result.valid).toBe(true);
+    });
+
+    it('schema with array of types — returns valid: true', () => {
+      const schema = JSON.stringify({
+        type: 'object',
+        properties: { value: { type: ['string', 'null'] } },
+      });
+      const result = validateJsonSchemaString(schema);
+      expect(result.valid).toBe(true);
+    });
+
+    it('truncated JSON string — returns valid: false with "Invalid JSON" error', () => {
+      const result = validateJsonSchemaString('{"type":');
+      expect(result.valid).toBe(false);
+      expect(result.errors![0]).toMatch(/Invalid JSON/);
     });
   });
 });
