@@ -56,14 +56,14 @@ export abstract class BaseCollectionTransformer<TExternal> {
      * @param filename Optional filename for the collection
      * @returns Result containing the internal Collection or an error
      */
-    abstract transformFrom(external: TExternal, filename?: string): Result<Collection, string>;
+    abstract transformFrom(external: TExternal, filename?: string): Promise<Result<Collection, string>>;
 
     /**
      * Transforms the internal Collection type to an external format.
      * @param collection The internal Collection to transform
      * @returns Result containing the external format or an error
      */
-    abstract transformTo(collection: Collection): Result<TExternal, string>;
+    abstract transformTo(collection: Collection): Promise<Result<TExternal, string>>;
 
     /**
      * Validates if the given data is a valid external collection format.

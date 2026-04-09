@@ -369,6 +369,26 @@ export * from './utils/encoding';
 // Collection parser utilities
 export * from './utils/collectionParser';
 
+// Collection transformer utilities
+export {
+    transformCollection,
+    exportCollection,
+    detectFormatFromFilename,
+    detectTransformer,
+    getTransformer,
+    getSupportedImportFormats,
+    getSupportedExportFormats,
+    getSupportedFormatNames,
+    IMPORT_FORMAT_OPTIONS,
+    EXPORT_FORMAT_OPTIONS,
+} from './utils/transformers';
+
+export type {
+    CollectionFormatType,
+    ImportFormatType,
+    ExportFormatType,
+} from './utils/transformers';
+
 // Flow resolver utilities
 export {
     hasUnresolvedVariables,

@@ -7,22 +7,22 @@ describe('PostmanCollectionTransformer', () => {
   const transformer = new PostmanCollectionTransformer();
 
   describe('formatType and formatName', () => {
-    it('should have correct format type', () => {
+    it('should have correct format type', async () => {
       expect(transformer.formatType).toBe('postman');
     });
 
-    it('should have correct format name', () => {
+    it('should have correct format name', async () => {
       expect(transformer.formatName).toBe('Postman Collection v2.1.0');
     });
 
-    it('should have correct file extensions', () => {
+    it('should have correct file extensions', async () => {
       expect(transformer.fileExtensions).toContain('.json');
       expect(transformer.fileExtensions).toContain('.postman_collection.json');
     });
   });
 
   describe('validate', () => {
-    it('should validate a valid Postman collection', () => {
+    it('should validate a valid Postman collection', async () => {
       const data = {
         info: {
           _postman_id: 'postman-id',
@@ -35,7 +35,7 @@ describe('PostmanCollectionTransformer', () => {
       expect(transformer.validate(data)).toBe(true);
     });
 
-    it('should validate Postman collection with schema containing postman.com', () => {
+    it('should validate Postman collection with schema containing postman.com', async () => {
       const data = {
         info: {
           name: 'Collection',
@@ -47,7 +47,7 @@ describe('PostmanCollectionTransformer', () => {
       expect(transformer.validate(data)).toBe(true);
     });
 
-    it('should validate Postman collection without schema but with item array', () => {
+    it('should validate Postman collection without schema but with item array', async () => {
       const data = {
         info: {
           _postman_id: 'id',
@@ -59,22 +59,22 @@ describe('PostmanCollectionTransformer', () => {
       expect(transformer.validate(data)).toBe(true);
     });
 
-    it('should reject null or undefined', () => {
+    it('should reject null or undefined', async () => {
       expect(transformer.validate(null)).toBe(false);
       expect(transformer.validate(undefined)).toBe(false);
     });
 
-    it('should reject non-object data', () => {
+    it('should reject non-object data', async () => {
       expect(transformer.validate('string')).toBe(false);
       expect(transformer.validate(123)).toBe(false);
     });
 
-    it('should reject data without info', () => {
+    it('should reject data without info', async () => {
       const data = { item: [] };
       expect(transformer.validate(data)).toBe(false);
     });
 
-    it('should reject data without info.name', () => {
+    it('should reject data without info.name', async () => {
       const data = {
         info: { _postman_id: 'id' },
         item: [],
@@ -82,7 +82,7 @@ describe('PostmanCollectionTransformer', () => {
       expect(transformer.validate(data)).toBe(false);
     });
 
-    it('should reject data without schema and without item array', () => {
+    it('should reject data without schema and without item array', async () => {
       const data = {
         info: {
           name: 'Test',
@@ -93,7 +93,7 @@ describe('PostmanCollectionTransformer', () => {
   });
 
   describe('canHandle', () => {
-    it('should handle valid Postman collection', () => {
+    it('should handle valid Postman collection', async () => {
       const data = {
         info: {
           _postman_id: 'postman-id',
@@ -106,7 +106,7 @@ describe('PostmanCollectionTransformer', () => {
       expect(transformer.canHandle(data)).toBe(true);
     });
 
-    it('should handle Postman collection without _postman_id', () => {
+    it('should handle Postman collection without _postman_id', async () => {
       const data = {
         info: {
           name: 'Collection',
@@ -118,13 +118,13 @@ describe('PostmanCollectionTransformer', () => {
       expect(transformer.canHandle(data)).toBe(true);
     });
 
-    it('should reject invalid data', () => {
+    it('should reject invalid data', async () => {
       expect(transformer.canHandle({ info: 'invalid' })).toBe(false);
     });
   });
 
   describe('transformFrom', () => {
-    it('should transform basic Postman collection', () => {
+    it('should transform basic Postman collection', async () => {
       const postmanCollection: PostmanCollection = {
         info: {
           _postman_id: 'pm-id',
@@ -134,7 +134,7 @@ describe('PostmanCollectionTransformer', () => {
         item: [],
       };
 
-      const result = transformer.transformFrom(postmanCollection, 'my-api.json');
+      const result = await transformer.transformFrom(postmanCollection, 'my-api.json');
 
       expect(result.isOk).toBe(true);
       if (result.isOk) {
@@ -144,7 +144,7 @@ describe('PostmanCollectionTransformer', () => {
       }
     });
 
-    it('should transform Postman collection with description', () => {
+    it('should transform Postman collection with description', async () => {
       const postmanCollection: PostmanCollection = {
         info: {
           _postman_id: 'pm-id',
@@ -155,7 +155,7 @@ describe('PostmanCollectionTransformer', () => {
         item: [],
       };
 
-      const result = transformer.transformFrom(postmanCollection);
+      const result = await transformer.transformFrom(postmanCollection);
 
       expect(result.isOk).toBe(true);
       if (result.isOk) {
@@ -163,7 +163,7 @@ describe('PostmanCollectionTransformer', () => {
       }
     });
 
-    it('should transform Postman collection with description object', () => {
+    it('should transform Postman collection with description object', async () => {
       const postmanCollection: PostmanCollection = {
         info: {
           _postman_id: 'pm-id',
@@ -174,7 +174,7 @@ describe('PostmanCollectionTransformer', () => {
         item: [],
       };
 
-      const result = transformer.transformFrom(postmanCollection);
+      const result = await transformer.transformFrom(postmanCollection);
 
       expect(result.isOk).toBe(true);
       if (result.isOk) {
@@ -182,7 +182,7 @@ describe('PostmanCollectionTransformer', () => {
       }
     });
 
-    it('should transform Postman collection with simple request', () => {
+    it('should transform Postman collection with simple request', async () => {
       const postmanCollection: PostmanCollection = {
         info: {
           _postman_id: 'pm-id',
@@ -200,7 +200,7 @@ describe('PostmanCollectionTransformer', () => {
         ],
       };
 
-      const result = transformer.transformFrom(postmanCollection);
+      const result = await transformer.transformFrom(postmanCollection);
 
       expect(result.isOk).toBe(true);
       if (result.isOk) {
@@ -210,7 +210,7 @@ describe('PostmanCollectionTransformer', () => {
       }
     });
 
-    it('should transform Postman collection with folder', () => {
+    it('should transform Postman collection with folder', async () => {
       const postmanCollection: PostmanCollection = {
         info: {
           _postman_id: 'pm-id',
@@ -233,7 +233,7 @@ describe('PostmanCollectionTransformer', () => {
         ],
       };
 
-      const result = transformer.transformFrom(postmanCollection);
+      const result = await transformer.transformFrom(postmanCollection);
 
       expect(result.isOk).toBe(true);
       if (result.isOk) {
@@ -244,7 +244,7 @@ describe('PostmanCollectionTransformer', () => {
       }
     });
 
-    it('should handle errors during transformation', () => {
+    it('should handle errors during transformation', async () => {
       const invalidCollection: any = {
         info: {
           name: 'Test',
@@ -258,7 +258,7 @@ describe('PostmanCollectionTransformer', () => {
         ],
       };
 
-      const result = transformer.transformFrom(invalidCollection);
+      const result = await transformer.transformFrom(invalidCollection);
 
       // Depending on implementation, might succeed or fail
       // If it fails, error message should be descriptive
@@ -269,7 +269,7 @@ describe('PostmanCollectionTransformer', () => {
   });
 
   describe('transformTo', () => {
-    it('should transform Collection to Postman format', () => {
+    it('should transform Collection to Postman format', async () => {
       const collection: Collection = {
         info: {
           waveId: 'wave-id',
@@ -290,7 +290,7 @@ describe('PostmanCollectionTransformer', () => {
         ],
       };
 
-      const result = transformer.transformTo(collection);
+      const result = await transformer.transformTo(collection);
 
       expect(result.isOk).toBe(true);
       if (result.isOk) {
@@ -300,7 +300,7 @@ describe('PostmanCollectionTransformer', () => {
       }
     });
 
-    it('should include description in exported collection', () => {
+    it('should include description in exported collection', async () => {
       const collection: Collection = {
         info: {
           waveId: 'id',
@@ -310,7 +310,7 @@ describe('PostmanCollectionTransformer', () => {
         item: [],
       };
 
-      const result = transformer.transformTo(collection);
+      const result = await transformer.transformTo(collection);
 
       expect(result.isOk).toBe(true);
       if (result.isOk) {
@@ -318,7 +318,7 @@ describe('PostmanCollectionTransformer', () => {
       }
     });
 
-    it('should transform nested folders', () => {
+    it('should transform nested folders', async () => {
       const collection: Collection = {
         info: {
           waveId: 'id',
@@ -344,7 +344,7 @@ describe('PostmanCollectionTransformer', () => {
         ],
       };
 
-      const result = transformer.transformTo(collection);
+      const result = await transformer.transformTo(collection);
 
       expect(result.isOk).toBe(true);
       if (result.isOk) {
@@ -355,14 +355,14 @@ describe('PostmanCollectionTransformer', () => {
   });
 
   describe('postmanTransformer singleton', () => {
-    it('should export singleton instance', () => {
+    it('should export singleton instance', async () => {
       expect(postmanTransformer).toBeInstanceOf(PostmanCollectionTransformer);
       expect(postmanTransformer.formatType).toBe('postman');
     });
   });
 
   describe('transformFrom - advanced request features', () => {
-    it('should transform request with URL object', () => {
+    it('should transform request with URL object', async () => {
       const postmanCollection: PostmanCollection = {
         info: {
           name: 'Test',
@@ -388,7 +388,7 @@ describe('PostmanCollectionTransformer', () => {
         ],
       };
 
-      const result = transformer.transformFrom(postmanCollection);
+      const result = await transformer.transformFrom(postmanCollection);
 
       expect(result.isOk).toBe(true);
       if (result.isOk) {
@@ -403,7 +403,7 @@ describe('PostmanCollectionTransformer', () => {
       }
     });
 
-    it('should handle request with headers as string', () => {
+    it('should handle request with headers as string', async () => {
       const postmanCollection: PostmanCollection = {
         info: {
           name: 'Test',
@@ -421,7 +421,7 @@ describe('PostmanCollectionTransformer', () => {
         ],
       };
 
-      const result = transformer.transformFrom(postmanCollection);
+      const result = await transformer.transformFrom(postmanCollection);
 
       expect(result.isOk).toBe(true);
       if (result.isOk) {
@@ -431,7 +431,7 @@ describe('PostmanCollectionTransformer', () => {
       }
     });
 
-    it('should handle request with raw body', () => {
+    it('should handle request with raw body', async () => {
       const postmanCollection: PostmanCollection = {
         info: {
           name: 'Test',
@@ -457,7 +457,7 @@ describe('PostmanCollectionTransformer', () => {
         ],
       };
 
-      const result = transformer.transformFrom(postmanCollection);
+      const result = await transformer.transformFrom(postmanCollection);
 
       expect(result.isOk).toBe(true);
       if (result.isOk) {
@@ -470,7 +470,7 @@ describe('PostmanCollectionTransformer', () => {
       }
     });
 
-    it('should handle request with urlencoded body', () => {
+    it('should handle request with urlencoded body', async () => {
       const postmanCollection: PostmanCollection = {
         info: {
           name: 'Test',
@@ -494,7 +494,7 @@ describe('PostmanCollectionTransformer', () => {
         ],
       };
 
-      const result = transformer.transformFrom(postmanCollection);
+      const result = await transformer.transformFrom(postmanCollection);
 
       expect(result.isOk).toBe(true);
       if (result.isOk) {
@@ -506,7 +506,7 @@ describe('PostmanCollectionTransformer', () => {
       }
     });
 
-    it('should handle request with formdata body', () => {
+    it('should handle request with formdata body', async () => {
       const postmanCollection: PostmanCollection = {
         info: {
           name: 'Test',
@@ -530,7 +530,7 @@ describe('PostmanCollectionTransformer', () => {
         ],
       };
 
-      const result = transformer.transformFrom(postmanCollection);
+      const result = await transformer.transformFrom(postmanCollection);
 
       expect(result.isOk).toBe(true);
       if (result.isOk) {
@@ -542,7 +542,7 @@ describe('PostmanCollectionTransformer', () => {
       }
     });
 
-    it('should handle disabled body', () => {
+    it('should handle disabled body', async () => {
       const postmanCollection: PostmanCollection = {
         info: {
           name: 'Test',
@@ -564,7 +564,7 @@ describe('PostmanCollectionTransformer', () => {
         ],
       };
 
-      const result = transformer.transformFrom(postmanCollection);
+      const result = await transformer.transformFrom(postmanCollection);
 
       expect(result.isOk).toBe(true);
       if (result.isOk) {
@@ -572,7 +572,7 @@ describe('PostmanCollectionTransformer', () => {
       }
     });
 
-    it('should handle request with responses', () => {
+    it('should handle request with responses', async () => {
       const postmanCollection: PostmanCollection = {
         info: {
           name: 'Test',
@@ -597,7 +597,7 @@ describe('PostmanCollectionTransformer', () => {
         ],
       };
 
-      const result = transformer.transformFrom(postmanCollection);
+      const result = await transformer.transformFrom(postmanCollection);
 
       expect(result.isOk).toBe(true);
       if (result.isOk) {
@@ -606,7 +606,7 @@ describe('PostmanCollectionTransformer', () => {
       }
     });
 
-    it('should handle missing or default values', () => {
+    it('should handle missing or default values', async () => {
       const postmanCollection: PostmanCollection = {
         info: {
           name: 'Test',
@@ -623,7 +623,7 @@ describe('PostmanCollectionTransformer', () => {
         ],
       };
 
-      const result = transformer.transformFrom(postmanCollection);
+      const result = await transformer.transformFrom(postmanCollection);
 
       expect(result.isOk).toBe(true);
       if (result.isOk) {
@@ -631,7 +631,7 @@ describe('PostmanCollectionTransformer', () => {
       }
     });
 
-    it('should handle URL without protocol', () => {
+    it('should handle URL without protocol', async () => {
       const postmanCollection: PostmanCollection = {
         info: {
           name: 'Test',
@@ -651,7 +651,7 @@ describe('PostmanCollectionTransformer', () => {
         ],
       };
 
-      const result = transformer.transformFrom(postmanCollection);
+      const result = await transformer.transformFrom(postmanCollection);
 
       expect(result.isOk).toBe(true);
       if (result.isOk) {
@@ -660,7 +660,7 @@ describe('PostmanCollectionTransformer', () => {
       }
     });
 
-    it('should handle URL with host as string', () => {
+    it('should handle URL with host as string', async () => {
       const postmanCollection: PostmanCollection = {
         info: {
           name: 'Test',
@@ -680,12 +680,12 @@ describe('PostmanCollectionTransformer', () => {
         ],
       };
 
-      const result = transformer.transformFrom(postmanCollection);
+      const result = await transformer.transformFrom(postmanCollection);
 
       expect(result.isOk).toBe(true);
     });
 
-    it('should handle URL with path as string', () => {
+    it('should handle URL with path as string', async () => {
       const postmanCollection: PostmanCollection = {
         info: {
           name: 'Test',
@@ -706,14 +706,14 @@ describe('PostmanCollectionTransformer', () => {
         ],
       };
 
-      const result = transformer.transformFrom(postmanCollection);
+      const result = await transformer.transformFrom(postmanCollection);
 
       expect(result.isOk).toBe(true);
     });
   });
 
   describe('transformTo - advanced features', () => {
-    it('should transform request with headers', () => {
+    it('should transform request with headers', async () => {
       const collection: Collection = {
         info: { waveId: 'id', name: 'Test' },
         item: [
@@ -734,7 +734,7 @@ describe('PostmanCollectionTransformer', () => {
         ],
       };
 
-      const result = transformer.transformTo(collection);
+      const result = await transformer.transformTo(collection);
 
       expect(result.isOk).toBe(true);
       if (result.isOk) {
@@ -743,7 +743,7 @@ describe('PostmanCollectionTransformer', () => {
       }
     });
 
-    it('should transform request with body', () => {
+    it('should transform request with body', async () => {
       const collection: Collection = {
         info: { waveId: 'id', name: 'Test' },
         item: [
@@ -764,7 +764,7 @@ describe('PostmanCollectionTransformer', () => {
         ],
       };
 
-      const result = transformer.transformTo(collection);
+      const result = await transformer.transformTo(collection);
 
       expect(result.isOk).toBe(true);
       if (result.isOk) {
@@ -773,7 +773,7 @@ describe('PostmanCollectionTransformer', () => {
       }
     });
 
-    it('should transform deeply nested folders', () => {
+    it('should transform deeply nested folders', async () => {
       const collection: Collection = {
         info: { waveId: 'id', name: 'Nested' },
         item: [
@@ -797,7 +797,7 @@ describe('PostmanCollectionTransformer', () => {
         ],
       };
 
-      const result = transformer.transformTo(collection);
+      const result = await transformer.transformTo(collection);
 
       expect(result.isOk).toBe(true);
       if (result.isOk) {

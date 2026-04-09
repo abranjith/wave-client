@@ -83,7 +83,7 @@ export class PostmanCollectionTransformer extends BaseCollectionTransformer<Post
     /**
      * Transforms a Postman collection to internal Collection format
      */
-    transformFrom(external: PostmanCollection, filename?: string): Result<Collection, string> {
+    async transformFrom(external: PostmanCollection, filename?: string): Promise<Result<Collection, string>> {
         try {
             const collection: Collection = {
                 info: {
@@ -105,7 +105,7 @@ export class PostmanCollectionTransformer extends BaseCollectionTransformer<Post
     /**
      * Transforms internal Collection to Postman collection format
      */
-    transformTo(collection: Collection): Result<PostmanCollection, string> {
+    async transformTo(collection: Collection): Promise<Result<PostmanCollection, string>> {
         try {
             const postmanCollection: PostmanCollection = {
                 info: {

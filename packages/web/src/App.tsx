@@ -31,6 +31,8 @@ import {
   useFileAdapter,
   useNotificationAdapter,
   useAdapterEvent,
+  transformCollection,
+  type ImportFormatType,
   type Environment,
   type Cookie,
   type Proxy,
@@ -629,9 +631,37 @@ const handleFlowSave = useCallback(async (flow: Flow) => {
   const handleImportCollection = async (
     fileName: string,
     fileContent: string,
-    _collectionType: string
+    collectionType: string
   ) => {
-    const result = await storage.importCollection(fileName, fileContent);
+    let importPayload = fileContent;
+
+    if (collectionType !== 'wave') {
+      let transformInput: unknown = fileContent;
+
+      if (collectionType === 'postman') {
+        try {
+          transformInput = JSON.parse(fileContent);
+        } catch {
+          notification.showNotification('error', 'Invalid Postman JSON file');
+          return;
+        }
+      }
+
+      const transformResult = await transformCollection(
+        transformInput,
+        fileName,
+        collectionType as ImportFormatType
+      );
+
+      if (!transformResult.isOk) {
+        notification.showNotification('error', transformResult.error);
+        return;
+      }
+
+      importPayload = JSON.stringify(transformResult.value, null, 2);
+    }
+
+    const result = await storage.importCollection(fileName, importPayload);
     if (result.isOk) {
       // Reload collections
       const collectionsResult = await storage.loadCollections();

@@ -6,32 +6,32 @@ describe('HttpFileTransformer', () => {
   const transformer = new HttpFileTransformer();
 
   describe('formatType and formatName', () => {
-    it('should have correct format type', () => {
+    it('should have correct format type', async () => {
       expect(transformer.formatType).toBe('http');
     });
 
-    it('should have correct format name', () => {
+    it('should have correct format name', async () => {
       expect(transformer.formatName).toBe('HTTP File');
     });
 
-    it('should have correct file extensions', () => {
+    it('should have correct file extensions', async () => {
       expect(transformer.fileExtensions).toContain('.http');
       expect(transformer.fileExtensions).toContain('.rest');
     });
   });
 
   describe('validate', () => {
-    it('should validate HTTP file content with GET request', () => {
+    it('should validate HTTP file content with GET request', async () => {
       const httpContent = 'GET https://api.example.com/users';
       expect(transformer.validate(httpContent)).toBe(true);
     });
 
-    it('should validate HTTP file content with POST request', () => {
+    it('should validate HTTP file content with POST request', async () => {
       const httpContent = 'POST https://api.example.com/users';
       expect(transformer.validate(httpContent)).toBe(true);
     });
 
-    it('should validate HTTP file with multiple methods', () => {
+    it('should validate HTTP file with multiple methods', async () => {
       const httpContent = `
 ### Get Users
 GET https://api.example.com/users
@@ -42,12 +42,12 @@ POST https://api.example.com/users
       expect(transformer.validate(httpContent)).toBe(true);
     });
 
-    it('should validate case-insensitive HTTP methods', () => {
+    it('should validate case-insensitive HTTP methods', async () => {
       const httpContent = 'get https://api.example.com';
       expect(transformer.validate(httpContent)).toBe(true);
     });
 
-    it('should validate all HTTP methods', () => {
+    it('should validate all HTTP methods', async () => {
       const methods = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS'];
       
       methods.forEach((method) => {
@@ -56,7 +56,7 @@ POST https://api.example.com/users
       });
     });
 
-    it('should reject non-string data', () => {
+    it('should reject non-string data', async () => {
       expect(transformer.validate(null)).toBe(false);
       expect(transformer.validate(undefined)).toBe(false);
       expect(transformer.validate(123)).toBe(false);
@@ -64,29 +64,29 @@ POST https://api.example.com/users
       expect(transformer.validate([])).toBe(false);
     });
 
-    it('should reject strings without HTTP methods', () => {
+    it('should reject strings without HTTP methods', async () => {
       expect(transformer.validate('Just some text')).toBe(false);
       expect(transformer.validate('URL: https://api.com')).toBe(false);
     });
   });
 
   describe('canHandle', () => {
-    it('should handle valid HTTP file content', () => {
+    it('should handle valid HTTP file content', async () => {
       const httpContent = 'GET https://api.example.com';
       expect(transformer.canHandle(httpContent)).toBe(true);
     });
 
-    it('should reject non-HTTP content', () => {
+    it('should reject non-HTTP content', async () => {
       expect(transformer.canHandle('not http')).toBe(false);
       expect(transformer.canHandle({})).toBe(false);
     });
   });
 
   describe('transformFrom', () => {
-    it('should transform simple GET request', () => {
+    it('should transform simple GET request', async () => {
       const httpContent = 'GET https://api.example.com/users';
       
-      const result = transformer.transformFrom(httpContent, 'requests.http');
+      const result = await transformer.transformFrom(httpContent, 'requests.http');
 
       expect(result.isOk).toBe(true);
       if (result.isOk) {
@@ -96,11 +96,11 @@ POST https://api.example.com/users
       }
     });
 
-    it('should transform request with name comment', () => {
+    it('should transform request with name comment', async () => {
       const httpContent = `### Get All Users
 GET https://api.example.com/users`;
       
-      const result = transformer.transformFrom(httpContent);
+      const result = await transformer.transformFrom(httpContent);
 
       expect(result.isOk).toBe(true);
       if (result.isOk) {
@@ -110,12 +110,12 @@ GET https://api.example.com/users`;
       }
     });
 
-    it('should transform request with headers', () => {
+    it('should transform request with headers', async () => {
       const httpContent = `POST https://api.example.com/users
 Content-Type: application/json
 Authorization: Bearer token123`;
       
-      const result = transformer.transformFrom(httpContent);
+      const result = await transformer.transformFrom(httpContent);
 
       expect(result.isOk).toBe(true);
       if (result.isOk) {
@@ -126,7 +126,7 @@ Authorization: Bearer token123`;
       }
     });
 
-    it('should transform request with body', () => {
+    it('should transform request with body', async () => {
       const httpContent = `POST https://api.example.com/users
 Content-Type: application/json
 
@@ -135,7 +135,7 @@ Content-Type: application/json
   "email": "john@example.com"
 }`;
       
-      const result = transformer.transformFrom(httpContent);
+      const result = await transformer.transformFrom(httpContent);
 
       expect(result.isOk).toBe(true);
       if (result.isOk) {
@@ -144,7 +144,7 @@ Content-Type: application/json
       }
     });
 
-    it('should transform multiple requests', () => {
+    it('should transform multiple requests', async () => {
       const httpContent = `### Get Users
 GET https://api.example.com/users
 
@@ -157,7 +157,7 @@ Content-Type: application/json
 ### Update User
 PUT https://api.example.com/users/1`;
       
-      const result = transformer.transformFrom(httpContent);
+      const result = await transformer.transformFrom(httpContent);
 
       expect(result.isOk).toBe(true);
       if (result.isOk) {
@@ -169,13 +169,13 @@ PUT https://api.example.com/users/1`;
       }
     });
 
-    it('should handle requests without names', () => {
+    it('should handle requests without names', async () => {
       const httpContent = `GET https://api.example.com/users
 
 ### 
 DELETE https://api.example.com/users/1`;
       
-      const result = transformer.transformFrom(httpContent);
+      const result = await transformer.transformFrom(httpContent);
 
       expect(result.isOk).toBe(true);
       if (result.isOk) {
@@ -186,10 +186,10 @@ DELETE https://api.example.com/users/1`;
       }
     });
 
-    it('should return error for content with no valid requests', () => {
+    it('should return error for content with no valid requests', async () => {
       const httpContent = 'Just some random text without HTTP requests';
       
-      const result = transformer.transformFrom(httpContent);
+      const result = await transformer.transformFrom(httpContent);
 
       expect(result.isOk).toBe(false);
       if (!result.isOk) {
@@ -197,10 +197,10 @@ DELETE https://api.example.com/users/1`;
       }
     });
 
-    it('should use filename for collection name', () => {
+    it('should use filename for collection name', async () => {
       const httpContent = 'GET https://api.com';
       
-      const result = transformer.transformFrom(httpContent, 'my-api-tests.http');
+      const result = await transformer.transformFrom(httpContent, 'my-api-tests.http');
 
       expect(result.isOk).toBe(true);
       if (result.isOk) {
@@ -208,10 +208,10 @@ DELETE https://api.example.com/users/1`;
       }
     });
 
-    it('should handle .rest extension', () => {
+    it('should handle .rest extension', async () => {
       const httpContent = 'GET https://api.com';
       
-      const result = transformer.transformFrom(httpContent, 'api.rest');
+      const result = await transformer.transformFrom(httpContent, 'api.rest');
 
       expect(result.isOk).toBe(true);
       if (result.isOk) {
@@ -221,7 +221,7 @@ DELETE https://api.example.com/users/1`;
   });
 
   describe('transformTo', () => {
-    it('should export simple request to HTTP format', () => {
+    it('should export simple request to HTTP format', async () => {
       const collection: Collection = {
         info: {
           waveId: 'id',
@@ -241,7 +241,7 @@ DELETE https://api.example.com/users/1`;
         ],
       };
 
-      const result = transformer.transformTo(collection);
+      const result = await transformer.transformTo(collection);
 
       expect(result.isOk).toBe(true);
       if (result.isOk) {
@@ -250,7 +250,7 @@ DELETE https://api.example.com/users/1`;
       }
     });
 
-    it('should export request with headers', () => {
+    it('should export request with headers', async () => {
       const collection: Collection = {
         info: {
           waveId: 'id',
@@ -274,7 +274,7 @@ DELETE https://api.example.com/users/1`;
         ],
       };
 
-      const result = transformer.transformTo(collection);
+      const result = await transformer.transformTo(collection);
 
       expect(result.isOk).toBe(true);
       if (result.isOk) {
@@ -283,7 +283,7 @@ DELETE https://api.example.com/users/1`;
       }
     });
 
-    it('should skip disabled headers', () => {
+    it('should skip disabled headers', async () => {
       const collection: Collection = {
         info: {
           waveId: 'id',
@@ -307,7 +307,7 @@ DELETE https://api.example.com/users/1`;
         ],
       };
 
-      const result = transformer.transformTo(collection);
+      const result = await transformer.transformTo(collection);
 
       expect(result.isOk).toBe(true);
       if (result.isOk) {
@@ -316,7 +316,7 @@ DELETE https://api.example.com/users/1`;
       }
     });
 
-    it('should export multiple requests with separators', () => {
+    it('should export multiple requests with separators', async () => {
       const collection: Collection = {
         info: {
           waveId: 'id',
@@ -336,7 +336,7 @@ DELETE https://api.example.com/users/1`;
         ],
       };
 
-      const result = transformer.transformTo(collection);
+      const result = await transformer.transformTo(collection);
 
       expect(result.isOk).toBe(true);
       if (result.isOk) {
@@ -346,7 +346,7 @@ DELETE https://api.example.com/users/1`;
       }
     });
 
-    it('should handle folders by flattening structure', () => {
+    it('should handle folders by flattening structure', async () => {
       const collection: Collection = {
         info: {
           waveId: 'id',
@@ -367,7 +367,7 @@ DELETE https://api.example.com/users/1`;
         ],
       };
 
-      const result = transformer.transformTo(collection);
+      const result = await transformer.transformTo(collection);
 
       expect(result.isOk).toBe(true);
       if (result.isOk) {
@@ -378,7 +378,7 @@ DELETE https://api.example.com/users/1`;
   });
 
   describe('httpFileTransformer singleton', () => {
-    it('should export singleton instance', () => {
+    it('should export singleton instance', async () => {
       expect(httpFileTransformer).toBeInstanceOf(HttpFileTransformer);
       expect(httpFileTransformer.formatType).toBe('http');
     });

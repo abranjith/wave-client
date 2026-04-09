@@ -7,93 +7,23 @@
  */
 
 import { BaseCollectionTransformer, CollectionFormatType, Result, ok, err } from './BaseCollectionTransformer';
+import { dereference, validate as scalarValidate } from '@scalar/openapi-parser';
+import type { OpenAPI } from '@scalar/openapi-types';
 import { Collection, CollectionItem, CollectionRequest, CollectionUrl, CollectionBody, HeaderRow, ParamRow } from '../../types/collection';
 
-/**
- * OpenAPI 3.x specification types
- */
-interface OpenAPISpec {
-    openapi?: string;
-    swagger?: string;
-    info: {
-        title: string;
-        description?: string;
-        version: string;
-    };
-    servers?: Array<{
-        url: string;
-        description?: string;
-        variables?: Record<string, { default: string; enum?: string[]; description?: string }>;
-    }>;
-    host?: string; // Swagger 2.0
-    basePath?: string; // Swagger 2.0
-    schemes?: string[]; // Swagger 2.0
-    paths: Record<string, PathItem>;
-    tags?: Array<{ name: string; description?: string }>;
-}
+type OpenApiObject = Record<string, unknown>;
 
-interface PathItem {
-    get?: Operation;
-    post?: Operation;
-    put?: Operation;
-    patch?: Operation;
-    delete?: Operation;
-    head?: Operation;
-    options?: Operation;
-    parameters?: Parameter[];
-}
-
-interface Operation {
-    operationId?: string;
-    summary?: string;
-    description?: string;
-    tags?: string[];
-    parameters?: Parameter[];
-    requestBody?: RequestBody;
-    responses?: Record<string, Response>;
-    security?: Array<Record<string, string[]>>;
-}
-
-interface Parameter {
-    name: string;
-    in: 'query' | 'header' | 'path' | 'cookie';
-    description?: string;
-    required?: boolean;
-    schema?: Schema;
-    example?: unknown;
-}
-
-interface RequestBody {
-    description?: string;
-    required?: boolean;
-    content?: Record<string, MediaType>;
-}
-
-interface MediaType {
-    schema?: Schema;
-    example?: unknown;
-    examples?: Record<string, { value: unknown }>;
-}
-
-interface Schema {
-    type?: string;
-    format?: string;
-    properties?: Record<string, Schema>;
-    items?: Schema;
-    example?: unknown;
-    default?: unknown;
-    enum?: unknown[];
-}
-
-interface Response {
-    description?: string;
-    content?: Record<string, MediaType>;
+interface TaggedOperation {
+    method: string;
+    path: string;
+    operation: OpenApiObject;
+    parameters: OpenApiObject[];
 }
 
 /**
  * Transformer for OpenAPI/Swagger specifications
  */
-export class SwaggerTransformer extends BaseCollectionTransformer<OpenAPISpec> {
+export class SwaggerTransformer extends BaseCollectionTransformer<unknown> {
     readonly formatType: CollectionFormatType = 'swagger';
     readonly formatName = 'OpenAPI / Swagger';
     readonly fileExtensions = ['.json', '.yaml', '.yml'];
@@ -101,29 +31,16 @@ export class SwaggerTransformer extends BaseCollectionTransformer<OpenAPISpec> {
     /**
      * Validates if the data is a valid OpenAPI specification
      */
-    validate(data: unknown): data is OpenAPISpec {
+    validate(data: unknown): data is unknown {
+        if (typeof data === 'string') {
+            return this.looksLikeOpenApiString(data);
+        }
+
         if (!data || typeof data !== 'object') {
             return false;
         }
 
-        const obj = data as Record<string, unknown>;
-
-        // Must have openapi (3.x) or swagger (2.0) version field
-        if (!obj.openapi && !obj.swagger) {
-            return false;
-        }
-
-        // Must have info object
-        if (!obj.info || typeof obj.info !== 'object') {
-            return false;
-        }
-
-        // Must have paths object
-        if (!obj.paths || typeof obj.paths !== 'object') {
-            return false;
-        }
-
-        return true;
+        return this.hasOpenApiShape(data as OpenApiObject);
     }
 
     /**
@@ -136,13 +53,29 @@ export class SwaggerTransformer extends BaseCollectionTransformer<OpenAPISpec> {
     /**
      * Transforms OpenAPI specification to Collection
      */
-    transformFrom(external: OpenAPISpec, filename?: string): Result<Collection, string> {
+    async transformFrom(external: unknown, filename?: string): Promise<Result<Collection, string>> {
         try {
-            const collectionName = external.info.title || filename?.replace(/\.(json|yaml|yml|txt)$/i, '') || 'Imported API';
-            const baseUrl = this.getBaseUrl(external);
+            const normalized = this.normalizeParserInput(external);
+            if (!normalized.isOk) {
+                return err(normalized.error);
+            }
+
+            const validated = await scalarValidate(normalized.value);
+            if (!validated.valid) {
+                return err(`Invalid OpenAPI specification: ${this.formatParserErrors(validated.errors)}`);
+            }
+
+            const dereferenced = dereference(normalized.value);
+            if (!dereferenced.schema) {
+                return err(`Failed to parse OpenAPI specification: ${this.formatParserErrors(dereferenced.errors)}`);
+            }
+
+            const spec = dereferenced.schema as OpenAPI.Document & OpenApiObject;
+            const collectionName = this.getDocumentTitle(spec) || filename?.replace(/\.(json|yaml|yml|txt)$/i, '') || 'Imported API';
+            const baseUrl = this.getBaseUrl(spec);
 
             // Group operations by tags
-            const taggedOperations = this.groupOperationsByTag(external);
+            const taggedOperations = this.groupOperationsByTag(spec);
 
             // Create collection items
             const items: CollectionItem[] = [];
@@ -156,7 +89,7 @@ export class SwaggerTransformer extends BaseCollectionTransformer<OpenAPISpec> {
                     items.push({
                         id: this.generateId(),
                         name: tag,
-                        description: this.getTagDescription(external, tag),
+                        description: this.getTagDescription(spec, tag),
                         item: operations.map(op => this.createRequestItem(op, baseUrl))
                     });
                 }
@@ -166,7 +99,7 @@ export class SwaggerTransformer extends BaseCollectionTransformer<OpenAPISpec> {
                 info: {
                     waveId: this.generateId(),
                     name: collectionName,
-                    description: external.info.description,
+                    description: this.getDocumentDescription(spec),
                     version: this.waveVersion,
                 },
                 item: items
@@ -182,9 +115,9 @@ export class SwaggerTransformer extends BaseCollectionTransformer<OpenAPISpec> {
      * Transforms Collection to OpenAPI specification
      * Note: Export to OpenAPI format is limited - responses and schemas are not fully reconstructed
      */
-    transformTo(collection: Collection): Result<OpenAPISpec, string> {
+    async transformTo(collection: Collection): Promise<Result<OpenAPI.Document, string>> {
         try {
-            const paths: Record<string, PathItem> = {};
+            const paths: Record<string, OpenApiObject> = {};
             const tags: Array<{ name: string; description?: string }> = [];
 
             // Convert items to paths
@@ -193,7 +126,7 @@ export class SwaggerTransformer extends BaseCollectionTransformer<OpenAPISpec> {
             // Extract server URL from first request item
             const serverUrl = this.extractServerUrl(collection.item);
 
-            const spec: OpenAPISpec = {
+            const spec: OpenAPI.Document = {
                 openapi: '3.0.3',
                 info: {
                     title: collection.info.name,
@@ -214,15 +147,23 @@ export class SwaggerTransformer extends BaseCollectionTransformer<OpenAPISpec> {
     /**
      * Gets the base URL from the OpenAPI spec
      */
-    private getBaseUrl(spec: OpenAPISpec): string {
+    private getBaseUrl(spec: OpenApiObject): string {
         // OpenAPI 3.x
-        if (spec.servers && spec.servers.length > 0) {
-            let url = spec.servers[0].url;
+        const servers = this.readArray(spec.servers).map((entry) => this.readObject(entry)).filter(Boolean) as OpenApiObject[];
+
+        if (servers.length > 0) {
+            const firstServer = servers[0];
+            let url = this.readString(firstServer.url) || 'https://api.example.com';
             
             // Replace server variables with defaults
-            if (spec.servers[0].variables) {
-                for (const [key, variable] of Object.entries(spec.servers[0].variables)) {
-                    url = url.replace(`{${key}}`, variable.default);
+            const variables = this.readObject(firstServer.variables);
+            if (variables) {
+                for (const [key, variable] of Object.entries(variables)) {
+                    const variableObj = this.readObject(variable);
+                    const defaultValue = variableObj ? this.readString(variableObj.default) : undefined;
+                    if (defaultValue) {
+                        url = url.replace(`{${key}}`, defaultValue);
+                    }
                 }
             }
             
@@ -230,10 +171,12 @@ export class SwaggerTransformer extends BaseCollectionTransformer<OpenAPISpec> {
         }
 
         // Swagger 2.0
-        if (spec.host) {
-            const scheme = spec.schemes?.[0] || 'https';
-            const basePath = spec.basePath || '';
-            return `${scheme}://${spec.host}${basePath}`;
+        const host = this.readString(spec.host);
+        if (host) {
+            const schemes = this.readStringArray(spec.schemes);
+            const scheme = schemes[0] || 'https';
+            const basePath = this.readString(spec.basePath) || '';
+            return `${scheme}://${host}${basePath}`;
         }
 
         return 'https://api.example.com';
@@ -242,24 +185,40 @@ export class SwaggerTransformer extends BaseCollectionTransformer<OpenAPISpec> {
     /**
      * Groups operations by their tags
      */
-    private groupOperationsByTag(spec: OpenAPISpec): Map<string, Array<{ method: string; path: string; operation: Operation }>> {
-        const grouped = new Map<string, Array<{ method: string; path: string; operation: Operation }>>();
+    private groupOperationsByTag(spec: OpenApiObject): Map<string, TaggedOperation[]> {
+        const grouped = new Map<string, TaggedOperation[]>();
         const methods = ['get', 'post', 'put', 'patch', 'delete', 'head', 'options'] as const;
 
-        for (const [path, pathItem] of Object.entries(spec.paths)) {
+        const paths = this.readObject(spec.paths);
+        if (!paths) {
+            return grouped;
+        }
+
+        for (const [path, rawPathItem] of Object.entries(paths)) {
+            const pathItem = this.readObject(rawPathItem);
+            if (!pathItem) {
+                continue;
+            }
+
+            const pathParameters = this.readParameterArray(pathItem.parameters);
+
             for (const method of methods) {
-                const operation = pathItem[method];
+                const operation = this.readObject(pathItem[method]);
                 if (!operation) {
                     continue;
                 }
 
-                const tags = operation.tags?.length ? operation.tags : ['__untagged__'];
+                const operationParameters = this.readParameterArray(operation.parameters);
+                const mergedParameters = this.mergeParameters(pathParameters, operationParameters);
+
+                const tags = this.readStringArray(operation.tags);
+                const effectiveTags = tags.length ? tags : ['__untagged__'];
                 
-                for (const tag of tags) {
+                for (const tag of effectiveTags) {
                     if (!grouped.has(tag)) {
                         grouped.set(tag, []);
                     }
-                    grouped.get(tag)!.push({ method, path, operation });
+                    grouped.get(tag)!.push({ method, path, operation, parameters: mergedParameters });
                 }
             }
         }
@@ -270,9 +229,13 @@ export class SwaggerTransformer extends BaseCollectionTransformer<OpenAPISpec> {
     /**
      * Gets description for a tag
      */
-    private getTagDescription(spec: OpenAPISpec, tagName: string): string | undefined {
-        const tag = spec.tags?.find(t => t.name === tagName);
-        return tag?.description;
+    private getTagDescription(spec: OpenApiObject, tagName: string): string | undefined {
+        const tags = this.readArray(spec.tags);
+        const tag = tags
+            .map((entry) => this.readObject(entry))
+            .find((entry) => entry && this.readString(entry.name) === tagName);
+
+        return tag ? this.readString(tag.description) : undefined;
     }
 
     /**
@@ -316,10 +279,10 @@ export class SwaggerTransformer extends BaseCollectionTransformer<OpenAPISpec> {
      * Creates a collection item from an operation
      */
     private createRequestItem(
-        op: { method: string; path: string; operation: Operation },
+        op: TaggedOperation,
         baseUrl: string
     ): CollectionItem {
-        const { method, path, operation } = op;
+        const { method, path, operation, parameters } = op;
         // Convert OpenAPI path parameters {param} to app format {{param}}
         const convertedPath = path.replace(/\{([^}]+)\}/g, '{{$1}}');
         const fullUrl = `${baseUrl}${convertedPath}`;
@@ -328,63 +291,44 @@ export class SwaggerTransformer extends BaseCollectionTransformer<OpenAPISpec> {
         const headers: HeaderRow[] = [];
         const queryParams: ParamRow[] = [];
         
-        if (operation.parameters) {
-            for (const param of operation.parameters) {
-                if (param.in === 'header') {
+        for (const param of parameters) {
+            const location = this.readString(param.in);
+            const key = this.readString(param.name);
+            if (!key) {
+                continue;
+            }
+
+            const required = this.readBoolean(param.required, true);
+
+            if (location === 'header') {
                     headers.push({
                         id: this.generateId(),
-                        key: param.name,
+                        key,
                         value: this.getExampleValue(param),
-                        disabled: !(param.required ?? true)
+                        disabled: !required
                     });
-                } else if (param.in === 'query') {
+                } else if (location === 'query') {
                     queryParams.push({
                         id: this.generateId(),
-                        key: param.name,
+                        key,
                         value: this.getExampleValue(param),
-                        disabled: !(param.required ?? true)
+                        disabled: !required
                     });
                 }
-            }
         }
+
+        const body = this.buildRequestBody(operation, parameters, headers);
 
         // Build URL with query params
         const urlObj: CollectionUrl = {
             raw: fullUrl,
             host: [baseUrl.replace(/^https?:\/\//, '').split('/')[0]],
-            path: path.split('/').filter(Boolean),
+            path: convertedPath.split('/').filter(Boolean),
             query: queryParams.length > 0 ? queryParams : undefined
         };
 
-        // Build request body
-        let body: CollectionBody | undefined;
-        if (operation.requestBody?.content) {
-            const contentTypes = Object.keys(operation.requestBody.content);
-            const preferredType = contentTypes.find(t => t.includes('json')) || contentTypes[0];
-            
-            if (preferredType) {
-                const mediaType = operation.requestBody.content[preferredType];
-                
-                // Add Content-Type header
-                headers.push({
-                    id: this.generateId(),
-                    key: 'Content-Type',
-                    value: preferredType,
-                    disabled: false
-                });
-
-                body = {
-                    mode: 'raw',
-                    raw: this.generateExampleBody(mediaType),
-                    options: {
-                        raw: { language: preferredType.includes('json') ? 'json' : 'text' }
-                    }
-                };
-            }
-        }
-
         const requestId = this.generateId();
-        const requestName = operation.summary || operation.operationId || `${method.toUpperCase()} ${path}`;
+        const requestName = this.readString(operation.summary) || this.readString(operation.operationId) || `${method.toUpperCase()} ${path}`;
 
         const request: CollectionRequest = {
             id: requestId,
@@ -398,7 +342,7 @@ export class SwaggerTransformer extends BaseCollectionTransformer<OpenAPISpec> {
         return {
             id: this.generateId(),
             name: requestName,
-            description: operation.description,
+            description: this.readString(operation.description),
             request
         };
     }
@@ -406,22 +350,25 @@ export class SwaggerTransformer extends BaseCollectionTransformer<OpenAPISpec> {
     /**
      * Gets example value from a parameter
      */
-    private getExampleValue(param: Parameter): string {
+    private getExampleValue(param: OpenApiObject): string {
         if (param.example !== undefined) {
             return String(param.example);
         }
-        if (param.schema?.example !== undefined) {
-            return String(param.schema.example);
+
+        const schema = this.readObject(param.schema);
+        if (schema?.example !== undefined) {
+            return String(schema.example);
         }
-        if (param.schema?.default !== undefined) {
-            return String(param.schema.default);
+        if (schema?.default !== undefined) {
+            return String(schema.default);
         }
-        if (param.schema?.enum?.length) {
-            return String(param.schema.enum[0]);
+        const schemaEnum = this.readArray(schema?.enum);
+        if (schemaEnum.length) {
+            return String(schemaEnum[0]);
         }
         
         // Return placeholder based on type
-        const type = param.schema?.type || 'string';
+        const type = this.readString(schema?.type) || this.readString(param.type) || 'string';
         switch (type) {
             case 'integer':
             case 'number':
@@ -429,22 +376,23 @@ export class SwaggerTransformer extends BaseCollectionTransformer<OpenAPISpec> {
             case 'boolean':
                 return 'true';
             default:
-                return `{{${param.name}}}`;
+                return `{{${this.readString(param.name) || 'value'}}}`;
         }
     }
 
     /**
      * Generates example body from media type
      */
-    private generateExampleBody(mediaType: MediaType): string {
+    private generateExampleBody(mediaType: OpenApiObject): string {
         if (mediaType.example !== undefined) {
             return typeof mediaType.example === 'string' 
                 ? mediaType.example 
                 : JSON.stringify(mediaType.example, null, 2);
         }
 
-        if (mediaType.examples) {
-            const firstExample = Object.values(mediaType.examples)[0];
+        const examples = this.readObject(mediaType.examples);
+        if (examples) {
+            const firstExample = this.readObject(Object.values(examples)[0]);
             if (firstExample?.value !== undefined) {
                 return typeof firstExample.value === 'string'
                     ? firstExample.value
@@ -452,8 +400,9 @@ export class SwaggerTransformer extends BaseCollectionTransformer<OpenAPISpec> {
             }
         }
 
-        if (mediaType.schema) {
-            return JSON.stringify(this.generateSchemaExample(mediaType.schema), null, 2);
+        const schema = this.readObject(mediaType.schema);
+        if (schema) {
+            return JSON.stringify(this.generateSchemaExample(schema), null, 2);
         }
 
         return '{}';
@@ -462,7 +411,7 @@ export class SwaggerTransformer extends BaseCollectionTransformer<OpenAPISpec> {
     /**
      * Generates example from schema
      */
-    private generateSchemaExample(schema: Schema): unknown {
+    private generateSchemaExample(schema: OpenApiObject): unknown {
         if (schema.example !== undefined) {
             return schema.example;
         }
@@ -471,24 +420,70 @@ export class SwaggerTransformer extends BaseCollectionTransformer<OpenAPISpec> {
             return schema.default;
         }
 
-        if (schema.enum?.length) {
-            return schema.enum[0];
+        const enumValues = this.readArray(schema.enum);
+        if (enumValues.length) {
+            return enumValues[0];
         }
 
-        switch (schema.type) {
+        const oneOf = this.readArray(schema.oneOf);
+        if (oneOf.length) {
+            const firstSchema = this.readObject(oneOf[0]);
+            if (firstSchema) {
+                return this.generateSchemaExample(firstSchema);
+            }
+        }
+
+        const anyOf = this.readArray(schema.anyOf);
+        if (anyOf.length) {
+            const firstSchema = this.readObject(anyOf[0]);
+            if (firstSchema) {
+                return this.generateSchemaExample(firstSchema);
+            }
+        }
+
+        const allOf = this.readArray(schema.allOf);
+        if (allOf.length) {
+            const merged = allOf
+                .map((entry) => this.readObject(entry))
+                .filter(Boolean)
+                .map((entry) => this.generateSchemaExample(entry as OpenApiObject));
+
+            if (merged.every((entry) => entry && typeof entry === 'object' && !Array.isArray(entry))) {
+                return Object.assign({}, ...merged);
+            }
+            if (merged.length) {
+                return merged[0];
+            }
+        }
+
+        const derivedType = this.readString(schema.type) || (this.readObject(schema.properties) ? 'object' : undefined) || (schema.items ? 'array' : undefined);
+
+        switch (derivedType) {
             case 'object':
-                if (schema.properties) {
+                if (this.readObject(schema.properties)) {
                     const obj: Record<string, unknown> = {};
-                    for (const [key, propSchema] of Object.entries(schema.properties)) {
-                        obj[key] = this.generateSchemaExample(propSchema);
+                    for (const [key, propSchema] of Object.entries(this.readObject(schema.properties) as OpenApiObject)) {
+                        const propertySchema = this.readObject(propSchema);
+                        if (propertySchema) {
+                            obj[key] = this.generateSchemaExample(propertySchema);
+                        }
                     }
                     return obj;
                 }
+
+                const additionalProperties = this.readObject(schema.additionalProperties);
+                if (additionalProperties) {
+                    return { key: this.generateSchemaExample(additionalProperties) };
+                }
+
                 return {};
 
             case 'array':
                 if (schema.items) {
-                    return [this.generateSchemaExample(schema.items)];
+                    const itemSchema = this.readObject(schema.items);
+                    if (itemSchema) {
+                        return [this.generateSchemaExample(itemSchema)];
+                    }
                 }
                 return [];
 
@@ -524,17 +519,19 @@ export class SwaggerTransformer extends BaseCollectionTransformer<OpenAPISpec> {
      */
     private convertItemsToPaths(
         items: CollectionItem[],
-        paths: Record<string, PathItem>,
+        paths: Record<string, OpenApiObject>,
         tags: Array<{ name: string; description?: string }>,
         currentTag?: string
     ): void {
         for (const item of items) {
             if (item.item) {
                 // Folder becomes a tag
-                tags.push({
-                    name: item.name,
-                    description: typeof item.description === 'string' ? item.description : undefined
-                });
+                if (!tags.some((tag) => tag.name === item.name)) {
+                    tags.push({
+                        name: item.name,
+                        description: typeof item.description === 'string' ? item.description : undefined
+                    });
+                }
                 this.convertItemsToPaths(item.item, paths, tags, item.name);
             } else if (item.request) {
                 // Request becomes a path operation
@@ -544,23 +541,27 @@ export class SwaggerTransformer extends BaseCollectionTransformer<OpenAPISpec> {
                 
                 // Extract path from URL
                 let pathStr = '/';
-                try {
-                    const urlObj = new URL(url.replace(/\{\{[^}]+\}\}/g, 'placeholder'));
-                    pathStr = urlObj.pathname || '/';
-                } catch {
-                    const match = url.match(/(?:https?:\/\/[^\/]+)?(\/[^\?]*)/);
-                    if (match) {
-                        pathStr = match[1];
+                const match = url.match(/(?:https?:\/\/[^\/]+)?(\/[^\?]*)/);
+                if (match) {
+                    pathStr = match[1];
+                } else {
+                    try {
+                        const urlObj = new URL(url.replace(/\{\{[^}]+\}\}/g, 'placeholder'));
+                        pathStr = urlObj.pathname || '/';
+                    } catch {
+                        pathStr = '/';
                     }
                 }
 
-                const method = (item.request.method || 'get').toLowerCase() as keyof PathItem;
+                pathStr = pathStr.replace(/\{\{([^}]+)\}\}/g, '{$1}');
+
+                const method = (item.request.method || 'get').toLowerCase();
                 
                 if (!paths[pathStr]) {
                     paths[pathStr] = {};
                 }
 
-                const operation: Operation = {
+                const operation: OpenApiObject = {
                     operationId: item.name.replace(/\s+/g, '_').toLowerCase(),
                     summary: item.name,
                     description: typeof item.description === 'string' ? item.description : undefined,
@@ -570,9 +571,187 @@ export class SwaggerTransformer extends BaseCollectionTransformer<OpenAPISpec> {
                     }
                 };
 
-                (paths[pathStr] as any)[method] = operation;
+                (paths[pathStr] as OpenApiObject)[method] = operation;
             }
         }
+    }
+
+    private buildRequestBody(operation: OpenApiObject, parameters: OpenApiObject[], headers: HeaderRow[]): CollectionBody | undefined {
+        const requestBody = this.readObject(operation.requestBody);
+        const content = this.readObject(requestBody?.content);
+
+        if (content) {
+            const contentTypes = Object.keys(content);
+            const preferredType = contentTypes.find((contentType) => contentType.includes('json')) || contentTypes[0];
+
+            if (!preferredType) {
+                return undefined;
+            }
+
+            const mediaType = this.readObject(content[preferredType]);
+            if (!mediaType) {
+                return undefined;
+            }
+
+            this.ensureContentTypeHeader(headers, preferredType);
+
+            return {
+                mode: 'raw',
+                raw: this.generateExampleBody(mediaType),
+                options: {
+                    raw: { language: preferredType.includes('json') ? 'json' : 'text' }
+                }
+            };
+        }
+
+        const bodyParameter = parameters.find((param) => this.readString(param.in) === 'body');
+        if (!bodyParameter) {
+            return undefined;
+        }
+
+        const schema = this.readObject(bodyParameter.schema);
+        const hasExample = bodyParameter.example !== undefined;
+        if (!schema && !hasExample) {
+            return undefined;
+        }
+
+        const consumes = this.readStringArray(operation.consumes);
+        const contentType = consumes[0] || 'application/json';
+        this.ensureContentTypeHeader(headers, contentType);
+
+        return {
+            mode: 'raw',
+            raw: this.generateExampleBody({ schema, example: bodyParameter.example }),
+            options: {
+                raw: { language: contentType.includes('json') ? 'json' : 'text' }
+            }
+        };
+    }
+
+    private ensureContentTypeHeader(headers: HeaderRow[], contentType: string): void {
+        const hasHeader = headers.some((header) => header.key.toLowerCase() === 'content-type');
+        if (hasHeader) {
+            return;
+        }
+
+        headers.push({
+            id: this.generateId(),
+            key: 'Content-Type',
+            value: contentType,
+            disabled: false
+        });
+    }
+
+    private mergeParameters(pathParameters: OpenApiObject[], operationParameters: OpenApiObject[]): OpenApiObject[] {
+        const merged = new Map<string, OpenApiObject>();
+
+        for (const param of pathParameters) {
+            const key = `${this.readString(param.in) || ''}:${this.readString(param.name) || ''}`;
+            if (key !== ':') {
+                merged.set(key, param);
+            }
+        }
+
+        for (const param of operationParameters) {
+            const key = `${this.readString(param.in) || ''}:${this.readString(param.name) || ''}`;
+            if (key !== ':') {
+                merged.set(key, param);
+            }
+        }
+
+        return Array.from(merged.values());
+    }
+
+    private readParameterArray(value: unknown): OpenApiObject[] {
+        return this.readArray(value)
+            .map((entry) => this.readObject(entry))
+            .filter(Boolean) as OpenApiObject[];
+    }
+
+    private looksLikeOpenApiString(raw: string): boolean {
+        return /(\"openapi\"\s*:|\"swagger\"\s*:|\bopenapi\s*:|\bswagger\s*:)/i.test(raw);
+    }
+
+    private hasOpenApiShape(obj: OpenApiObject): boolean {
+        if (!obj.openapi && !obj.swagger) {
+            return false;
+        }
+
+        const info = this.readObject(obj.info);
+        const paths = this.readObject(obj.paths);
+
+        return Boolean(info && paths);
+    }
+
+    private getDocumentTitle(spec: OpenApiObject): string | undefined {
+        const info = this.readObject(spec.info);
+        return info ? this.readString(info.title) : undefined;
+    }
+
+    private getDocumentDescription(spec: OpenApiObject): string | undefined {
+        const info = this.readObject(spec.info);
+        return info ? this.readString(info.description) : undefined;
+    }
+
+    private normalizeParserInput(external: unknown): Result<string, string> {
+        if (typeof external === 'string') {
+            return ok(external);
+        }
+
+        if (!external || typeof external !== 'object') {
+            return err('OpenAPI input must be a JSON/YAML string or object.');
+        }
+
+        try {
+            return ok(JSON.stringify(external));
+        } catch (stringifyError) {
+            return err(`Failed to serialize OpenAPI object: ${stringifyError instanceof Error ? stringifyError.message : String(stringifyError)}`);
+        }
+    }
+
+    private formatParserErrors(errors: unknown): string {
+        if (!Array.isArray(errors) || errors.length === 0) {
+            return 'Unknown parsing error';
+        }
+
+        const [first] = errors;
+        if (typeof first === 'string') {
+            return first;
+        }
+
+        if (this.readObject(first)) {
+            const firstObj = first as OpenApiObject;
+            const message = this.readString(firstObj.message);
+            if (message) {
+                return message;
+            }
+            return JSON.stringify(firstObj);
+        }
+
+        return String(first);
+    }
+
+    private readObject(value: unknown): OpenApiObject | undefined {
+        if (!value || typeof value !== 'object' || Array.isArray(value)) {
+            return undefined;
+        }
+        return value as OpenApiObject;
+    }
+
+    private readArray(value: unknown): unknown[] {
+        return Array.isArray(value) ? value : [];
+    }
+
+    private readString(value: unknown): string | undefined {
+        return typeof value === 'string' ? value : undefined;
+    }
+
+    private readStringArray(value: unknown): string[] {
+        return this.readArray(value).filter((entry): entry is string => typeof entry === 'string');
+    }
+
+    private readBoolean(value: unknown, fallback: boolean): boolean {
+        return typeof value === 'boolean' ? value : fallback;
     }
 }
 

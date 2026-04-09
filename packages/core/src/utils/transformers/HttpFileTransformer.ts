@@ -64,7 +64,7 @@ export class HttpFileTransformer extends BaseCollectionTransformer<string> {
     /**
      * Transforms HTTP file content to Collection
      */
-    transformFrom(external: string, filename?: string): Result<Collection, string> {
+    async transformFrom(external: string, filename?: string): Promise<Result<Collection, string>> {
         try {
             const requests = this.parseHttpFile(external);
             
@@ -94,7 +94,7 @@ export class HttpFileTransformer extends BaseCollectionTransformer<string> {
      * Transforms Collection to HTTP file content
      * Note: Export to HTTP format is limited - some data may be lost
      */
-    transformTo(collection: Collection): Result<string, string> {
+    async transformTo(collection: Collection): Promise<Result<string, string>> {
         try {
             const lines: string[] = [];
             

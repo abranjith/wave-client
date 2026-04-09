@@ -72,7 +72,7 @@ export class WaveCollectionTransformer extends BaseCollectionTransformer<Collect
     /**
      * Transforms Wave JSON to Collection (identity transform with validation)
      */
-    transformFrom(external: Collection, filename?: string): Result<Collection, string> {
+    async transformFrom(external: Collection, filename?: string): Promise<Result<Collection, string>> {
         try {
             // Deep clone to avoid mutations
             const collection: Collection = JSON.parse(JSON.stringify(external));
@@ -103,7 +103,7 @@ export class WaveCollectionTransformer extends BaseCollectionTransformer<Collect
     /**
      * Transforms Collection to Wave JSON (identity transform)
      */
-    transformTo(collection: Collection): Result<Collection, string> {
+    async transformTo(collection: Collection): Promise<Result<Collection, string>> {
         try {
             // Deep clone to avoid mutations
             const exported: Collection = JSON.parse(JSON.stringify(collection));

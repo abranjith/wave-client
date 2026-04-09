@@ -79,11 +79,11 @@ export function detectTransformer(data: unknown): BaseCollectionTransformer<unkn
  * @param filename Optional filename for the collection
  * @param formatType Optional format type hint
  */
-export function transformCollection(
+export async function transformCollection(
     data: unknown,
     filename?: string,
     formatType?: CollectionFormatType
-): Result<Collection, string> {
+): Promise<Result<Collection, string>> {
     let transformer: BaseCollectionTransformer<unknown> | undefined;
 
     if (formatType) {
@@ -110,10 +110,10 @@ export function transformCollection(
  * @param collection The collection to export
  * @param formatType The target format type
  */
-export function exportCollection(
+export async function exportCollection(
     collection: Collection,
     formatType: ExportFormatType
-): Result<unknown, string> {
+): Promise<Result<unknown, string>> {
     const transformer = getTransformer(formatType);
     if (!transformer) {
         return err(`Unknown export format: ${formatType}`);

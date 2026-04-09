@@ -6,21 +6,21 @@ describe('WaveCollectionTransformer', () => {
   const transformer = new WaveCollectionTransformer();
 
   describe('formatType and formatName', () => {
-    it('should have correct format type', () => {
+    it('should have correct format type', async () => {
       expect(transformer.formatType).toBe('wave');
     });
 
-    it('should have correct format name', () => {
+    it('should have correct format name', async () => {
       expect(transformer.formatName).toBe('Wave JSON');
     });
 
-    it('should have correct file extensions', () => {
+    it('should have correct file extensions', async () => {
       expect(transformer.fileExtensions).toEqual(['.json']);
     });
   });
 
   describe('validate', () => {
-    it('should validate a valid Wave collection', () => {
+    it('should validate a valid Wave collection', async () => {
       const data = {
         info: {
           waveId: 'test-id',
@@ -33,23 +33,23 @@ describe('WaveCollectionTransformer', () => {
       expect(transformer.validate(data)).toBe(true);
     });
 
-    it('should reject null or undefined', () => {
+    it('should reject null or undefined', async () => {
       expect(transformer.validate(null)).toBe(false);
       expect(transformer.validate(undefined)).toBe(false);
     });
 
-    it('should reject non-object data', () => {
+    it('should reject non-object data', async () => {
       expect(transformer.validate('string')).toBe(false);
       expect(transformer.validate(123)).toBe(false);
       expect(transformer.validate([])).toBe(false);
     });
 
-    it('should reject data without info', () => {
+    it('should reject data without info', async () => {
       const data = { item: [] };
       expect(transformer.validate(data)).toBe(false);
     });
 
-    it('should reject data with invalid info', () => {
+    it('should reject data with invalid info', async () => {
       const data = {
         info: 'not an object',
         item: [],
@@ -57,7 +57,7 @@ describe('WaveCollectionTransformer', () => {
       expect(transformer.validate(data)).toBe(false);
     });
 
-    it('should reject data without info.name', () => {
+    it('should reject data without info.name', async () => {
       const data = {
         info: { waveId: 'id' },
         item: [],
@@ -65,14 +65,14 @@ describe('WaveCollectionTransformer', () => {
       expect(transformer.validate(data)).toBe(false);
     });
 
-    it('should reject data without item array', () => {
+    it('should reject data without item array', async () => {
       const data = {
         info: { name: 'Test' },
       };
       expect(transformer.validate(data)).toBe(false);
     });
 
-    it('should reject data with non-array item', () => {
+    it('should reject data with non-array item', async () => {
       const data = {
         info: { name: 'Test' },
         item: 'not an array',
@@ -82,7 +82,7 @@ describe('WaveCollectionTransformer', () => {
   });
 
   describe('canHandle', () => {
-    it('should handle valid Wave collection', () => {
+    it('should handle valid Wave collection', async () => {
       const data = {
         info: {
           waveId: 'test-id',
@@ -94,7 +94,7 @@ describe('WaveCollectionTransformer', () => {
       expect(transformer.canHandle(data)).toBe(true);
     });
 
-    it('should reject Postman collections with _postman_id', () => {
+    it('should reject Postman collections with _postman_id', async () => {
       const data = {
         info: {
           _postman_id: 'postman-id',
@@ -106,7 +106,7 @@ describe('WaveCollectionTransformer', () => {
       expect(transformer.canHandle(data)).toBe(false);
     });
 
-    it('should reject Postman collections with schema', () => {
+    it('should reject Postman collections with schema', async () => {
       const data = {
         info: {
           name: 'Postman Collection',
@@ -118,13 +118,13 @@ describe('WaveCollectionTransformer', () => {
       expect(transformer.canHandle(data)).toBe(false);
     });
 
-    it('should reject invalid data', () => {
+    it('should reject invalid data', async () => {
       expect(transformer.canHandle({ info: 'invalid' })).toBe(false);
     });
   });
 
   describe('transformFrom', () => {
-    it('should transform valid Wave collection', () => {
+    it('should transform valid Wave collection', async () => {
       const input: Collection = {
         info: {
           waveId: 'test-id',
@@ -145,7 +145,7 @@ describe('WaveCollectionTransformer', () => {
         ],
       };
 
-      const result = transformer.transformFrom(input);
+      const result = await transformer.transformFrom(input);
 
       expect(result.isOk).toBe(true);
       if (result.isOk) {
@@ -155,12 +155,12 @@ describe('WaveCollectionTransformer', () => {
       }
     });
 
-    it('should create info if missing', () => {
+    it('should create info if missing', async () => {
       const input: any = {
         item: [],
       };
 
-      const result = transformer.transformFrom(input, 'test-collection.json');
+      const result = await transformer.transformFrom(input, 'test-collection.json');
 
       expect(result.isOk).toBe(true);
       if (result.isOk) {
@@ -170,12 +170,12 @@ describe('WaveCollectionTransformer', () => {
       }
     });
 
-    it('should create empty item array if missing', () => {
+    it('should create empty item array if missing', async () => {
       const input: any = {
         info: { name: 'Test' },
       };
 
-      const result = transformer.transformFrom(input);
+      const result = await transformer.transformFrom(input);
 
       expect(result.isOk).toBe(true);
       if (result.isOk) {
@@ -183,7 +183,7 @@ describe('WaveCollectionTransformer', () => {
       }
     });
 
-    it('should ensure items have IDs', () => {
+    it('should ensure items have IDs', async () => {
       const input: any = {
         info: { name: 'Test' },
         item: [
@@ -194,7 +194,7 @@ describe('WaveCollectionTransformer', () => {
         ],
       };
 
-      const result = transformer.transformFrom(input);
+      const result = await transformer.transformFrom(input);
 
       expect(result.isOk).toBe(true);
       if (result.isOk) {
@@ -202,7 +202,7 @@ describe('WaveCollectionTransformer', () => {
       }
     });
 
-    it('should preserve existing IDs', () => {
+    it('should preserve existing IDs', async () => {
       const input: Collection = {
         info: { name: 'Test', waveId: 'id' },
         item: [
@@ -214,7 +214,7 @@ describe('WaveCollectionTransformer', () => {
         ],
       };
 
-      const result = transformer.transformFrom(input);
+      const result = await transformer.transformFrom(input);
 
       expect(result.isOk).toBe(true);
       if (result.isOk) {
@@ -222,7 +222,7 @@ describe('WaveCollectionTransformer', () => {
       }
     });
 
-    it('should handle nested items', () => {
+    it('should handle nested items', async () => {
       const input: Collection = {
         info: { name: 'Test', waveId: 'id' },
         item: [
@@ -240,7 +240,7 @@ describe('WaveCollectionTransformer', () => {
         ],
       };
 
-      const result = transformer.transformFrom(input);
+      const result = await transformer.transformFrom(input);
 
       expect(result.isOk).toBe(true);
       if (result.isOk) {
@@ -248,7 +248,7 @@ describe('WaveCollectionTransformer', () => {
       }
     });
 
-    it('should return error for invalid JSON during deep clone', () => {
+    it('should return error for invalid JSON during deep clone', async () => {
       // Create circular reference
       const input: any = {
         info: { name: 'Test' },
@@ -256,7 +256,7 @@ describe('WaveCollectionTransformer', () => {
       };
       input.circular = input;
 
-      const result = transformer.transformFrom(input);
+      const result = await transformer.transformFrom(input);
 
       expect(result.isOk).toBe(false);
       if (!result.isOk) {
@@ -266,7 +266,7 @@ describe('WaveCollectionTransformer', () => {
   });
 
   describe('transformTo', () => {
-    it('should transform Collection to Wave JSON', () => {
+    it('should transform Collection to Wave JSON', async () => {
       const collection: Collection = {
         info: {
           waveId: 'test-id',
@@ -287,7 +287,7 @@ describe('WaveCollectionTransformer', () => {
         ],
       };
 
-      const result = transformer.transformTo(collection);
+      const result = await transformer.transformTo(collection);
 
       expect(result.isOk).toBe(true);
       if (result.isOk) {
@@ -296,7 +296,7 @@ describe('WaveCollectionTransformer', () => {
       }
     });
 
-    it('should return identity (same object structure)', () => {
+    it('should return identity (same object structure)', async () => {
       const collection: Collection = {
         info: {
           waveId: 'test-id',
@@ -305,7 +305,7 @@ describe('WaveCollectionTransformer', () => {
         item: [],
       };
 
-      const result = transformer.transformTo(collection);
+      const result = await transformer.transformTo(collection);
 
       expect(result.isOk).toBe(true);
       if (result.isOk) {
@@ -315,7 +315,7 @@ describe('WaveCollectionTransformer', () => {
   });
 
   describe('waveTransformer singleton', () => {
-    it('should export singleton instance', () => {
+    it('should export singleton instance', async () => {
       expect(waveTransformer).toBeInstanceOf(WaveCollectionTransformer);
       expect(waveTransformer.formatType).toBe('wave');
     });

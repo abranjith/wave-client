@@ -24,7 +24,9 @@ import {
   TestSuiteEditor,
   ArenaPane,
   generateUniqueId,
+  transformCollection,
   type Environment,
+  type ImportFormatType,
   type Cookie,
   type Proxy,
   type Cert,
@@ -544,7 +546,38 @@ const App: React.FC = () => {
 
   const handleImportCollection = async (fileName: string, fileContent: string, collectionType: string) => {
     setIsCollectionsLoading(true);
-    const result = await storage.importCollection(fileName, fileContent);
+
+    let importPayload = fileContent;
+
+    if (collectionType !== 'wave') {
+      let transformInput: unknown = fileContent;
+
+      if (collectionType === 'postman') {
+        try {
+          transformInput = JSON.parse(fileContent);
+        } catch {
+          notification.showNotification('error', 'Invalid Postman JSON file');
+          setIsCollectionsLoading(false);
+          return;
+        }
+      }
+
+      const transformResult = await transformCollection(
+        transformInput,
+        fileName,
+        collectionType as ImportFormatType
+      );
+
+      if (!transformResult.isOk) {
+        notification.showNotification('error', transformResult.error);
+        setIsCollectionsLoading(false);
+        return;
+      }
+
+      importPayload = JSON.stringify(transformResult.value, null, 2);
+    }
+
+    const result = await storage.importCollection(fileName, importPayload);
     
     if (result.isOk) {
       setCollections(result.value);
