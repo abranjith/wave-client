@@ -258,6 +258,48 @@ export function App() {
 }
 ```
 
+### Shared Confirmation Dialog
+
+Use `useConfirmDialog` to show a standardised destructive-action confirmation dialog without duplicating state and markup in every component.
+
+```tsx
+import { useConfirmDialog } from '@wave-client/core';
+import { useNotificationAdapter } from '@wave-client/core';
+
+function MyPane() {
+  const { openConfirmDialog, ConfirmDialogComponent } = useConfirmDialog();
+  const notification = useNotificationAdapter();
+
+  const handleDelete = (id: string) => {
+    openConfirmDialog({
+      title: 'Delete Item',
+      message: 'Are you sure? This action cannot be undone.',
+      confirmText: 'Delete',
+      onConfirm: async () => {
+        const result = await deleteItem(id);
+        if (!result.isOk) {
+          throw new Error(result.error); // dialog stays open, call shows error below
+        }
+      },
+    });
+  };
+
+  // Render ConfirmDialogComponent once, anywhere in the JSX tree
+  return (
+    <div>
+      <button onClick={() => handleDelete('abc')}>Delete</button>
+      <ConfirmDialogComponent />
+    </div>
+  );
+}
+```
+
+Key behaviours:
+- `onConfirm` can be sync or async. While a `Promise` is pending both buttons are disabled (`isConfirming` state).
+- If the `Promise` rejects the dialog **stays open** so the caller can surface an error notification.
+- `ConfirmDialogComponent` has a **stable function identity** — React never unmounts it mid-animation.
+
+
 ## Developer Guide
 
 ### Prerequisites

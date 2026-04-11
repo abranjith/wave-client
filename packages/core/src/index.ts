@@ -454,6 +454,12 @@ export { useFlowRunner } from './hooks/useFlowRunner';
 export { useTestSuiteRunner } from './hooks/useTestSuiteRunner';
 export { useFileUpload } from './hooks/useFileUpload';
 export { useArenaStreamManager } from './hooks/useArenaStreamManager';
+export { useConfirmDialog } from './hooks/useConfirmDialog';
+
+export type {
+    ConfirmDialogOptions,
+    UseConfirmDialogResult,
+} from './hooks/useConfirmDialog';
 
 export type {
     CollectionRunItem,

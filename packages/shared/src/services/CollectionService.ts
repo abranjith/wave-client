@@ -26,6 +26,27 @@ function ensureCollectionItemIds(items: CollectionItem[]): CollectionItem[] {
 }
 
 /**
+ * Recursively removes the item matching `itemId` from the folder indicated by
+ * `itemPath`. Returns an immutably updated items array.
+ *
+ * @param items - Current-level items
+ * @param itemPath - Ordered folder names from this level to the item's parent
+ * @param itemId - The `id` of the item to remove
+ */
+function removeItemFromTree(items: CollectionItem[], itemPath: string[], itemId: string): CollectionItem[] {
+    if (itemPath.length === 0) {
+        return items.filter(i => i.id !== itemId);
+    }
+    const [nextFolder, ...remainingPath] = itemPath;
+    return items.map(item => {
+        if (item.name === nextFolder && item.item) {
+            return { ...item, item: removeItemFromTree(item.item, remainingPath, itemId) };
+        }
+        return item;
+    });
+}
+
+/**
  * Service for managing collections (groups of API requests).
  */
 export class CollectionService extends BaseStorageService {
@@ -198,6 +219,31 @@ export class CollectionService extends BaseStorageService {
         const collectionsDir = await this.getCollectionsDir();
         const filePath = path.join(collectionsDir, fileName);
         this.deleteFile(filePath);
+    }
+
+    /**
+     * Deletes a nested item (folder or request) from within a collection and
+     * returns the updated collection.
+     *
+     * Navigates the tree using `itemPath` to locate the parent folder, then
+     * removes the child whose `id` matches `itemId`. The updated collection is
+     * persisted to disk before being returned.
+     *
+     * @param fileName - The collection filename
+     * @param itemPath - Ordered folder names from collection root to the item's parent
+     * @param itemId - The `id` of the item to remove
+     * @returns The updated collection with the item removed
+     */
+    async deleteItem(fileName: string, itemPath: string[], itemId: string): Promise<Collection & { filename: string }> {
+        const collection = await this.loadOne(fileName);
+        if (!collection) {
+            throw new Error(`Collection not found: ${fileName}`);
+        }
+
+        const updatedItems = removeItemFromTree(collection.item, itemPath, itemId);
+        const updatedCollection = { ...collection, item: updatedItems };
+        await this.save(updatedCollection, fileName);
+        return { ...updatedCollection, filename: fileName };
     }
 
     /**

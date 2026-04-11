@@ -1,8 +1,10 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { ChevronRightIcon, ChevronDownIcon, FolderIcon, LayoutGridIcon, ImportIcon, DownloadIcon, MoreVertical } from 'lucide-react';
+import { ChevronRightIcon, ChevronDownIcon, FolderIcon, LayoutGridIcon, ImportIcon, DownloadIcon, MoreVertical, PlayIcon, PencilIcon, Trash2Icon } from 'lucide-react';
 import { Collection, CollectionItem, CollectionRequest } from '../../types/collection';
-import { extractRequestFromItem, countRequests } from '../../utils/collectionParser';
+import { extractRequestFromItem, countRequests, getSiblingsAtPath, renameItemInTree } from '../../utils/collectionParser';
 import useAppStateStore from '../../hooks/store/useAppStateStore';
+import { useStorageAdapter, useNotificationAdapter } from '../../hooks/useAdapter';
+import { useConfirmDialog } from '../../hooks/useConfirmDialog';
 import { Button } from '../ui/button';
 import { Tooltip, TooltipTrigger, TooltipContent } from '../ui/tooltip';
 import {
@@ -168,6 +170,12 @@ const CollectionsPane: React.FC<CollectionsPaneProps> = ({
   const savedExpandedFolders = useAppStateStore((state) => state.savedExpandedFolders);
   const setSavedExpandedState = useAppStateStore((state) => state.setSavedExpandedState);
   const clearSavedExpandedState = useAppStateStore((state) => state.clearSavedExpandedState);
+  const updateCollection = useAppStateStore((state) => state.updateCollection);
+  const removeCollection = useAppStateStore((state) => state.removeCollection);
+
+  const storageAdapter = useStorageAdapter();
+  const notification = useNotificationAdapter();
+  const { openConfirmDialog, ConfirmDialogComponent } = useConfirmDialog();
 
   const [expandedCollections, setExpandedCollections] = useState<Set<string>>(new Set());
   const [sortedCollections, setSortedCollections] = useState<Collection[]>([]);
@@ -182,6 +190,10 @@ const CollectionsPane: React.FC<CollectionsPaneProps> = ({
     items: CollectionItem[];
     itemPath: string[];
   }>({ isOpen: false, collectionName: '', items: [], itemPath: [] });
+  /** Filename of the collection currently in inline-rename mode (null = no rename active). */
+  const [editingCollectionFilename, setEditingCollectionFilename] = useState<string | null>(null);
+  /** Draft text while a collection name is being edited inline. */
+  const [editingCollectionNameDraft, setEditingCollectionNameDraft] = useState('');
   const wasSearchingRef = useRef(false);
 
   const toggleCollection = (filename: string) => {
@@ -232,6 +244,145 @@ const CollectionsPane: React.FC<CollectionsPaneProps> = ({
   const handleCloseRunModal = useCallback(() => {
     setRunModalData(prev => ({ ...prev, isOpen: false }));
   }, []);
+
+  /**
+   * Starts inline rename for a collection header.
+   * Sets the editing filename and prepopulates the draft with the current name.
+   */
+  const handleRenameCollectionStart = useCallback((filename: string, currentName: string) => {
+    setEditingCollectionFilename(filename);
+    setEditingCollectionNameDraft(currentName);
+  }, []);
+
+  /**
+   * Commits or cancels an in-progress collection rename.
+   * Performs uniqueness check before persisting via the storage adapter.
+   */
+  const handleRenameCollectionEnd = useCallback(async () => {
+    if (!editingCollectionFilename) return;
+    const collection = sortedCollections.find(c => c.filename === editingCollectionFilename);
+    setEditingCollectionFilename(null);
+    if (!collection) return;
+
+    const trimmedName = editingCollectionNameDraft.trim() || 'Untitled Collection';
+    if (trimmedName === collection.info.name) return; // no-op
+
+    // Uniqueness check (case-insensitive) against all other collections
+    const isDuplicate = collections.some(
+      c => c.filename !== editingCollectionFilename && c.info.name.toLowerCase() === trimmedName.toLowerCase()
+    );
+    if (isDuplicate) {
+      notification.showNotification('error', `A collection named "${trimmedName}" already exists.`);
+      return;
+    }
+
+    const updatedCollection: Collection = {
+      ...collection,
+      info: { ...collection.info, name: trimmedName },
+    };
+    const result = await storageAdapter.saveCollection(updatedCollection);
+    if (result.isOk) {
+      updateCollection(collection.info.name, { info: { ...collection.info, name: trimmedName } });
+    } else {
+      notification.showNotification('error', result.error);
+    }
+  }, [editingCollectionFilename, editingCollectionNameDraft, collections, sortedCollections, storageAdapter, notification, updateCollection]);
+
+  /**
+   * Opens a confirm dialog and, on confirmation, deletes the whole collection.
+   */
+  const handleDeleteCollection = useCallback((collection: Collection) => {
+    openConfirmDialog({
+      title: 'Delete Collection',
+      message: `Are you sure you want to delete "${collection.info.name}"? This cannot be undone.`,
+      confirmText: 'Delete',
+      onConfirm: async () => {
+        const result = await storageAdapter.deleteCollection(collection.filename || '');
+        if (!result.isOk) {
+          notification.showNotification('error', result.error);
+          throw new Error(result.error);
+        }
+        removeCollection(collection.info.name);
+      },
+    });
+  }, [openConfirmDialog, storageAdapter, notification, removeCollection]);
+
+  /**
+   * Renames a folder or request inside a collection, with sibling-level uniqueness check.
+   * Called from CollectionTreeItem via onRenameItem callback.
+   *
+   * @param collectionFilename - Filename key of the owning collection
+   * @param collectionName - Current name of the owning collection (for store update)
+   * @param itemId - ID of the item to rename
+   * @param parentItemPath - Path of folder names from collection root to the item's parent
+   * @param newName - The new name to assign
+   */
+  const handleRenameItem = useCallback(async (
+    collectionFilename: string,
+    collectionName: string,
+    itemId: string,
+    parentItemPath: string[],
+    newName: string
+  ) => {
+    const trimmedName = newName.trim();
+    if (!trimmedName) return;
+
+    const collection = collections.find(c => c.filename === collectionFilename);
+    if (!collection) return;
+
+    // Sibling-level uniqueness check (case-insensitive)
+    const siblings = getSiblingsAtPath(collection.item, parentItemPath);
+    const isDuplicate = siblings.some(
+      s => s.id !== itemId && s.name.toLowerCase() === trimmedName.toLowerCase()
+    );
+    if (isDuplicate) {
+      notification.showNotification('error', `An item named "${trimmedName}" already exists at this level.`);
+      return;
+    }
+
+    const updatedItems = renameItemInTree(collection.item, itemId, trimmedName);
+    const updatedCollection: Collection = { ...collection, item: updatedItems };
+    const result = await storageAdapter.saveCollection(updatedCollection);
+    if (result.isOk) {
+      updateCollection(collectionName, { item: updatedItems });
+    } else {
+      notification.showNotification('error', result.error);
+    }
+  }, [collections, storageAdapter, notification, updateCollection]);
+
+  /**
+   * Opens a confirm dialog and, on confirmation, deletes a folder or request
+   * from within a collection via the storage adapter.
+   * Called from CollectionTreeItem via onDeleteItem callback.
+   *
+   * @param collection - The owning collection
+   * @param parentItemPath - Path of folder names from collection root to the item's parent
+   * @param item - The CollectionItem to delete
+   */
+  const handleDeleteItem = useCallback((
+    collection: Collection,
+    parentItemPath: string[],
+    item: CollectionItem
+  ) => {
+    const isFolder = Array.isArray(item.item);
+    openConfirmDialog({
+      title: `Delete ${isFolder ? 'Folder' : 'Request'}`,
+      message: `Are you sure you want to delete "${item.name}"?${isFolder ? ' All items inside will also be deleted.' : ''} This cannot be undone.`,
+      confirmText: 'Delete',
+      onConfirm: async () => {
+        const result = await storageAdapter.deleteRequestFromCollection(
+          collection.filename || '',
+          parentItemPath,
+          item.id
+        );
+        if (!result.isOk) {
+          notification.showNotification('error', result.error);
+          throw new Error(result.error);
+        }
+        updateCollection(collection.info.name, { item: result.value.item });
+      },
+    });
+  }, [openConfirmDialog, storageAdapter, notification, updateCollection]);
 
   //TODO this default logic is flaky and needs a better approach
   // Sort collections to show default collection first
@@ -445,7 +596,7 @@ const CollectionsPane: React.FC<CollectionsPaneProps> = ({
                     className={`flex items-center p-3 bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 cursor-pointer rounded-t-lg group transition-colors ${
                       openMenuFilename === filename ? 'bg-slate-100 dark:bg-slate-700' : ''
                     }`}
-                    onClick={() => toggleCollection(filename)}
+                    onClick={() => editingCollectionFilename !== filename && toggleCollection(filename)}
                 >
                 <div className="flex items-center flex-1 mb-1">
                         {expandedCollections.has(filename) ? (
@@ -454,9 +605,24 @@ const CollectionsPane: React.FC<CollectionsPaneProps> = ({
                         <ChevronRightIcon className="h-5 w-5 text-slate-500 mr-2 flex-shrink-0" />
                         )}
                         <LayoutGridIcon className="h-4 w-4 text-amber-600 mr-2 flex-shrink-0" />
-                        <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-200 break-words">
-                        {collection.info.name}
-                        </h3>
+                        {editingCollectionFilename === filename ? (
+                          <Input
+                            value={editingCollectionNameDraft}
+                            onChange={(e) => setEditingCollectionNameDraft(e.target.value)}
+                            onBlur={handleRenameCollectionEnd}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') handleRenameCollectionEnd();
+                              if (e.key === 'Escape') setEditingCollectionFilename(null);
+                            }}
+                            onClick={(e) => e.stopPropagation()}
+                            className="h-6 text-sm py-0 font-semibold flex-1"
+                            autoFocus
+                          />
+                        ) : (
+                          <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-200 break-words">
+                            {collection.info.name}
+                          </h3>
+                        )}
                 </div>
                 <span className={`text-xs text-slate-400 bg-slate-200 dark:bg-slate-600 px-2 py-1 rounded-full ml-2 transition-opacity ${
                   openMenuFilename === filename ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
@@ -470,9 +636,28 @@ const CollectionsPane: React.FC<CollectionsPaneProps> = ({
                         <MoreVertical className="h-4 w-4" />
                       </Button>
                     </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end" className="min-w-24">
-                      <DropdownMenuItem onClick={() => handleRunCollection(collection.info.name, collection.item, [])}>Run</DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => {}}>Delete</DropdownMenuItem> {/* Add delete functionality later */}
+                    <DropdownMenuContent align="end" className="min-w-32">
+                      <DropdownMenuItem onClick={() => handleRunCollection(collection.info.name, collection.item, [])}>
+                        <PlayIcon className="h-4 w-4 mr-2" />
+                        Run
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={(e) => {
+                        e.stopPropagation();
+                        handleRenameCollectionStart(filename, collection.info.name);
+                      }}>
+                        <PencilIcon className="h-4 w-4 mr-2" />
+                        Rename
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        className="text-red-600 focus:text-red-600 focus:bg-red-50 dark:focus:bg-red-900/20"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleDeleteCollection(collection);
+                        }}
+                      >
+                        <Trash2Icon className="h-4 w-4 mr-2" />
+                        Delete
+                      </DropdownMenuItem>
                     </DropdownMenuContent>
                   </DropdownMenu>
                 </div>
@@ -494,6 +679,12 @@ const CollectionsPane: React.FC<CollectionsPaneProps> = ({
                                 onToggleFolder={toggleFolder}
                                 onRequestSelect={handleRequestSelect}
                                 onRunFolder={(items, folderPath) => handleRunCollection(collection.info.name, items, folderPath)}
+                                onRenameItem={(itemId, newName, parentItemPath) =>
+                                  handleRenameItem(filename, collection.info.name, itemId, parentItemPath, newName)
+                                }
+                                onDeleteItem={(deletedItem, parentItemPath) =>
+                                  handleDeleteItem(collection, parentItemPath, deletedItem)
+                                }
                             />
                         ))}
                     </div>
@@ -520,6 +711,7 @@ const CollectionsPane: React.FC<CollectionsPaneProps> = ({
         items={runModalData.items}
         itemPath={runModalData.itemPath}
       />
+      <ConfirmDialogComponent />
     </div>
   );
 };

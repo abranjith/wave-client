@@ -8,7 +8,6 @@
 import React, { useState, useCallback } from 'react';
 import { 
     PlusIcon, 
-    PlayIcon, 
     Trash2Icon, 
     FlaskConicalIcon,
     AlertCircleIcon,
@@ -17,6 +16,7 @@ import {
     PencilIcon,
     CircleIcon,
 } from 'lucide-react';
+import { useConfirmDialog } from '../../hooks/useConfirmDialog';
 import useAppStateStore from '../../hooks/store/useAppStateStore';
 import { useStorageAdapter, useNotificationAdapter } from '../../hooks/useAdapter';
 import { Button } from '../ui/button';
@@ -38,8 +38,6 @@ import { createNewTestSuite } from '../../types/testSuite';
 export interface TestLabPaneProps {
     /** Callback when a test suite is selected for editing */
     onTestSuiteSelect?: (suite: TestSuite) => void;
-    /** Callback to run a test suite */
-    onTestSuiteRun?: (suite: TestSuite) => void;
     /** Callback to retry loading test suites */
     onRetry?: () => void;
 }
@@ -50,11 +48,11 @@ export interface TestLabPaneProps {
 
 const TestLabPane: React.FC<TestLabPaneProps> = ({ 
     onTestSuiteSelect, 
-    onTestSuiteRun,
     onRetry
 }) => {
     const storageAdapter = useStorageAdapter();
     const notification = useNotificationAdapter();
+    const { openConfirmDialog, ConfirmDialogComponent } = useConfirmDialog();
     
     // Use store state for test suites
     const testSuites = useAppStateStore((state) => state.testSuites);
@@ -125,17 +123,27 @@ const TestLabPane: React.FC<TestLabPaneProps> = ({
         }
     }, [storageAdapter, notification, onTestSuiteSelect, addTestSuite, isTestSuiteNameUnique]);
 
-    // Delete test suite
-    const handleDeleteTestSuite = useCallback(async (suiteId: string, suiteName: string) => {
-        const result = await storageAdapter.deleteTestSuite(suiteId);
-        
-        if (result.isOk) {
-            removeTestSuite(suiteId);
-            notification.showNotification('success', `Deleted "${suiteName}"`);
-        } else {
-            notification.showNotification('error', result.error);
-        }
-    }, [storageAdapter, notification, removeTestSuite]);
+    /**
+     * Opens a confirmation dialog before deleting a test suite.
+     * The adapter is called only after the user explicitly confirms;
+     * the store is mutated only on adapter success.
+     */
+    const handleDeleteTestSuite = useCallback((suiteId: string, suiteName: string) => {
+        openConfirmDialog({
+            title: 'Delete Test Suite',
+            message: `Are you sure you want to delete "${suiteName}"? This action cannot be undone.`,
+            confirmText: 'Delete',
+            onConfirm: async () => {
+                const result = await storageAdapter.deleteTestSuite(suiteId);
+                if (!result.isOk) {
+                    notification.showNotification('error', result.error);
+                    throw new Error(result.error);
+                }
+                removeTestSuite(suiteId);
+                notification.showNotification('success', `Deleted "${suiteName}"`);
+            },
+        });
+    }, [openConfirmDialog, storageAdapter, notification, removeTestSuite]);
 
     // Rename test suite
     const handleRenameStart = useCallback((suite: TestSuite) => {
@@ -245,6 +253,7 @@ const TestLabPane: React.FC<TestLabPaneProps> = ({
     }
 
     return (
+        <>
         <div className="flex flex-col h-full">
             {/* Header */}
             <div className="flex items-center justify-between p-4 pb-2">
@@ -344,25 +353,6 @@ const TestLabPane: React.FC<TestLabPaneProps> = ({
                                         <span className="text-xs text-purple-600 dark:text-purple-400 font-medium px-2">Running...</span>
                                     ) : (
                                         <>
-                                            {onTestSuiteRun && suite.items.length > 0 && (
-                                                <Tooltip>
-                                                    <TooltipTrigger asChild>
-                                                        <Button
-                                                            variant="ghost"
-                                                            size="sm"
-                                                            className="h-6 w-6 p-0"
-                                                            onClick={(e) => {
-                                                                e.stopPropagation();
-                                                                onTestSuiteRun(suite);
-                                                            }}
-                                                        >
-                                                            <PlayIcon className="h-3 w-3 text-green-600" />
-                                                        </Button>
-                                                    </TooltipTrigger>
-                                                    <TooltipContent>Run Test Suite</TooltipContent>
-                                                </Tooltip>
-                                            )}
-                                            
                                             <DropdownMenu>
                                                 <DropdownMenuTrigger asChild>
                                                     <Button
@@ -405,6 +395,10 @@ const TestLabPane: React.FC<TestLabPaneProps> = ({
                 )}
             </div>
         </div>
+
+        {/* Confirmation dialog for destructive operations */}
+        <ConfirmDialogComponent />
+    </>
     );
 };
 

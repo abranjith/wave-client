@@ -286,6 +286,69 @@ export function prepareCollection(collection: Collection, filename: string): Col
 }
 
 // ============================================================================
+// Immutable Tree Modification Utilities
+// ============================================================================
+
+/**
+ * Returns an immutably updated items array where the item matching `itemId`
+ * has its `name` replaced with `newName`. Searches recursively through folders.
+ *
+ * @param items - The current-level items to search
+ * @param itemId - The ID of the item to rename
+ * @param newName - The new name to assign
+ * @returns A new array with the renamed item; unchanged if `itemId` is not found
+ */
+export function renameItemInTree(items: CollectionItem[], itemId: string, newName: string): CollectionItem[] {
+  return items.map(item => {
+    if (item.id === itemId) {
+      return { ...item, name: newName };
+    }
+    if (item.item) {
+      return { ...item, item: renameItemInTree(item.item, itemId, newName) };
+    }
+    return item;
+  });
+}
+
+/**
+ * Returns an immutably updated items array with the item identified by
+ * `itemId` removed from the folder at `itemPath`.
+ *
+ * @param items - The current-level items to search
+ * @param itemPath - Ordered folder names from the current level to the item's parent
+ * @param itemId - The ID of the item to remove
+ * @returns A new array without the target item; unchanged if not found
+ */
+export function removeItemFromTree(items: CollectionItem[], itemPath: string[], itemId: string): CollectionItem[] {
+  if (itemPath.length === 0) {
+    return items.filter(item => item.id !== itemId);
+  }
+  const [nextFolder, ...remainingPath] = itemPath;
+  return items.map(item => {
+    if (item.name === nextFolder && item.item) {
+      return { ...item, item: removeItemFromTree(item.item, remainingPath, itemId) };
+    }
+    return item;
+  });
+}
+
+/**
+ * Returns the sibling items at the folder level described by `folderPath`.
+ * An empty path refers to the root level.
+ *
+ * @param items - Root-level items of the collection
+ * @param folderPath - Ordered folder names from root to the desired parent folder
+ * @returns The items array at that level, or `[]` if the path is invalid
+ */
+export function getSiblingsAtPath(items: CollectionItem[], folderPath: string[]): CollectionItem[] {
+  if (folderPath.length === 0) return items;
+  const [nextFolder, ...remainingPath] = folderPath;
+  const folder = items.find(i => i.name === nextFolder && i.item !== undefined);
+  if (!folder || !folder.item) return [];
+  return getSiblingsAtPath(folder.item, remainingPath);
+}
+
+// ============================================================================
 // Request Conversion Utilities
 // ============================================================================
 

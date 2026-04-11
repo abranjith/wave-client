@@ -1,9 +1,41 @@
-import React, { useState } from 'react';
-import { CloudIcon, SettingsIcon, ImportIcon, DownloadIcon, PlusIcon } from 'lucide-react';
+/**
+ * EnvironmentsPane Component
+ *
+ * Sidebar pane for browsing and managing environment files.
+ * Supports per-row actions: Rename (inline, uniqueness-validated) and
+ * Delete (confirm-gated, adapter-backed).
+ *
+ * FEAT-005: Adds DropdownMenu with Rename and Delete actions to each row.
+ * Rename: validates case-insensitive uniqueness, persists via saveEnvironment,
+ *         then updates the store via updateEnvironment.
+ * Delete: routes through useConfirmDialog; adapter deleteEnvironment is called
+ *         only after explicit user confirmation; store is mutated on success only.
+ */
+
+import React, { useState, useCallback } from 'react';
+import {
+    CloudIcon,
+    SettingsIcon,
+    ImportIcon,
+    DownloadIcon,
+    PlusIcon,
+    MoreVerticalIcon,
+    PencilIcon,
+    Trash2Icon,
+} from 'lucide-react';
 import { Environment } from '../../types/collection';
 import useAppStateStore from '../../hooks/store/useAppStateStore';
+import { useStorageAdapter, useNotificationAdapter } from '../../hooks/useAdapter';
+import { useConfirmDialog } from '../../hooks/useConfirmDialog';
 import { Button } from '../ui/button';
+import { Input } from '../ui/input';
 import { Tooltip, TooltipTrigger, TooltipContent } from '../ui/tooltip';
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuTrigger,
+} from '../ui/dropdown-menu';
 import EnvImportWizard from './EnvImportWizard';
 import EnvAddWizard from './EnvAddWizard';
 
@@ -75,8 +107,19 @@ const EnvironmentsPane: React.FC<EnvironmentsPaneProps> = ({ onEnvSelect, onImpo
   const isLoading = useAppStateStore((state) => state.isEnvironmentsLoading);
   const error = useAppStateStore((state) => state.environmentLoadError);
   const addEnvironment = useAppStateStore((state) => state.addEnvironment);
+  const updateEnvironment = useAppStateStore((state) => state.updateEnvironment);
+  const removeEnvironment = useAppStateStore((state) => state.removeEnvironment);
+
+  const storageAdapter = useStorageAdapter();
+  const notification = useNotificationAdapter();
+  const { openConfirmDialog, ConfirmDialogComponent } = useConfirmDialog();
+
   const [isImportWizardOpen, setIsImportWizardOpen] = useState(false);
   const [isAddWizardOpen, setIsAddWizardOpen] = useState(false);
+  // Tracks which environment row is being renamed; null when no rename is active.
+  const [editingEnvironmentId, setEditingEnvironmentId] = useState<string | null>(null);
+  // Holds the current text of the inline rename input.
+  const [editingName, setEditingName] = useState('');
 
   const handleEnvironmentClick = (environment: Environment) => {
     if (onEnvSelect) {
@@ -103,6 +146,83 @@ const EnvironmentsPane: React.FC<EnvironmentsPaneProps> = ({ onEnvSelect, onImpo
       return { success: false, error: result.error };
     }
   };
+
+  /** Opens the inline rename editor for the given environment row. */
+  const handleRenameStart = useCallback((environment: Environment) => {
+    setEditingEnvironmentId(environment.id);
+    setEditingName(environment.name);
+  }, []);
+
+  /**
+   * Commits an in-progress rename after Enter, blur, or any other commit trigger.
+   *
+   * Ordering:
+   *  1. Trim + empty-guard (revert to original name if blank).
+   *  2. No-op if name unchanged.
+   *  3. Case-insensitive uniqueness check against all OTHER environments.
+   *  4. storageAdapter.saveEnvironment → persist first.
+   *  5. updateEnvironment → mutate store only after successful persistence.
+   */
+  const handleRenameEnd = useCallback(async () => {
+    if (!editingEnvironmentId) return;
+
+    const environment = environments.find(e => e.id === editingEnvironmentId);
+    if (!environment) {
+      setEditingEnvironmentId(null);
+      return;
+    }
+
+    const trimmedName = editingName.trim() || environment.name;
+
+    // No-op when name is unchanged.
+    if (trimmedName === environment.name) {
+      setEditingEnvironmentId(null);
+      return;
+    }
+
+    // Case-insensitive uniqueness: reject if another environment shares the same name.
+    const isDuplicate = environments.some(
+      e => e.id !== editingEnvironmentId && e.name.toLowerCase() === trimmedName.toLowerCase()
+    );
+    if (isDuplicate) {
+      notification.showNotification('error', `An environment named "${trimmedName}" already exists.`);
+      setEditingEnvironmentId(null);
+      return;
+    }
+
+    const updatedEnvironment: Environment = { ...environment, name: trimmedName };
+    const result = await storageAdapter.saveEnvironment(updatedEnvironment);
+
+    if (result.isOk) {
+      updateEnvironment(environment.id, { name: trimmedName });
+    } else {
+      notification.showNotification('error', result.error);
+    }
+
+    setEditingEnvironmentId(null);
+  }, [editingEnvironmentId, editingName, environments, storageAdapter, notification, updateEnvironment]);
+
+  /**
+   * Opens a confirmation dialog before deleting an environment.
+   * The adapter is called only after the user explicitly confirms.
+   * The store is mutated only after the adapter succeeds.
+   */
+  const handleDeleteEnvironment = useCallback((environment: Environment) => {
+    openConfirmDialog({
+      title: 'Delete Environment',
+      message: `Are you sure you want to delete "${environment.name}"? This action cannot be undone.`,
+      confirmText: 'Delete',
+      onConfirm: async () => {
+        const result = await storageAdapter.deleteEnvironment(environment.id);
+        if (!result.isOk) {
+          notification.showNotification('error', result.error);
+          throw new Error(result.error);
+        }
+        removeEnvironment(environment.id);
+        notification.showNotification('success', `Deleted "${environment.name}"`);
+      },
+    });
+  }, [openConfirmDialog, storageAdapter, notification, removeEnvironment]);
 
   if (isLoading) {
     return (
@@ -131,6 +251,7 @@ const EnvironmentsPane: React.FC<EnvironmentsPaneProps> = ({ onEnvSelect, onImpo
           onClose={() => setIsAddWizardOpen(false)}
           onAddEnvironment={handleAddEnvironment}
         />
+        <ConfirmDialogComponent />
       </div>
     );
   }
@@ -173,6 +294,7 @@ const EnvironmentsPane: React.FC<EnvironmentsPaneProps> = ({ onEnvSelect, onImpo
           onClose={() => setIsAddWizardOpen(false)}
           onAddEnvironment={handleAddEnvironment}
         />
+        <ConfirmDialogComponent />
       </div>
     );
   }
@@ -207,6 +329,7 @@ const EnvironmentsPane: React.FC<EnvironmentsPaneProps> = ({ onEnvSelect, onImpo
           onClose={() => setIsAddWizardOpen(false)}
           onAddEnvironment={handleAddEnvironment}
         />
+        <ConfirmDialogComponent />
       </div>
     );
   }
@@ -216,6 +339,7 @@ const EnvironmentsPane: React.FC<EnvironmentsPaneProps> = ({ onEnvSelect, onImpo
     if (b.name.toLowerCase() === 'global') return 1;
     return a.name.localeCompare(b.name);
   });
+
   return (
     <div className="h-full overflow-hidden bg-white dark:bg-slate-900">
       <div className="h-full overflow-auto p-4">
@@ -234,19 +358,79 @@ const EnvironmentsPane: React.FC<EnvironmentsPaneProps> = ({ onEnvSelect, onImpo
               <div 
                 key={environment.id} 
                 className="border border-slate-200 dark:border-slate-700 rounded-lg hover:shadow-sm transition-shadow cursor-pointer"
-                onClick={() => handleEnvironmentClick(environment)}
+                // Guard row click: do not trigger selection while a rename is active.
+                onClick={() => { if (!editingEnvironmentId) handleEnvironmentClick(environment); }}
               >
                 {/* Environment Header */}
                 <div className="flex items-center p-3 bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg group transition-colors">
-                  <div className="flex items-center flex-1">
+                  <div className="flex items-center flex-1 min-w-0">
                     <SettingsIcon className="h-4 w-4 text-green-600 mr-2 flex-shrink-0" />
-                    <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-200 break-words">
-                      {environment.name}
-                    </h3>
+                    {editingEnvironmentId === environment.id ? (
+                      /* Inline rename input — replaces the name label when active */
+                      <Input
+                        value={editingName}
+                        onChange={(e) => setEditingName(e.target.value)}
+                        onBlur={handleRenameEnd}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') handleRenameEnd();
+                          if (e.key === 'Escape') setEditingEnvironmentId(null);
+                        }}
+                        // Prevent the row click handler from firing when interacting
+                        // with the input.
+                        onClick={(e) => e.stopPropagation()}
+                        className="h-6 text-sm py-0 flex-1"
+                        autoFocus
+                      />
+                    ) : (
+                      <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-200 break-words flex-1 min-w-0 truncate">
+                        {environment.name}
+                      </h3>
+                    )}
                   </div>
-                  <span className="text-xs text-slate-400 bg-slate-200 dark:bg-slate-600 px-2 py-1 rounded-full ml-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                    {enabledVariables.length}
-                  </span>
+
+                  {/* Variable count badge + per-row action menu */}
+                  <div className="flex items-center gap-1 ml-2 flex-shrink-0">
+                    <span className="text-xs text-slate-400 bg-slate-200 dark:bg-slate-600 px-2 py-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity">
+                      {enabledVariables.length}
+                    </span>
+
+                    {/* Three-dots dropdown — visible on hover */}
+                    <div className="opacity-0 group-hover:opacity-100 transition-opacity">
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-6 w-6 p-0"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <MoreVerticalIcon className="h-3 w-3" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleRenameStart(environment);
+                            }}
+                          >
+                            <PencilIcon className="h-4 w-4 mr-2" />
+                            Rename
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            className="text-red-600"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleDeleteEnvironment(environment);
+                            }}
+                          >
+                            <Trash2Icon className="h-4 w-4 mr-2" />
+                            Delete
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </div>
+                  </div>
                 </div>
               </div>
             );
@@ -263,6 +447,7 @@ const EnvironmentsPane: React.FC<EnvironmentsPaneProps> = ({ onEnvSelect, onImpo
         onClose={() => setIsAddWizardOpen(false)}
         onAddEnvironment={handleAddEnvironment}
       />
+      <ConfirmDialogComponent />
     </div>
   );
 };

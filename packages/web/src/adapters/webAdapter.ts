@@ -267,20 +267,22 @@ class WebStorageAdapter implements IStorageAdapter {
 
   async deleteRequestFromCollection(
     collectionFilename: string,
-    _itemPath: string[],
-    _itemId: string
+    itemPath: string[],
+    itemId: string
   ): Promise<Result<Collection, string>> {
-    // TODO: Implement proper delete endpoint on server
-    const collectionsResult = await this.loadCollections();
-    if (collectionsResult.isOk) {
-      const collection = collectionsResult.value.find(
-        (c) => c.filename === collectionFilename
+    try {
+      const response = await api.delete(
+        `/api/collections/${encodeURIComponent(collectionFilename)}/items/${encodeURIComponent(itemId)}`,
+        { data: { itemPath } }
       );
-      if (collection) {
-        return ok(collection);
+      if (response.data.isOk) {
+        return ok(response.data.value);
       }
+      return err(response.data.error || 'Failed to delete item');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      return err(`Server error: ${message}`);
     }
-    return err('Collection not found');
   }
 
   async importCollection(
@@ -458,6 +460,19 @@ class WebStorageAdapter implements IStorageAdapter {
         return ok(undefined);
       }
       return err(response.data.error || 'Failed to clear history');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      return err(`Server error: ${message}`);
+    }
+  }
+
+  async deleteHistoryItem(requestId: string): Promise<Result<void, string>> {
+    try {
+      const response = await api.delete(`/api/history/${encodeURIComponent(requestId)}`);
+      if (response.data.isOk) {
+        return ok(undefined);
+      }
+      return err(response.data.error || 'Failed to delete history item');
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unknown error';
       return err(`Server error: ${message}`);

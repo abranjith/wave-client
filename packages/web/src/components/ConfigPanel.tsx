@@ -30,7 +30,6 @@ interface ConfigPanelProps {
   onFlowSelect: (flow: Flow) => void;
   onFlowRun?: (flow: Flow) => void;
   onTestSuiteSelect?: (suite: TestSuite) => void;
-  onTestSuiteRun?: (suite: TestSuite) => void;
   onSettingsSelect: () => void;
   onImportCollection: (fileName: string, fileContent: string, collectionType: string) => void;
   onExportCollection: (collectionName: string, exportFormat: string) => void;
@@ -61,7 +60,6 @@ const ConfigPanel: React.FC<ConfigPanelProps> = ({
   onFlowSelect,
   onFlowRun,
   onTestSuiteSelect,
-  onTestSuiteRun,
   onSettingsSelect,
   onImportCollection,
   onExportCollection,
@@ -155,7 +153,6 @@ const ConfigPanel: React.FC<ConfigPanelProps> = ({
             {onTestSuiteSelect && (
               <TestLabPane
                 onTestSuiteSelect={onTestSuiteSelect}
-                onTestSuiteRun={onTestSuiteRun}
                 onRetry={onRetryTestSuites}
               />
             )}

@@ -129,6 +129,7 @@ function createVSCodeStorageAdapter(
                 'importEnvironments': 'environments',
                 'exportEnvironments': 'filePath',
                 'loadHistory': 'history',
+                'deleteHistoryItem': '',         // void - no data field
                 'loadCookies': 'cookies',
                 'saveCookies': '',           // void - no data field
                 'loadAuths': 'auths',
@@ -147,6 +148,8 @@ function createVSCodeStorageAdapter(
                 'loadTestSuites': 'testSuites',
                 'saveTestSuite': 'testSuite',
                 'deleteTestSuite': '',       // void - no data field
+                'deleteCollection': '',              // void - no data field
+                'deleteRequestFromCollection': 'collection',
             };
 
             pendingRequests.set(requestId, {
@@ -189,11 +192,7 @@ function createVSCodeStorageAdapter(
         },
 
         async deleteCollection(collectionId): Promise<Result<void, string>> {
-            vsCodeApi.postMessage({
-                type: 'deleteCollection',
-                data: { collectionId }
-            });
-            return ok(undefined);
+            return sendAndWait<void>('deleteCollection', { data: { collectionId } });
         },
 
         async saveRequestToCollection(collectionFilename, itemPath, item): Promise<Result<Collection, string>> {
@@ -208,11 +207,9 @@ function createVSCodeStorageAdapter(
         },
 
         async deleteRequestFromCollection(collectionFilename, itemPath, itemId): Promise<Result<Collection, string>> {
-            vsCodeApi.postMessage({
-                type: 'deleteRequestFromCollection',
+            return sendAndWait<Collection>('deleteRequestFromCollection', {
                 data: { collectionFilename, itemPath, itemId }
             });
-            return ok({} as Collection);
         },
 
         async importCollection(fileName: string, fileContent: string): Promise<Result<Collection[], string>> {
@@ -377,6 +374,10 @@ function createVSCodeStorageAdapter(
         async clearHistory(): Promise<Result<void, string>> {
             vsCodeApi.postMessage({ type: 'clearHistory' });
             return ok(undefined);
+        },
+
+        async deleteHistoryItem(requestId: string): Promise<Result<void, string>> {
+            return sendAndWait<void>('deleteHistoryItem', { data: { requestId } });
         },
 
         // Cookies

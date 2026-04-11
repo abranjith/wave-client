@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { ChevronRightIcon, ChevronDownIcon, FolderIcon, MoreVertical } from 'lucide-react';
+import React, { useState, useCallback } from 'react';
+import { ChevronRightIcon, ChevronDownIcon, FolderIcon, MoreVertical, PencilIcon, PlayIcon, Trash2Icon } from 'lucide-react';
 import { CollectionItem, isFolder, isRequest } from '../../types/collection';
 import {
   Tooltip,
@@ -14,6 +14,7 @@ import {
   DropdownMenuTrigger,
 } from '../ui/dropdown-menu';
 import { Button } from '../ui/button';
+import { Input } from '../ui/input';
 import { getHttpMethodColor } from '../../utils/common';
 import { urlToString } from '../../utils/collectionParser';
 
@@ -22,17 +23,31 @@ interface CollectionTreeItemProps {
   depth: number;
   collectionFilename: string;
   collectionName: string;
+  /** Path of folder names from the collection root to this item's parent folder. */
   itemPath: string[];
   currentRequestId: string | undefined;
   expandedFolders: Set<string>;
   onToggleFolder: (folderKey: string) => void;
   onRequestSelect: (item: CollectionItem, collectionFilename: string, collectionName: string, itemPath: string[]) => void;
   onRunFolder?: (items: CollectionItem[], folderPath: string[]) => void;
+  /**
+   * Called when the user commits a rename for this item.
+   * @param itemId - The ID of the item being renamed
+   * @param newName - The committed new name
+   * @param parentItemPath - `itemPath` of this component (path to the item's parent)
+   */
+  onRenameItem: (itemId: string, newName: string, parentItemPath: string[]) => Promise<void>;
+  /**
+   * Called when the user triggers a delete on this item (before confirmation).
+   * @param item - The CollectionItem to delete
+   * @param parentItemPath - `itemPath` of this component (path to the item's parent)
+   */
+  onDeleteItem: (item: CollectionItem, parentItemPath: string[]) => void;
 }
 
 /**
- * Recursive component for rendering collection items (folders and requests)
- * Supports arbitrary nesting depth
+ * Recursive component for rendering collection items (folders and requests).
+ * Supports arbitrary nesting depth, inline rename, and delete confirmation wiring.
  */
 const CollectionTreeItem: React.FC<CollectionTreeItemProps> = ({
   item,
@@ -45,6 +60,8 @@ const CollectionTreeItem: React.FC<CollectionTreeItemProps> = ({
   onToggleFolder,
   onRequestSelect,
   onRunFolder,
+  onRenameItem,
+  onDeleteItem,
 }) => {
   // Generate unique key for this folder
   const folderKey = `${collectionFilename}:${[...itemPath, item.name].join('/')}`;
@@ -55,6 +72,29 @@ const CollectionTreeItem: React.FC<CollectionTreeItemProps> = ({
 
   const [isFolderMenuOpen, setIsFolderMenuOpen] = useState(false);
   const [isRequestMenuOpen, setIsRequestMenuOpen] = useState(false);
+  /** True when this item's name is being edited inline. */
+  const [isEditing, setIsEditing] = useState(false);
+  /** The current draft text while editing. */
+  const [editingDraft, setEditingDraft] = useState('');
+
+  /** Initiates inline rename for this item. */
+  const handleRenameStart = useCallback(() => {
+    setEditingDraft(item.name);
+    setIsEditing(true);
+  }, [item.name]);
+
+  /**
+   * Commits the inline rename: calls the parent callback if the name changed,
+   * then exits editing mode regardless of outcome.
+   */
+  const handleRenameEnd = useCallback(async () => {
+    if (!isEditing) return;
+    setIsEditing(false);
+    const trimmedName = editingDraft.trim();
+    if (trimmedName && trimmedName !== item.name) {
+      await onRenameItem(item.id, trimmedName, itemPath);
+    }
+  }, [isEditing, editingDraft, item.id, item.name, itemPath, onRenameItem]);
 
   if (isFolder(item)) {
     const childCount = item.item?.length || 0;
@@ -67,7 +107,7 @@ const CollectionTreeItem: React.FC<CollectionTreeItemProps> = ({
             isFolderMenuOpen ? 'bg-slate-100 dark:bg-slate-700' : ''
           }`}
           style={{ paddingLeft: `${paddingLeft + 8}px` }}
-          onClick={() => onToggleFolder(folderKey)}
+          onClick={() => !isEditing && onToggleFolder(folderKey)}
         >
           <div className="flex items-center flex-1 min-w-0">
             {isFolderExpanded ? (
@@ -76,9 +116,24 @@ const CollectionTreeItem: React.FC<CollectionTreeItemProps> = ({
               <ChevronRightIcon className="h-4 w-4 text-slate-500 mr-1 flex-shrink-0" />
             )}
             <FolderIcon className="h-4 w-4 text-amber-600 mr-2 flex-shrink-0" />
-            <span className="text-sm font-medium text-slate-700 dark:text-slate-200 truncate">
-              {item.name}
-            </span>
+            {isEditing ? (
+              <Input
+                value={editingDraft}
+                onChange={(e) => setEditingDraft(e.target.value)}
+                onBlur={handleRenameEnd}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') handleRenameEnd();
+                  if (e.key === 'Escape') setIsEditing(false);
+                }}
+                onClick={(e) => e.stopPropagation()}
+                className="h-5 text-sm py-0 font-medium flex-1"
+                autoFocus
+              />
+            ) : (
+              <span className="text-sm font-medium text-slate-700 dark:text-slate-200 truncate">
+                {item.name}
+              </span>
+            )}
           </div>
           <span className={`text-xs text-slate-400 bg-slate-200 dark:bg-slate-600 px-2 py-1 rounded-full ml-2 transition-opacity ${
             isFolderMenuOpen ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
@@ -92,9 +147,22 @@ const CollectionTreeItem: React.FC<CollectionTreeItemProps> = ({
                   <MoreVertical className="h-4 w-4" />
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="min-w-24">
-                <DropdownMenuItem onClick={() => onRunFolder?.(item.item || [], [...itemPath, item.name])}>Run</DropdownMenuItem>
-                <DropdownMenuItem onClick={() => {}}>Delete</DropdownMenuItem>
+              <DropdownMenuContent align="end" className="min-w-32">
+                <DropdownMenuItem onClick={() => onRunFolder?.(item.item || [], [...itemPath, item.name])}>
+                  <PlayIcon className="h-4 w-4 mr-2" />
+                  Run
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={(e) => { e.stopPropagation(); handleRenameStart(); }}>
+                  <PencilIcon className="h-4 w-4 mr-2" />
+                  Rename
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  className="text-red-600 focus:text-red-600 focus:bg-red-50 dark:focus:bg-red-900/20"
+                  onClick={(e) => { e.stopPropagation(); onDeleteItem(item, itemPath); }}
+                >
+                  <Trash2Icon className="h-4 w-4 mr-2" />
+                  Delete
+                </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
           </div>
@@ -116,6 +184,8 @@ const CollectionTreeItem: React.FC<CollectionTreeItemProps> = ({
                 onToggleFolder={onToggleFolder}
                 onRequestSelect={onRequestSelect}
                 onRunFolder={onRunFolder}
+                onRenameItem={onRenameItem}
+                onDeleteItem={onDeleteItem}
               />
             ))}
           </div>
@@ -142,15 +212,30 @@ const CollectionTreeItem: React.FC<CollectionTreeItemProps> = ({
                     : 'hover:bg-blue-50 dark:hover:bg-blue-900/20'
               }`}
               style={{ paddingLeft: `${paddingLeft + 8}px` }}
-              onClick={() => onRequestSelect(item, collectionFilename, collectionName, itemPath)}
+              onClick={() => !isEditing && onRequestSelect(item, collectionFilename, collectionName, itemPath)}
             >
               <div className="flex items-center flex-1 min-w-0">
                 <span className={`text-xs font-medium mr-2 px-2 py-1 rounded-full flex-shrink-0 ${getHttpMethodColor(method)}`}>
                   {method}
                 </span>
-                <span className="text-sm text-slate-600 dark:text-slate-300 truncate">
-                  {item.name}
-                </span>
+                {isEditing ? (
+                  <Input
+                    value={editingDraft}
+                    onChange={(e) => setEditingDraft(e.target.value)}
+                    onBlur={handleRenameEnd}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') handleRenameEnd();
+                      if (e.key === 'Escape') setIsEditing(false);
+                    }}
+                    onClick={(e) => e.stopPropagation()}
+                    className="h-5 text-sm py-0 flex-1"
+                    autoFocus
+                  />
+                ) : (
+                  <span className="text-sm text-slate-600 dark:text-slate-300 truncate">
+                    {item.name}
+                  </span>
+                )}
               </div>
               <div className={`ml-1 transition-opacity ${isRequestMenuOpen ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`} onClick={(e) => e.stopPropagation()}>
                 <DropdownMenu onOpenChange={setIsRequestMenuOpen}>
@@ -159,8 +244,18 @@ const CollectionTreeItem: React.FC<CollectionTreeItemProps> = ({
                       <MoreVertical className="h-4 w-4" />
                     </Button>
                   </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" className="min-w-24">
-                    <DropdownMenuItem onClick={() => {}}>Delete</DropdownMenuItem>
+                  <DropdownMenuContent align="end" className="min-w-32">
+                    <DropdownMenuItem onClick={(e) => { e.stopPropagation(); handleRenameStart(); }}>
+                      <PencilIcon className="h-4 w-4 mr-2" />
+                      Rename
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      className="text-red-600 focus:text-red-600 focus:bg-red-50 dark:focus:bg-red-900/20"
+                      onClick={(e) => { e.stopPropagation(); onDeleteItem(item, itemPath); }}
+                    >
+                      <Trash2Icon className="h-4 w-4 mr-2" />
+                      Delete
+                    </DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>
               </div>
@@ -180,3 +275,4 @@ const CollectionTreeItem: React.FC<CollectionTreeItemProps> = ({
 };
 
 export default CollectionTreeItem;
+

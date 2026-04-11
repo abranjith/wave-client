@@ -8,6 +8,8 @@ interface HistorySlice {
     setHistory: (history: CollectionRequest[]) => void;
     setIsHistoryLoading: (isLoading: boolean) => void;
     setHistoryLoadError: (error: string | null) => void;
+    /** Removes a single history item by ID from local state after adapter confirms deletion. */
+    removeHistoryItem: (requestId: string) => void;
 }
 
 const createHistorySlice: StateCreator<HistorySlice> = (set) => ({
@@ -23,6 +25,13 @@ const createHistorySlice: StateCreator<HistorySlice> = (set) => ({
     }),
     
     setHistoryLoadError: (error) => set({ historyLoadError: error, isHistoryLoading: false }),
+
+    /**
+     * Filters out the item with the matching ID.
+     * Must only be called after the adapter has successfully persisted the deletion.
+     */
+    removeHistoryItem: (requestId) =>
+        set((state) => ({ history: state.history.filter((r) => r.id !== requestId) })),
 });
 
 export default createHistorySlice;

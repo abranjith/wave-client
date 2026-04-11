@@ -132,6 +132,55 @@ export class HistoryService extends BaseStorageService {
     }
 
     /**
+     * Deletes a single history entry identified by its stored request ID.
+     *
+     * Because `save()` mutates the ID before persisting
+     * (`${originalId}_${Date.now()}_hist_...`), this method must scan each
+     * file's JSON content to find the matching entry rather than relying on
+     * the filename number. After deletion the remaining files are re-sequenced
+     * to maintain the invariant that filenames are contiguous integers.
+     *
+     * @param requestId The ID stored inside the history JSON file.
+     * @throws {Error} When the history directory cannot be read.
+     */
+    async deleteByRequestId(requestId: string): Promise<void> {
+        const historyDir = await this.getHistoryDir();
+        this.ensureDirectoryExists(historyDir);
+
+        const files = this.listJsonFiles(historyDir)
+            .map((file) => {
+                const num = parseInt(path.basename(file, '.json'));
+                return { file, num };
+            })
+            .filter((item) => !isNaN(item.num))
+            .sort((a, b) => a.num - b.num);
+
+        // Find the file whose stored ID matches requestId
+        let targetFile: string | null = null;
+        for (const { file } of files) {
+            const filePath = path.join(historyDir, file);
+            const requestData = await this.readJsonFileSecure<CollectionRequest | null>(filePath, null);
+            if (requestData && requestData.id === requestId) {
+                targetFile = file;
+                break;
+            }
+        }
+
+        if (!targetFile) {
+            // Idempotent: if the item is already gone, treat as success
+            return;
+        }
+
+        // Delete the matched file from disk
+        const deletePath = path.join(historyDir, targetFile);
+        this.deleteFile(deletePath);
+
+        // Re-sequence remaining files so numbering stays contiguous
+        const remaining = files.filter((f) => f.file !== targetFile);
+        await this.renumberHistoryFiles(historyDir, remaining);
+    }
+
+    /**
      * Clears all history.
      */
     async clearAll(): Promise<void> {

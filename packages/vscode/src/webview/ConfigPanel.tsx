@@ -30,7 +30,6 @@ interface ConfigPanelProps {
   onFlowSelect: ((flow: Flow) => void)
   onFlowRun?: ((flow: Flow) => void)
   onTestSuiteSelect?: ((suite: TestSuite) => void)
-  onTestSuiteRun?: ((suite: TestSuite) => void)
   onSettingsSelect: () => void;
   onImportCollection: (fileName: string, fileContent: string, collectionType: string) => void;
   onExportCollection: (collectionName: string, exportFormat: string) => void;
@@ -54,7 +53,7 @@ const TABS = [
   { key: 'store', label: 'Wave Store', icon: <ShieldCheckIcon size={20} /> },
 ];
 
-const ConfigPanel: React.FC<ConfigPanelProps> = ({ onRequestSelect, onEnvSelect, onStoreSelect, onFlowSelect, onFlowRun, onTestSuiteSelect, onTestSuiteRun, onSettingsSelect, onImportCollection, onExportCollection, onImportEnvironments, onExportEnvironments, onRetryCollections, onRetryHistory, onRetryEnvironments, onRetryFlows, onRetryTestSuites, onActiveTabChange}) => {
+const ConfigPanel: React.FC<ConfigPanelProps> = ({ onRequestSelect, onEnvSelect, onStoreSelect, onFlowSelect, onFlowRun, onTestSuiteSelect, onSettingsSelect, onImportCollection, onExportCollection, onImportEnvironments, onExportEnvironments, onRetryCollections, onRetryHistory, onRetryEnvironments, onRetryFlows, onRetryTestSuites, onActiveTabChange}) => {
   const { theme, toggleTheme } = useTheme();
   const [activeTab, setActiveTab] = React.useState('collections');
 
@@ -131,7 +130,6 @@ const ConfigPanel: React.FC<ConfigPanelProps> = ({ onRequestSelect, onEnvSelect,
             {onTestSuiteSelect && (
               <TestLabPane
                   onTestSuiteSelect={onTestSuiteSelect}
-                  onTestSuiteRun={onTestSuiteRun}
                   onRetry={onRetryTestSuites}
               />
             )}

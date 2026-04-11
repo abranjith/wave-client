@@ -174,6 +174,7 @@ export interface IStorageAdapter {
     loadHistory(): Promise<Result<CollectionRequest[], string>>;
     saveRequestToHistory(request: CollectionRequest): Promise<Result<void, string>>;
     clearHistory(): Promise<Result<void, string>>;
+    deleteHistoryItem(requestId: string): Promise<Result<void, string>>;
 
     // Cookies
     loadCookies(): Promise<Result<Cookie[], string>>;

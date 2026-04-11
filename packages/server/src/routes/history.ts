@@ -42,4 +42,23 @@ export async function registerHistoryRoutes(fastify: FastifyInstance): Promise<v
             return reply.status(500).send({ isOk: false, error: message });
         }
     });
+
+    // Delete a single history item by request ID
+    fastify.delete(
+        '/api/history/:requestId',
+        async (
+            request: FastifyRequest<{ Params: { requestId: string } }>,
+            reply: FastifyReply,
+        ) => {
+            try {
+                const { requestId } = request.params;
+                await historyService.deleteByRequestId(requestId);
+                emitStateChange('history');
+                return reply.send({ isOk: true, value: undefined });
+            } catch (error) {
+                const message = error instanceof Error ? error.message : 'Unknown error';
+                return reply.status(500).send({ isOk: false, error: message });
+            }
+        },
+    );
 }

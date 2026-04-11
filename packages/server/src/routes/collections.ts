@@ -127,4 +127,24 @@ export async function registerCollectionRoutes(fastify: FastifyInstance): Promis
             return reply.status(500).send({ isOk: false, error: message });
         }
     });
+
+    // Delete a nested item (folder or request) within a collection
+    fastify.delete('/api/collections/:filename/items/:itemId', async (
+        request: FastifyRequest<{
+            Params: { filename: string; itemId: string };
+            Body: { itemPath: string[] };
+        }>,
+        reply: FastifyReply
+    ) => {
+        try {
+            const { filename, itemId } = request.params;
+            const { itemPath = [] } = request.body ?? {};
+            const updatedCollection = await collectionService.deleteItem(filename, itemPath, itemId);
+            emitStateChange('collections');
+            return reply.send({ isOk: true, value: updatedCollection });
+        } catch (error) {
+            const message = error instanceof Error ? error.message : 'Unknown error';
+            return reply.status(500).send({ isOk: false, error: message });
+        }
+    });
 }

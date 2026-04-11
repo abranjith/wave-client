@@ -72,6 +72,28 @@ import type { Flow } from '../../types/flow';
 import type { TestSuite } from '../../types/testSuite';
 
 // ============================================================================
+// Tree Utilities
+// ============================================================================
+
+/**
+ * Recursively removes the item matching `itemId` from the folder indicated by
+ * `itemPath`. Returns an immutably updated items array (mirrors the logic in
+ * `packages/shared/src/services/CollectionService.ts` for test parity).
+ */
+function removeFromTree(items: CollectionItem[], itemPath: string[], itemId: string): CollectionItem[] {
+    if (itemPath.length === 0) {
+        return items.filter(i => i.id !== itemId);
+    }
+    const [nextFolder, ...remainingPath] = itemPath;
+    return items.map(item => {
+        if (item.name === nextFolder && item.item) {
+            return { ...item, item: removeFromTree(item.item, remainingPath, itemId) };
+        }
+        return item;
+    });
+}
+
+// ============================================================================
 // Mock Data Store (in-memory)
 // ============================================================================
 
@@ -166,7 +188,8 @@ function createMockStorageAdapter(store: MockDataStore): IStorageAdapter {
             if (!collection) {
                 return err(`Collection not found: ${collectionFilename}`);
             }
-            collection.item = collection.item.filter(i => i.id !== itemId);
+            // Immutably remove the item at the given path using recursive helper
+            collection.item = removeFromTree(collection.item, itemPath, itemId);
             return ok(collection);
         },
         async importCollection(fileName, fileContent) {
@@ -241,6 +264,14 @@ function createMockStorageAdapter(store: MockDataStore): IStorageAdapter {
         },
         async clearHistory() {
             store.history = [];
+            return ok(undefined);
+        },
+        async deleteHistoryItem(requestId) {
+            const exists = store.history.some((r) => r.id === requestId);
+            if (!exists) {
+                return err(`History item not found: ${requestId}`);
+            }
+            store.history = store.history.filter((r) => r.id !== requestId);
             return ok(undefined);
         },
 

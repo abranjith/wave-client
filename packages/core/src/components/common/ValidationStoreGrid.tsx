@@ -1,15 +1,15 @@
 import React, { useState } from 'react';
-import { ArrowLeftIcon, PlusIcon, PencilIcon, Trash2Icon, ClipboardCheckIcon, XIcon, CheckIcon } from 'lucide-react';
+import { ArrowLeftIcon, PlusIcon, PencilIcon, Trash2Icon, ClipboardCheckIcon } from 'lucide-react';
 import { Button } from '../ui/button';
-import { PrimaryButton } from '../ui/PrimaryButton';
 import { SecondaryButton } from '../ui/SecondaryButton';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '../ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../ui/dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
 import { Switch } from '../ui/switch';
 import Banner from '../ui/banner';
 import useAppStateStore from '../../hooks/store/useAppStateStore';
 import { GlobalValidationRule, ValidationRule } from '../../types/validation';
 import ValidationWizard from './ValidationWizard';
+import { useConfirmDialog } from '../../hooks/useConfirmDialog';
 
 interface ValidationStoreGridProps {
     onBack: () => void;
@@ -106,17 +106,7 @@ const ValidationStoreGrid: React.FC<ValidationStoreGridProps> = ({ onBack, onSav
     const [editingRule, setEditingRule] = useState<GlobalValidationRule | undefined>(undefined);
     const [error, setError] = useState<string | null>(null);
 
-    const [confirmDialog, setConfirmDialog] = useState<{
-        isOpen: boolean;
-        title: string;
-        message: string;
-        onConfirm: () => void;
-    }>({
-        isOpen: false,
-        title: '',
-        message: '',
-        onConfirm: () => { },
-    });
+    const { openConfirmDialog, ConfirmDialogComponent } = useConfirmDialog();
 
     const handleAddNew = () => {
         setEditingRule(undefined);
@@ -165,8 +155,7 @@ const ValidationStoreGrid: React.FC<ValidationStoreGridProps> = ({ onBack, onSav
     };
 
     const handleDelete = (id: string) => {
-        setConfirmDialog({
-            isOpen: true,
+        openConfirmDialog({
             title: 'Delete Validation Rule',
             message: 'Are you sure you want to delete this validation rule? This may affect requests that reference it.',
             onConfirm: () => {
@@ -174,7 +163,6 @@ const ValidationStoreGrid: React.FC<ValidationStoreGridProps> = ({ onBack, onSav
                 if (result.isErr) {
                     console.error('Failed to delete rule:', result.error);
                 }
-                setConfirmDialog((prev) => ({ ...prev, isOpen: false }));
             },
         });
     };
@@ -329,28 +317,7 @@ const ValidationStoreGrid: React.FC<ValidationStoreGridProps> = ({ onBack, onSav
             </Dialog>
 
             {/* Confirmation Dialog */}
-            <Dialog open={confirmDialog.isOpen} onOpenChange={(open) => setConfirmDialog((prev) => ({ ...prev, isOpen: open }))}>
-                <DialogContent>
-                    <DialogHeader>
-                        <DialogTitle className="text-lg font-semibold text-slate-800 dark:text-slate-200">{confirmDialog.title}</DialogTitle>
-                        <DialogDescription>{confirmDialog.message}</DialogDescription>
-                    </DialogHeader>
-                    <DialogFooter>
-                        <SecondaryButton
-                            onClick={() => setConfirmDialog((prev) => ({ ...prev, isOpen: false }))}
-                            colorTheme="warning"
-                            icon={<XIcon />}
-                            text="Cancel"
-                        />
-                        <PrimaryButton
-                            onClick={confirmDialog.onConfirm}
-                            colorTheme="error"
-                            icon={<CheckIcon />}
-                            text="Confirm"
-                        />
-                    </DialogFooter>
-                </DialogContent>
-            </Dialog>
+            <ConfirmDialogComponent />
         </div>
     );
 };

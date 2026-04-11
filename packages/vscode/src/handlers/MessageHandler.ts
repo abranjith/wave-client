@@ -102,6 +102,12 @@ export class MessageHandler {
             case 'saveRequestToCollection':
                 await this.handleSaveRequestToCollection(message);
                 break;
+            case 'deleteCollection':
+                await this.handleDeleteCollection(message);
+                break;
+            case 'deleteRequestFromCollection':
+                await this.handleDeleteRequestFromCollection(message);
+                break;
             case 'importCollection':
                 await this.handleImportCollection(message);
                 break;
@@ -125,6 +131,9 @@ export class MessageHandler {
                 break;
             case 'saveRequestToHistory':
                 await this.handleSaveRequestToHistory(message);
+                break;
+            case 'deleteHistoryItem':
+                await this.handleDeleteHistoryItem(message);
                 break;
             case 'downloadResponse':
                 await this.handleDownloadResponse(message);
@@ -356,6 +365,56 @@ export class MessageHandler {
         } catch (error: any) {
             this.postMessage({
                 type: 'collectionsLoaded',
+                requestId,
+                error: error.message
+            });
+        }
+    }
+
+    /**
+     * Deletes a whole collection from storage.
+     */
+    private async handleDeleteCollection(message: any): Promise<void> {
+        const requestId = message.requestId;
+        try {
+            const { collectionId } = message.data;
+            await collectionService.delete(collectionId);
+            this.postMessage({
+                type: 'collectionDeleted',
+                requestId
+            });
+        } catch (error: any) {
+            console.error('Error deleting collection:', error);
+            this.postMessage({
+                type: 'collectionDeleted',
+                requestId,
+                error: error.message
+            });
+        }
+    }
+
+    /**
+     * Deletes a nested item (folder or request) from within a collection and
+     * responds with the updated collection.
+     */
+    private async handleDeleteRequestFromCollection(message: any): Promise<void> {
+        const requestId = message.requestId;
+        try {
+            const { collectionFilename, itemPath, itemId } = message.data;
+            const updatedCollection = await collectionService.deleteItem(
+                collectionFilename,
+                itemPath,
+                itemId
+            );
+            this.postMessage({
+                type: 'collectionItemDeleted',
+                requestId,
+                collection: updatedCollection
+            });
+        } catch (error: any) {
+            console.error('Error deleting collection item:', error);
+            this.postMessage({
+                type: 'collectionItemDeleted',
                 requestId,
                 error: error.message
             });
@@ -663,6 +722,32 @@ export class MessageHandler {
             console.error('Error saving request to history:', error);
             this.postMessage({
                 type: 'historyError',
+                error: error.message
+            });
+        }
+    }
+
+    /**
+     * Deletes a single history item by its request ID and sends back a
+     * correlated response so the webview adapter can resolve the promise.
+     */
+    private async handleDeleteHistoryItem(message: any): Promise<void> {
+        const requestId = message.requestId;
+        try {
+            const { requestId: itemId } = message.data;
+            if (!itemId) {
+                throw new Error('requestId is required to delete a history item');
+            }
+            await historyService.deleteByRequestId(itemId);
+            this.postMessage({
+                type: 'historyItemDeleted',
+                requestId
+            });
+        } catch (error: any) {
+            console.error('Error deleting history item:', error);
+            this.postMessage({
+                type: 'historyItemDeleted',
+                requestId,
                 error: error.message
             });
         }

@@ -322,6 +322,54 @@ describe('WebAdapter - Storage', () => {
       expect(mockAxios.delete).toHaveBeenCalledWith('/api/history');
     });
 
+    it('deletes a single history item successfully', async () => {
+      const requestId = 'req-abc_12345_hist_xyz';
+      mockAxios.setResponse(
+        `/api/history/${encodeURIComponent(requestId)}`,
+        { isOk: true, value: undefined },
+        'DELETE',
+      );
+
+      const result = await adapter.storage.deleteHistoryItem(requestId);
+
+      expect(result.isOk).toBe(true);
+      expect(mockAxios.delete).toHaveBeenCalledWith(
+        `/api/history/${encodeURIComponent(requestId)}`,
+      );
+    });
+
+    it('returns an error result when the server signals failure for deleteHistoryItem', async () => {
+      const requestId = 'req-abc_12345_hist_xyz';
+      mockAxios.setResponse(
+        `/api/history/${encodeURIComponent(requestId)}`,
+        { isOk: false, error: 'Not found' },
+        'DELETE',
+      );
+
+      const result = await adapter.storage.deleteHistoryItem(requestId);
+
+      expect(result.isOk).toBe(false);
+      if (!result.isOk) {
+        expect(result.error).toContain('Not found');
+      }
+    });
+
+    it('returns an error result when the network request throws for deleteHistoryItem', async () => {
+      const requestId = 'req-abc_12345_hist_xyz';
+      mockAxios.setError(
+        `/api/history/${encodeURIComponent(requestId)}`,
+        new Error('Network error'),
+        'DELETE',
+      );
+
+      const result = await adapter.storage.deleteHistoryItem(requestId);
+
+      expect(result.isOk).toBe(false);
+      if (!result.isOk) {
+        expect(result.error).toContain('Network error');
+      }
+    });
+
     it('handles history errors', async () => {
       mockAxios.setError('/api/history', new Error('History error'));
 

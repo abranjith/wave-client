@@ -310,6 +310,104 @@ describe('HistoryService', () => {
       await expect(service.clearAll()).resolves.not.toThrow();
     });
   });
-});
 
+  describe('deleteByRequestId', () => {
+    /**
+     * Helper: build a CollectionRequest with a given stored ID (as produced by save()).
+     */
+    function makeStoredReq(storedId: string, method = 'GET'): CollectionRequest {
+      return {
+        id: storedId,
+        name: `Request ${storedId}`,
+        method,
+        url: `https://api.example.com/${storedId}`,
+        header: [],
+        query: [],
+        body: { mode: 'none' },
+      };
+    }
+
+    it('deletes the file whose stored ID matches requestId', async () => {
+      const req1 = makeStoredReq('req-one_12345_hist_abc');
+      const req2 = makeStoredReq('req-two_67890_hist_def');
+      mockFs.setFile(path.join(testHistoryDir, '1.json'), JSON.stringify(req1));
+      mockFs.setFile(path.join(testHistoryDir, '2.json'), JSON.stringify(req2));
+
+      await service.deleteByRequestId('req-one_12345_hist_abc');
+
+      const files = mockFs.listJsonFiles(testHistoryDir);
+      expect(files).toHaveLength(1);
+      // Verify the remaining file contains req2
+      const content = mockFs.getFile(path.join(testHistoryDir, '1.json'));
+      const remaining = JSON.parse(content!);
+      expect(remaining.id).toBe('req-two_67890_hist_def');
+    });
+
+    it('is idempotent when the request ID does not exist', async () => {
+      const req1 = makeStoredReq('req-one_12345_hist_abc');
+      mockFs.setFile(path.join(testHistoryDir, '1.json'), JSON.stringify(req1));
+
+      await expect(
+        service.deleteByRequestId('does-not-exist'),
+      ).resolves.not.toThrow();
+
+      // Original file untouched
+      expect(mockFs.listJsonFiles(testHistoryDir)).toHaveLength(1);
+    });
+
+    it('is a no-op on an empty history directory', async () => {
+      await expect(
+        service.deleteByRequestId('any-id'),
+      ).resolves.not.toThrow();
+
+      expect(mockFs.listJsonFiles(testHistoryDir)).toHaveLength(0);
+    });
+
+    it('re-sequences remaining files after deletion', async () => {
+      // Seed files 1.json, 2.json, 3.json
+      for (let i = 1; i <= 3; i++) {
+        const req = makeStoredReq(`req-id-${i}_ts_hist_rnd`);
+        mockFs.setFile(path.join(testHistoryDir, `${i}.json`), JSON.stringify(req));
+      }
+
+      // Delete the middle file (2.json)
+      await service.deleteByRequestId('req-id-2_ts_hist_rnd');
+
+      const files = mockFs.listJsonFiles(testHistoryDir).sort();
+      // After deletion and re-sequencing, expect exactly 1.json and 2.json
+      expect(files).toEqual(['1.json', '2.json']);
+    });
+
+    it('deletes from a single-item history leaving an empty directory', async () => {
+      const req = makeStoredReq('solo-req_ts_hist_abc');
+      mockFs.setFile(path.join(testHistoryDir, '1.json'), JSON.stringify(req));
+
+      await service.deleteByRequestId('solo-req_ts_hist_abc');
+
+      expect(mockFs.listJsonFiles(testHistoryDir)).toHaveLength(0);
+    });
+
+    it('only deletes the matched item; others are preserved', async () => {
+      const req1 = makeStoredReq('keep-me_ts_hist_aaa');
+      const req2 = makeStoredReq('delete-me_ts_hist_bbb');
+      const req3 = makeStoredReq('keep-me-too_ts_hist_ccc');
+      mockFs.setFile(path.join(testHistoryDir, '1.json'), JSON.stringify(req1));
+      mockFs.setFile(path.join(testHistoryDir, '2.json'), JSON.stringify(req2));
+      mockFs.setFile(path.join(testHistoryDir, '3.json'), JSON.stringify(req3));
+
+      await service.deleteByRequestId('delete-me_ts_hist_bbb');
+
+      const files = mockFs.listJsonFiles(testHistoryDir).sort();
+      expect(files).toHaveLength(2);
+      // Read all remaining IDs
+      const ids = files.map((f) => {
+        const content = mockFs.getFile(path.join(testHistoryDir, f))!;
+        return JSON.parse(content).id;
+      });
+      expect(ids).toContain('keep-me_ts_hist_aaa');
+      expect(ids).toContain('keep-me-too_ts_hist_ccc');
+      expect(ids).not.toContain('delete-me_ts_hist_bbb');
+    });
+  });
+});
 

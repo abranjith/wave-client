@@ -141,6 +141,39 @@ const RequestHeaders: React.FC = () => {
 
   return (
     <div className="space-y-0">
+      {/* Header with action buttons */}
+      <div className="flex items-center justify-end mb-4">
+        <div className="flex items-center gap-2">
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={copyHeaders}
+                disabled={!copyEnabled}
+                className="h-9 w-9 p-0 flex items-center justify-center"
+              >
+                <CopyIcon size={16} />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent className="px-2 py-1 text-xs">Copy headers</TooltipContent>
+          </Tooltip>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={pasteHeaders}
+                className="h-9 w-9 p-0 flex items-center justify-center"
+              >
+                <ClipboardPasteIcon size={16} />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent className="px-2 py-1 text-xs">Paste headers</TooltipContent>
+          </Tooltip>
+        </div>
+      </div>
+
       <div className="overflow-x-auto border border-slate-200 dark:border-slate-700 rounded-t-lg">
         <Table>
           <TableHeader>
@@ -213,7 +246,7 @@ const RequestHeaders: React.FC = () => {
         </Table>
       </div>
       
-      <div className="flex items-center justify-between border border-t-0 border-slate-200 dark:border-slate-700 rounded-b-lg p-3 bg-slate-50 dark:bg-slate-800">
+      <div className="flex items-center border border-t-0 border-slate-200 dark:border-slate-700 rounded-b-lg p-3 bg-slate-50 dark:bg-slate-800">
         <SecondaryButton
           size="sm"
           onClick={addEmptyHeader}
@@ -221,35 +254,6 @@ const RequestHeaders: React.FC = () => {
           icon={<PlusIcon />}
           text="Add Header"
         />
-        <div className="flex items-center gap-2">
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={copyHeaders}
-                disabled={!copyEnabled}
-                className="h-9 w-9 p-0 flex items-center justify-center"
-              >
-                <CopyIcon size={16} />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent className="px-2 py-1 text-xs">Copy headers</TooltipContent>
-          </Tooltip>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={pasteHeaders}
-                className="h-9 w-9 p-0 flex items-center justify-center"
-              >
-                <ClipboardPasteIcon size={16} />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent className="px-2 py-1 text-xs">Paste headers</TooltipContent>
-          </Tooltip>
-        </div>
       </div>
     </div>
   );

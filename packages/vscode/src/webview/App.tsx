@@ -692,7 +692,6 @@ const App: React.FC = () => {
           onFlowSelect={handleFlowSelect}
           onFlowRun={undefined}
           onTestSuiteSelect={handleTestSuiteSelect}
-          onTestSuiteRun={undefined}
           onSettingsSelect={handleSettingsSelect}
           onImportCollection={handleImportCollection}
           onExportCollection={handleExportCollection}

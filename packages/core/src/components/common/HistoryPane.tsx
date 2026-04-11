@@ -1,9 +1,10 @@
 import React from 'react';
-import { ClockIcon } from 'lucide-react';
+import { ClockIcon, Trash2Icon } from 'lucide-react';
 import { CollectionRequest, getRawUrl } from '../../types/collection';
 import useAppStateStore from '../../hooks/store/useAppStateStore';
 import { getHttpMethodColor } from '../../utils/common';
 import { Button } from '../ui/button';
+import { useStorageAdapter, useNotificationAdapter } from '../../hooks/useAdapter';
 
 interface HistoryPaneProps {
   onRequestSelect: (request: CollectionRequest) => void;
@@ -16,10 +17,30 @@ const HistoryPane: React.FC<HistoryPaneProps> = ({ onRequestSelect, onRetry }) =
   const error = useAppStateStore((state) => state.historyLoadError);
   const activeTab = useAppStateStore((state) => state.getActiveTab());
   const currentRequestId = activeTab?.id;
+  const removeHistoryItem = useAppStateStore((state) => state.removeHistoryItem);
+
+  const storageAdapter = useStorageAdapter();
+  const notification = useNotificationAdapter();
 
   const handleRequestClick = (request: CollectionRequest) => {
     if (onRequestSelect) {
       onRequestSelect(request);
+    }
+  };
+
+  /**
+   * Deletes a single history entry via the adapter, then removes it from the
+   * store only when the adapter confirms success. Stops row-click propagation
+   * so clicking the remove button does not trigger request selection.
+   */
+  const handleRemoveItem = async (e: React.MouseEvent, request: CollectionRequest) => {
+    e.stopPropagation();
+    if (!request.id) return;
+    const result = await storageAdapter.deleteHistoryItem(request.id);
+    if (result.isOk) {
+      removeHistoryItem(request.id);
+    } else {
+      notification.showNotification('error', `Failed to remove history item: ${result.error}`);
     }
   };
 
@@ -129,6 +150,14 @@ const HistoryPane: React.FC<HistoryPaneProps> = ({ onRequestSelect, onRetry }) =
                   {getDisplayName(request)}
                 </span>
               </div>
+              {/* Per-item remove button — only visible on group hover */}
+              <button
+                aria-label="Remove history item"
+                className="opacity-0 group-hover:opacity-100 ml-2 flex-shrink-0 p-0.5 rounded text-red-500 hover:text-red-700 hover:bg-red-100 dark:hover:bg-red-900/30 transition-opacity"
+                onClick={(e) => handleRemoveItem(e, request)}
+              >
+                <Trash2Icon className="h-3 w-3" />
+              </button>
             </div>
             );
           })}

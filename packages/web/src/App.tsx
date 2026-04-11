@@ -382,12 +382,6 @@ function WaveClientUI() {
     setSelectedFlow(null);
   };
 
-  const handleTestSuiteRun = (suite: TestSuite) => {
-    // For now, just select the test suite
-    // The actual running logic is handled in TestLabPane
-    setSelectedTestSuite(suite);
-  };
-
 const handleFlowSave = useCallback(async (flow: Flow) => {
     const result = await storage.saveFlow(flow);
     if (result.isOk) {
@@ -767,7 +761,6 @@ const handleFlowSave = useCallback(async (flow: Flow) => {
           onFlowSelect={handleFlowSelect}
           onFlowRun={undefined}
           onTestSuiteSelect={handleTestSuiteSelect}
-          onTestSuiteRun={handleTestSuiteRun}
           onSettingsSelect={handleSettingsSelect}
           onImportCollection={handleImportCollection}
           onExportCollection={handleExportCollection}

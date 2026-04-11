@@ -17,6 +17,7 @@ import {
     PencilIcon,
     CircleIcon,
 } from 'lucide-react';
+import { useConfirmDialog } from '../../hooks/useConfirmDialog';
 import useAppStateStore from '../../hooks/store/useAppStateStore';
 import { useStorageAdapter, useNotificationAdapter } from '../../hooks/useAdapter';
 import { Button } from '../ui/button';
@@ -54,6 +55,7 @@ const FlowsPane: React.FC<FlowsPaneProps> = ({
 }) => {
     const storageAdapter = useStorageAdapter();
     const notification = useNotificationAdapter();
+    const { openConfirmDialog, ConfirmDialogComponent } = useConfirmDialog();
     
     // Use store state for flows
     const flows = useAppStateStore((state) => state.flows);
@@ -127,17 +129,28 @@ const FlowsPane: React.FC<FlowsPaneProps> = ({
         }
     }, [storageAdapter, notification, onFlowSelect, addFlow, isFlowNameUnique]);
 
-    // Delete flow
-    const handleDeleteFlow = useCallback(async (flowId: string, flowName: string) => {
-        const result = await storageAdapter.deleteFlow(flowId);
-        
-        if (result.isOk) {
-            removeFlow(flowId);
-            notification.showNotification('success', `Deleted "${flowName}"`);
-        } else {
-            notification.showNotification('error', result.error);
-        }
-    }, [storageAdapter, notification, removeFlow]);
+    /**
+     * Opens a confirmation dialog before deleting a flow.
+     * Deletion is confirm-gated to prevent accidental destructive actions.
+     * The adapter is called only after the user explicitly confirms;
+     * the store is mutated only on adapter success.
+     */
+    const handleDeleteFlow = useCallback((flowId: string, flowName: string) => {
+        openConfirmDialog({
+            title: 'Delete Flow',
+            message: `Are you sure you want to delete "${flowName}"? This action cannot be undone.`,
+            confirmText: 'Delete',
+            onConfirm: async () => {
+                const result = await storageAdapter.deleteFlow(flowId);
+                if (!result.isOk) {
+                    notification.showNotification('error', result.error);
+                    throw new Error(result.error);
+                }
+                removeFlow(flowId);
+                notification.showNotification('success', `Deleted "${flowName}"`);
+            },
+        });
+    }, [openConfirmDialog, storageAdapter, notification, removeFlow]);
 
     // Rename flow
     const handleRenameStart = useCallback((flow: Flow) => {
@@ -396,6 +409,7 @@ const FlowsPane: React.FC<FlowsPaneProps> = ({
                     </div>
                 )}
             </div>
+            <ConfirmDialogComponent />
         </div>
     );
 };

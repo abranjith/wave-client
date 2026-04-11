@@ -37,6 +37,7 @@ vi.mock('@wave-client/shared', () => ({
     loadHistory: vi.fn(),
     saveRequestToHistory: vi.fn(),
     clearHistory: vi.fn(),
+    deleteByRequestId: vi.fn(),
   },
   cookieService: {
     loadCookies: vi.fn(),
@@ -255,6 +256,50 @@ describe('MessageHandler', () => {
         error: expect.stringContaining('Failed to load'),
       })
     );
+  });
+
+  describe('History handlers', () => {
+    it('deleteHistoryItem — calls deleteByRequestId and posts success response', async () => {
+      const { historyService } = await import('../../services/index.js');
+      (historyService.deleteByRequestId as any).mockResolvedValue(undefined);
+
+      const message = {
+        type: 'deleteHistoryItem',
+        requestId: 'rq-del-1',
+        data: { requestId: 'item-abc' },
+      };
+
+      await handler.handleMessage(message);
+
+      expect(historyService.deleteByRequestId).toHaveBeenCalledWith('item-abc');
+      expect(mockPanel.webview.postMessage).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: 'historyItemDeleted',
+          requestId: 'rq-del-1',
+        })
+      );
+    });
+
+    it('deleteHistoryItem — service throws → posts error response', async () => {
+      const { historyService } = await import('../../services/index.js');
+      (historyService.deleteByRequestId as any).mockRejectedValue(new Error('disk error'));
+
+      const message = {
+        type: 'deleteHistoryItem',
+        requestId: 'rq-del-2',
+        data: { requestId: 'item-xyz' },
+      };
+
+      await handler.handleMessage(message);
+
+      expect(mockPanel.webview.postMessage).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: 'historyItemDeleted',
+          requestId: 'rq-del-2',
+          error: 'disk error',
+        })
+      );
+    });
   });
 
   describe('Arena handlers', () => {
