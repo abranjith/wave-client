@@ -106,7 +106,6 @@ export {
     ARENA_AGENT_IDS,
     ARENA_AGENT_DEFINITIONS,
     PROVIDER_DEFINITIONS,
-    MODEL_DEFINITIONS,
     DEFAULT_ARENA_SETTINGS,
     STORAGE_KEYS,
     ARENA_DIR,
@@ -115,10 +114,8 @@ export {
     LLM_DEFAULTS,
     getAgentDefinition,
     getProviderDefinition,
-    getModelsForProvider,
     getDefaultProviderSettings,
     getEnabledProviders,
-    getEnabledModels,
     isProviderConfigured,
     geminiGenerateContentUrl,
     geminiStreamUrl,
@@ -133,7 +130,7 @@ export {
 export type {
     ArenaSessionMetadata,
     ProviderDefinition,
-    ModelDefinition,
+    DynamicModelInfo,
     ArenaAgentDefinition,
     ArenaSourceConfig,
     ArenaSourceType,
@@ -330,6 +327,8 @@ export {
     useAdapterEventEmitter,
 } from './hooks/useAdapter';
 export type { AdapterProviderProps } from './hooks/useAdapter';
+export { useArenaModels } from './hooks/useArenaModels';
+export type { UseArenaModelsResult } from './hooks/useArenaModels';
 
 // Mock adapter for testing
 export {

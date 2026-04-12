@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { ArenaService } from '@wave-client/arena';
 import type { ChatChunk } from '@wave-client/arena';
 import type { ArenaChatRequest, ArenaChatStreamChunk, ArenaProviderSettings } from '@wave-client/shared';
-import { ARENA_AGENT_IDS, arenaStorageService, httpService, getModelsForProvider } from '@wave-client/shared';
+import { ARENA_AGENT_IDS, arenaStorageService, httpService } from '@wave-client/shared';
 
 // ---------------------------------------------------------------------------
 // Mock helpers
@@ -436,23 +436,39 @@ describe('ArenaService', () => {
             );
         });
 
-        it('falls back to static list when Ollama httpService.send throws', async () => {
+        it('returns empty array when Ollama httpService.send throws', async () => {
             vi.spyOn(httpService, 'send').mockRejectedValue(new Error('ECONNREFUSED'));
 
             const service = new ArenaService();
             const models = await service.getAvailableModels('ollama', ollamaSettings);
 
-            expect(models).toEqual(getModelsForProvider('ollama'));
+            expect(models).toEqual([]);
         });
 
-        it('returns static list for Gemini (no httpService.send call)', async () => {
-            const sendSpy = vi.spyOn(httpService, 'send');
+        it('fetches models from Gemini API via httpService.send', async () => {
+            vi.spyOn(httpService, 'send').mockResolvedValue({
+                response: {
+                    status: 200,
+                    statusText: 'OK',
+                    headers: {},
+                    data: {
+                        models: [
+                            { name: 'models/gemini-2.0-flash', displayName: 'Gemini 2.0 Flash', supportedGenerationMethods: ['generateContent'] },
+                            { name: 'models/gemini-1.5-pro', displayName: 'Gemini 1.5 Pro', supportedGenerationMethods: ['generateContent', 'countTokens'] },
+                        ],
+                    },
+                },
+            } as never);
 
             const service = new ArenaService();
             const models = await service.getAvailableModels('gemini', geminiSettings);
 
-            expect(models).toEqual(getModelsForProvider('gemini'));
-            expect(sendSpy).not.toHaveBeenCalled();
+            expect(models).toContainEqual(
+                expect.objectContaining({ id: 'gemini-2.0-flash', provider: 'gemini' }),
+            );
+            expect(models).toContainEqual(
+                expect.objectContaining({ id: 'gemini-1.5-pro', provider: 'gemini' }),
+            );
         });
     });
 

@@ -9,7 +9,7 @@ import { cn } from '../../utils/styling';
 import { AppSettings, DEFAULT_SETTINGS, ArenaAppSettings, DEFAULT_ARENA_APP_SETTINGS } from '../../hooks/store/createSettingsSlice';
 import {
   PROVIDER_DEFINITIONS,
-  getModelsForProvider,
+
   getDefaultProviderSettings,
   OLLAMA_DEFAULT_BASE_URL,
 } from '../../config/arenaConfig';
@@ -45,7 +45,6 @@ const SettingsWizard: React.FC<SettingsWizardProps> = ({
 
   // Arena / AI form state
   const [arenaDefaultProvider, setArenaDefaultProvider] = useState<ArenaProviderType>(settings.arena?.defaultProvider ?? DEFAULT_ARENA_APP_SETTINGS.defaultProvider);
-  const [arenaDefaultModel, setArenaDefaultModel] = useState(settings.arena?.defaultModel ?? DEFAULT_ARENA_APP_SETTINGS.defaultModel);
   const [arenaEnableStreaming, setArenaEnableStreaming] = useState(settings.arena?.enableStreaming ?? DEFAULT_ARENA_APP_SETTINGS.enableStreaming);
   const [arenaMaxSessions, setArenaMaxSessions] = useState(settings.arena?.maxSessions ?? DEFAULT_ARENA_APP_SETTINGS.maxSessions);
   const [arenaMaxMessages, setArenaMaxMessages] = useState(settings.arena?.maxMessagesPerSession ?? DEFAULT_ARENA_APP_SETTINGS.maxMessagesPerSession);
@@ -65,7 +64,6 @@ const SettingsWizard: React.FC<SettingsWizardProps> = ({
     setIgnoreCertificateValidation(settings.ignoreCertificateValidation);
     // Sync arena state
     setArenaDefaultProvider(settings.arena?.defaultProvider ?? DEFAULT_ARENA_APP_SETTINGS.defaultProvider);
-    setArenaDefaultModel(settings.arena?.defaultModel ?? DEFAULT_ARENA_APP_SETTINGS.defaultModel);
     setArenaEnableStreaming(settings.arena?.enableStreaming ?? DEFAULT_ARENA_APP_SETTINGS.enableStreaming);
     setArenaMaxSessions(settings.arena?.maxSessions ?? DEFAULT_ARENA_APP_SETTINGS.maxSessions);
     setArenaMaxMessages(settings.arena?.maxMessagesPerSession ?? DEFAULT_ARENA_APP_SETTINGS.maxMessagesPerSession);
@@ -83,26 +81,6 @@ const SettingsWizard: React.FC<SettingsWizardProps> = ({
         ...prev,
         [providerId]: { ...prev[providerId], [key]: value },
       }));
-    },
-    [],
-  );
-
-  /** Toggle a model's disabled state for a provider */
-  const handleToggleModel = useCallback(
-    (providerId: ArenaProviderType, modelId: string) => {
-      setArenaProviders((prev) => {
-        const current = prev[providerId];
-        const disabled = new Set(current.disabledModels);
-        if (disabled.has(modelId)) {
-          disabled.delete(modelId);
-        } else {
-          disabled.add(modelId);
-        }
-        return {
-          ...prev,
-          [providerId]: { ...current, disabledModels: Array.from(disabled) },
-        };
-      });
     },
     [],
   );
@@ -155,11 +133,11 @@ const SettingsWizard: React.FC<SettingsWizardProps> = ({
       ignoreCertificateValidation,
       arena: {
         defaultProvider: arenaDefaultProvider,
-        defaultModel: arenaDefaultModel,
         enableStreaming: arenaEnableStreaming,
         maxSessions: arenaMaxSessions,
         maxMessagesPerSession: arenaMaxMessages,
         providers: arenaProviders,
+        lastSelectedModels: settings.arena?.lastSelectedModels,
       },
     };
 
@@ -176,7 +154,6 @@ const SettingsWizard: React.FC<SettingsWizardProps> = ({
     setIgnoreCertificateValidation(DEFAULT_SETTINGS.ignoreCertificateValidation);
     // Reset arena settings
     setArenaDefaultProvider(DEFAULT_ARENA_APP_SETTINGS.defaultProvider);
-    setArenaDefaultModel(DEFAULT_ARENA_APP_SETTINGS.defaultModel);
     setArenaEnableStreaming(DEFAULT_ARENA_APP_SETTINGS.enableStreaming);
     setArenaMaxSessions(DEFAULT_ARENA_APP_SETTINGS.maxSessions);
     setArenaMaxMessages(DEFAULT_ARENA_APP_SETTINGS.maxMessagesPerSession);
@@ -399,47 +376,25 @@ const SettingsWizard: React.FC<SettingsWizardProps> = ({
           Arena / AI Settings
         </h3>
 
-        {/* Default Provider & Model */}
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <Label htmlFor="arenaDefaultProvider">Default Provider</Label>
-            <select
-              id="arenaDefaultProvider"
-              value={arenaDefaultProvider}
-              onChange={(e) => {
-                const pid = e.target.value as ArenaProviderType;
-                const def = PROVIDER_DEFINITIONS.find((p) => p.id === pid);
-                setArenaDefaultProvider(pid);
-                setArenaDefaultModel(def?.defaultModel ?? '');
-              }}
-              className="w-full mt-1 px-2 py-1.5 text-sm bg-slate-100 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500"
-            >
-              {implementedProviders
-                .filter((p) => arenaProviders[p.id]?.enabled !== false)
-                .map((p) => (
-                  <option key={p.id} value={p.id}>{p.label}</option>
-                ))}
-            </select>
-            <p className="text-xs text-slate-500 mt-1">Provider used by default in new chats</p>
-          </div>
-          <div>
-            <Label htmlFor="arenaDefaultModel">Default Model</Label>
-            <select
-              id="arenaDefaultModel"
-              value={arenaDefaultModel}
-              onChange={(e) => setArenaDefaultModel(e.target.value)}
-              className="w-full mt-1 px-2 py-1.5 text-sm bg-slate-100 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500"
-            >
-              {getModelsForProvider(arenaDefaultProvider)
-                .filter((m) => !arenaProviders[arenaDefaultProvider]?.disabledModels?.includes(m.id))
-                .map((m) => (
-                  <option key={m.id} value={m.id}>
-                    {m.label}{m.note ? ` (${m.note})` : ''}
-                  </option>
-                ))}
-            </select>
-            <p className="text-xs text-slate-500 mt-1">Model used by default in new chats</p>
-          </div>
+        {/* Default Provider */}
+        <div>
+          <Label htmlFor="arenaDefaultProvider">Default Provider</Label>
+          <select
+            id="arenaDefaultProvider"
+            value={arenaDefaultProvider}
+            onChange={(e) => {
+              const pid = e.target.value as ArenaProviderType;
+              setArenaDefaultProvider(pid);
+            }}
+            className="w-full mt-1 px-2 py-1.5 text-sm bg-slate-100 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500"
+          >
+            {implementedProviders
+              .filter((p) => arenaProviders[p.id]?.enabled !== false)
+              .map((p) => (
+                <option key={p.id} value={p.id}>{p.label}</option>
+              ))}
+          </select>
+          <p className="text-xs text-slate-500 mt-1">Provider used by default in new chats</p>
         </div>
 
         {/* Streaming toggle */}
@@ -511,7 +466,6 @@ const SettingsWizard: React.FC<SettingsWizardProps> = ({
                   setExpandedProvider((prev) => (prev === provider.id ? null : provider.id))
                 }
                 onFieldChange={(key, value) => handleProviderFieldChange(provider.id, key, value)}
-                onToggleModel={(modelId) => handleToggleModel(provider.id, modelId)}
               />
             ))}
           </div>
@@ -565,7 +519,6 @@ interface ArenaProviderCardProps {
     key: K,
     value: ArenaProviderSettingsMap[ArenaProviderType][K],
   ) => void;
-  onToggleModel: (modelId: string) => void;
 }
 
 function ArenaProviderCard({
@@ -574,11 +527,8 @@ function ArenaProviderCard({
   isExpanded,
   onToggleExpand,
   onFieldChange,
-  onToggleModel,
 }: ArenaProviderCardProps) {
   const [showApiKey, setShowApiKey] = useState(false);
-  const models = getModelsForProvider(provider.id);
-  const disabledSet = new Set(providerConfig.disabledModels);
 
   return (
     <div
@@ -673,36 +623,7 @@ function ArenaProviderCard({
             />
           </div>
 
-          {/* Model enable/disable */}
-          <div>
-            <label className="text-[11px] font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide block mb-1">
-              Models
-            </label>
-            <div className="space-y-1">
-              {models.map((m) => (
-                <label
-                  key={m.id}
-                  className={cn(
-                    'flex items-center gap-2 px-2 py-1 rounded cursor-pointer text-xs transition-colors',
-                    disabledSet.has(m.id)
-                      ? 'text-slate-400 dark:text-slate-500'
-                      : 'text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700/50',
-                  )}
-                >
-                  <input
-                    type="checkbox"
-                    checked={!disabledSet.has(m.id)}
-                    onChange={() => onToggleModel(m.id)}
-                    className="accent-blue-600"
-                  />
-                  <span>{m.label}</span>
-                  {m.note && (
-                    <span className="text-[10px] text-slate-400">{m.note}</span>
-                  )}
-                </label>
-              ))}
-            </div>
-          </div>
+
         </div>
       )}
     </div>

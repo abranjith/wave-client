@@ -9,8 +9,6 @@ import {
   getAgentDefinition,
   PROVIDER_DEFINITIONS,
   getProviderDefinition,
-  MODEL_DEFINITIONS,
-  getModelsForProvider,
   geminiGenerateContentUrl,
   geminiStreamUrl,
   geminiModelsUrl,
@@ -92,24 +90,6 @@ describe('PROVIDER_DEFINITIONS', () => {
   it('gemini and ollama should be available', () => {
     expect(getProviderDefinition('gemini')?.available).toBe(true);
     expect(getProviderDefinition('ollama')?.available).toBe(true);
-  });
-});
-
-describe('getModelsForProvider', () => {
-  it('should return models for gemini', () => {
-    const models = getModelsForProvider('gemini');
-    expect(models.length).toBeGreaterThan(0);
-    expect(models.every((m) => m.provider === 'gemini')).toBe(true);
-  });
-
-  it('should return models for ollama', () => {
-    const models = getModelsForProvider('ollama');
-    expect(models.length).toBeGreaterThan(0);
-    expect(models.every((m) => m.provider === 'ollama')).toBe(true);
-  });
-
-  it('should return empty array for unsupported provider', () => {
-    expect(getModelsForProvider('nonexistent' as any)).toEqual([]);
   });
 });
 

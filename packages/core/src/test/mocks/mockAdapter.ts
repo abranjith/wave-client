@@ -56,6 +56,7 @@ import type {
 import { DEFAULT_ARENA_SETTINGS } from '../../types/arena';
 import type { ArenaReference } from '../../config/arenaConfig';
 import type { ArenaProviderSettingsMap } from '../../config/arenaConfig';
+import type { DynamicModelInfo } from '../../config/arenaConfig';
 import { getDefaultProviderSettings } from '../../config/arenaConfig';
 import type {
     Collection,
@@ -758,8 +759,8 @@ function createMockArenaAdapter(store: MockDataStore): IArenaAdapter {
         },
 
         // Models
-        async getAvailableModels(_provider: string): Promise<Result<{ id: string; label: string }[], string>> {
-            return ok([{ id: 'mock-model', label: 'Mock Model' }]);
+        async getAvailableModels(_provider: string): Promise<Result<DynamicModelInfo[], string>> {
+            return ok([{ id: 'mock-model', label: 'Mock Model', provider: 'gemini' as const }]);
         },
     };
 }

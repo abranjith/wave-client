@@ -13,8 +13,6 @@ import { getDefaultProviderSettings } from '../../config/arenaConfig';
 export interface ArenaAppSettings {
     /** Default LLM provider */
     defaultProvider: ArenaProviderType;
-    /** Default model for the selected provider */
-    defaultModel: string;
     /** Enable streaming responses */
     enableStreaming: boolean;
     /** Max sessions to keep */
@@ -23,11 +21,12 @@ export interface ArenaAppSettings {
     maxMessagesPerSession: number;
     /** Per-provider configuration (API keys, URLs, disabled models) */
     providers: ArenaProviderSettingsMap;
+    /** Last model selected per provider — persisted so the user does not need to re-select on provider switch */
+    lastSelectedModels?: Partial<Record<ArenaProviderType, string>>;
 }
 
 export const DEFAULT_ARENA_APP_SETTINGS: ArenaAppSettings = {
     defaultProvider: 'gemini',
-    defaultModel: 'gemini-2.0-flash',
     enableStreaming: true,
     maxSessions: 5,
     maxMessagesPerSession: 10,

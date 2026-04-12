@@ -34,7 +34,7 @@ export type {
     ArenaSettings,
     ArenaSession,
     ArenaReference,
-    ModelDefinition,
+    DynamicModelInfo,
 } from '@wave-client/core';
 
 export {
@@ -42,6 +42,5 @@ export {
     DEFAULT_ARENA_SETTINGS,
     geminiModelsUrl,
     ollamaTagsUrl,
-    getModelsForProvider,
     getDefaultProviderSettings,
 } from '@wave-client/core';

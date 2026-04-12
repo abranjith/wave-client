@@ -40,6 +40,7 @@ import type {
 } from './arena';
 import type { ArenaReference } from '../config/arenaConfig';
 import type { ArenaProviderSettingsMap } from '../config/arenaConfig';
+import type { DynamicModelInfo } from '../config/arenaConfig';
 
 // ============================================================================
 // Common Types
@@ -470,10 +471,10 @@ export interface IArenaAdapter {
     validateApiKey(provider: string, apiKey: string): Promise<Result<boolean, string>>;
 
     /**
-     * Get available models for a provider (e.g. dynamically fetched from Ollama).
-     * Falls back to the static MODEL_DEFINITIONS in arenaConfig if not supported.
+     * Get available models for a provider, dynamically fetched from the provider API.
+     * Returns an empty array if the provider is not supported or the fetch fails.
      */
-    getAvailableModels?(provider: string): Promise<Result<{ id: string; label: string }[], string>>;
+    getAvailableModels(provider: string): Promise<Result<DynamicModelInfo[], string>>;
 
     // References (stored in .waveclient/arena/)
     /**

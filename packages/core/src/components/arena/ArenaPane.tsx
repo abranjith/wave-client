@@ -88,7 +88,8 @@ export function ArenaPane({ className }: ArenaPaneProps): React.ReactElement {
   // downstream components (ArenaChatToolbar, ArenaSettings panel, chat requests).
   const arenaSettings = useMemo<ArenaSettingsConfig>(() => ({
     provider: settings.arena.defaultProvider,
-    model: settings.arena.defaultModel,
+    model: settings.arena.lastSelectedModels?.[settings.arena.defaultProvider],
+    lastSelectedModels: settings.arena.lastSelectedModels,
     maxSessions: settings.arena.maxSessions,
     maxMessagesPerSession: settings.arena.maxMessagesPerSession,
     enableStreaming: settings.arena.enableStreaming,
@@ -123,7 +124,7 @@ export function ArenaPane({ className }: ArenaPaneProps): React.ReactElement {
         const s = settingsResult.value;
         updateArenaAppSettings({
           defaultProvider: s.provider,
-          defaultModel: s.model || '',
+          lastSelectedModels: s.lastSelectedModels,
           enableStreaming: s.enableStreaming,
           maxSessions: s.maxSessions,
           maxMessagesPerSession: s.maxMessagesPerSession,
@@ -451,7 +452,7 @@ export function ArenaPane({ className }: ArenaPaneProps): React.ReactElement {
       // Map to ArenaAppSettings keys for the settings slice
       const appUpdates: Partial<ArenaAppSettings> = {};
       if (updates.provider !== undefined) appUpdates.defaultProvider = updates.provider;
-      if (updates.model !== undefined) appUpdates.defaultModel = updates.model;
+      if (updates.lastSelectedModels !== undefined) appUpdates.lastSelectedModels = updates.lastSelectedModels;
       if (updates.enableStreaming !== undefined) appUpdates.enableStreaming = updates.enableStreaming;
       if (updates.maxSessions !== undefined) appUpdates.maxSessions = updates.maxSessions;
       if (updates.maxMessagesPerSession !== undefined) appUpdates.maxMessagesPerSession = updates.maxMessagesPerSession;

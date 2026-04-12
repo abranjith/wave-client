@@ -18,6 +18,7 @@ import {
   Globe,
   PanelRight,
   Cpu,
+  RefreshCw,
 } from 'lucide-react';
 import { cn } from '../../utils/styling';
 import {
@@ -30,13 +31,12 @@ import type {
   ArenaSettings,
   ArenaProviderSettingsMap,
   ProviderDefinition,
-  ModelDefinition,
 } from '../../config/arenaConfig';
 import {
   getEnabledProviders,
-  getEnabledModels,
 } from '../../config/arenaConfig';
 import { SecondaryButton } from '../ui/SecondaryButton';
+import { useArenaModels } from '../../hooks/useArenaModels';
 
 // ============================================================================
 // Types
@@ -104,7 +104,7 @@ export function ArenaChatToolbar({
   }, [showProviderPopover]);
 
   const currentProvider = getProviderDefinition(settings.provider);
-  const currentModel = settings.model || currentProvider?.defaultModel || '';
+  const currentModel = settings.model || settings.lastSelectedModels?.[settings.provider] || '';
   const agentDef = agentId ? getAgentDefinition(agentId) : null;
 
   const AGENT_ICON_MAP: Record<string, React.ReactNode> = {
@@ -250,24 +250,25 @@ interface ProviderPopoverProps {
 
 function ProviderPopover({ settings, providerSettings, onSettingsChange, onClose }: ProviderPopoverProps) {
   const enabledProviders: ProviderDefinition[] = getEnabledProviders(providerSettings);
-  const enabledModels: ModelDefinition[] = getEnabledModels(settings.provider, providerSettings);
+  const { models, isLoading, error, refetch } = useArenaModels(settings.provider);
   const providerDef = getProviderDefinition(settings.provider);
 
   const handleProviderChange = useCallback(
     (providerId: ArenaProviderType) => {
-      const def = getProviderDefinition(providerId);
+      // Restore the last used model for the selected provider, if available
+      const lastModel = settings.lastSelectedModels?.[providerId];
       onSettingsChange({
         provider: providerId,
-        model: def?.defaultModel,
+        model: lastModel,
       });
     },
-    [onSettingsChange],
+    [onSettingsChange, settings.lastSelectedModels],
   );
 
   return (
     <div
       className={cn(
-        'absolute left-0 top-full mt-2 z-50 w-72 rounded-lg shadow-lg',
+        'absolute right-0 top-full mt-2 z-50 w-72 rounded-lg shadow-lg',
         'bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-600',
       )}
     >
@@ -320,21 +321,55 @@ function ProviderPopover({ settings, providerSettings, onSettingsChange, onClose
 
         {/* Model select */}
         <div>
-          <label className="text-[11px] font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide block mb-1">
-            Model
-          </label>
-          {enabledModels.length === 0 ? (
-            <p className="text-xs text-slate-400 py-1">No models available. Configure in Settings.</p>
+          <div className="flex items-center justify-between mb-1">
+            <label className="text-[11px] font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide">
+              Model
+            </label>
+            {!isLoading && (
+              <button
+                type="button"
+                onClick={refetch}
+                title="Refresh models"
+                className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 p-0.5 rounded"
+              >
+                <RefreshCw size={10} />
+              </button>
+            )}
+          </div>
+          {isLoading ? (
+            <p className="text-xs text-slate-400 py-1 animate-pulse">Loading models…</p>
+          ) : error ? (
+            <div className="space-y-1">
+              <p className="text-xs text-red-500 dark:text-red-400 py-1">{error}</p>
+              <button
+                type="button"
+                onClick={refetch}
+                className="text-xs text-blue-500 hover:underline"
+              >
+                Retry
+              </button>
+            </div>
+          ) : models.length === 0 ? (
+            <p className="text-xs text-slate-400 py-1">No models available for this provider.</p>
           ) : (
             <select
               value={settings.model || providerDef?.defaultModel}
-              onChange={(e) => onSettingsChange({ model: e.target.value })}
+              onChange={(e) => {
+                const selectedModel = e.target.value;
+                onSettingsChange({
+                  model: selectedModel,
+                  lastSelectedModels: {
+                    ...settings.lastSelectedModels,
+                    [settings.provider]: selectedModel,
+                  },
+                });
+              }}
               className="w-full px-2 py-1.5 text-xs bg-slate-100 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500"
             >
-              {enabledModels.map((m) => (
-                <option key={m.id} value={m.id}>
+              {models.map((m) => (
+                <option key={m.id} value={m.id} title={m.description}>
                   {m.label}
-                  {m.note ? ` (${m.note})` : ''}
+                  {m.parameterSize ? ` (${m.parameterSize})` : ''}
                 </option>
               ))}
             </select>

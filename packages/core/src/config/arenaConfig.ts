@@ -274,35 +274,27 @@ export function getProviderDefinition(providerId: ArenaProviderType): ProviderDe
 // Model Definitions
 // ============================================================================
 
-export interface ModelDefinition {
-  id: string;
-  label: string;
-  provider: ArenaProviderType;
-  contextWindow: number;
-  /** Short note shown in the UI (optional) */
-  note?: string;
-}
-
-export const MODEL_DEFINITIONS: ModelDefinition[] = [
-  // Gemini
-  { id: 'gemini-2.0-flash', label: 'Gemini 2.0 Flash', provider: 'gemini', contextWindow: 1_000_000, note: 'Recommended' },
-  { id: 'gemini-1.5-flash', label: 'Gemini 1.5 Flash', provider: 'gemini', contextWindow: 1_000_000 },
-  { id: 'gemini-1.5-pro', label: 'Gemini 1.5 Pro', provider: 'gemini', contextWindow: 2_000_000 },
-  // Ollama
-  { id: 'llama2', label: 'Llama 2', provider: 'ollama', contextWindow: 4096 },
-  { id: 'llama3.2', label: 'Llama 3.2', provider: 'ollama', contextWindow: 128_000, note: 'Recommended' },
-  { id: 'mistral', label: 'Mistral', provider: 'ollama', contextWindow: 8192 },
-  { id: 'neural-chat', label: 'Neural Chat', provider: 'ollama', contextWindow: 4096 },
-  { id: 'dolphin-mixtral', label: 'Dolphin Mixtral', provider: 'ollama', contextWindow: 32_000 },
-  { id: 'openchat', label: 'OpenChat', provider: 'ollama', contextWindow: 8192 },
-  { id: 'wizardlm2', label: 'WizardLM 2', provider: 'ollama', contextWindow: 4096 },
-];
-
 /**
- * Get models available for a specific provider.
+ * Dynamically fetched model information from a provider API.
+ * Replaces the old static `ModelDefinition` type.
  */
-export function getModelsForProvider(providerId: ArenaProviderType): ModelDefinition[] {
-  return MODEL_DEFINITIONS.filter((m) => m.provider === providerId);
+export interface DynamicModelInfo {
+  /** Model identifier, e.g. `gemini-2.0-flash`, `llama3.2:latest` */
+  id: string;
+  /** Human-readable display name */
+  label: string;
+  /** Provider this model belongs to */
+  provider: ArenaProviderType;
+  /** Maximum input context tokens (from Gemini API) */
+  inputTokenLimit?: number;
+  /** Maximum output tokens (from Gemini API) */
+  outputTokenLimit?: number;
+  /** Parameter size string, e.g. `"3.2B"` (from Ollama API) */
+  parameterSize?: string;
+  /** Quantization level, e.g. `"Q4_K_M"` (from Ollama API) */
+  quantizationLevel?: string;
+  /** Model description (from Gemini API) */
+  description?: string;
 }
 
 // ============================================================================
@@ -469,18 +461,7 @@ export function getEnabledProviders(
   );
 }
 
-/**
- * Get models for a provider, excluding user-disabled ones.
- */
-export function getEnabledModels(
-  providerId: ArenaProviderType,
-  providerSettings: ArenaProviderSettingsMap,
-): ModelDefinition[] {
-  const disabled = new Set(providerSettings[providerId]?.disabledModels ?? []);
-  return MODEL_DEFINITIONS.filter(
-    (m) => m.provider === providerId && !disabled.has(m.id),
-  );
-}
+
 
 /**
  * Returns `true` if at least one provider is enabled with valid configuration.
@@ -525,6 +506,8 @@ export interface ArenaSettings {
   enableStreaming: boolean;
   /** Custom reference websites for web-expert agent */
   customReferenceSites?: string[];
+  /** Last model selected per provider — persisted so the user does not need to re-select on provider switch */
+  lastSelectedModels?: Partial<Record<ArenaProviderType, string>>;
 }
 
 export const DEFAULT_ARENA_SETTINGS: ArenaSettings = {

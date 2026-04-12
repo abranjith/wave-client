@@ -8,6 +8,7 @@ import { ChatGoogleGenerativeAI } from '@langchain/google-genai';
 import type { BaseChatModel } from '@langchain/core/language_models/chat_models';
 import type { GeminiConfig } from '../types';
 import { httpService } from '@wave-client/shared';
+import type { DynamicModelInfo } from '@wave-client/shared';
 
 export interface GeminiProviderConfig {
   apiKey: string;
@@ -72,6 +73,54 @@ export const GEMINI_MODELS = [
   { id: 'gemini-1.5-flash', name: 'Gemini 1.5 Flash', contextWindow: 1000000 },
   { id: 'gemini-pro', name: 'Gemini Pro', contextWindow: 30720 },
 ] as const;
+
+/**
+ * Fetch available models from the Gemini API.
+ *
+ * Queries the `/v1beta/models` endpoint and returns only models that support
+ * the `generateContent` generation method.
+ *
+ * NOTE: Uses a single `pageSize=100` query. Full pagination via `nextPageToken`
+ * is tracked as a future TODO.
+ */
+export async function listGeminiModels(apiKey: string): Promise<DynamicModelInfo[]> {
+  if (!apiKey) return [];
+  try {
+    const url = `https://generativelanguage.googleapis.com/v1beta/models?key=${encodeURIComponent(apiKey)}&pageSize=100`;
+    const result = await httpService.send({
+      method: 'GET',
+      url,
+      headers: {},
+      validateStatus: true,
+      responseType: 'json',
+    });
+    if (result.response.status < 200 || result.response.status >= 400) {
+      return [];
+    }
+    interface GeminiModelEntry {
+      name: string;
+      displayName?: string;
+      description?: string;
+      inputTokenLimit?: number;
+      outputTokenLimit?: number;
+      supportedGenerationMethods?: string[];
+    }
+    const data = result.response.data as { models?: GeminiModelEntry[] };
+    return (data.models ?? [])
+      .filter((m) => m.supportedGenerationMethods?.includes('generateContent'))
+      .map((m) => ({
+        // Strip the "models/" prefix that the API includes in the name field
+        id: m.name.startsWith('models/') ? m.name.slice('models/'.length) : m.name,
+        label: m.displayName ?? m.name,
+        provider: 'gemini' as const,
+        inputTokenLimit: m.inputTokenLimit,
+        outputTokenLimit: m.outputTokenLimit,
+        description: m.description,
+      }));
+  } catch {
+    return [];
+  }
+}
 
 /**
  * Validate a Gemini API key by probing the models endpoint via the proxy-aware HTTP service.

@@ -32,6 +32,7 @@ import type {
     ArenaProviderSettingsMap,
     StreamHandle,
     StreamUnsubscribe,
+    DynamicModelInfo,
 } from '@wave-client/core';
 
 // ---------------------------------------------------------------------------
@@ -393,8 +394,8 @@ export function createVSCodeArenaAdapter(
             return sendAndWait<boolean>('arena.validateApiKey', { provider, apiKey });
         },
 
-        async getAvailableModels(provider: string): Promise<Result<{ id: string; label: string }[], string>> {
-            return sendAndWait<{ id: string; label: string }[]>('arena.getAvailableModels', { provider });
+        async getAvailableModels(provider: string): Promise<Result<DynamicModelInfo[], string>> {
+            return sendAndWait<DynamicModelInfo[]>('arena.getAvailableModels', { provider });
         },
 
         async checkMcpStatus(): Promise<Result<import('@wave-client/core').McpStatus, string>> {

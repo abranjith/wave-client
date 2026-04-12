@@ -1,4 +1,6 @@
 import { createProviderFactory, testProviderConnection, validateProviderApiKey } from './providers/factory';
+import { listGeminiModels } from './providers/gemini';
+import { listOllamaModels } from './providers/ollama';
 import { createWaveClientAgent } from './agents/waveClientAgent';
 import { createWebExpertAgent } from './agents/webExpertAgent';
 import { createMcpBridge, createDirectToolBridge } from './tools/mcpBridge';
@@ -12,14 +14,11 @@ import type {
     ArenaProviderType,
     ArenaProviderSettings,
     ArenaReference,
-    ModelDefinition,
+    DynamicModelInfo,
 } from '@wave-client/shared';
 import {
     ARENA_AGENT_IDS,
-    ollamaTagsUrl,
-    getModelsForProvider,
     arenaStorageService,
-    httpService,
 } from '@wave-client/shared';
 
 /** Ollama default base URL (mirrors OLLAMA_DEFAULT_BASE_URL in @wave-client/core). */
@@ -402,44 +401,29 @@ export class ArenaService {
     }
 
     /**
-     * Returns the list of models available for the given provider.
+     * Returns the list of models available for the given provider by fetching
+     * them dynamically from the provider API.
      *
-     * For Ollama, probes the live `/api/tags` endpoint via `httpService.send()` and
-     * maps the response to `ModelDefinition[]`.  Falls back to the static list on any
-     * failure.  All other providers use the static list directly.
+     * For Gemini, calls the `/v1beta/models` endpoint filtered to models that
+     * support `generateContent`.  For Ollama, queries the running server's
+     * `/api/tags` endpoint.  Returns an empty array on any failure.
      *
      * @param provider         The provider type.
-     * @param providerSettings The provider settings (used for Ollama base URL).
-     * @returns Array of available `ModelDefinition` objects.
+     * @param providerSettings The provider settings (API key / base URL).
+     * @returns Array of available `DynamicModelInfo` objects.
      */
     async getAvailableModels(
         provider: ArenaProviderType,
         providerSettings: ArenaProviderSettings,
-    ): Promise<ModelDefinition[]> {
-        if (provider === 'ollama') {
-            try {
-                const baseUrl = providerSettings.apiUrl ?? OLLAMA_DEFAULT_BASE_URL;
-                const result = await httpService.send({
-                    method: 'GET',
-                    url: ollamaTagsUrl(baseUrl),
-                    headers: {},
-                    validateStatus: true,
-                    responseType: 'json',
-                });
-                if (result.response.status >= 200 && result.response.status < 400) {
-                    const data = result.response.data as { models: { name: string }[] };
-                    return (data.models ?? []).map((m) => ({
-                        id: m.name,
-                        label: m.name,
-                        provider: 'ollama' as const,
-                        contextWindow: 0,
-                    }));
-                }
-            } catch {
-                // fall through to static list
-            }
+    ): Promise<DynamicModelInfo[]> {
+        if (provider === 'gemini') {
+            return listGeminiModels(providerSettings.apiKey ?? '');
         }
-        return getModelsForProvider(provider);
+        if (provider === 'ollama') {
+            const baseUrl = providerSettings.apiUrl ?? OLLAMA_DEFAULT_BASE_URL;
+            return listOllamaModels(baseUrl);
+        }
+        return [];
     }
 
     // =========================================================================

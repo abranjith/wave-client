@@ -25,6 +25,7 @@ import type {
     ArenaProviderSettingsMap,
     StreamHandle,
     StreamUnsubscribe,
+    DynamicModelInfo,
 } from '@wave-client/core';
 import { ok, err, Result } from '@wave-client/core';
 
@@ -312,8 +313,8 @@ export function createWebArenaAdapter(events: IAdapterEvents): IArenaAdapter {
             return err(result.error);
         },
 
-        async getAvailableModels(provider: string): Promise<Result<{ id: string; label: string }[], string>> {
-            return serverRequest<{ id: string; label: string }[]>(
+        async getAvailableModels(provider: string): Promise<Result<DynamicModelInfo[], string>> {
+            return serverRequest<DynamicModelInfo[]>(
                 'GET', `/api/arena/models/${encodeURIComponent(provider)}`,
             );
         },

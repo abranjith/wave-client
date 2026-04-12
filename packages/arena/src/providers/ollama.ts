@@ -8,6 +8,7 @@ import { ChatOllama } from '@langchain/ollama';
 import type { BaseChatModel } from '@langchain/core/language_models/chat_models';
 import type { OllamaConfig } from '../types';
 import { httpService } from '@wave-client/shared';
+import type { DynamicModelInfo } from '@wave-client/shared';
 
 export interface OllamaProviderConfig {
   baseUrl: string;
@@ -107,33 +108,43 @@ export async function testOllamaConnection(baseUrl: string): Promise<{ connected
 }
 
 /**
- * Get list of available models from Ollama server
+ * Fetch available models from a running Ollama server.
+ *
+ * Uses the proxy-aware `httpService` so requests work behind corporate proxies
+ * and inside VS Code's Node.js process.
+ *
+ * @param baseUrl The Ollama server base URL (e.g. `http://localhost:11434`).
+ * @returns Array of `DynamicModelInfo` objects; empty array on any failure.
  */
-export async function listOllamaModels(baseUrl: string): Promise<string[]> {
+export async function listOllamaModels(baseUrl: string): Promise<DynamicModelInfo[]> {
   try {
     const url = new URL('/api/tags', baseUrl).toString();
-    const response = await fetch(url);
-    
-    if (!response.ok) {
-      throw new Error(`Server returned status ${response.status}`);
+    const result = await httpService.send({
+      method: 'GET',
+      url,
+      headers: {},
+      validateStatus: true,
+      responseType: 'json',
+    });
+    if (result.response.status < 200 || result.response.status >= 400) {
+      return [];
     }
-
-    const data = (await response.json()) as { models: Array<{ name: string }> };
-    return data.models.map((m) => m.name);
-  } catch (error) {
-    console.error('Failed to list Ollama models:', error);
+    interface OllamaModelEntry {
+      name: string;
+      details?: {
+        parameter_size?: string;
+        quantization_level?: string;
+      };
+    }
+    const data = result.response.data as { models?: OllamaModelEntry[] };
+    return (data.models ?? []).map((m) => ({
+      id: m.name,
+      label: m.name,
+      provider: 'ollama' as const,
+      parameterSize: m.details?.parameter_size,
+      quantizationLevel: m.details?.quantization_level,
+    }));
+  } catch {
     return [];
   }
 }
-
-/**
- * Popular open-source models available via Ollama
- */
-export const OLLAMA_POPULAR_MODELS = [
-  { id: 'llama2', name: 'Llama 2', parameters: '7B, 13B, 70B variants', contextWindow: 4096 },
-  { id: 'mistral', name: 'Mistral', parameters: '7B', contextWindow: 8192 },
-  { id: 'neural-chat', name: 'Neural Chat', parameters: '7B', contextWindow: 4096 },
-  { id: 'dolphin-mixtral', name: 'Dolphin Mixtral', parameters: '8x7B', contextWindow: 32768 },
-  { id: 'openchat', name: 'OpenChat', parameters: '3.5', contextWindow: 8192 },
-  { id: 'wizardlm2', name: 'WizardLM 2', parameters: '8x22B', contextWindow: 65536 },
-] as const;

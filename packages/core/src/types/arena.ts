@@ -24,9 +24,6 @@ export {
   // Provider definitions
   PROVIDER_DEFINITIONS,
   getProviderDefinition,
-  // Model definitions
-  MODEL_DEFINITIONS,
-  getModelsForProvider,
   // API URLs
   GEMINI_API_BASE_URL,
   OLLAMA_DEFAULT_BASE_URL,
@@ -53,7 +50,6 @@ export {
   // Provider settings helpers
   getDefaultProviderSettings,
   getEnabledProviders,
-  getEnabledModels,
   isProviderConfigured,
 } from '../config/arenaConfig';
 
@@ -66,7 +62,7 @@ export type {
   ReferenceWebsite,
   ArenaProviderType,
   ProviderDefinition,
-  ModelDefinition,
+  DynamicModelInfo,
   ArenaSessionMetadata,
   ArenaSettings,
   ArenaProviderSettings,
