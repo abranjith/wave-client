@@ -529,18 +529,20 @@ const RequestEditor: React.FC<RequestEditorProps> = ({
                               Network/Connection Error
                             </span>
                           </div>
-                          <div className="flex gap-2">
-                            <span className="font-mono font-bold text-slate-500 dark:text-slate-400 w-32 flex-shrink-0">
-                              Status Code:
-                            </span>
-                            <span className="font-mono text-slate-800 dark:text-slate-200">
-                              {responseData.status}
-                            </span>
-                          </div>
+                          {responseData.status !== 0 && (
+                            <div className="flex gap-2">
+                              <span className="font-mono font-bold text-slate-500 dark:text-slate-400 w-32 flex-shrink-0">
+                                Status Code:
+                              </span>
+                              <span className="font-mono text-slate-800 dark:text-slate-200">
+                                {responseData.status}
+                              </span>
+                            </div>
+                          )}
                         </div>
                       </div>
 
-                      {responseData.body && (
+                      {responseData.body && atob(responseData.body) !== 'Unknown error' && (
                         <div className="space-y-2">
                           <h4 className="text-sm font-semibold text-slate-700 dark:text-slate-300">
                             Error Details
