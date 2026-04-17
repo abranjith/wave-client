@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { createMockAxios } from '../mocks/axios';
 import type { Collection, Environment, CollectionRequest } from '@wave-client/core';
 
@@ -12,7 +12,8 @@ vi.mock('axios', () => ({
 }));
 
 // Import after mocking
-const { createWebAdapter } = await import('../../adapters/webAdapter');
+const { createWebAdapter, dispatchServerPushMessageForTests } = await import('../../adapters/webAdapter');
+const { wsHandles, sseHandles } = await import('../../adapters/webRealtimeAdapter');
 
 describe('WebAdapter - Storage', () => {
   let adapter: ReturnType<typeof createWebAdapter>;
@@ -468,7 +469,7 @@ describe('WebAdapter - HTTP', () => {
 
     mockAxios.setResponse(
       '/api/http/execute',
-      { isOk: true, value: { response: mockResponse } },
+      { isOk: true, value: mockResponse },
       'POST'
     );
 
@@ -592,6 +593,8 @@ describe('WebAdapter - Platform', () => {
 
   beforeEach(() => {
     mockAxios.reset();
+    wsHandles.clear();
+    sseHandles.clear();
     adapter = createWebAdapter();
   });
 
@@ -604,6 +607,237 @@ describe('WebAdapter - Platform', () => {
     expect(adapter.events.on).toBeInstanceOf(Function);
     expect(adapter.events.off).toBeInstanceOf(Function);
     expect(adapter.events.emit).toBeInstanceOf(Function);
+  });
+
+  it('exposes realtime adapter methods', () => {
+    expect(adapter.realtime).toBeDefined();
+    expect(typeof adapter.realtime?.connectWebSocket).toBe('function');
+    expect(typeof adapter.realtime?.disconnectWebSocket).toBe('function');
+    expect(typeof adapter.realtime?.sendWebSocketMessage).toBe('function');
+    expect(typeof adapter.realtime?.connectSse).toBe('function');
+    expect(typeof adapter.realtime?.disconnectSse).toBe('function');
+  });
+});
+
+describe('WebAdapter - Realtime push routing', () => {
+  let adapter: ReturnType<typeof createWebAdapter>;
+
+  beforeEach(() => {
+    mockAxios.reset();
+    wsHandles.clear();
+    sseHandles.clear();
+    adapter = createWebAdapter();
+  });
+
+  it('routes ws.message push events to matching WS handle', async () => {
+    mockAxios.setResponse('/api/ws/connect', { isOk: true, value: {} }, 'POST');
+    const handle = adapter.realtime!.connectWebSocket({ id: 'ws-route-1', url: 'wss://example.com/ws' });
+    const onMessage = vi.fn();
+    handle.onMessage(onMessage);
+
+    dispatchServerPushMessageForTests({
+      type: 'ws.message',
+      data: {
+        connectionId: 'ws-route-1',
+        message: {
+          id: 'msg-1',
+          direction: 'received',
+          content: 'hello',
+          timestamp: 1,
+          size: 5,
+        },
+      },
+    });
+
+    expect(onMessage).toHaveBeenCalledWith({
+      id: 'msg-1',
+      direction: 'received',
+      content: 'hello',
+      timestamp: 1,
+      size: 5,
+    });
+  });
+
+  it('routes ws.status/ws.headers/ws.error push events', async () => {
+    mockAxios.setResponse('/api/ws/connect', { isOk: true, value: {} }, 'POST');
+    const handle = adapter.realtime!.connectWebSocket({ id: 'ws-route-2', url: 'wss://example.com/ws' });
+    const onStatus = vi.fn();
+    const onHeaders = vi.fn();
+    const onError = vi.fn();
+    handle.onStatusChange(onStatus);
+    handle.onHeaders(onHeaders);
+    handle.onError(onError);
+
+    dispatchServerPushMessageForTests({ type: 'ws.status', data: { connectionId: 'ws-route-2', status: 'connected' } });
+    dispatchServerPushMessageForTests({
+      type: 'ws.headers',
+      data: { connectionId: 'ws-route-2', headers: { upgrade: 'websocket' } },
+    });
+    dispatchServerPushMessageForTests({ type: 'ws.error', data: { connectionId: 'ws-route-2', error: 'boom' } });
+
+    expect(onStatus).toHaveBeenCalledWith('connected');
+    expect(onHeaders).toHaveBeenCalledWith({ upgrade: 'websocket' });
+    expect(onError).toHaveBeenCalledWith('boom');
+  });
+
+  it('routes sse.event/sse.status/sse.headers/sse.error push events', async () => {
+    mockAxios.setResponse('/api/sse/connect', { isOk: true, value: {} }, 'POST');
+    const handle = adapter.realtime!.connectSse({
+      id: 'sse-route-1',
+      method: 'GET',
+      url: 'https://example.com/events',
+    });
+
+    const onEvent = vi.fn();
+    const onStatus = vi.fn();
+    const onHeaders = vi.fn();
+    const onError = vi.fn();
+    handle.onEvent(onEvent);
+    handle.onStatusChange(onStatus);
+    handle.onHeaders(onHeaders);
+    handle.onError(onError);
+
+    dispatchServerPushMessageForTests({
+      type: 'sse.event',
+      data: {
+        connectionId: 'sse-route-1',
+        event: { id: 'evt-1', eventName: 'message', data: '{"ok":true}', timestamp: 2 },
+      },
+    });
+    dispatchServerPushMessageForTests({ type: 'sse.status', data: { connectionId: 'sse-route-1', status: 'connected' } });
+    dispatchServerPushMessageForTests({
+      type: 'sse.headers',
+      data: { connectionId: 'sse-route-1', headers: { 'content-type': 'text/event-stream' } },
+    });
+    dispatchServerPushMessageForTests({ type: 'sse.error', data: { connectionId: 'sse-route-1', error: 'stream failed' } });
+
+    expect(onEvent).toHaveBeenCalledWith({
+      id: 'evt-1',
+      eventName: 'message',
+      data: '{"ok":true}',
+      timestamp: 2,
+    });
+    expect(onStatus).toHaveBeenCalledWith('connected');
+    expect(onHeaders).toHaveBeenCalledWith({ 'content-type': 'text/event-stream' });
+    expect(onError).toHaveBeenCalledWith('stream failed');
+  });
+
+  it('ignores unknown realtime connection ids without throwing', () => {
+    expect(() => {
+      dispatchServerPushMessageForTests({
+        type: 'ws.message',
+        data: {
+          connectionId: 'unknown-conn',
+          message: {
+            id: 'msg-x',
+            direction: 'received',
+            content: 'ignored',
+            timestamp: 1,
+            size: 7,
+          },
+        },
+      });
+    }).not.toThrow();
+  });
+
+  it('preserves existing banner push-event behavior', () => {
+    const onBanner = vi.fn();
+    adapter.events.on('banner', onBanner);
+
+    dispatchServerPushMessageForTests({
+      type: 'banner',
+      data: { type: 'info', message: 'hello banner' },
+    });
+
+    expect(onBanner).toHaveBeenCalledWith({ type: 'info', message: 'hello banner' });
+  });
+});
+
+describe('WebAdapter - WebSocket diagnostics', () => {
+  const originalWebSocket = global.WebSocket;
+  let adapter: ReturnType<typeof createWebAdapter>;
+  let mockSocket: {
+    send: ReturnType<typeof vi.fn>;
+    close: ReturnType<typeof vi.fn>;
+    addEventListener: ReturnType<typeof vi.fn>;
+    removeEventListener: ReturnType<typeof vi.fn>;
+    readyState: number;
+    onopen: (() => void) | null;
+    onmessage: ((event: MessageEvent) => void) | null;
+    onclose: ((event: CloseEvent) => void) | null;
+    onerror: ((event: Event) => void) | null;
+  };
+
+  beforeEach(() => {
+    mockAxios.reset();
+
+    mockSocket = {
+      send: vi.fn(),
+      close: vi.fn(),
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      readyState: 0,
+      onopen: null,
+      onmessage: null,
+      onclose: null,
+      onerror: null,
+    };
+
+    const mockWebSocketCtor = vi.fn(() => mockSocket) as unknown as typeof WebSocket;
+    (mockWebSocketCtor as unknown as { CONNECTING: number; OPEN: number }).CONNECTING = 0;
+    (mockWebSocketCtor as unknown as { CONNECTING: number; OPEN: number }).OPEN = 1;
+
+    global.WebSocket = mockWebSocketCtor;
+    adapter = createWebAdapter();
+  });
+
+  afterEach(() => {
+    adapter.dispose?.();
+    global.WebSocket = originalWebSocket;
+  });
+
+  it('emits actionable warning diagnostics when websocket setup errors', async () => {
+    const onBanner = vi.fn();
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+
+    adapter.events.on('banner', onBanner);
+    mockAxios.setError('/health', new Error('Server down'));
+
+    mockSocket.onerror?.(new Event('error'));
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(warnSpy).toHaveBeenCalledWith(
+      expect.stringContaining('Wave Client Server is not reachable')
+    );
+    expect(onBanner).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: 'warning',
+      })
+    );
+
+    warnSpy.mockRestore();
+  });
+
+  it('emits a success banner after a prior websocket issue recovers', async () => {
+    const onBanner = vi.fn();
+
+    adapter.events.on('banner', onBanner);
+    mockAxios.setError('/health', new Error('Server down'));
+
+    mockSocket.onerror?.(new Event('error'));
+    await Promise.resolve();
+    await Promise.resolve();
+
+    mockSocket.onopen?.();
+
+    expect(onBanner).toHaveBeenCalledWith(
+      expect.objectContaining({ type: 'warning' })
+    );
+    expect(onBanner).toHaveBeenCalledWith({
+      type: 'success',
+      message: 'Realtime channel reconnected.',
+    });
   });
 });
 

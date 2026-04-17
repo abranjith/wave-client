@@ -28,6 +28,7 @@ import type { Auth } from '../../hooks/store/createAuthSlice';
 import type { Flow } from '../../types/flow';
 import type { TestSuite, TestItem, TestSuiteSettings, TestCase, RequestTestItem } from '../../types/testSuite';
 import { isRequest } from '../../types/collection';
+import { isWsRequest, isHttpRequest } from '../../utils/requestTypeGuards';
 import { urlToString } from '../../utils/collectionParser';
 import { createRequestTestItem, createFlowTestItem, isRequestTestItem, isFlowTestItem, createTestCase } from '../../types/testSuite';
 import useAppStateStore from '../../hooks/store/useAppStateStore';
@@ -94,7 +95,7 @@ function flattenCollectionRequests(
                 id: item.id,
                 referenceId: `${collectionFilename}:${item.id}`,
                 name: item.name,
-                method: item.request.method,
+                method: isWsRequest(item.request) ? 'WS' : item.request.method,
                 url,
                 collectionName,
                 folderPath: parentPath,
@@ -104,6 +105,58 @@ function flattenCollectionRequests(
         if (item.item && item.item.length > 0) {
             requests.push(
                 ...flattenCollectionRequests(
+                    item.item,
+                    collectionName,
+                    collectionFilename,
+                    [...parentPath, item.name]
+                )
+            );
+        }
+    }
+
+    return requests;
+}
+
+/**
+ * Like `flattenCollectionRequests` but restricted to HTTP requests only.
+ *
+ * Used exclusively by AddItemDialog to populate the "Requests" tab. WS and
+ * SSE requests are intentionally excluded — the test suite executor only
+ * supports HTTP requests. Items without a `protocol` field are treated as
+ * HTTP for backward-compatibility.
+ *
+ * The unrestricted `flattenCollectionRequests` is kept separate so that
+ * TestItemRow can still resolve display metadata for pre-existing WS/SSE
+ * test items that were added before this gate was introduced.
+ */
+function flattenHttpCollectionRequests(
+    items: CollectionItem[],
+    collectionName: string,
+    collectionFilename: string,
+    parentPath: string[] = []
+): FlatRequest[] {
+    const requests: FlatRequest[] = [];
+
+    for (const item of items) {
+        if (isRequest(item) && item.request && isHttpRequest(item.request)) {
+            const url = typeof item.request.url === 'string'
+                ? item.request.url
+                : urlToString(item.request.url);
+
+            requests.push({
+                id: item.id,
+                referenceId: `${collectionFilename}:${item.id}`,
+                name: item.name,
+                method: item.request.method,
+                url,
+                collectionName,
+                folderPath: parentPath,
+            });
+        }
+
+        if (item.item && item.item.length > 0) {
+            requests.push(
+                ...flattenHttpCollectionRequests(
                     item.item,
                     collectionName,
                     collectionFilename,
@@ -208,10 +261,10 @@ const AddItemDialog: React.FC<AddItemDialogProps> = ({
     const [activeTab, setActiveTab] = useState<'requests' | 'flows'>('requests');
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
-    // Get all available requests
+    // Get all available HTTP requests (WS/SSE excluded — test suite runner is HTTP-only)
     const allRequests = useMemo(() => {
         return collections.flatMap(c => 
-            flattenCollectionRequests(c.item, c.info?.name || c.filename || 'Collection', c.filename || '')
+            flattenHttpCollectionRequests(c.item, c.info?.name || c.filename || 'Collection', c.filename || '')
         );
     }, [collections]);
 

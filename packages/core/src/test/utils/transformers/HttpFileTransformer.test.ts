@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { HttpFileTransformer, httpFileTransformer } from '../../../utils/transformers/HttpFileTransformer';
-import type { Collection } from '../../../types/collection';
+import type { Collection, CollectionRequest } from '../../../types/collection';
 
 describe('HttpFileTransformer', () => {
   const transformer = new HttpFileTransformer();
@@ -92,7 +92,7 @@ POST https://api.example.com/users
       if (result.isOk) {
         expect(result.value.info.name).toBe('requests');
         expect(result.value.item).toHaveLength(1);
-        expect(result.value.item[0].request?.method).toBe('GET');
+        expect((result.value.item[0].request as CollectionRequest | undefined)?.method).toBe('GET');
       }
     });
 
@@ -139,7 +139,7 @@ Content-Type: application/json
 
       expect(result.isOk).toBe(true);
       if (result.isOk) {
-        const request = result.value.item[0].request;
+        const request = result.value.item[0].request as CollectionRequest | undefined;
         expect(request?.body).toBeDefined();
       }
     });

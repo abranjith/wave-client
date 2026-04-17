@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { ChevronRightIcon, ChevronDownIcon, FolderIcon, LayoutGridIcon, ImportIcon, DownloadIcon, MoreVertical, PlayIcon, PencilIcon, Trash2Icon } from 'lucide-react';
-import { Collection, CollectionItem, CollectionRequest } from '../../types/collection';
+import { Collection, CollectionItem, CollectionRequest, AnyCollectionRequest } from '../../types/collection';
 import { extractRequestFromItem, countRequests, getSiblingsAtPath, renameItemInTree } from '../../utils/collectionParser';
 import useAppStateStore from '../../hooks/store/useAppStateStore';
 import { useStorageAdapter, useNotificationAdapter } from '../../hooks/useAdapter';
@@ -21,7 +21,7 @@ import { Input } from '../ui/input';
 import { SecondaryButton } from '../ui';
 
 interface CollectionsPaneProps {
-  onRequestSelect: (request: CollectionRequest) => void;
+  onRequestSelect: (request: AnyCollectionRequest) => void;
   onImportCollection: (fileName: string, fileContent: string, collectionType: string) => void;
   onExportCollection: (collectionName: string, exportFormat: string) => void;
   onRetry?: () => void;

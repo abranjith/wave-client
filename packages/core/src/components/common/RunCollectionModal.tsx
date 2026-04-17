@@ -3,6 +3,7 @@ import { useCollectionRunner, CollectionRunItem, type CollectionRunResult } from
 import React, { useState, useMemo, useCallback, useId } from 'react';
 import { PlayIcon, StopCircleIcon, ChevronDownIcon, ChevronRightIcon, SearchIcon } from 'lucide-react';
 import { CollectionItem, isRequest } from '../../types/collection';
+import { isHttpRequest } from '../../utils/requestTypeGuards';
 import { urlToString } from '../../utils/collectionParser';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../ui/dialog';
 import { PrimaryButton } from '../ui/PrimaryButton';
@@ -38,8 +39,12 @@ interface RunMetrics {
 // ==================== Helper Functions ====================
 
 /**
- * Recursively flattens all requests from collection items
- * Returns UI-ready RunRequestData with initial idle statuses.
+ * Recursively flattens all HTTP requests from collection items.
+ *
+ * WS and SSE requests are intentionally excluded — the collection runner only
+ * supports HTTP requests. Items without a `protocol` field are treated as HTTP
+ * for backward-compatibility with collections saved before the protocol
+ * discriminant was introduced.
  */
 function flattenRequests(
   items: CollectionItem[],
@@ -48,7 +53,7 @@ function flattenRequests(
   const requests: RunRequestData[] = [];
 
   for (const item of items) {
-    if (isRequest(item) && item.request) {
+    if (isRequest(item) && item.request && isHttpRequest(item.request)) {
       // Use request validation if defined and enabled, otherwise use default
       const validation = item.request.validation?.enabled
         ? item.request.validation
@@ -337,7 +342,7 @@ const RunCollectionModal: React.FC<RunCollectionModalProps> = ({
         referenceId: r.id, // executor will look up by request id within collections
         name: r.name,
         folderPath: r.folderPath,
-        validation: r.request?.validation,
+        validation: isHttpRequest(r.request) ? r.request?.validation : undefined,
       }));
 
     runner.runCollection(

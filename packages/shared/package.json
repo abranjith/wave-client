@@ -26,10 +26,12 @@
     "@wave-client/core": "workspace:*",
     "ajv": "^8.18.0",
     "axios": "^1.14.0",
-    "jsonpath-plus": "^10.4.0"
+    "jsonpath-plus": "^10.4.0",
+    "ws": "^8.18.2"
   },
   "devDependencies": {
     "@types/node": "^22.19.17",
+    "@types/ws": "^8.5.14",
     "@vitest/coverage-v8": "^4.1.2",
     "@vitest/ui": "^4.1.2",
     "rimraf": "^6.1.3",

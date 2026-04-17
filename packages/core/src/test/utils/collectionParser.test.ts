@@ -9,11 +9,17 @@ import {
   countRequests,
   getFolderPathOptions,
   ensureItemIds,
+  extractRequestFromItem,
+  requestToCollectionItem,
 } from '../../utils/collectionParser';
 import type {
   Collection,
   CollectionItem,
   CollectionUrl,
+  AnyCollectionRequest,
+  CollectionRequest,
+  WsCollectionRequest,
+  SseCollectionRequest,
 } from '../../types/collection';
 
 describe('collectionParser', () => {
@@ -397,6 +403,317 @@ describe('collectionParser', () => {
       ];
       ensureItemIds(items);
       expect(items[0].id).toBe('existing-id');
+    });
+  });
+
+  // ==========================================================================
+  // Protocol-Aware Round-Trip Tests (FEAT-010)
+  // ==========================================================================
+
+  describe('extractRequestFromItem — protocol fidelity', () => {
+    it('should extract an HTTP request with all fields preserved', () => {
+      const item: CollectionItem = {
+        id: 'http-1',
+        name: 'Get Users',
+        request: {
+          id: 'http-1',
+          name: 'Get Users',
+          protocol: 'http',
+          method: 'POST',
+          url: 'https://api.example.com/users',
+          header: [{ id: 'h1', key: 'Accept', value: 'application/json', disabled: false }],
+          query: [{ id: 'q1', key: 'page', value: '1', disabled: false }],
+          body: { mode: 'raw', raw: '{"test":true}' },
+          validation: { enabled: true, rules: [] },
+          authId: 'auth-1',
+          description: 'Fetch users',
+        } as CollectionRequest,
+      };
+
+      const extracted = extractRequestFromItem(item, 'collection.json', 'My API', ['Folder']);
+
+      expect(extracted.id).toBe('http-1');
+      expect(extracted.name).toBe('Get Users');
+      expect(extracted.protocol).toBe('http');
+      expect((extracted as CollectionRequest).method).toBe('POST');
+      expect((extracted as CollectionRequest).body).toEqual({ mode: 'raw', raw: '{"test":true}' });
+      expect((extracted as CollectionRequest).validation).toEqual({ enabled: true, rules: [] });
+      expect(extracted.authId).toBe('auth-1');
+      expect(extracted.sourceRef).toEqual({
+        collectionFilename: 'collection.json',
+        collectionName: 'My API',
+        itemPath: ['Folder'],
+      });
+    });
+
+    it('should extract a WS request without HTTP-only fields', () => {
+      const item: CollectionItem = {
+        id: 'ws-1',
+        name: 'WS Echo',
+        request: {
+          id: 'ws-1',
+          name: 'WS Echo',
+          protocol: 'ws',
+          url: 'wss://echo.example.com',
+          header: [{ id: 'h1', key: 'x-token', value: 'abc', disabled: false }],
+          query: [{ id: 'q1', key: 'room', value: 'test', disabled: false }],
+          description: 'Echo endpoint',
+        } as WsCollectionRequest,
+      };
+
+      const extracted = extractRequestFromItem(item, 'coll.json', 'WS Coll', []);
+
+      expect(extracted.protocol).toBe('ws');
+      expect(extracted.url).toBe('wss://echo.example.com');
+      expect(extracted.header).toHaveLength(1);
+      expect(extracted.query).toHaveLength(1);
+      // WS must not have method, body, or validation
+      expect((extracted as any).method).toBeUndefined();
+      expect((extracted as any).body).toBeUndefined();
+      expect((extracted as any).validation).toBeUndefined();
+      expect(extracted.sourceRef?.collectionFilename).toBe('coll.json');
+    });
+
+    it('should extract an SSE request preserving method and body', () => {
+      const item: CollectionItem = {
+        id: 'sse-1',
+        name: 'SSE Stream',
+        request: {
+          id: 'sse-1',
+          name: 'SSE Stream',
+          protocol: 'sse',
+          method: 'POST',
+          url: 'https://api.example.com/stream',
+          body: { mode: 'raw', raw: '{"subscribe":"events"}' },
+          header: [],
+        } as SseCollectionRequest,
+      };
+
+      const extracted = extractRequestFromItem(item, 'coll.json', 'SSE Coll', ['Events']);
+
+      expect(extracted.protocol).toBe('sse');
+      expect((extracted as SseCollectionRequest).method).toBe('POST');
+      expect((extracted as SseCollectionRequest).body).toEqual({ mode: 'raw', raw: '{"subscribe":"events"}' });
+      // SSE must not have validation
+      expect((extracted as any).validation).toBeUndefined();
+    });
+
+    it('should convert CollectionUrl to string on extraction', () => {
+      const item: CollectionItem = {
+        id: 'r1',
+        name: 'R1',
+        request: {
+          id: 'r1',
+          name: 'R1',
+          method: 'GET',
+          url: { raw: 'https://api.example.com/test', protocol: 'https', host: ['api', 'example', 'com'], path: ['test'] },
+        } as CollectionRequest,
+      };
+
+      const extracted = extractRequestFromItem(item, 'c.json', 'C', []);
+      expect(typeof extracted.url).toBe('string');
+      expect(extracted.url).toBe('https://api.example.com/test');
+    });
+
+    it('should throw for items without a request', () => {
+      const folderItem: CollectionItem = { id: 'f1', name: 'Folder', item: [] };
+      expect(() => extractRequestFromItem(folderItem, 'c.json', 'C', [])).toThrow('Item is not a request');
+    });
+  });
+
+  describe('requestToCollectionItem — protocol fidelity', () => {
+    it('should convert HTTP request to item, stripping sourceRef', () => {
+      const request: CollectionRequest = {
+        id: 'http-1',
+        name: 'Get Users',
+        protocol: 'http',
+        method: 'POST',
+        url: 'https://api.example.com/users',
+        header: [{ id: 'h1', key: 'Accept', value: 'application/json', disabled: false }],
+        body: { mode: 'raw', raw: '{}' },
+        validation: { enabled: true, rules: [] },
+        sourceRef: { collectionFilename: 'old.json', collectionName: 'Old', itemPath: [] },
+      };
+
+      const item = requestToCollectionItem(request);
+
+      expect(item.id).toBe('http-1');
+      expect(item.name).toBe('Get Users');
+      expect(item.request?.protocol).toBe('http');
+      expect((item.request as CollectionRequest).method).toBe('POST');
+      expect((item.request as CollectionRequest).body).toEqual({ mode: 'raw', raw: '{}' });
+      expect((item.request as CollectionRequest).validation).toEqual({ enabled: true, rules: [] });
+      // sourceRef must be stripped
+      expect(item.request?.sourceRef).toBeUndefined();
+    });
+
+    it('should convert WS request to item, preserving protocol and WS fields', () => {
+      const request: WsCollectionRequest = {
+        id: 'ws-1',
+        name: 'WS Echo',
+        protocol: 'ws',
+        url: 'wss://echo.example.com',
+        header: [{ id: 'h1', key: 'x-token', value: 'abc', disabled: false }],
+        query: [{ id: 'q1', key: 'room', value: 'test', disabled: false }],
+        description: 'Echo endpoint',
+        authId: 'auth-ws',
+        sourceRef: { collectionFilename: 'ws.json', collectionName: 'WS', itemPath: [] },
+      };
+
+      const item = requestToCollectionItem(request);
+
+      expect(item.id).toBe('ws-1');
+      expect(item.name).toBe('WS Echo');
+      expect(item.request?.protocol).toBe('ws');
+      expect(item.request?.url).toBe('wss://echo.example.com');
+      expect(item.request?.header).toHaveLength(1);
+      expect(item.request?.query).toHaveLength(1);
+      expect(item.request?.description).toBe('Echo endpoint');
+      expect(item.request?.authId).toBe('auth-ws');
+      // Must NOT have method, body, or validation
+      expect((item.request as any).method).toBeUndefined();
+      expect((item.request as any).body).toBeUndefined();
+      expect((item.request as any).validation).toBeUndefined();
+      // sourceRef must be stripped
+      expect(item.request?.sourceRef).toBeUndefined();
+    });
+
+    it('should convert SSE request to item, preserving method and body', () => {
+      const request: SseCollectionRequest = {
+        id: 'sse-1',
+        name: 'SSE Events',
+        protocol: 'sse',
+        method: 'POST',
+        url: 'https://api.example.com/events',
+        body: { mode: 'raw', raw: '{"filter":"all"}' },
+        header: [{ id: 'h1', key: 'Accept', value: 'text/event-stream', disabled: false }],
+        sourceRef: { collectionFilename: 'sse.json', collectionName: 'SSE', itemPath: ['Events'] },
+      };
+
+      const item = requestToCollectionItem(request);
+
+      expect(item.id).toBe('sse-1');
+      expect(item.name).toBe('SSE Events');
+      expect(item.request?.protocol).toBe('sse');
+      expect((item.request as SseCollectionRequest).method).toBe('POST');
+      expect((item.request as SseCollectionRequest).body).toEqual({ mode: 'raw', raw: '{"filter":"all"}' });
+      // Must NOT have validation
+      expect((item.request as any).validation).toBeUndefined();
+      // sourceRef must be stripped
+      expect(item.request?.sourceRef).toBeUndefined();
+    });
+  });
+
+  describe('end-to-end round-trip: extract → requestToCollectionItem', () => {
+    it('should round-trip an HTTP request faithfully', () => {
+      const originalItem: CollectionItem = {
+        id: 'rt-http-1',
+        name: 'HTTP RT',
+        request: {
+          id: 'rt-http-1',
+          name: 'HTTP RT',
+          protocol: 'http',
+          method: 'PUT',
+          url: 'https://api.example.com/resource',
+          header: [{ id: 'h1', key: 'Content-Type', value: 'application/json', disabled: false }],
+          query: [{ id: 'q1', key: 'v', value: '2', disabled: false }],
+          body: { mode: 'raw', raw: '{"data":"test"}' },
+          validation: { enabled: false, rules: [] },
+          authId: 'auth-rt',
+          description: 'Round-trip test',
+        } as CollectionRequest,
+      };
+
+      const extracted = extractRequestFromItem(originalItem, 'rt.json', 'RT Coll', ['Folder']);
+      const roundTripped = requestToCollectionItem(extracted);
+
+      expect(roundTripped.id).toBe(originalItem.id);
+      expect(roundTripped.name).toBe(originalItem.name);
+      expect(roundTripped.request?.protocol).toBe('http');
+      expect((roundTripped.request as CollectionRequest).method).toBe('PUT');
+      expect((roundTripped.request as CollectionRequest).body).toEqual({ mode: 'raw', raw: '{"data":"test"}' });
+      expect((roundTripped.request as CollectionRequest).validation).toEqual({ enabled: false, rules: [] });
+      expect(roundTripped.request?.authId).toBe('auth-rt');
+      // sourceRef should be stripped in the round-tripped item
+      expect(roundTripped.request?.sourceRef).toBeUndefined();
+    });
+
+    it('should round-trip a WS request faithfully', () => {
+      const originalItem: CollectionItem = {
+        id: 'rt-ws-1',
+        name: 'WS RT',
+        request: {
+          id: 'rt-ws-1',
+          name: 'WS RT',
+          protocol: 'ws',
+          url: 'wss://ws.example.com/chat',
+          header: [{ id: 'h1', key: 'Authorization', value: 'Bearer tok', disabled: false }],
+          query: [{ id: 'q1', key: 'channel', value: 'general', disabled: false }],
+          description: 'WS round-trip',
+        } as WsCollectionRequest,
+      };
+
+      const extracted = extractRequestFromItem(originalItem, 'rt.json', 'RT Coll', []);
+      const roundTripped = requestToCollectionItem(extracted);
+
+      expect(roundTripped.id).toBe('rt-ws-1');
+      expect(roundTripped.name).toBe('WS RT');
+      expect(roundTripped.request?.protocol).toBe('ws');
+      expect(roundTripped.request?.url).toBe('wss://ws.example.com/chat');
+      expect(roundTripped.request?.header).toHaveLength(1);
+      expect(roundTripped.request?.query).toHaveLength(1);
+      expect(roundTripped.request?.description).toBe('WS round-trip');
+      expect((roundTripped.request as any).method).toBeUndefined();
+      expect((roundTripped.request as any).body).toBeUndefined();
+      expect((roundTripped.request as any).validation).toBeUndefined();
+    });
+
+    it('should round-trip an SSE request faithfully', () => {
+      const originalItem: CollectionItem = {
+        id: 'rt-sse-1',
+        name: 'SSE RT',
+        request: {
+          id: 'rt-sse-1',
+          name: 'SSE RT',
+          protocol: 'sse',
+          method: 'POST',
+          url: 'https://sse.example.com/stream',
+          header: [{ id: 'h1', key: 'Accept', value: 'text/event-stream', disabled: false }],
+          body: { mode: 'raw', raw: '{"subscribe":"*"}' },
+          description: 'SSE round-trip',
+          authId: 'auth-sse',
+        } as SseCollectionRequest,
+      };
+
+      const extracted = extractRequestFromItem(originalItem, 'rt.json', 'RT Coll', ['Streams']);
+      const roundTripped = requestToCollectionItem(extracted);
+
+      expect(roundTripped.id).toBe('rt-sse-1');
+      expect(roundTripped.name).toBe('SSE RT');
+      expect(roundTripped.request?.protocol).toBe('sse');
+      expect((roundTripped.request as SseCollectionRequest).method).toBe('POST');
+      expect((roundTripped.request as SseCollectionRequest).body).toEqual({ mode: 'raw', raw: '{"subscribe":"*"}' });
+      expect(roundTripped.request?.authId).toBe('auth-sse');
+      expect((roundTripped.request as any).validation).toBeUndefined();
+    });
+
+    it('should treat legacy items without protocol as HTTP', () => {
+      const legacyItem: CollectionItem = {
+        id: 'legacy-1',
+        name: 'Legacy GET',
+        request: {
+          id: 'legacy-1',
+          name: 'Legacy GET',
+          method: 'GET',
+          url: 'https://api.example.com/old',
+        } as CollectionRequest,
+      };
+
+      const extracted = extractRequestFromItem(legacyItem, 'legacy.json', 'Legacy', []);
+
+      // Legacy (no protocol) should still be usable as HTTP
+      expect(extracted.protocol).toBeUndefined();
+      expect((extracted as CollectionRequest).method).toBe('GET');
     });
   });
 });

@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { PostmanCollectionTransformer, postmanTransformer } from '../../../utils/transformers/PostmanCollectionTransformer';
 import type { PostmanCollection } from '../../../types/external/postman';
-import type { Collection } from '../../../types/collection';
+import type { Collection, CollectionRequest } from '../../../types/collection';
 
 describe('PostmanCollectionTransformer', () => {
   const transformer = new PostmanCollectionTransformer();
@@ -206,7 +206,7 @@ describe('PostmanCollectionTransformer', () => {
       if (result.isOk) {
         expect(result.value.item).toHaveLength(1);
         expect(result.value.item[0].name).toBe('Get Users');
-        expect(result.value.item[0].request?.method).toBe('GET');
+        expect((result.value.item[0].request as CollectionRequest | undefined)?.method).toBe('GET');
       }
     });
 
@@ -461,7 +461,7 @@ describe('PostmanCollectionTransformer', () => {
 
       expect(result.isOk).toBe(true);
       if (result.isOk) {
-        const body = result.value.item[0].request?.body;
+        const body = (result.value.item[0].request as CollectionRequest | undefined)?.body;
         expect(body).toBeDefined();
         expect(body?.mode).toBe('raw');
         if (body?.mode === 'raw') {
@@ -498,7 +498,7 @@ describe('PostmanCollectionTransformer', () => {
 
       expect(result.isOk).toBe(true);
       if (result.isOk) {
-        const body = result.value.item[0].request?.body;
+        const body = (result.value.item[0].request as CollectionRequest | undefined)?.body;
         expect(body?.mode).toBe('urlencoded');
         if (body?.mode === 'urlencoded') {
           expect(body.urlencoded).toHaveLength(2);
@@ -534,7 +534,7 @@ describe('PostmanCollectionTransformer', () => {
 
       expect(result.isOk).toBe(true);
       if (result.isOk) {
-        const body = result.value.item[0].request?.body;
+        const body = (result.value.item[0].request as CollectionRequest | undefined)?.body;
         expect(body?.mode).toBe('formdata');
         if (body?.mode === 'formdata') {
           expect(body.formdata).toHaveLength(2);
@@ -568,7 +568,7 @@ describe('PostmanCollectionTransformer', () => {
 
       expect(result.isOk).toBe(true);
       if (result.isOk) {
-        expect(result.value.item[0].request?.body).toBeUndefined();
+        expect((result.value.item[0].request as CollectionRequest | undefined)?.body).toBeUndefined();
       }
     });
 
@@ -627,7 +627,7 @@ describe('PostmanCollectionTransformer', () => {
 
       expect(result.isOk).toBe(true);
       if (result.isOk) {
-        expect(result.value.item[0].request?.method).toBe('GET');
+        expect((result.value.item[0].request as CollectionRequest | undefined)?.method).toBe('GET');
       }
     });
 
@@ -768,7 +768,7 @@ describe('PostmanCollectionTransformer', () => {
 
       expect(result.isOk).toBe(true);
       if (result.isOk) {
-        const request = result.value.item[0].request;
+        const request = result.value.item[0].request as CollectionRequest | undefined;
         expect(request?.body).toBeDefined();
       }
     });

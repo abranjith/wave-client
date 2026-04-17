@@ -11,6 +11,30 @@
 // Note: These types are the source of truth from @wave-client/core.
 // Import them from core in new code where possible.
 
+// WebSocket connection types (FEAT-004)
+export type {
+    Unsubscribe,
+    WsConnectionConfig,
+    WsConnectionHandle,
+    SseConnectionConfig,
+    SseConnectionHandle,
+} from '@wave-client/core';
+
+// Protocol-union request types (FEAT-010)
+export type {
+    AnyCollectionRequest,
+    WsCollectionRequest,
+    SseCollectionRequest,
+    RequestProtocol,
+} from '@wave-client/core';
+
+export {
+    isHttpRequest,
+    isWsRequest,
+    isSseRequest,
+    getRequestProtocol,
+} from '@wave-client/core';
+
 export type {
     Collection,
     CollectionInfo,

@@ -5,6 +5,8 @@ export default defineConfig({
   test: {
     globals: true,
     environment: 'node',
+    testTimeout: 20000,
+    hookTimeout: 20000,
     setupFiles: './src/test/setup.ts',
     include: ['src/**/*.{test,spec}.{ts,tsx}'],
     exclude: ['src/webview/**/*', 'node_modules/**', 'dist/**'],

@@ -33,13 +33,24 @@ import type {
   NotificationType,
   Flow,
   TestSuite,
+  WsMessage,
+  SseEvent,
+  ConnectionStatus,
 } from '@wave-client/core';
 import { ok, err, Result, createAdapterEventEmitter } from '@wave-client/core';
 import { createWebArenaAdapter } from './webArenaAdapter';
+import { createWebRealtimeAdapter, sseHandles, wsHandles } from './webRealtimeAdapter';
 
 // Server configuration
 const SERVER_URL = 'http://127.0.0.1:3456';
-const WS_URL = 'ws://127.0.0.1:3456/ws';
+const WS_URL = (() => {
+  const url = new URL(SERVER_URL);
+  url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
+  url.pathname = '/ws';
+  url.search = '';
+  url.hash = '';
+  return url.toString();
+})();
 
 /**
  * API client for server communication
@@ -57,19 +68,87 @@ const api: AxiosInstance = axios.create({
  */
 let wsConnection: WebSocket | null = null;
 let wsReconnectAttempts = 0;
-const MAX_RECONNECT_ATTEMPTS = 5;
 const RECONNECT_DELAY = 2000;
+const MAX_RECONNECT_DELAY = 15000;
+let wsReconnectTimer: ReturnType<typeof setTimeout> | null = null;
+let wsShouldReconnect = true;
+let wsConnectionIssueNotified = false;
 
 /**
  * Event emitter for adapter events
  */
 const events = createAdapterEventEmitter();
+const realtime = createWebRealtimeAdapter(api);
+
+function getRealtimePayload(message: {
+  data?: unknown;
+  [key: string]: unknown;
+}): Record<string, unknown> {
+  if (message.data && typeof message.data === 'object' && !Array.isArray(message.data)) {
+    return message.data as Record<string, unknown>;
+  }
+
+  return message;
+}
+
+function clearReconnectTimer(): void {
+  if (wsReconnectTimer !== null) {
+    clearTimeout(wsReconnectTimer);
+    wsReconnectTimer = null;
+  }
+}
+
+function scheduleReconnect(): void {
+  if (!wsShouldReconnect || wsReconnectTimer !== null) {
+    return;
+  }
+
+  const delay = Math.min(
+    RECONNECT_DELAY * 2 ** Math.min(wsReconnectAttempts, 3),
+    MAX_RECONNECT_DELAY
+  );
+
+  wsReconnectAttempts += 1;
+
+  wsReconnectTimer = setTimeout(() => {
+    wsReconnectTimer = null;
+    initWebSocket();
+  }, delay);
+}
+
+async function reportWebSocketConnectionIssue(): Promise<void> {
+  const isServerHealthy = await checkServerHealth();
+  const isProtocolMismatch =
+    typeof window !== 'undefined' &&
+    window.location.protocol === 'https:' &&
+    WS_URL.startsWith('ws://');
+
+  let message = '';
+
+  if (!isServerHealthy) {
+    message = `Realtime channel unavailable. Wave Client Server is not reachable at ${SERVER_URL}. Start it with: pnpm dev:server`;
+  } else if (isProtocolMismatch) {
+    message = `Realtime channel unavailable. The app is served over HTTPS but the socket URL uses WS (${WS_URL}). Use WSS for secure pages.`;
+  } else {
+    message = `Realtime channel unavailable. WebSocket upgrade failed at ${WS_URL}. Check local proxy/firewall WebSocket support.`;
+  }
+
+  console.warn(`[WebAdapter] ${message}`);
+
+  if (!wsConnectionIssueNotified) {
+    events.emit('banner', { type: 'warning', message });
+    wsConnectionIssueNotified = true;
+  }
+}
 
 /**
  * Initialize WebSocket connection
  */
 function initWebSocket(): void {
-  if (wsConnection?.readyState === WebSocket.OPEN) {
+  if (
+    wsConnection?.readyState === WebSocket.OPEN ||
+    wsConnection?.readyState === WebSocket.CONNECTING
+  ) {
     return;
   }
 
@@ -79,6 +158,15 @@ function initWebSocket(): void {
     wsConnection.onopen = () => {
       console.log('WebSocket connected to Wave Client Server');
       wsReconnectAttempts = 0;
+      clearReconnectTimer();
+
+      if (wsConnectionIssueNotified) {
+        events.emit('banner', {
+          type: 'success',
+          message: 'Realtime channel reconnected.',
+        });
+        wsConnectionIssueNotified = false;
+      }
     };
 
     wsConnection.onmessage = (event) => {
@@ -90,22 +178,27 @@ function initWebSocket(): void {
       }
     };
 
-    wsConnection.onclose = () => {
-      console.log('WebSocket disconnected');
+    wsConnection.onclose = (event) => {
       wsConnection = null;
 
-      // Attempt reconnection
-      if (wsReconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
-        wsReconnectAttempts++;
-        setTimeout(initWebSocket, RECONNECT_DELAY);
+      if (!wsShouldReconnect) {
+        return;
       }
+
+      const closeReason = event.reason ? ` (${event.reason})` : '';
+      console.warn(
+        `[WebAdapter] Realtime channel disconnected (code ${event.code})${closeReason}. Retrying...`
+      );
+
+      scheduleReconnect();
     };
 
-    wsConnection.onerror = (error) => {
-      console.error('WebSocket error:', error);
+    wsConnection.onerror = () => {
+      void reportWebSocketConnectionIssue();
     };
   } catch (error) {
     console.error('Failed to connect WebSocket:', error);
+    scheduleReconnect();
   }
 }
 
@@ -116,6 +209,7 @@ function handleWebSocketMessage(message: {
   type: string;
   data?: unknown;
   message?: string;
+  [key: string]: unknown;
 }): void {
   switch (message.type) {
     case 'connected':
@@ -165,7 +259,72 @@ function handleWebSocketMessage(message: {
     case 'encryptionStatusChanged':
       events.emit('encryptionStatusChanged', message.data as EncryptionStatus);
       break;
+
+    // Realtime push events are emitted by server routes through the shared
+    // push channel. Payloads may arrive under `message.data` (broadcast)
+    // or as top-level fields (future compatibility).
+    case 'ws.message': {
+      const payload = getRealtimePayload(message);
+      const handle = wsHandles.get(payload.connectionId as string);
+      handle?.dispatchMessage(payload.message as WsMessage);
+      break;
+    }
+    case 'ws.status': {
+      const payload = getRealtimePayload(message);
+      const handle = wsHandles.get(payload.connectionId as string);
+      handle?.dispatchStatus(payload.status as ConnectionStatus);
+      break;
+    }
+    case 'ws.headers': {
+      const payload = getRealtimePayload(message);
+      const handle = wsHandles.get(payload.connectionId as string);
+      handle?.dispatchHeaders(payload.headers as Record<string, string>);
+      break;
+    }
+    case 'ws.error': {
+      const payload = getRealtimePayload(message);
+      const handle = wsHandles.get(payload.connectionId as string);
+      handle?.dispatchError(payload.error as string);
+      break;
+    }
+    case 'sse.event': {
+      const payload = getRealtimePayload(message);
+      const handle = sseHandles.get(payload.connectionId as string);
+      handle?.dispatchEvent(payload.event as SseEvent);
+      break;
+    }
+    case 'sse.status': {
+      const payload = getRealtimePayload(message);
+      const handle = sseHandles.get(payload.connectionId as string);
+      handle?.dispatchStatus(payload.status as ConnectionStatus);
+      break;
+    }
+    case 'sse.headers': {
+      const payload = getRealtimePayload(message);
+      const handle = sseHandles.get(payload.connectionId as string);
+      handle?.dispatchHeaders(payload.headers as Record<string, string>);
+      break;
+    }
+    case 'sse.error': {
+      const payload = getRealtimePayload(message);
+      const handle = sseHandles.get(payload.connectionId as string);
+      handle?.dispatchError(payload.error as string);
+      break;
+    }
   }
+}
+
+/**
+ * Test-only helper that routes a synthetic server push message through the
+ * same code path used by the browser WebSocket event handler.
+ */
+export function dispatchServerPushMessageForTests(message: {
+  type: string;
+  data?: unknown;
+  message?: string;
+  [key: string]: unknown;
+}): void {
+  handleWebSocketMessage(message);
 }
 
 /**
@@ -1084,6 +1243,10 @@ class WebClipboardAdapter implements IClipboardAdapter {
  * Create the web adapter with server communication
  */
 export function createWebAdapter(): IPlatformAdapter {
+  wsShouldReconnect = true;
+  wsReconnectAttempts = 0;
+  wsConnectionIssueNotified = false;
+
   // Initialize WebSocket connection
   initWebSocket();
 
@@ -1096,6 +1259,7 @@ export function createWebAdapter(): IPlatformAdapter {
     notification: new WebNotificationAdapter(),
     arena: createWebArenaAdapter(events),
     clipboard: new WebClipboardAdapter(),
+    realtime,
     events,
     platform: 'web',
 
@@ -1110,6 +1274,18 @@ export function createWebAdapter(): IPlatformAdapter {
     },
 
     dispose() {
+      wsShouldReconnect = false;
+      clearReconnectTimer();
+
+      wsHandles.forEach((_handle, id) => {
+        void realtime.disconnectWebSocket(id);
+      });
+      sseHandles.forEach((_handle, id) => {
+        void realtime.disconnectSse(id);
+      });
+      wsHandles.clear();
+      sseHandles.clear();
+
       if (wsConnection) {
         wsConnection.close();
         wsConnection = null;

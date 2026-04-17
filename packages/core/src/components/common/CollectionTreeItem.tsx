@@ -1,6 +1,7 @@
 import React, { useState, useCallback } from 'react';
 import { ChevronRightIcon, ChevronDownIcon, FolderIcon, MoreVertical, PencilIcon, PlayIcon, Trash2Icon } from 'lucide-react';
 import { CollectionItem, isFolder, isRequest } from '../../types/collection';
+import { isWsRequest } from '../../utils/requestTypeGuards';
 import {
   Tooltip,
   TooltipContent,
@@ -196,7 +197,7 @@ const CollectionTreeItem: React.FC<CollectionTreeItemProps> = ({
 
   if (isRequest(item) && item.request) {
     const isActive = item.id === currentRequestId;
-    const method = item.request.method?.toUpperCase() || 'GET';
+    const method = isWsRequest(item.request) ? 'WS' : item.request.method?.toUpperCase() || 'GET';
     const requestUrl = item.request.url ? urlToString(item.request.url) : '';
     
     return (

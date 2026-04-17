@@ -155,6 +155,18 @@ export interface CollectionReference {
   itemPath: string[]; // Path through folders to reach the item, e.g., ['Folder1', 'Subfolder']
 }
 
+// ============================================================================
+// Protocol Types
+// ============================================================================
+
+/**
+ * Identifies the transport protocol for a request.
+ * - 'http': Standard HTTP/HTTPS request (default)
+ * - 'ws': WebSocket connection (ws:// or wss://)
+ * - 'sse': Server-Sent Events stream (http:// or https://)
+ */
+export type RequestProtocol = 'http' | 'ws' | 'sse';
+
 /**
  * HTTP Request definition - THE unified request type.
  * Used for:
@@ -162,12 +174,19 @@ export interface CollectionReference {
  * - Tab state (active editing)
  * - History entries
  * - Request execution
+ *
+ * When `protocol` is absent, it defaults to 'http' (backward compatibility).
  */
 export interface CollectionRequest {
   /** Unique identifier for runtime tracking */
   id: string;
   /** Display name for the request */
   name: string;
+  /**
+   * Protocol discriminant. Optional for backward-compatibility: existing
+   * collections without this field are treated as HTTP requests.
+   */
+  protocol?: 'http';
   /** HTTP method (GET, POST, PUT, DELETE, etc.) */
   method: string;
   /** Request URL - can be string or parsed URL object */
@@ -188,9 +207,67 @@ export interface CollectionRequest {
   sourceRef?: CollectionReference;
 }
 
-// ============================================================================
-// Response Types
-// ============================================================================
+/**
+ * WebSocket request definition.
+ * Represents a WebSocket connection (ws:// or wss://).
+ * There is no HTTP method (WS uses an upgrade handshake, not a verb).
+ */
+export interface WsCollectionRequest {
+  /** Unique identifier for runtime tracking */
+  id: string;
+  /** Display name for the request */
+  name: string;
+  /** Protocol discriminant — always 'ws' */
+  protocol: 'ws';
+  /** WebSocket URL — must use ws:// or wss:// scheme */
+  url: CollectionUrl | string;
+  /** HTTP headers sent with the WS upgrade request */
+  header?: HeaderRow[];
+  /** Query parameters appended to the URL */
+  query?: ParamRow[];
+  /** Optional description/documentation */
+  description?: string;
+  /** Reference to auth configuration by ID */
+  authId?: string;
+  /** Reference to source collection (for collection-linked requests) */
+  sourceRef?: CollectionReference;
+}
+
+/**
+ * Server-Sent Events (SSE) request definition.
+ * Supports GET and POST-based SSE endpoints; POST allows a request body.
+ */
+export interface SseCollectionRequest {
+  /** Unique identifier for runtime tracking */
+  id: string;
+  /** Display name for the request */
+  name: string;
+  /** Protocol discriminant — always 'sse' */
+  protocol: 'sse';
+  /** HTTP method for establishing the SSE stream (typically GET or POST) */
+  method: string;
+  /** SSE endpoint URL — uses standard http:// or https:// scheme */
+  url: CollectionUrl | string;
+  /** HTTP headers */
+  header?: HeaderRow[];
+  /** Query parameters appended to the URL */
+  query?: ParamRow[];
+  /** Optional request body (used for POST-based SSE endpoints) */
+  body?: CollectionBody;
+  /** Optional description/documentation */
+  description?: string;
+  /** Reference to auth configuration by ID */
+  authId?: string;
+  /** Reference to source collection (for collection-linked requests) */
+  sourceRef?: CollectionReference;
+}
+
+/**
+ * Discriminated union of all request types.
+ * Use the `protocol` field (or `getRequestProtocol()`) to narrow to a specific type.
+ * Absent `protocol` on a `CollectionRequest` is treated as 'http'.
+ */
+export type AnyCollectionRequest = CollectionRequest | WsCollectionRequest | SseCollectionRequest;
 
 /**
  * Saved response for a request
@@ -212,13 +289,14 @@ export interface CollectionResponse {
 
 /**
  * A collection item - can be a request or a folder containing other items
- * Supports arbitrary nesting depth
+ * Supports arbitrary nesting depth.
+ * The `request` field accepts any protocol (HTTP, WS, or SSE) via `AnyCollectionRequest`.
  */
 export interface CollectionItem {
   id: string; // Unique identifier for UI operations
   name: string;
   description?: string;
-  request?: CollectionRequest;
+  request?: AnyCollectionRequest;
   response?: CollectionResponse[];
   item?: CollectionItem[]; // For folders containing other items (supports infinite nesting)
 }

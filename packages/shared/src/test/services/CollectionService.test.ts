@@ -1,8 +1,8 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { CollectionService } from '../../services/CollectionService.js';
+import { CollectionService, normalizeRequestOnLoad, sanitizeRequestForSave } from '../../services/CollectionService.js';
 import { MockFileSystem } from '../mocks/fs.js';
 import { setGlobalSettingsProvider, setSecurityServiceInstance } from '../../services/BaseStorageService.js';
-import type { Collection, AppSettings } from '../../types.js';
+import type { Collection, AppSettings, AnyCollectionRequest } from '../../types.js';
 import * as path from 'path';
 
 // Create mock instance that will be used across all tests
@@ -722,6 +722,280 @@ describe('CollectionService', () => {
 
       // Assert
       expect(result.suggestedFilename).toBe('api_collection___v2_0_.json');
+    });
+  });
+
+  // ==========================================================================
+  // normalizeRequestOnLoad — protocol-aware load normalization (FEAT-010)
+  // ==========================================================================
+  describe('normalizeRequestOnLoad', () => {
+    it('should default missing protocol to http', () => {
+      const raw = { id: 'r1', name: 'Legacy', url: 'https://example.com', method: 'POST', body: { mode: 'raw', raw: '{}' } };
+      const result = normalizeRequestOnLoad(raw);
+      expect(result.protocol).toBe('http');
+      expect((result as any).method).toBe('POST');
+      expect((result as any).body).toEqual({ mode: 'raw', raw: '{}' });
+    });
+
+    it('should normalize http request and preserve all fields', () => {
+      const raw = {
+        id: 'r2', name: 'HTTP', protocol: 'http', url: 'https://example.com',
+        method: 'PUT', body: { mode: 'raw', raw: 'data' }, validation: { rules: [] },
+        header: [{ key: 'X-Test', value: '1' }], description: 'desc', authId: 'auth-1',
+      };
+      const result = normalizeRequestOnLoad(raw);
+      expect(result.protocol).toBe('http');
+      expect((result as any).method).toBe('PUT');
+      expect((result as any).body).toEqual({ mode: 'raw', raw: 'data' });
+      expect((result as any).validation).toEqual({ rules: [] });
+      expect((result as any).header).toEqual([{ key: 'X-Test', value: '1' }]);
+      expect((result as any).description).toBe('desc');
+      expect((result as any).authId).toBe('auth-1');
+    });
+
+    it('should default http method to GET when absent', () => {
+      const raw = { id: 'r3', name: 'No Method', protocol: 'http', url: 'https://example.com' };
+      const result = normalizeRequestOnLoad(raw);
+      expect((result as any).method).toBe('GET');
+    });
+
+    it('should normalize ws request and strip http-only fields', () => {
+      const raw = {
+        id: 'r4', name: 'WS', protocol: 'ws', url: 'wss://echo.example.com',
+        method: 'GET', body: { mode: 'raw', raw: '' }, validation: { rules: [] },
+      };
+      const result = normalizeRequestOnLoad(raw);
+      expect(result.protocol).toBe('ws');
+      expect((result as any).method).toBeUndefined();
+      expect((result as any).body).toBeUndefined();
+      expect((result as any).validation).toBeUndefined();
+    });
+
+    it('should normalize sse request — keeps method and body, strips validation', () => {
+      const raw = {
+        id: 'r5', name: 'SSE', protocol: 'sse', url: 'https://stream.example.com',
+        method: 'POST', body: { mode: 'raw', raw: '{}' }, validation: { rules: [] },
+      };
+      const result = normalizeRequestOnLoad(raw);
+      expect(result.protocol).toBe('sse');
+      expect((result as any).method).toBe('POST');
+      expect((result as any).body).toEqual({ mode: 'raw', raw: '{}' });
+      expect((result as any).validation).toBeUndefined();
+    });
+
+    it('should default sse method to GET when absent', () => {
+      const raw = { id: 'r6', name: 'SSE No Method', protocol: 'sse', url: 'https://stream.example.com' };
+      const result = normalizeRequestOnLoad(raw);
+      expect((result as any).method).toBe('GET');
+    });
+
+    it('should preserve shared fields on ws request', () => {
+      const raw = {
+        id: 'r7', name: 'WS Full', protocol: 'ws', url: 'wss://ws.example.com',
+        header: [{ key: 'Auth', value: 'token' }], query: [{ key: 'v', value: '2' }],
+        description: 'websocket endpoint', authId: 'auth-ws',
+      };
+      const result = normalizeRequestOnLoad(raw);
+      expect((result as any).header).toEqual([{ key: 'Auth', value: 'token' }]);
+      expect((result as any).query).toEqual([{ key: 'v', value: '2' }]);
+      expect((result as any).description).toBe('websocket endpoint');
+      expect((result as any).authId).toBe('auth-ws');
+    });
+  });
+
+  // ==========================================================================
+  // sanitizeRequestForSave — protocol-aware save sanitization (FEAT-010)
+  // ==========================================================================
+  describe('sanitizeRequestForSave', () => {
+    it('should strip sourceRef from http request', () => {
+      const request = {
+        id: 'r1', name: 'HTTP', protocol: 'http' as const, url: 'https://example.com',
+        method: 'GET', sourceRef: { collectionFilename: 'col.json', collectionName: 'C', itemPath: [] },
+      } as AnyCollectionRequest;
+      const result = sanitizeRequestForSave(request);
+      expect((result as any).sourceRef).toBeUndefined();
+      expect(result.protocol).toBe('http');
+      expect((result as any).method).toBe('GET');
+    });
+
+    it('should save http request with method, body, validation', () => {
+      const request = {
+        id: 'r2', name: 'HTTP Full', protocol: 'http' as const, url: 'https://example.com',
+        method: 'POST', body: { mode: 'raw', raw: '{}' }, validation: { rules: [{ type: 'status', operator: 'eq', expected: 200 }] },
+        header: [{ key: 'Content-Type', value: 'application/json' }],
+        description: 'Creates a resource',
+      } as unknown as AnyCollectionRequest;
+      const result = sanitizeRequestForSave(request);
+      expect((result as any).method).toBe('POST');
+      expect((result as any).body).toEqual({ mode: 'raw', raw: '{}' });
+      expect((result as any).validation).toBeDefined();
+      expect((result as any).header).toEqual([{ key: 'Content-Type', value: 'application/json' }]);
+      expect((result as any).description).toBe('Creates a resource');
+    });
+
+    it('should save ws request stripping method, body, validation', () => {
+      const request = {
+        id: 'r3', name: 'WS', protocol: 'ws' as const, url: 'wss://echo.example.com',
+        header: [{ key: 'Authorization', value: 'Bearer tok' }],
+      } as AnyCollectionRequest;
+      const result = sanitizeRequestForSave(request);
+      expect(result.protocol).toBe('ws');
+      expect((result as any).method).toBeUndefined();
+      expect((result as any).body).toBeUndefined();
+      expect((result as any).validation).toBeUndefined();
+      expect((result as any).header).toEqual([{ key: 'Authorization', value: 'Bearer tok' }]);
+    });
+
+    it('should save sse request with method and body but no validation', () => {
+      const request = {
+        id: 'r4', name: 'SSE', protocol: 'sse' as const, url: 'https://stream.example.com',
+        method: 'POST', body: { mode: 'raw', raw: '{"channel":"updates"}' },
+      } as unknown as AnyCollectionRequest;
+      const result = sanitizeRequestForSave(request);
+      expect(result.protocol).toBe('sse');
+      expect((result as any).method).toBe('POST');
+      expect((result as any).body).toEqual({ mode: 'raw', raw: '{"channel":"updates"}' });
+      expect((result as any).validation).toBeUndefined();
+    });
+
+    it('should default missing protocol to http on save', () => {
+      const request = {
+        id: 'r5', name: 'Legacy', url: 'https://example.com', method: 'DELETE',
+      } as AnyCollectionRequest;
+      const result = sanitizeRequestForSave(request);
+      expect(result.protocol).toBe('http');
+      expect((result as any).method).toBe('DELETE');
+    });
+
+    it('should omit empty header and query arrays', () => {
+      const request = {
+        id: 'r6', name: 'Sparse', protocol: 'http' as const, url: 'https://example.com',
+        method: 'GET', header: [], query: [],
+      } as unknown as AnyCollectionRequest;
+      const result = sanitizeRequestForSave(request);
+      expect((result as any).header).toBeUndefined();
+      expect((result as any).query).toBeUndefined();
+    });
+  });
+
+  // ==========================================================================
+  // Protocol-aware round-trip through CollectionService (FEAT-010)
+  // ==========================================================================
+  describe('protocol-aware persistence round-trip', () => {
+    it('should save and load a WS request with protocol fidelity', async () => {
+      // Arrange — collection with a ws request
+      const collection: Collection = {
+        info: { waveId: 'col-ws', version: '0.0.1', name: 'WS Collection' },
+        item: [],
+      };
+      mockFs.setFile(path.join(testCollectionsDir, 'ws_col.json'), JSON.stringify(collection));
+
+      const wsRequest = JSON.stringify({
+        protocol: 'ws',
+        url: 'wss://echo.example.com',
+        header: [{ key: 'Authorization', value: 'Bearer tok' }],
+      });
+
+      // Act
+      await service.saveRequest(wsRequest, 'Echo WS', 'ws_col.json', []);
+      const loaded = await service.loadOne('ws_col.json');
+
+      // Assert
+      const item = loaded!.item[0];
+      expect(item.name).toBe('Echo WS');
+      const req = item.request as any;
+      expect(req.protocol).toBe('ws');
+      expect(req.method).toBeUndefined();
+      expect(req.body).toBeUndefined();
+      expect(req.validation).toBeUndefined();
+      expect(req.header).toEqual([{ key: 'Authorization', value: 'Bearer tok' }]);
+    });
+
+    it('should save and load an SSE request with protocol fidelity', async () => {
+      const collection: Collection = {
+        info: { waveId: 'col-sse', version: '0.0.1', name: 'SSE Collection' },
+        item: [],
+      };
+      mockFs.setFile(path.join(testCollectionsDir, 'sse_col.json'), JSON.stringify(collection));
+
+      const sseRequest = JSON.stringify({
+        protocol: 'sse',
+        url: 'https://stream.example.com/events',
+        method: 'POST',
+        body: { mode: 'raw', raw: '{"channel":"updates"}' },
+      });
+
+      await service.saveRequest(sseRequest, 'Stream Events', 'sse_col.json', []);
+      const loaded = await service.loadOne('sse_col.json');
+
+      const req = loaded!.item[0].request as any;
+      expect(req.protocol).toBe('sse');
+      expect(req.method).toBe('POST');
+      expect(req.body).toEqual({ mode: 'raw', raw: '{"channel":"updates"}' });
+      expect(req.validation).toBeUndefined();
+    });
+
+    it('should normalize legacy HTTP requests (no protocol field) on load', async () => {
+      // Simulate a legacy collection on disk (no protocol field)
+      const legacyCollection = {
+        info: { waveId: 'col-legacy', version: '0.0.1', name: 'Legacy Collection' },
+        item: [{
+          id: 'legacy-1',
+          name: 'Old Request',
+          request: { method: 'POST', url: 'https://api.example.com/data', body: { mode: 'raw', raw: '{}' } },
+        }],
+      };
+      mockFs.setFile(path.join(testCollectionsDir, 'legacy.json'), JSON.stringify(legacyCollection));
+
+      const loaded = await service.loadOne('legacy.json');
+      const req = loaded!.item[0].request as any;
+      expect(req.protocol).toBe('http');
+      expect(req.method).toBe('POST');
+      expect(req.body).toEqual({ mode: 'raw', raw: '{}' });
+    });
+
+    it('should handle mixed-protocol collections on load', async () => {
+      const mixedCollection = {
+        info: { waveId: 'col-mix', version: '0.0.1', name: 'Mixed Collection' },
+        item: [
+          { id: 'http-1', name: 'HTTP Req', request: { protocol: 'http', method: 'GET', url: 'https://api.example.com' } },
+          { id: 'ws-1', name: 'WS Req', request: { protocol: 'ws', url: 'wss://ws.example.com' } },
+          { id: 'sse-1', name: 'SSE Req', request: { protocol: 'sse', url: 'https://stream.example.com', method: 'GET' } },
+          { id: 'legacy-1', name: 'Legacy', request: { method: 'DELETE', url: 'https://api.example.com/old' } },
+        ],
+      };
+      mockFs.setFile(path.join(testCollectionsDir, 'mixed.json'), JSON.stringify(mixedCollection));
+
+      const loaded = await service.loadOne('mixed.json');
+      const items = loaded!.item;
+
+      expect((items[0].request as any).protocol).toBe('http');
+      expect((items[1].request as any).protocol).toBe('ws');
+      expect((items[1].request as any).method).toBeUndefined();
+      expect((items[2].request as any).protocol).toBe('sse');
+      expect((items[3].request as any).protocol).toBe('http'); // legacy defaulted
+    });
+
+    it('should strip sourceRef on save via saveRequest', async () => {
+      const collection: Collection = {
+        info: { waveId: 'col-sr', version: '0.0.1', name: 'SourceRef Test' },
+        item: [],
+      };
+      mockFs.setFile(path.join(testCollectionsDir, 'sr.json'), JSON.stringify(collection));
+
+      const requestWithSourceRef = JSON.stringify({
+        protocol: 'http',
+        method: 'GET',
+        url: 'https://api.example.com',
+        sourceRef: { collectionFilename: 'sr.json', collectionName: 'SourceRef Test', itemPath: [] },
+      });
+
+      await service.saveRequest(requestWithSourceRef, 'SR Test', 'sr.json', []);
+
+      // Read raw file to confirm sourceRef is not persisted
+      const rawContent = mockFs.getFile(path.join(testCollectionsDir, 'sr.json'));
+      const parsed = JSON.parse(rawContent!);
+      expect(parsed.item[0].request.sourceRef).toBeUndefined();
     });
   });
 });

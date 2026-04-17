@@ -41,14 +41,12 @@ import {
   type GlobalValidationRule,
   type HttpRequestConfig,
   type BannerEvent,
-  type CollectionRequest,
+  type AnyCollectionRequest,
+  type CollectionItem,
   type Flow,
   type TestSuite,
 } from '@wave-client/core';
-import { createWebAdapter, checkServerHealth } from './adapters';
-
-// Create the web adapter instance
-const webAdapter = createWebAdapter();
+import webAdapter, { checkServerHealth } from './adapters';
 
 // Theme Context
 interface ThemeContextType {
@@ -468,7 +466,7 @@ const handleFlowSave = useCallback(async (flow: Flow) => {
   };
 
   const handleSaveRequest = async (
-    request: CollectionRequest,
+    request: AnyCollectionRequest,
     saveToCollectionName: string | undefined,
     folderPath: string[] = [],
     tabId?: string
@@ -515,11 +513,11 @@ const handleFlowSave = useCallback(async (flow: Flow) => {
       return;
     }
 
-    // Wrap the collection request as a CollectionItem
-    const collectionItem: any = {
+    // Wrap the protocol-union request as a CollectionItem
+    const collectionItem: CollectionItem = {
       id: request.id || crypto.randomUUID(),
       name: request.name,
-      request: request,
+      request,
     };
 
     const result = await storage.saveRequestToCollection(

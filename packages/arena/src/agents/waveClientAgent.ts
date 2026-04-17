@@ -355,7 +355,7 @@ export function createWaveClientAgent(config: WaveClientAgentConfig) {
         for (let i = resultMessages.length - 1; i >= 0; i--) {
           const msg = resultMessages[i];
           if (
-            msg._getType() === 'ai' &&
+            msg.getType() === 'ai' &&
             !((msg as AIMessage).tool_calls?.length)
           ) {
             const rawContent = msg.content;

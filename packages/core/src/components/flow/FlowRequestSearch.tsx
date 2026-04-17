@@ -9,6 +9,7 @@ import React, { useState, useMemo } from 'react';
 import { SearchIcon, PlusCircle, FolderIcon } from 'lucide-react';
 import type { Collection, CollectionItem } from '../../types/collection';
 import { isRequest } from '../../types/collection';
+import { isHttpRequest } from '../../utils/requestTypeGuards';
 import { urlToString } from '../../utils/collectionParser';
 import { getHttpMethodColor, cn } from '../../utils/common';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../ui/dialog';
@@ -49,7 +50,12 @@ export interface SearchableRequest {
 // ============================================================================
 
 /**
- * Flattens all requests from collections into a searchable list
+ * Flattens all HTTP requests from collections into a searchable list.
+ *
+ * WS and SSE requests are intentionally excluded — flows only support HTTP
+ * request nodes. Items without a `protocol` field are treated as HTTP for
+ * backward-compatibility with collections saved before the discriminant was
+ * introduced.
  */
 function flattenCollections(collections: Collection[]): SearchableRequest[] {
     const requests: SearchableRequest[] = [];
@@ -61,7 +67,7 @@ function flattenCollections(collections: Collection[]): SearchableRequest[] {
         folderPath: string[]
     ) {
         for (const item of items) {
-            if (isRequest(item) && item.request) {
+            if (isRequest(item) && item.request && isHttpRequest(item.request)) {
                 requests.push({
                     id: item.id,
                     name: item.name,

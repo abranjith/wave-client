@@ -7,6 +7,10 @@
 import { StateCreator } from 'zustand';
 import { 
     CollectionRequest, 
+    AnyCollectionRequest,
+    WsCollectionRequest,
+    SseCollectionRequest,
+    RequestProtocol,
     CollectionBody,
     CollectionReference,
     CollectionUrl,
@@ -34,17 +38,29 @@ import {
     createEmptyFormdataBody,
     createEmptyRawBody,
     createEmptyValidation,
+    getDefaultRequestSection,
+    getDefaultResponseSection,
     RequestSectionTab,
     ResponseSectionTab
 } from '../../types/tab';
+import { 
+    isHttpRequest, 
+    isWsRequest, 
+    isSseRequest, 
+    getRequestProtocol 
+} from '../../utils/requestTypeGuards';
 import { ValidationRuleRef, RequestValidation } from '../../types/validation';
 import { IFileAdapter } from '../../types/adapters';
 import { parseUrlQueryParams } from '../../utils/common';
 import { buildHttpRequest as buildHttpRequestFromCollection } from '../../utils/requestBuilder';
 import { Auth } from './createAuthSlice';
+import type { RealtimeSlice } from './createRealtimeSlice';
 
 // Type alias for backwards compatibility during migration
 type RawBodyLanguage = 'json' | 'xml' | 'html' | 'text' | 'csv' | undefined;
+
+// Combined store type giving this slice access to the realtime slice at runtime
+type RequestTabsSliceStore = RequestTabsSlice & RealtimeSlice;
 
 // ==================== Slice Interface ====================
 
@@ -62,22 +78,27 @@ export interface RequestTabsSlice {
     canAddTab: () => boolean;
     
     // Load request into tab (from collection, history, etc.)
-    loadRequestIntoTab: (request: CollectionRequest, targetTabId?: string) => void;
-    loadRequestIntoNewTab: (request: CollectionRequest) => TabData | null;
+    loadRequestIntoTab: (request: AnyCollectionRequest, targetTabId?: string) => void;
+    loadRequestIntoNewTab: (request: AnyCollectionRequest) => TabData | null;
     
     // Clear/Reset tab
     clearActiveTab: () => void;
     clearTab: (tabId: string) => void;
     
-    // Get request for saving/history (converts TabData to CollectionRequest)
-    getCollectionRequest: (tabId?: string) => CollectionRequest;
+    // Get request for saving/history (converts TabData to AnyCollectionRequest based on protocol)
+    getCollectionRequest: (tabId?: string) => AnyCollectionRequest;
     
     // Update tab metadata (name, folder path, collection ref) and mark clean
     updateTabMetadata: (tabId: string, metadata: { name?: string, folderPath?: string[], collectionRef?: CollectionReference }) => void;
 
     // Individual field updaters (operate on active tab)
     updateMethod: (method: string) => void;
-    updateProtocol: (protocol: string) => void;
+    /**
+     * Switches the request protocol for the active tab.
+     * - When switching to 'ws': normalizes URL scheme to ws:// or wss://, forces body to none.
+     * - When switching to 'http' or 'sse': normalizes URL scheme to http:// or https://.
+     */
+    updateProtocol: (protocol: RequestProtocol) => void;
     updateUrl: (url: string) => void;
     updateName: (name: string) => void;
     updateFolderPath: (folderPath: string[]) => void;
@@ -186,7 +207,7 @@ const updateUrlWithParams = (currentUrl: string, paramRows: ParamRow[]): string 
 /**
  * Gets the folder path from a collection request
  */
-function getRequestFolderPath(request: CollectionRequest | null): string[] {
+function getRequestFolderPath(request: AnyCollectionRequest | null): string[] {
     const fullFolderPath: string[] = [];
     if (request?.sourceRef) {
         if (request.sourceRef.collectionName) {
@@ -201,7 +222,7 @@ function getRequestFolderPath(request: CollectionRequest | null): string[] {
 
 // ==================== Slice Creator ====================
 
-const createRequestTabsSlice: StateCreator<RequestTabsSlice> = (set, get) => {
+const createRequestTabsSlice: StateCreator<RequestTabsSliceStore, [], [], RequestTabsSlice> = (set, get) => {
     // Create initial tab
     const initialTab = createEmptyTab();
     
@@ -260,12 +281,14 @@ const createRequestTabsSlice: StateCreator<RequestTabsSlice> = (set, get) => {
             
             // Don't close the last tab
             if (state.tabs.length <= 1) {
-                // Instead, reset the tab
+                // Instead, reset the tab to an empty HTTP tab
                 const resetTab = createEmptyTab();
                 set({
                     tabs: [{ ...resetTab, id: state.tabs[0].id }],
                     activeTabId: state.tabs[0].id
                 });
+                // The tab is now HTTP — remove realtime state if it had any
+                get().removeRealtimeTabState(tabId);
                 return;
             }
             
@@ -284,6 +307,8 @@ const createRequestTabsSlice: StateCreator<RequestTabsSlice> = (set, get) => {
                 tabs: newTabs,
                 activeTabId: newActiveTabId
             });
+            // Tab is gone — remove its realtime entry to prevent orphan state
+            get().removeRealtimeTabState(tabId);
         },
         
         setActiveTab: (tabId: string) => {
@@ -307,7 +332,7 @@ const createRequestTabsSlice: StateCreator<RequestTabsSlice> = (set, get) => {
         
         // ==================== Load Request ====================
         
-        loadRequestIntoTab: (request: CollectionRequest, targetTabId?: string) => {
+        loadRequestIntoTab: (request: AnyCollectionRequest, targetTabId?: string) => {
             const state = get();
             
             // Determine the tab ID to use
@@ -327,6 +352,8 @@ const createRequestTabsSlice: StateCreator<RequestTabsSlice> = (set, get) => {
                 set({ tabs: newTabs });
             }
             
+            const protocol = getRequestProtocol(request);
+            
             // Convert request headers to HeaderRow format (ensure IDs exist)
             const headerRows: HeaderRow[] = (request.header && request.header.length > 0)
                 ? request.header.map(h => ({
@@ -353,20 +380,26 @@ const createRequestTabsSlice: StateCreator<RequestTabsSlice> = (set, get) => {
             // Extract raw URL string from CollectionUrl or use string directly
             const rawUrl = getRawUrl(request.url);
             
-            // Use the body directly (it's already CollectionBody)
-            const body: CollectionBody = request.body || createEmptyBody();
+            // Protocol-specific field resolution:
+            // - HTTP: all fields present
+            // - WS: no body (WS is always upgrade-only), no validation, no method
+            // - SSE: has method and optional body, no validation
+            const method = isWsRequest(request) ? TAB_CONSTANTS.DEFAULT_METHOD : (request.method || TAB_CONSTANTS.DEFAULT_METHOD);
+            const body: CollectionBody = isWsRequest(request) ? createEmptyBody() : (('body' in request ? request.body : undefined) || createEmptyBody());
+            const validation = isHttpRequest(request) ? (request.validation || createEmptyValidation()) : createEmptyValidation();
             
             const updatedTabData: Partial<TabData> = {
-                id: tabId, // Use request ID as tab ID for proper matching
+                id: tabId,
                 name: request.name || TAB_CONSTANTS.DEFAULT_NAME,
-                method: request.method || TAB_CONSTANTS.DEFAULT_METHOD,
+                protocol,
+                method,
                 url: rawUrl,
                 params: paramRows,
                 headers: headerRows,
                 body,
                 folderPath: getRequestFolderPath(request),
                 collectionRef: request.sourceRef || null,
-                validation: request.validation || createEmptyValidation(),
+                validation,
                 authId: request.authId || null,
                 responseData: null,
                 isRequestProcessing: false,
@@ -374,6 +407,8 @@ const createRequestTabsSlice: StateCreator<RequestTabsSlice> = (set, get) => {
                 isCancelled: false,
                 errorMessage: '',
                 isDirty: false,
+                activeRequestSection: getDefaultRequestSection(protocol),
+                activeResponseSection: getDefaultResponseSection(protocol),
             };
             
             // If the target tab exists, update it; otherwise create a new tab with this ID
@@ -392,11 +427,33 @@ const createRequestTabsSlice: StateCreator<RequestTabsSlice> = (set, get) => {
                 }));
             }
             
+            // Synchronize realtime state with the new protocol.
+            // Reloading always discards stale messages/events/headers so the tab
+            // starts from a clean connection state.
+            if (protocol === 'ws' || protocol === 'sse') {
+                const existing = get().getRealtimeState(tabId);
+                if (existing) {
+                    // Reset to idle, preserving the tabId/protocol key in the map
+                    get().resetRealtimeTabState(tabId);
+                    // If the protocol changed (e.g., WS→SSE), we need a new entry with
+                    // the correct protocol discriminant
+                    if (existing.protocol !== protocol) {
+                        get().removeRealtimeTabState(tabId);
+                        get().ensureRealtimeTabState(tabId, protocol);
+                    }
+                } else {
+                    get().ensureRealtimeTabState(tabId, protocol);
+                }
+            } else {
+                // HTTP tab — remove any lingering realtime entry
+                get().removeRealtimeTabState(tabId);
+            }
+            
             // Make this tab active
             set({ activeTabId: tabId });
         },
         
-        loadRequestIntoNewTab: (request: CollectionRequest) => {
+        loadRequestIntoNewTab: (request: AnyCollectionRequest) => {
             const state = get();
             
             // Check if a tab with this request ID already exists
@@ -414,6 +471,8 @@ const createRequestTabsSlice: StateCreator<RequestTabsSlice> = (set, get) => {
                 get().loadRequestIntoTab(request);
                 return getActiveTabInternal() || null;
             }
+            
+            const protocol = getRequestProtocol(request);
             
             // Convert request headers to HeaderRow format (ensure IDs exist)
             const headerRows: HeaderRow[] = (request.header && request.header.length > 0)
@@ -441,26 +500,39 @@ const createRequestTabsSlice: StateCreator<RequestTabsSlice> = (set, get) => {
             // Extract raw URL string from CollectionUrl or use string directly
             const rawUrl = getRawUrl(request.url);
             
+            // Protocol-specific field resolution
+            const method = isWsRequest(request) ? TAB_CONSTANTS.DEFAULT_METHOD : (request.method || TAB_CONSTANTS.DEFAULT_METHOD);
+            const body: CollectionBody = isWsRequest(request) ? createEmptyBody() : (('body' in request ? request.body : undefined) || createEmptyBody());
+            const validation = isHttpRequest(request) ? (request.validation || createEmptyValidation()) : createEmptyValidation();
+            
             const newTab = createEmptyTab();
             const updatedTab: TabData = {
                 ...newTab,
                 id: request.id || newTab.id, // Use request ID as tab ID
                 name: request.name || TAB_CONSTANTS.DEFAULT_NAME,
-                method: request.method || TAB_CONSTANTS.DEFAULT_METHOD,
+                protocol,
+                method,
                 url: rawUrl,
                 params: paramRows,
                 headers: headerRows,
-                body: request.body || createEmptyBody(),
+                body,
                 folderPath: getRequestFolderPath(request),
                 collectionRef: request.sourceRef || null,
-                validation: request.validation || createEmptyValidation(),
+                validation,
                 authId: request.authId || null,
+                activeRequestSection: getDefaultRequestSection(protocol),
+                activeResponseSection: getDefaultResponseSection(protocol),
             };
             
             set({
                 tabs: [...state.tabs, updatedTab],
                 activeTabId: updatedTab.id
             });
+            
+            // Initialize idle realtime state for WS/SSE tabs
+            if (protocol === 'ws' || protocol === 'sse') {
+                get().ensureRealtimeTabState(updatedTab.id, protocol);
+            }
             
             return updatedTab;
         },
@@ -474,6 +546,8 @@ const createRequestTabsSlice: StateCreator<RequestTabsSlice> = (set, get) => {
                 ...resetData,
                 id: state.activeTabId // Keep the same tab ID
             });
+            // Cleared tab resets to HTTP — remove any realtime entry
+            get().removeRealtimeTabState(state.activeTabId);
         },
         
         clearTab: (tabId: string) => {
@@ -482,18 +556,27 @@ const createRequestTabsSlice: StateCreator<RequestTabsSlice> = (set, get) => {
                 ...resetData,
                 id: tabId
             });
+            // Cleared tab resets to HTTP — remove any realtime entry
+            get().removeRealtimeTabState(tabId);
         },
         
         // ==================== Get Collection Request ====================
         
-        getCollectionRequest: (tabId?: string): CollectionRequest => {
+        /**
+         * Serializes the active (or specified) tab into the correct `AnyCollectionRequest` union
+         * member based on the tab's protocol:
+         * - `'http'` → `CollectionRequest` (method, body, validation all included)
+         * - `'ws'`   → `WsCollectionRequest` (no method, body, or validation)
+         * - `'sse'`  → `SseCollectionRequest` (method and optional body; no validation)
+         */
+        getCollectionRequest: (tabId?: string): AnyCollectionRequest => {
             const state = get();
             const tab = tabId 
                 ? state.tabs.find(t => t.id === tabId) 
                 : getActiveTabInternal();
             
             if (!tab) {
-                // Return empty request
+                // Return empty HTTP request as fallback
                 return {
                     id: '',
                     name: '',
@@ -505,17 +588,56 @@ const createRequestTabsSlice: StateCreator<RequestTabsSlice> = (set, get) => {
                     sourceRef: { collectionFilename: '', collectionName: '', itemPath: [] },
                     validation: createEmptyValidation(),
                     authId: undefined
-                };
+                } satisfies CollectionRequest;
             }
             
-            // Filter out empty headers
+            // Filter out empty headers and params
             const nonEmptyHeaders = tab.headers?.filter(header => header.key || header.value) || [];
-            // Filter out empty params
             const nonEmptyParams = tab.params?.filter(param => param.key || param.value) || [];
             
-            return {
+            const sourceRef = tab.collectionRef || { 
+                collectionFilename: '', 
+                collectionName: '', 
+                itemPath: tab.folderPath || [] 
+            };
+            
+            if (tab.protocol === 'ws') {
+                // WS tabs — no method, body, or validation
+                const wsRequest: WsCollectionRequest = {
+                    id: tab.id,
+                    name: tab.name || '',
+                    protocol: 'ws',
+                    url: tab.url || '',
+                    header: nonEmptyHeaders,
+                    query: nonEmptyParams,
+                    authId: tab.authId || undefined,
+                    sourceRef,
+                };
+                return wsRequest;
+            }
+            
+            if (tab.protocol === 'sse') {
+                // SSE tabs — has method and optional body, no validation
+                const sseRequest: SseCollectionRequest = {
+                    id: tab.id,
+                    name: tab.name || '',
+                    protocol: 'sse',
+                    method: tab.method || 'GET',
+                    url: tab.url || '',
+                    header: nonEmptyHeaders,
+                    query: nonEmptyParams,
+                    body: tab.body,
+                    authId: tab.authId || undefined,
+                    sourceRef,
+                };
+                return sseRequest;
+            }
+            
+            // HTTP tabs — full request shape including method, body, and validation
+            const httpRequest: CollectionRequest = {
                 id: tab.id,
                 name: tab.name || '',
+                protocol: 'http',
                 method: tab.method || 'GET',
                 url: tab.url || '',
                 header: nonEmptyHeaders,
@@ -523,12 +645,9 @@ const createRequestTabsSlice: StateCreator<RequestTabsSlice> = (set, get) => {
                 body: tab.body || createEmptyBody(),
                 validation: tab.validation,
                 authId: tab.authId || undefined,
-                sourceRef: tab.collectionRef || { 
-                    collectionFilename: '', 
-                    collectionName: '', 
-                    itemPath: tab.folderPath || [] 
-                }
+                sourceRef,
             };
+            return httpRequest;
         },
         
         updateTabMetadata: (tabId: string, metadata: { name?: string, folderPath?: string[], collectionRef?: CollectionReference }) => {
@@ -544,28 +663,64 @@ const createRequestTabsSlice: StateCreator<RequestTabsSlice> = (set, get) => {
             updateActiveTab({ method, isDirty: true });
         },
         
-        updateProtocol: (protocol: string) => {
+        updateProtocol: (protocol: RequestProtocol) => {
             const tab = getActiveTabInternal();
             if (!tab) return;
             
-            const newProtocol = protocol.toLowerCase();
-            let currentUrl = tab.url || '';
+            const currentUrl = tab.url || '';
+            let newUrl = currentUrl;
             
             try {
-                if (!currentUrl || currentUrl === `${tab.protocol}://`) {
-                    updateActiveTab({ protocol: newProtocol, url: `${newProtocol}://`, isDirty: true });
-                    return;
-                }
-
-                const urlParts = currentUrl.split('://');
-                if (urlParts.length > 1) {
-                    const urlWithoutProtocol = urlParts.slice(1).join('://');
-                    updateActiveTab({ protocol: newProtocol, url: `${newProtocol}://${urlWithoutProtocol}`, isDirty: true });
+                if (protocol === 'ws') {
+                    // Switching to WebSocket — normalize URL scheme to ws:// or wss://
+                    newUrl = currentUrl
+                        .replace(/^https:\/\//i, 'wss://')
+                        .replace(/^http:\/\//i, 'ws://');
+                    // If no scheme at all, add ws://
+                    if (newUrl && !newUrl.includes('://')) {
+                        newUrl = `ws://${newUrl}`;
+                    }
                 } else {
-                    updateActiveTab({ protocol: newProtocol, url: `${newProtocol}://${currentUrl}`, isDirty: true });
+                    // Switching to HTTP or SSE — normalize scheme back to http:// or https://
+                    newUrl = currentUrl
+                        .replace(/^wss:\/\//i, 'https://')
+                        .replace(/^ws:\/\//i, 'http://');
                 }
-            } catch (error) {
-                console.error('Error updating protocol:', error);
+            } catch {
+                // URL normalization is best-effort; keep the original URL on error
+            }
+            
+            const updates: Partial<TabData> = {
+                protocol,
+                url: newUrl,
+                isDirty: true,
+                activeRequestSection: getDefaultRequestSection(protocol),
+                activeResponseSection: getDefaultResponseSection(protocol),
+            };
+            
+            // WS tabs have no body — force to none when switching to WS
+            if (protocol === 'ws') {
+                updates.body = createEmptyBody();
+            }
+            
+            updateActiveTab(updates);
+            
+            // Synchronize realtime state with the new protocol.
+            // Any change in protocol discards the old connection state.
+            const tabId = tab.id;
+            const prevProtocol = tab.protocol;
+            if (protocol === 'ws' || protocol === 'sse') {
+                if (prevProtocol !== protocol) {
+                    // Protocol changed (HTTP→WS/SSE or WS↔SSE) — always start fresh
+                    get().removeRealtimeTabState(tabId);
+                    get().ensureRealtimeTabState(tabId, protocol);
+                } else {
+                    // Same protocol (e.g., user re-selected current protocol) — no-op
+                    get().ensureRealtimeTabState(tabId, protocol);
+                }
+            } else {
+                // Switching to HTTP — remove any realtime entry
+                get().removeRealtimeTabState(tabId);
             }
         },
         
@@ -583,14 +738,39 @@ const createRequestTabsSlice: StateCreator<RequestTabsSlice> = (set, get) => {
             }
             
             let fullUrl = url;
-            const urlParts = url.split('://');
+            const schemeMatch = url.match(/^([a-z][a-z0-9+\-.]*):\/\//i);
             
-            if (urlParts.length > 1) {
-                updateActiveTab({ protocol: urlParts[0].toLowerCase() });
+            if (schemeMatch) {
+                // URL already has a scheme — detect protocol from it
+                const scheme = schemeMatch[1].toLowerCase();
+                const detectedProtocol: RequestProtocol | undefined =
+                    scheme === 'ws' || scheme === 'wss' ? 'ws' : undefined;
+                    
                 fullUrl = url;
-            } else {
-                fullUrl = `${tab.protocol}://${url}`;
+                if (detectedProtocol && detectedProtocol !== tab.protocol) {
+                    // Auto-switch protocol discriminant when URL scheme clearly indicates WS.
+                    // Keep protocol side-effects aligned with updateProtocol():
+                    // initialize realtime state and reset WS-incompatible fields.
+                    const tabId = tab.id;
+                    const protocolUpdates: Partial<TabData> = {
+                        protocol: detectedProtocol,
+                        activeRequestSection: getDefaultRequestSection(detectedProtocol),
+                        activeResponseSection: getDefaultResponseSection(detectedProtocol),
+                    };
+
+                    if (detectedProtocol === 'ws') {
+                        protocolUpdates.body = createEmptyBody();
+                    }
+
+                    updateActiveTab(protocolUpdates);
+
+                    // URL-based protocol detection should create the realtime entry,
+                    // otherwise connection status updates become no-ops and UI stays idle.
+                    get().removeRealtimeTabState(tabId);
+                    get().ensureRealtimeTabState(tabId, detectedProtocol);
+                }
             }
+            // No scheme — keep the URL as-is; the scheme will be in the URL string itself
             
             const parsedParams = parseUrlQueryParams(fullUrl);
             
@@ -1033,18 +1213,23 @@ const createRequestTabsSlice: StateCreator<RequestTabsSlice> = (set, get) => {
                 return { success: false, error: 'No tab found to send request' };
             }
             
+            // buildHttpRequest only applies to HTTP protocol tabs
+            if (tab.protocol !== 'http') {
+                return { success: false, error: 'buildHttpRequest is only valid for HTTP tabs' };
+            }
+            
             if (!tab.method || !tab.url) {
                 updateTab(tab.id, { requestError: 'Method and URL are required' });
                 return { success: false, error: 'Method and URL are required' };
             }
 
-            // Convert tab data to CollectionRequest
-            const collectionRequest = state.getCollectionRequest(tab.id);
+            // Serialize the HTTP tab into a CollectionRequest
+            const collectionRequest = state.getCollectionRequest(tab.id) as CollectionRequest;
             
-            // Handle protocol prefix if URL doesn't have one
+            // Ensure URL has a scheme — default to https:// if missing
             let urlWithProtocol = tab.url;
             if (!urlWithProtocol.startsWith('http://') && !urlWithProtocol.startsWith('https://')) {
-                urlWithProtocol = tab.protocol ? `${tab.protocol}://${urlWithProtocol}` : urlWithProtocol;
+                urlWithProtocol = `https://${urlWithProtocol}`;
             }
             collectionRequest.url = urlWithProtocol;
 

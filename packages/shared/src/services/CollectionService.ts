@@ -2,7 +2,141 @@ import * as path from 'path';
 
 import { BaseStorageService } from './BaseStorageService';
 import { generateUniqueId } from '@wave-client/core';
-import type { Collection, CollectionItem, CollectionRequest } from '../types';
+import {
+    isSseRequest,
+    isWsRequest,
+} from '../types';
+import type { Collection, CollectionItem, AnyCollectionRequest } from '../types';
+
+// ============================================================================
+// Protocol-Aware Request Normalization
+// ============================================================================
+
+/**
+ * Normalizes a persisted request payload to a protocol-safe shape.
+ *
+ * Rules applied on load:
+ * - Missing `protocol` → defaults to `'http'` (backward compatibility).
+ * - `protocol: 'ws'` → strips HTTP-only fields (`method`, `body`, `validation`).
+ * - `protocol: 'sse'` → strips `validation`; defaults `method` to `'GET'` when absent.
+ * - `protocol: 'http'` → defaults `method` to `'GET'` when absent.
+ *
+ * @param request - The raw request payload from the JSON file.
+ * @returns The normalized request, safe for the declared protocol.
+ */
+export function normalizeRequestOnLoad(request: Record<string, unknown>): AnyCollectionRequest {
+    const protocol = (request.protocol as string | undefined) ?? 'http';
+
+    // Shared fields present on every protocol
+    const base = {
+        id: request.id as string,
+        name: request.name as string,
+        url: request.url,
+        header: request.header,
+        query: request.query,
+        description: request.description,
+        authId: request.authId,
+        sourceRef: request.sourceRef,
+    };
+
+    if (protocol === 'ws') {
+        // WS: no method, body, or validation
+        return {
+            ...base,
+            protocol: 'ws',
+        } as AnyCollectionRequest;
+    }
+
+    if (protocol === 'sse') {
+        // SSE: has method and optional body; no validation
+        return {
+            ...base,
+            protocol: 'sse',
+            method: (request.method as string) || 'GET',
+            body: request.body,
+        } as AnyCollectionRequest;
+    }
+
+    // HTTP (explicit or legacy missing protocol)
+    return {
+        ...base,
+        protocol: 'http',
+        method: (request.method as string) || 'GET',
+        body: request.body,
+        validation: request.validation,
+    } as AnyCollectionRequest;
+}
+
+/**
+ * Sanitizes a request payload for persistence, stripping runtime-only fields
+ * and fields invalid for the declared protocol.
+ *
+ * Rules applied on save:
+ * - `protocol: 'ws'` → strips `method`, `body`, `validation`.
+ * - `protocol: 'sse'` → strips `validation`.
+ * - `protocol: 'http'` → keeps all fields; omits `protocol` if it would add
+ *   noise to legacy-compatible payloads (optional, kept explicit here).
+ * - `sourceRef` is always stripped — it is runtime-only metadata that is
+ *   recomputed on load from the item's position in the tree.
+ *
+ * @param request - The in-memory request being persisted.
+ * @returns A cleaned request safe for JSON serialization.
+ */
+export function sanitizeRequestForSave(request: AnyCollectionRequest): AnyCollectionRequest {
+    const protocol = (request.protocol as string | undefined) ?? 'http';
+
+    // Shared persistent fields
+    const base: Record<string, unknown> = {
+        id: request.id,
+        name: request.name,
+        url: request.url,
+    };
+    if (request.header && (request.header as unknown[]).length > 0) base.header = request.header;
+    if (request.query && (request.query as unknown[]).length > 0) base.query = request.query;
+    if (request.description) base.description = request.description;
+    if (request.authId) base.authId = request.authId;
+    // sourceRef is runtime-only — never persisted
+
+    if (isWsRequest(request) || protocol === 'ws') {
+        return { ...base, protocol: 'ws' } as AnyCollectionRequest;
+    }
+
+    if (isSseRequest(request) || protocol === 'sse') {
+        return {
+            ...base,
+            protocol: 'sse',
+            method: ('method' in request && typeof request.method === 'string' ? request.method : 'GET'),
+            ...('body' in request && request.body ? { body: request.body } : {}),
+        } as AnyCollectionRequest;
+    }
+
+    // HTTP
+    return {
+        ...base,
+        protocol: 'http',
+        method: ('method' in request && typeof request.method === 'string' ? request.method : 'GET'),
+        ...('body' in request && request.body ? { body: request.body } : {}),
+        ...('validation' in request && request.validation ? { validation: request.validation } : {}),
+    } as AnyCollectionRequest;
+}
+
+/**
+ * Recursively normalizes all request payloads in a `CollectionItem` tree.
+ * Applied after loading from disk.
+ */
+function normalizeItemRequests(item: CollectionItem): CollectionItem {
+    if (item.request) {
+        item.request = normalizeRequestOnLoad(item.request as unknown as Record<string, unknown>);
+    }
+    if (item.item) {
+        item.item = item.item.map(normalizeItemRequests);
+    }
+    return item;
+}
+
+// ============================================================================
+// Item ID Helpers
+// ============================================================================
 
 /**
  * Ensures all items in a collection have unique IDs
@@ -19,10 +153,11 @@ function ensureItemIds(item: CollectionItem): CollectionItem {
 }
 
 /**
- * Ensures all items in a collection item array have IDs
+ * Ensures all items in a collection item array have IDs and
+ * normalizes request payloads for protocol safety.
  */
 function ensureCollectionItemIds(items: CollectionItem[]): CollectionItem[] {
-    return items.map(ensureItemIds);
+    return items.map(item => normalizeItemRequests(ensureItemIds(item)));
 }
 
 /**
@@ -172,8 +307,9 @@ export class CollectionService extends BaseStorageService {
             throw new Error(`Collection file ${collectionFileName} does not exist and no new collection name provided.`);
         }
 
-        // Parse the request JSON
-        const request = JSON.parse(requestContent) as CollectionRequest;
+        // Parse the request JSON — accepts any protocol (HTTP, WS, SSE)
+        const rawRequest = JSON.parse(requestContent) as AnyCollectionRequest;
+        const request = sanitizeRequestForSave(rawRequest);
 
         // Navigate to the correct folder, creating it if necessary
         let items = collection.item;
@@ -278,9 +414,9 @@ export class CollectionService extends BaseStorageService {
             collection.item = [];
         }
         
-        // Ensure all items have IDs
-        collection.item = collection.item.map((item: CollectionItem) => ensureItemIds(item));
-        
+        // Ensure all items have IDs and normalize request payloads
+        collection.item = collection.item.map((item: CollectionItem) => normalizeItemRequests(ensureItemIds(item)));
+
         // Generate a JSON filename for saving
         const jsonFileName = fileName.replace(/\.[^.]*$/, '.json');
         

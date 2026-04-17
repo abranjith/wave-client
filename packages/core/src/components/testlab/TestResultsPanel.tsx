@@ -9,8 +9,9 @@ import React, { useMemo, useState } from 'react';
 import { CheckCircle2, XCircle, Circle, Trash2, ChevronDown, ChevronRight, GitBranchIcon, BeakerIcon } from 'lucide-react';
 import type { TestSuite, TestSuiteRunResult, TestItemResult, TestItem, TestCaseResult, RequestTestItemResult, FlowTestCaseResult, FlowTestItemResult } from '../../types/testSuite';
 import type { FlowRunResult, FlowNodeResult, FlowNode, Flow } from '../../types/flow';
-import type { Collection, CollectionItem, CollectionRequest } from '../../types/collection';
+import type { Collection, CollectionItem, CollectionRequest, AnyCollectionRequest } from '../../types/collection';
 import { isRequest } from '../../types/collection';
+import { isWsRequest } from '../../utils/requestTypeGuards';
 import { isRequestTestItem, isFlowTestItem, isRequestTestItemResult, isFlowTestItemResult } from '../../types/testSuite';
 import { urlToString } from '../../utils/collectionParser';
 import { cn } from '../../utils/common';
@@ -44,7 +45,7 @@ interface TestResultsPanelProps {
 // ============================================================================
 
 interface RequestLookupResult {
-    request: CollectionRequest;
+    request: AnyCollectionRequest;
     folderPath: string[];
     name: string;
     method: string;
@@ -64,7 +65,7 @@ function findRequestInItems(items: CollectionItem[], targetId: string, path: str
                 request: item.request,
                 folderPath: path,
                 name: item.name,
-                method: item.request.method,
+                method: isWsRequest(item.request) ? 'WS' : item.request.method,
                 url,
             };
         }
@@ -166,7 +167,7 @@ const FlowResultSubPanel: React.FC<FlowResultSubPanelProps> = ({
         return flow.nodes.map((node) => {
             const nodeResult = flowResult.nodeResults.get(node.id);
             const lookup = findRequestMeta(node.requestId, collections);
-            const request = lookup?.request ?? { method: node.method, url: 'Unknown URL' };
+            const request: AnyCollectionRequest = lookup?.request ?? { method: node.method, url: 'Unknown URL' } as AnyCollectionRequest;
             const url = lookup?.url || (typeof request.url === 'string' ? request.url : urlToString(request.url));
 
             let validationStatus: ValidationStatus = 'idle';
@@ -177,7 +178,7 @@ const FlowResultSubPanel: React.FC<FlowResultSubPanelProps> = ({
             return {
                 id: node.id,
                 name: node.alias || lookup?.name || node.name,
-                method: (request.method || node.method || 'GET').toUpperCase(),
+                method: ((!isWsRequest(request) ? request.method : undefined) || node.method || 'GET').toUpperCase(),
                 url,
                 request,
                 folderPath: lookup?.folderPath ?? [],
@@ -213,7 +214,7 @@ const FlowResultSubPanel: React.FC<FlowResultSubPanelProps> = ({
 
 interface TestCaseResultCardProps {
     testCaseResult: TestCaseResult;
-    request: CollectionRequest;
+    request: AnyCollectionRequest;
 }
 
 /**
@@ -221,7 +222,7 @@ interface TestCaseResultCardProps {
  */
 function convertTestCaseToRunRequestData(
     testCaseResult: TestCaseResult,
-    request: CollectionRequest
+    request: AnyCollectionRequest
 ): RunRequestData {
     // Determine error message
     let error: string | undefined;
@@ -234,7 +235,7 @@ function convertTestCaseToRunRequestData(
     return {
         id: testCaseResult.testCaseId,
         name: testCaseResult.testCaseName,
-        method: (request.method || 'GET').toUpperCase(),
+        method: ((!isWsRequest(request) ? request.method : undefined) || 'GET').toUpperCase(),
         url: typeof request.url === 'string' ? request.url : urlToString(request.url),
         request,
         folderPath: [], // Test cases don't have folder paths
@@ -378,7 +379,7 @@ const TestItemCard: React.FC<TestItemCardProps> = ({
     if (isRequestTestItem(item)) {
         // Request item handling
         const lookup = findRequestMeta(item.referenceId, collections);
-        const request: CollectionRequest = lookup?.request ?? { 
+        const request: AnyCollectionRequest = lookup?.request ?? { 
             id: item.id, 
             name: item.name || 'Unknown Request',
             method: 'GET', 
@@ -443,9 +444,9 @@ const TestItemCard: React.FC<TestItemCardProps> = ({
                         {/* Method badge */}
                         <span className={cn(
                             'text-xs font-mono font-semibold px-1.5 py-0.5 rounded flex-shrink-0',
-                            methodColors[(request.method || 'GET').toUpperCase()] || 'bg-slate-100 text-slate-700'
+                            methodColors[((!isWsRequest(request) ? request.method : undefined) || 'GET').toUpperCase()] || 'bg-slate-100 text-slate-700'
                         )}>
-                            {(request.method || 'GET').toUpperCase()}
+                            {((!isWsRequest(request) ? request.method : undefined) || 'GET').toUpperCase()}
                         </span>
 
                         {/* Name */}
@@ -492,9 +493,9 @@ const TestItemCard: React.FC<TestItemCardProps> = ({
         const data: RunRequestData = {
             id: item.id,
             name: item.name || lookup?.name || 'Unknown Request',
-            method: (request.method || 'GET').toUpperCase(),
+            method: ((!isWsRequest(request) ? request.method : undefined) || 'GET').toUpperCase(),
             url,
-            request: request as CollectionRequest,
+            request,
             folderPath: lookup?.folderPath ?? [],
             runStatus: toRunStatus(itemResult?.status),
             responseStatus: requestResult?.response?.status,

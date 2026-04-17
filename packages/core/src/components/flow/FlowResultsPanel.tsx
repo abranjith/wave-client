@@ -7,8 +7,9 @@
 import React, { useMemo } from 'react';
 import { CheckCircle2, XCircle, Circle, Trash2 } from 'lucide-react';
 import type { Flow, FlowRunResult, FlowNodeResult, FlowNodeStatus, FlowNode } from '../../types/flow';
-import type { Collection, CollectionItem, CollectionRequest } from '../../types/collection';
+import type { Collection, CollectionItem, CollectionRequest, AnyCollectionRequest } from '../../types/collection';
 import { isRequest } from '../../types/collection';
+import { isWsRequest } from '../../utils/requestTypeGuards';
 import { urlToString } from '../../utils/collectionParser';
 import { cn } from '../../utils/common';
 import RunRequestCard, { RunRequestData, RunStatus, ValidationStatus } from '../common/RunRequestCard';
@@ -31,7 +32,7 @@ interface FlowResultsPanelProps {
 }
 
 interface RequestLookupResult {
-    request: CollectionRequest;
+    request: AnyCollectionRequest;
     folderPath: string[];
     name: string;
     method: string;
@@ -51,7 +52,7 @@ function findRequestInItems(items: CollectionItem[], targetId: string, path: str
                 request: item.request,
                 folderPath: path,
                 name: item.name,
-                method: item.request.method,
+                method: isWsRequest(item.request) ? 'WS' : item.request.method,
                 url,
             };
         }
@@ -132,7 +133,7 @@ function buildRunRequestData(
     collections: Collection[]
 ): RunRequestData {
     const lookup = findRequestMeta(node.requestId, collections);
-    const request: CollectionRequest = lookup?.request ?? {
+    const request: AnyCollectionRequest = lookup?.request ?? {
         id: node.id,
         name: node.alias || node.name,
         method: node.method,
@@ -144,7 +145,7 @@ function buildRunRequestData(
     return {
         id: node.id,
         name: node.alias || lookup?.name || node.name,
-        method: (request.method || node.method || 'GET').toUpperCase(),
+        method: ((!isWsRequest(request) ? request.method : undefined) || node.method || 'GET').toUpperCase(),
         url,
         request,
         folderPath: lookup?.folderPath ?? [],

@@ -39,7 +39,14 @@ import {
   TAB_CONSTANTS,
   renderParameterizedText,
   getResponseLanguage,
-  type CollectionRequest,
+  type AnyCollectionRequest,
+  ProtocolSelector,
+  ConnectionControls,
+  WsOutputArea,
+  SseOutputArea,
+  getRequestTabsForProtocol,
+  useWsConnection,
+  useSseConnection,
 } from '@wave-client/core';
 
 // ==================== Helper Functions ====================
@@ -54,15 +61,19 @@ function getStatusColor(status: number) {
 // ==================== Constants ====================
 
 const HTTP_METHODS = ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'HEAD', 'OPTIONS'];
-const REQUEST_TABS = ['Params', 'Headers', 'Body', 'Validation'] as const;
 const BASE_RESPONSE_TABS = ['Body', 'Headers', 'Validation'] as const;
 
 // ==================== Props ====================
 
 interface RequestEditorProps {
   onSendRequest: (tabId: string) => void;
+  /**
+   * Save callback accepting any protocol request (HTTP, WS, or SSE).
+   * The `request` parameter is the full `AnyCollectionRequest` union member
+   * produced by `getCollectionRequest()`.
+   */
   onSaveRequest: (
-    request: CollectionRequest,
+    request: AnyCollectionRequest,
     newCollectionName: string | undefined,
     folderPath?: string[],
     tabId?: string
@@ -116,6 +127,11 @@ const RequestEditor: React.FC<RequestEditorProps> = ({
   const httpMethodSelectId = useId();
   const environmentSelectId = useId();
   const authSelectId = useId();
+
+  // ==================== Realtime hooks ====================
+
+  const { connect: wsConnect, disconnect: wsDisconnect, sendMessage } = useWsConnection();
+  const { connect: sseConnect, disconnect: sseDisconnect } = useSseConnection();
 
   // ==================== Derived State ====================
 
@@ -217,6 +233,10 @@ const RequestEditor: React.FC<RequestEditorProps> = ({
   const RESPONSE_TABS = isError 
       ? (['Error', ...BASE_RESPONSE_TABS] as const)
       : BASE_RESPONSE_TABS;
+
+  // Protocol-aware request tabs and protocol discriminant
+  const protocol = activeTab.protocol ?? 'http';
+  const visibleRequestTabs = getRequestTabsForProtocol(protocol);
 
   return (
     <div className="w-full h-full flex flex-col overflow-hidden">
@@ -352,9 +372,10 @@ const RequestEditor: React.FC<RequestEditorProps> = ({
           </div>
         )}
 
-        {/* Top Bar - Method, URL, Send */}
+        {/* Top Bar - Protocol Selector, Method (HTTP/SSE only), URL, Send / Connection Controls */}
         <div className="px-6 py-4 flex items-center gap-3 flex-shrink-0 border-b border-slate-200 dark:border-slate-700">
-          {/* HTTP Method Dropdown */}
+          {/* HTTP Method Dropdown — hidden for WS (WS has no HTTP verb) */}
+          {protocol !== 'ws' && (
           <div className="*:not-first:mt-2">
             <Select value={method || 'GET'} onValueChange={updateMethod}>
               <SelectTrigger
@@ -376,6 +397,7 @@ const RequestEditor: React.FC<RequestEditorProps> = ({
               </SelectContent>
             </Select>
           </div>
+          )}
 
           {/* URL Input */}
           <StyledInput
@@ -388,30 +410,42 @@ const RequestEditor: React.FC<RequestEditorProps> = ({
             placeholder="Enter request URL..."
           />
 
-          {/* Send Button */}
-          <PrimaryButton
-            onClick={() => onSendRequest(activeTabId)}
-            icon={
-              isRequestProcessing ? (
-                <LoaderCircleIcon className="animate-spin" />
-              ) : (
-                <SendHorizonalIcon />
-              )
-            }
-            colorTheme="main"
-            tooltip="Send"
-            disabled={isRequestProcessing || !Boolean(url?.trim())}
-            className="px-6 py-2"
-          />
+          {/* Send button (HTTP only) or Connection Controls (WS / SSE) */}
+          {protocol === 'http' ? (
+            <PrimaryButton
+              onClick={() => onSendRequest(activeTabId)}
+              icon={
+                isRequestProcessing ? (
+                  <LoaderCircleIcon className="animate-spin" />
+                ) : (
+                  <SendHorizonalIcon />
+                )
+              }
+              colorTheme="main"
+              tooltip="Send"
+              disabled={isRequestProcessing || !Boolean(url?.trim())}
+              className="px-6 py-2"
+            />
+          ) : (
+            <ConnectionControls
+              tabId={activeTabId}
+              onConnect={protocol === 'sse' ? sseConnect : wsConnect}
+              onDisconnect={protocol === 'sse' ? sseDisconnect : wsDisconnect}
+              disabled={!Boolean(url?.trim())}
+            />
+          )}
+
+          {/* Protocol selector — always visible in the toolbar */}
+          <ProtocolSelector />
         </div>
 
         {/* Split View: Request (top half) and Response (bottom half) */}
         <div className="flex-1 min-h-0 flex flex-col">
           {/* Request Section */}
           <div className="flex-1 min-h-0 flex flex-col border-b border-slate-300 dark:border-slate-600">
-            {/* Request Tabs */}
+            {/* Request Tabs — filtered by protocol via getRequestTabsForProtocol */}
             <div className="border-b border-slate-200 flex gap-0 bg-slate-50 px-6 dark:border-slate-700 dark:bg-slate-900 flex-shrink-0">
-              {REQUEST_TABS.map((tab) => (
+              {visibleRequestTabs.map((tab) => (
                 <button
                   key={tab}
                   className={`px-6 py-3 text-sm font-medium focus:outline-none transition-all relative ${
@@ -435,7 +469,13 @@ const RequestEditor: React.FC<RequestEditorProps> = ({
             </div>
           </div>
 
-          {/* Response Section */}
+          {/* Response / Output Section — branches on protocol */}
+          {protocol === 'ws' ? (
+            <WsOutputArea tabId={activeTabId} onSendMessage={sendMessage} />
+          ) : protocol === 'sse' ? (
+            <SseOutputArea tabId={activeTabId} />
+          ) : (
+          /* HTTP response section — unchanged */
           <div className="flex-1 min-h-0 flex flex-col bg-white dark:bg-slate-900">
             {!responseData ? (
               <div className="flex-1 flex items-center justify-center">
@@ -587,8 +627,7 @@ const RequestEditor: React.FC<RequestEditorProps> = ({
                 </div>
               </>
             )}
-          </div>
-        </div>
+          </div>          )} {/* end HTTP response branch */}        </div>
       </div>
 
       {/* Save Wizard Modal */}

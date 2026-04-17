@@ -26,6 +26,7 @@ export type {
     INotificationAdapter,
     IArenaAdapter,
     IClipboardAdapter,
+    IRealtimeAdapter,
     IAdapterEvents,
     HttpRequestConfig,
     HttpResponseResult,
@@ -145,6 +146,10 @@ export type {
     CollectionInfo,
     CollectionItem,
     CollectionRequest,
+    WsCollectionRequest,
+    SseCollectionRequest,
+    AnyCollectionRequest,
+    RequestProtocol,
     CollectionResponse,
     CollectionBody,
     CollectionUrl,
@@ -176,6 +181,30 @@ export type {
 } from './types/collection';
 
 export { isFolder, isRequest, CertType, isCollectionUrl, getRawUrl } from './types/collection';
+
+// Request type guard utilities
+export {
+    isHttpRequest,
+    isWsRequest,
+    isSseRequest,
+    getRequestProtocol,
+} from './utils/requestTypeGuards';
+
+// Realtime state types (FEAT-002) + WS connection types (FEAT-004) + SSE connection types (FEAT-005)
+export type {
+    ConnectionStatus,
+    WsMessage,
+    SseEvent,
+    RealtimeTabState,
+    RealtimeStateByTabId,
+    Unsubscribe,
+    WsConnectionConfig,
+    WsConnectionHandle,
+    SseConnectionConfig,
+    SseConnectionHandle,
+} from './types/realtime';
+
+export { createIdleRealtimeTabState } from './types/realtime';
 
 // Flow types
 export type {
@@ -302,6 +331,10 @@ export {
     createEmptyValidation,
     getBodyMode,
     getTabDisplayName,
+    getRequestTabsForProtocol,
+    getResponseTabsForProtocol,
+    getDefaultResponseSection,
+    getDefaultRequestSection,
 } from './types/tab';
 
 // ============================================================================
@@ -454,6 +487,8 @@ export { useTestSuiteRunner } from './hooks/useTestSuiteRunner';
 export { useFileUpload } from './hooks/useFileUpload';
 export { useArenaStreamManager } from './hooks/useArenaStreamManager';
 export { useConfirmDialog } from './hooks/useConfirmDialog';
+export { useWsConnection } from './hooks/useWsConnection';
+export { useSseConnection } from './hooks/useSseConnection';
 
 export type {
     ConfirmDialogOptions,

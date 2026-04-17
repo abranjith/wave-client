@@ -36,7 +36,8 @@ import {
   type BannerEvent,
   type Flow,
   type TestSuite,
-  type CollectionRequest,
+  type AnyCollectionRequest,
+  type CollectionItem,
 } from '@wave-client/core';
 
 const App: React.FC = () => {
@@ -393,7 +394,7 @@ const App: React.FC = () => {
     }
   };
 
-  const handleSaveRequest = async (request: CollectionRequest, saveToCollectionName: string | undefined, folderPath: string[] = [], tabId?: string) => {
+  const handleSaveRequest = async (request: AnyCollectionRequest, saveToCollectionName: string | undefined, folderPath: string[] = [], tabId?: string) => {
     if (tabId) {
       pendingSaveInfo.current = {
         tabId,
@@ -431,11 +432,11 @@ const App: React.FC = () => {
       return;
     }
 
-    // Wrap the collection request as a CollectionItem
-    const collectionItem: any = {
+    // Wrap the protocol-union request as a CollectionItem
+    const collectionItem: CollectionItem = {
       id: request.id || generateUniqueId(),
       name: request.name,
-      request: request
+      request,
     };
 
     const result = await storage.saveRequestToCollection(collectionFileName, itemPath, collectionItem);

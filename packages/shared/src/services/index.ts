@@ -16,7 +16,7 @@ export { SettingsService, settingsService } from './SettingsService';
 export type { AppSettings } from './SettingsService';
 
 export { EnvironmentService, environmentService } from './EnvironmentService';
-export { CollectionService, collectionService } from './CollectionService';
+export { CollectionService, collectionService, normalizeRequestOnLoad, sanitizeRequestForSave } from './CollectionService';
 export { HistoryService, historyService } from './HistoryService';
 export { CookieService, cookieService } from './CookieService';
 export { StoreService, storeService } from './StoreService';
@@ -37,6 +37,18 @@ export {
     ArenaStorageService,
     arenaStorageService,
 } from './ArenaStorageService';
+
+export {
+    WebSocketService,
+    webSocketService,
+    setWsAuthServiceFactory,
+} from './WebSocketService';
+
+export {
+    SseService,
+    sseService,
+    setSseAuthServiceFactory,
+} from './SseService';
 
 // Auth services
 export * from './auth/index';

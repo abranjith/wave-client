@@ -18,7 +18,10 @@ import {
     testSuiteService,
     fileService,
     arenaStorageService,
+    webSocketService,
+    sseService,
 } from '@wave-client/shared';
+import type { WsConnectionHandle, SseConnectionHandle } from '@wave-client/shared';
 import { securityService } from '../services/SecurityService';
 import type { ArenaService } from '@wave-client/arena';
 
@@ -84,6 +87,16 @@ function base64ToUint8Array(base64: string): Uint8Array {
 export class MessageHandler {
     /** AbortControllers keyed by streamId for in-flight Arena stream requests. */
     private arenaAbortControllers = new Map<string, AbortController>();
+
+    /** Active WebSocket connection handles keyed by connectionId. */
+    private wsHandles = new Map<string, WsConnectionHandle>();
+    /** Unsubscribe callbacks for WS event listeners, keyed by connectionId. */
+    private wsUnsubscribers = new Map<string, Array<() => void>>();
+
+    /** Active SSE connection handles keyed by connectionId. */
+    private sseHandles = new Map<string, SseConnectionHandle>();
+    /** Unsubscribe callbacks for SSE event listeners, keyed by connectionId. */
+    private sseUnsubscribers = new Map<string, Array<() => void>>();
 
     constructor(private panel: vscode.WebviewPanel) {}
 
@@ -304,6 +317,23 @@ export class MessageHandler {
                 break;
             case 'clipboard.writeText':
                 await this.handleClipboardWriteText(message);
+                break;
+            // WebSocket handlers
+            case 'ws.connect':
+                await this.handleWsConnect(message);
+                break;
+            case 'ws.disconnect':
+                await this.handleWsDisconnect(message);
+                break;
+            case 'ws.send':
+                await this.handleWsSend(message);
+                break;
+            // SSE handlers
+            case 'sse.connect':
+                await this.handleSseConnect(message);
+                break;
+            case 'sse.disconnect':
+                await this.handleSseDisconnect(message);
                 break;
             default:
                 if (message.type) {
@@ -1962,6 +1992,208 @@ export class MessageHandler {
         } catch (error: any) {
             this.postMessage({ type: 'clipboard.writeTextResponse', requestId, error: error.message });
         }
+    }
+
+    // ==================== WebSocket Handlers ====================
+
+    /**
+     * Handles a `ws.connect` message from the webview.
+     *
+     * Calls `webSocketService.connect(config)` and registers lifecycle event
+     * listeners that push `ws.status`, `ws.message`, `ws.headers`, and
+     * `ws.error` push events back to the webview (no `requestId`, routed by
+     * `connectionId` on the webview side).
+     *
+     * Unsubscribe functions are stored in `wsUnsubscribers` so they can be
+     * invoked during `dispose()` or when the connection is closed.
+     *
+     * @param message - Webview message containing `config: WsConnectionConfig`.
+     */
+    private async handleWsConnect(message: any): Promise<void> {
+        const config = message.config;
+        if (!config?.id) {
+            console.warn('[MessageHandler] ws.connect received without a valid config.id — ignoring');
+            return;
+        }
+        const connectionId: string = config.id;
+
+        const handle = await webSocketService.connect(config);
+        if (!handle) {
+            // Connection was rejected (invalid URL scheme or connection limit reached)
+            this.postMessage({ type: 'ws.status', connectionId, status: 'error' });
+            this.postMessage({ type: 'ws.error', connectionId, error: 'Connection rejected: invalid URL or connection limit reached' });
+            return;
+        }
+
+        this.wsHandles.set(connectionId, handle);
+
+        const unsubscribers: Array<() => void> = [
+            handle.onStatusChange((status: string) =>
+                this.postMessage({ type: 'ws.status', connectionId, status })
+            ),
+            handle.onMessage((msg: unknown) =>
+                this.postMessage({ type: 'ws.message', connectionId, message: msg })
+            ),
+            handle.onHeaders((headers: Record<string, string>) =>
+                this.postMessage({ type: 'ws.headers', connectionId, headers })
+            ),
+            handle.onError((error: string) =>
+                this.postMessage({ type: 'ws.error', connectionId, error })
+            ),
+        ];
+        this.wsUnsubscribers.set(connectionId, unsubscribers);
+    }
+
+    /**
+     * Handles a `ws.disconnect` message from the webview.
+     *
+     * Awaits `webSocketService.disconnect(connectionId)`, invokes all stored
+     * unsubscribe callbacks for that connection, then replies with a
+     * `ws.disconnectResponse` message carrying the original `requestId`.
+     *
+     * @param message - Webview message containing `connectionId` and `requestId`.
+     */
+    private async handleWsDisconnect(message: any): Promise<void> {
+        const { connectionId, requestId } = message;
+        const result = await webSocketService.disconnect(connectionId);
+        this._cleanupWsHandle(connectionId);
+        this.postMessage({
+            type: 'ws.disconnectResponse',
+            requestId,
+            error: result.isOk ? undefined : result.error,
+        });
+    }
+
+    /**
+     * Handles a `ws.send` message from the webview.
+     *
+     * Forwards the text payload to `webSocketService.sendMessage` and replies
+     * with a `ws.sendResponse` message carrying the original `requestId`.
+     *
+     * @param message - Webview message containing `connectionId`, `message`, and `requestId`.
+     */
+    private async handleWsSend(message: any): Promise<void> {
+        const { connectionId, message: text, requestId } = message;
+        const result = await webSocketService.sendMessage(connectionId, text);
+        this.postMessage({
+            type: 'ws.sendResponse',
+            requestId,
+            error: result.isOk ? undefined : result.error,
+        });
+    }
+
+    /**
+     * Removes a WebSocket handle and invokes its unsubscribe functions.
+     * @param connectionId - The connection to clean up.
+     */
+    private _cleanupWsHandle(connectionId: string): void {
+        const unsubs = this.wsUnsubscribers.get(connectionId);
+        if (unsubs) {
+            unsubs.forEach((fn) => fn());
+            this.wsUnsubscribers.delete(connectionId);
+        }
+        this.wsHandles.delete(connectionId);
+    }
+
+    // ==================== SSE Handlers ====================
+
+    /**
+     * Handles a `sse.connect` message from the webview.
+     *
+     * Calls `sseService.connect(config)` and registers lifecycle event
+     * listeners that push `sse.status`, `sse.event`, `sse.headers`, and
+     * `sse.error` push events back to the webview (no `requestId`, routed by
+     * `connectionId` on the webview side).
+     *
+     * @param message - Webview message containing `config: SseConnectionConfig`.
+     */
+    private async handleSseConnect(message: any): Promise<void> {
+        const config = message.config;
+        if (!config?.id) {
+            console.warn('[MessageHandler] sse.connect received without a valid config.id — ignoring');
+            return;
+        }
+        const connectionId: string = config.id;
+
+        const handle = await sseService.connect(config);
+        if (!handle) {
+            this.postMessage({ type: 'sse.status', connectionId, status: 'error' });
+            this.postMessage({ type: 'sse.error', connectionId, error: 'SSE connection rejected: invalid URL or connection limit reached' });
+            return;
+        }
+
+        this.sseHandles.set(connectionId, handle);
+
+        const unsubscribers: Array<() => void> = [
+            handle.onStatusChange((status: string) =>
+                this.postMessage({ type: 'sse.status', connectionId, status })
+            ),
+            handle.onEvent((event: unknown) =>
+                this.postMessage({ type: 'sse.event', connectionId, event })
+            ),
+            handle.onHeaders((headers: Record<string, string>) =>
+                this.postMessage({ type: 'sse.headers', connectionId, headers })
+            ),
+            handle.onError((error: string) =>
+                this.postMessage({ type: 'sse.error', connectionId, error })
+            ),
+        ];
+        this.sseUnsubscribers.set(connectionId, unsubscribers);
+    }
+
+    /**
+     * Handles a `sse.disconnect` message from the webview.
+     *
+     * Awaits `sseService.disconnect(connectionId)`, cleans up stored
+     * unsubscribe callbacks, and replies with `sse.disconnectResponse`.
+     *
+     * @param message - Webview message containing `connectionId` and `requestId`.
+     */
+    private async handleSseDisconnect(message: any): Promise<void> {
+        const { connectionId, requestId } = message;
+        const result = await sseService.disconnect(connectionId);
+        this._cleanupSseHandle(connectionId);
+        this.postMessage({
+            type: 'sse.disconnectResponse',
+            requestId,
+            error: result.isOk ? undefined : result.error,
+        });
+    }
+
+    /**
+     * Removes an SSE handle and invokes its unsubscribe functions.
+     * @param connectionId - The connection to clean up.
+     */
+    private _cleanupSseHandle(connectionId: string): void {
+        const unsubs = this.sseUnsubscribers.get(connectionId);
+        if (unsubs) {
+            unsubs.forEach((fn) => fn());
+            this.sseUnsubscribers.delete(connectionId);
+        }
+        this.sseHandles.delete(connectionId);
+    }
+
+    // ==================== Lifecycle ====================
+
+    /**
+     * Disposes all active WebSocket and SSE connections managed by this handler.
+     *
+     * Should be called from `extension.ts` when the webview panel is disposed
+     * (`panel.onDidDispose`). This ensures that long-lived connections are cleanly
+     * closed and all event listeners are removed to prevent memory leaks.
+     */
+    public dispose(): void {
+        // Fire-and-forget disconnect for all active WS connections
+        this.wsHandles.forEach((_, id) => {
+            void webSocketService.disconnect(id);
+            this._cleanupWsHandle(id);
+        });
+
+        // Fire-and-forget disconnect for all active SSE connections
+        this.sseHandles.forEach((_, id) => {
+            void sseService.disconnect(id);
+            this._cleanupSseHandle(id);
+        });
     }
 
     // ==================== Helper Methods ====================

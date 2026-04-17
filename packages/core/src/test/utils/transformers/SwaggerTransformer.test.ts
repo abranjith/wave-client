@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { SwaggerTransformer, swaggerTransformer } from '../../../utils/transformers/SwaggerTransformer';
-import type { Collection } from '../../../types/collection';
+import type { Collection, CollectionRequest } from '../../../types/collection';
 
 describe('SwaggerTransformer', () => {
   const transformer = new SwaggerTransformer();
@@ -110,7 +110,7 @@ describe('SwaggerTransformer', () => {
       expect(folder.item).toHaveLength(2);
 
       const getRequestItem = folder.item?.find((entry) => entry.name === 'Get Pet');
-      expect(getRequestItem?.request?.method).toBe('GET');
+      expect((getRequestItem?.request as CollectionRequest | undefined)?.method).toBe('GET');
       expect((getRequestItem?.request?.url as { raw: string }).raw).toContain('https://dev.api.example.com/v1/pets/{{petId}}');
       expect(getRequestItem?.request?.url && typeof getRequestItem.request.url !== 'string' ? getRequestItem.request.url.query?.[0].key : '').toBe('include');
       expect(getRequestItem?.request?.url && typeof getRequestItem.request.url !== 'string' ? getRequestItem.request.url.query?.[0].disabled : false).toBe(true);
@@ -121,8 +121,8 @@ describe('SwaggerTransformer', () => {
       const createRequestItem = folder.item?.find((entry) => entry.name === 'Create Pet');
       const contentTypeHeader = createRequestItem?.request?.header?.find((entry) => entry.key === 'Content-Type');
       expect(contentTypeHeader?.value).toBe('application/json');
-      expect(createRequestItem?.request?.body?.mode).toBe('raw');
-      const createBody = createRequestItem?.request?.body;
+      expect((createRequestItem?.request as CollectionRequest | undefined)?.body?.mode).toBe('raw');
+      const createBody = (createRequestItem?.request as CollectionRequest | undefined)?.body;
       const createBodyRaw = createBody?.mode === 'raw' ? createBody.raw : '';
       expect(createBodyRaw).toContain('name');
     });
@@ -151,7 +151,7 @@ paths:
 
       expect(result.value.info.name).toBe('YAML API');
       expect(result.value.item).toHaveLength(1);
-      expect(result.value.item[0].request?.method).toBe('GET');
+      expect((result.value.item[0].request as CollectionRequest | undefined)?.method).toBe('GET');
     });
 
     it('should transform Swagger 2.0 spec and build base url from host/basePath/schemes', async () => {
@@ -193,10 +193,10 @@ paths:
       }
 
       expect(result.value.item).toHaveLength(1);
-      const request = result.value.item[0].request;
+      const request = result.value.item[0].request as CollectionRequest | undefined;
       expect(request?.method).toBe('POST');
       expect(request && typeof request.url !== 'string' ? request.url.raw : '').toBe('http://api.example.com/v2/users');
-      expect(request?.body?.mode).toBe('raw');
+      expect((request as CollectionRequest | undefined)?.body?.mode).toBe('raw');
     });
 
     it('should resolve inline $refs in request body and parameters', async () => {
@@ -248,9 +248,9 @@ paths:
         return;
       }
 
-      const request = result.value.item[0].request;
+      const request = result.value.item[0].request as CollectionRequest | undefined;
       expect(request && typeof request.url !== 'string' ? request.url.query?.[0].key : '').toBe('pageSize');
-      const requestBody = request?.body;
+      const requestBody = (request as CollectionRequest | undefined)?.body;
       const requestBodyRaw = requestBody?.mode === 'raw' ? requestBody.raw : '';
       expect(requestBodyRaw).toContain('name');
       expect(requestBodyRaw).toContain('age');

@@ -63,3 +63,12 @@ export { default as CertWizard } from './CertWizard';
 
 // Settings
 export { default as SettingsWizard } from './SettingsWizard';
+
+// Realtime / Protocol UI (FEAT-003, FEAT-006)
+export { default as ProtocolSelector } from './ProtocolSelector';
+export { default as ConnectionControls } from './ConnectionControls';
+export { default as WsOutputArea } from './WsOutputArea';
+export { default as WsMessageTimeline } from './WsMessageTimeline';
+export { default as WsMessageComposer } from './WsMessageComposer';
+export { default as SseOutputArea } from './SseOutputArea';
+export { default as SseEventTimeline } from './SseEventTimeline';

@@ -152,12 +152,21 @@ const TabsBar: React.FC<TabsBarProps> = ({ className, onSave }) => {
                                             : "bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700"
                                     )}
                                 >
-                                    {/* Method Badge */}
+                                    {/* Protocol / Method Badge — shows WS/SSE label for non-HTTP protocols,
+                                        or the HTTP method abbreviation for HTTP tabs. */}
                                     <span className={cn(
                                         "text-xs font-bold flex-shrink-0",
-                                        getMethodColor(tab.method)
+                                        tab.protocol === 'ws'
+                                            ? 'text-teal-600 dark:text-teal-400'
+                                            : tab.protocol === 'sse'
+                                                ? 'text-purple-600 dark:text-purple-400'
+                                                : getMethodColor(tab.method)
                                     )}>
-                                        {tab.method?.substring(0, 3) || 'GET'}
+                                        {tab.protocol === 'ws'
+                                            ? 'WS'
+                                            : tab.protocol === 'sse'
+                                                ? 'SSE'
+                                                : tab.method?.substring(0, 3) || 'GET'}
                                     </span>
 
                                     {/* Tab Name */}

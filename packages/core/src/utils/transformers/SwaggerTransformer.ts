@@ -555,7 +555,7 @@ export class SwaggerTransformer extends BaseCollectionTransformer<unknown> {
 
                 pathStr = pathStr.replace(/\{\{([^}]+)\}\}/g, '{$1}');
 
-                const method = (item.request.method || 'get').toLowerCase();
+                const method = ((item.request as CollectionRequest).method || 'get').toLowerCase();
                 
                 if (!paths[pathStr]) {
                     paths[pathStr] = {};

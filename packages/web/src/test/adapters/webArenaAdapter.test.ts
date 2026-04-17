@@ -3,45 +3,52 @@
  * (FEAT-016 / TASK-001 and TASK-002)
  *
  * Verifies:
- *  - Content chunks carry sequential `seq` values starting from 0
- *  - The final done chunk carries the next seq value
- *  - seq resets to 0 for each new stream call
- *  - An immediate heartbeat is emitted after fetch succeeds (before content)
- *  - Periodic heartbeats are emitted via setInterval (every 15 s)
- *  - Heartbeat chunks have `heartbeat: true` and no `seq` field
- *  - The heartbeat interval is cleared on stream completion
- *  - The heartbeat interval is cleared on stream error
+ *  - Chunk events from SSE are forwarded to onChunk subscribers
+ *  - Content chunk seq values are preserved (0,1,2…)
+ *  - Done chunk seq values are preserved
+ *  - Seq resets for each new stream call
+ *  - Heartbeat chunks are forwarded and keep `seq` undefined
+ *  - Complete events resolve onDone
+ *  - Error events resolve onError
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import type { ArenaChatStreamChunk, ArenaChatRequest } from '@wave-client/core';
+import type { ArenaChatStreamChunk, ArenaChatRequest, ArenaChatResponse } from '@wave-client/core';
+import { createAdapterEventEmitter } from '@wave-client/core';
 
 // ============================================================================
 // Helpers — build a fake SSE streaming response
 // ============================================================================
 
-/** Encodes SSE lines into a Uint8Array for the mock ReadableStream. */
-function buildSseChunk(...texts: string[]): Uint8Array {
+/** Encodes a single SSE frame into a Uint8Array. */
+function buildSseEvent(event: 'chunk' | 'complete' | 'error', payload: unknown): Uint8Array {
     const encoder = new TextEncoder();
-    const lines = texts
-        .map((text) => {
-            const payload = JSON.stringify({
-                candidates: [{ content: { parts: [{ text }] } }],
-            });
-            return `data: ${payload}`;
-        })
-        .join('\n');
-    return encoder.encode(lines + '\n');
+    return encoder.encode(`event: ${event}\ndata: ${JSON.stringify(payload)}\n\n`);
 }
 
-/** Builds a final SSE line with usageMetadata. */
-function buildSseFinalChunk(tokenCount: number): Uint8Array {
-    const encoder = new TextEncoder();
-    const payload = JSON.stringify({
-        candidates: [{ content: { parts: [{ text: '' }] } }],
-        usageMetadata: { totalTokenCount: tokenCount },
-    });
-    return encoder.encode(`data: ${payload}\n`);
+/** Builds a chunk-frame payload. */
+function buildChunkChunk(
+    overrides: Partial<ArenaChatStreamChunk>,
+): Uint8Array {
+    const payload: ArenaChatStreamChunk = {
+        messageId: 'msg-1',
+        content: '',
+        done: false,
+        ...overrides,
+    };
+    return buildSseEvent('chunk', payload);
+}
+
+/** Builds a complete-frame payload. */
+function buildCompleteChunk(
+    overrides: Partial<ArenaChatResponse> = {},
+): Uint8Array {
+    const payload: ArenaChatResponse = {
+        messageId: 'msg-1',
+        content: '',
+        ...overrides,
+    };
+    return buildSseEvent('complete', payload);
 }
 
 /**
@@ -82,45 +89,42 @@ const TEST_REQUEST: ArenaChatRequest = {
     },
 };
 
+function makeAdapter(
+    createWebArenaAdapter: typeof import('../../adapters/webArenaAdapter').createWebArenaAdapter,
+) {
+    return createWebArenaAdapter(createAdapterEventEmitter());
+}
+
 // ============================================================================
 // Suite
 // ============================================================================
 
 describe('WebArenaAdapter — seq numbering (TASK-001)', () => {
     let capturedChunks: ArenaChatStreamChunk[];
-    let WebArenaAdapter: typeof import('../../adapters/webArenaAdapter').WebArenaAdapter;
+    let createWebArenaAdapter: typeof import('../../adapters/webArenaAdapter').createWebArenaAdapter;
 
     beforeEach(async () => {
         capturedChunks = [];
-        vi.useFakeTimers();
-
-        // Seed localStorage with a fake API key so the adapter doesn't bail early.
-        localStorage.setItem(
-            PROVIDER_SETTINGS_KEY,
-            JSON.stringify({ gemini: { apiKey: 'test-key' } }),
-        );
 
         // Import inside beforeEach so localStorage is already seeded.
-        ({ WebArenaAdapter } = await import('../../adapters/webArenaAdapter'));
+        ({ createWebArenaAdapter } = await import('../../adapters/webArenaAdapter'));
     });
 
     afterEach(() => {
-        localStorage.clear();
         vi.restoreAllMocks();
-        vi.useRealTimers();
     });
 
     it('01 — content chunks have sequential seq values starting from 0', async () => {
-        // Three SSE lines yield three content chunks (seq 0, 1, 2).
         vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(
             makeMockStreamResponse(
-                buildSseChunk('Hello'),
-                buildSseChunk(' there'),
-                buildSseChunk('!'),
+                buildChunkChunk({ content: 'Hello', seq: 0 }),
+                buildChunkChunk({ content: ' there', seq: 1 }),
+                buildChunkChunk({ content: '!', seq: 2 }),
+                buildCompleteChunk({ content: 'Hello there!' }),
             ),
         );
 
-        const adapter = new WebArenaAdapter();
+        const adapter = makeAdapter(createWebArenaAdapter);
         const handle = adapter.streamMessage(TEST_REQUEST);
         handle.onChunk((chunk) => capturedChunks.push(chunk));
 
@@ -140,13 +144,14 @@ describe('WebArenaAdapter — seq numbering (TASK-001)', () => {
     it('02 — final done chunk carries the next seq value', async () => {
         vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(
             makeMockStreamResponse(
-                buildSseChunk('word1'),
-                buildSseChunk('word2'),
-                buildSseFinalChunk(42),
+                buildChunkChunk({ content: 'word1', seq: 0 }),
+                buildChunkChunk({ content: 'word2', seq: 1 }),
+                buildChunkChunk({ content: '', done: true, seq: 2, tokenCount: 42 }),
+                buildCompleteChunk({ content: 'word1word2', tokenCount: 42 }),
             ),
         );
 
-        const adapter = new WebArenaAdapter();
+        const adapter = makeAdapter(createWebArenaAdapter);
         const handle = adapter.streamMessage(TEST_REQUEST);
         handle.onChunk((chunk) => capturedChunks.push(chunk));
 
@@ -164,10 +169,14 @@ describe('WebArenaAdapter — seq numbering (TASK-001)', () => {
     it('03 — seq resets to 0 for each new stream call', async () => {
         const mockFetch = vi.spyOn(globalThis, 'fetch')
             .mockResolvedValue(
-                makeMockStreamResponse(buildSseChunk('ping')),
+                makeMockStreamResponse(
+                    buildChunkChunk({ content: 'ping', seq: 0 }),
+                    buildChunkChunk({ content: '', done: true, seq: 1 }),
+                    buildCompleteChunk({ content: 'ping' }),
+                ),
             );
 
-        const adapter = new WebArenaAdapter();
+        const adapter = makeAdapter(createWebArenaAdapter);
 
         // First stream
         const run1Chunks: ArenaChatStreamChunk[] = [];
@@ -179,7 +188,13 @@ describe('WebArenaAdapter — seq numbering (TASK-001)', () => {
         });
 
         // Second stream — fresh mock response
-        mockFetch.mockResolvedValue(makeMockStreamResponse(buildSseChunk('pong')));
+        mockFetch.mockResolvedValue(
+            makeMockStreamResponse(
+                buildChunkChunk({ content: 'pong', seq: 0 }),
+                buildChunkChunk({ content: '', done: true, seq: 1 }),
+                buildCompleteChunk({ content: 'pong' }),
+            ),
+        );
         const run2Chunks: ArenaChatStreamChunk[] = [];
         const handle2 = adapter.streamMessage(TEST_REQUEST);
         handle2.onChunk((c) => run2Chunks.push(c));
@@ -199,32 +214,29 @@ describe('WebArenaAdapter — seq numbering (TASK-001)', () => {
 
 describe('WebArenaAdapter — heartbeat emission (TASK-002)', () => {
     let capturedChunks: ArenaChatStreamChunk[];
-    let WebArenaAdapter: typeof import('../../adapters/webArenaAdapter').WebArenaAdapter;
+    let createWebArenaAdapter: typeof import('../../adapters/webArenaAdapter').createWebArenaAdapter;
 
     beforeEach(async () => {
         capturedChunks = [];
-        vi.useFakeTimers();
 
-        localStorage.setItem(
-            PROVIDER_SETTINGS_KEY,
-            JSON.stringify({ gemini: { apiKey: 'test-key' } }),
-        );
-
-        ({ WebArenaAdapter } = await import('../../adapters/webArenaAdapter'));
+        ({ createWebArenaAdapter } = await import('../../adapters/webArenaAdapter'));
     });
 
     afterEach(() => {
-        localStorage.clear();
         vi.restoreAllMocks();
-        vi.useRealTimers();
     });
 
     it('04 — an immediate heartbeat is emitted before any content chunks', async () => {
         vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(
-            makeMockStreamResponse(buildSseChunk('Hello')),
+            makeMockStreamResponse(
+                buildChunkChunk({ heartbeat: true }),
+                buildChunkChunk({ content: 'Hello', seq: 0 }),
+                buildChunkChunk({ done: true, seq: 1 }),
+                buildCompleteChunk({ content: 'Hello' }),
+            ),
         );
 
-        const adapter = new WebArenaAdapter();
+        const adapter = makeAdapter(createWebArenaAdapter);
         const handle = adapter.streamMessage(TEST_REQUEST);
         handle.onChunk((chunk) => capturedChunks.push(chunk));
 
@@ -244,77 +256,41 @@ describe('WebArenaAdapter — heartbeat emission (TASK-002)', () => {
     });
 
     it('05 — periodic heartbeat interval emits heartbeats every 15 s', async () => {
-        // Capture the setInterval callback without scheduling it so we can invoke
-        // it manually while the stream is still active.
-        let capturedHeartbeatCb: (() => void) | undefined;
-        vi.spyOn(globalThis, 'setInterval').mockImplementation(
-            (fn: TimerHandler, delay?: number) => {
-                if (delay === 15_000) {
-                    capturedHeartbeatCb = fn as () => void;
-                }
-                return 0 as unknown as ReturnType<typeof setInterval>;
-            },
-        );
-        vi.spyOn(globalThis, 'clearInterval').mockImplementation(() => {});
-
-        // Controlled stream: emit one chunk, then pause until we resolve.
-        let resolveStream!: () => void;
-        const blocker = new Promise<void>((r) => { resolveStream = r; });
-        let pullCount = 0;
-
-        const pausedStream = new ReadableStream<Uint8Array>({
-            pull(controller) {
-                pullCount++;
-                if (pullCount === 1) {
-                    controller.enqueue(buildSseChunk('hi'));
-                } else {
-                    return blocker.then(() => controller.close());
-                }
-            },
-        });
-
         vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(
-            new Response(pausedStream, { status: 200 }),
+            makeMockStreamResponse(
+                buildChunkChunk({ heartbeat: true }),
+                buildChunkChunk({ heartbeat: true }),
+                buildChunkChunk({ content: 'hi', seq: 0 }),
+                buildChunkChunk({ done: true, seq: 1 }),
+                buildCompleteChunk({ content: 'hi' }),
+            ),
         );
 
-        const adapter = new WebArenaAdapter();
+        const adapter = makeAdapter(createWebArenaAdapter);
         const handle = adapter.streamMessage(TEST_REQUEST);
         handle.onChunk((chunk) => capturedChunks.push(chunk));
 
-        const streamDone = new Promise<void>((resolve, reject) => {
+        await new Promise<void>((resolve, reject) => {
             handle.onDone(() => resolve());
             handle.onError((e) => reject(new Error(e)));
         });
 
-        // Drain the microtask queue until setInterval has been called.
-        // The chain is: fetch() → heartbeat → setInterval → reader.read() × 2 (second blocks).
-        // 20 await steps is sufficient to exhaust all synchronous-async chaining.
-        for (let i = 0; i < 20; i++) {
-            await Promise.resolve();
-        }
-
-        // setInterval must have been called with the 15 s delay by now.
-        expect(capturedHeartbeatCb).toBeDefined();
-
-        // Manually fire the periodic callback while the stream is still paused
-        // (simulates the 15 s timer firing).
-        capturedHeartbeatCb!();
-
         const heartbeats = capturedChunks.filter((c) => c.heartbeat === true);
-        // 1 immediate (on connection) + 1 manually triggered periodic.
+        // At least two heartbeats should be forwarded when present in stream.
         expect(heartbeats.length).toBeGreaterThanOrEqual(2);
-
-        // Close the stream and wait for the done event.
-        resolveStream();
-        await streamDone;
     });
 
     it('06 — heartbeat chunks have heartbeat: true and no seq field', async () => {
         vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(
-            makeMockStreamResponse(buildSseChunk('test')),
+            makeMockStreamResponse(
+                buildChunkChunk({ heartbeat: true }),
+                buildChunkChunk({ content: 'test', seq: 0 }),
+                buildChunkChunk({ done: true, seq: 1 }),
+                buildCompleteChunk({ content: 'test' }),
+            ),
         );
 
-        const adapter = new WebArenaAdapter();
+        const adapter = makeAdapter(createWebArenaAdapter);
         const handle = adapter.streamMessage(TEST_REQUEST);
         handle.onChunk((chunk) => capturedChunks.push(chunk));
 
@@ -333,14 +309,17 @@ describe('WebArenaAdapter — heartbeat emission (TASK-002)', () => {
         }
     });
 
-    it('07 — heartbeat interval is cleared on stream completion', async () => {
-        const clearIntervalSpy = vi.spyOn(globalThis, 'clearInterval');
-
+    it('07 — stream completes successfully when complete event is received', async () => {
         vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(
-            makeMockStreamResponse(buildSseChunk('done')),
+            makeMockStreamResponse(
+                buildChunkChunk({ heartbeat: true }),
+                buildChunkChunk({ content: 'done', seq: 0 }),
+                buildChunkChunk({ done: true, seq: 1 }),
+                buildCompleteChunk({ content: 'done' }),
+            ),
         );
 
-        const adapter = new WebArenaAdapter();
+        const adapter = makeAdapter(createWebArenaAdapter);
         const handle = adapter.streamMessage(TEST_REQUEST);
         handle.onChunk((chunk) => capturedChunks.push(chunk));
 
@@ -349,38 +328,27 @@ describe('WebArenaAdapter — heartbeat emission (TASK-002)', () => {
             handle.onError((e) => reject(new Error(e)));
         });
 
-        expect(clearIntervalSpy).toHaveBeenCalled();
+        expect(capturedChunks.some((c) => c.done === true)).toBe(true);
     });
 
-    it('08 — heartbeat interval is cleared on stream error (fetch failure)', async () => {
-        const clearIntervalSpy = vi.spyOn(globalThis, 'clearInterval');
-
-        // Simulate a successful fetch but a reader that throws on read.
-        let readCount = 0;
-        const errorStream = new ReadableStream<Uint8Array>({
-            pull(controller) {
-                readCount++;
-                if (readCount === 1) {
-                    controller.enqueue(buildSseChunk('first'));
-                } else {
-                    throw new Error('Stream read failure');
-                }
-            },
-        });
-
+    it('08 — stream errors when an SSE error event is received', async () => {
         vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(
-            new Response(errorStream, { status: 200 }),
+            makeMockStreamResponse(
+                buildChunkChunk({ heartbeat: true }),
+                buildSseEvent('error', { message: 'Stream read failure' }),
+            ),
         );
 
-        const adapter = new WebArenaAdapter();
+        const adapter = makeAdapter(createWebArenaAdapter);
         const handle = adapter.streamMessage(TEST_REQUEST);
         handle.onChunk((chunk) => capturedChunks.push(chunk));
 
-        await new Promise<void>((resolve) => {
-            handle.onDone(() => resolve());
-            handle.onError(() => resolve());
+        await new Promise<void>((resolve, reject) => {
+            handle.onDone(() => reject(new Error('Expected onError, got onDone')));
+            handle.onError((error) => {
+                expect(error).toContain('Stream read failure');
+                resolve();
+            });
         });
-
-        expect(clearIntervalSpy).toHaveBeenCalled();
     });
 });

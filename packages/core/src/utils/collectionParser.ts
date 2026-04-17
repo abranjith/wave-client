@@ -5,6 +5,7 @@
  */
 
 import {
+  AnyCollectionRequest,
   Collection,
   CollectionItem,
   CollectionRequest,
@@ -353,16 +354,25 @@ export function getSiblingsAtPath(items: CollectionItem[], folderPath: string[])
 // ============================================================================
 
 /**
- * Extracts a CollectionRequest from a CollectionItem with full metadata.
- * This creates a standalone request that includes the source reference
- * for save operations back to the collection.
+ * Extracts an `AnyCollectionRequest` from a `CollectionItem` with full metadata.
+ *
+ * Creates a standalone request that includes the `sourceRef` for save
+ * operations back to the collection. Protocol-specific fields (e.g.,
+ * `method`, `body`, `validation` for HTTP; nothing extra for WS; `method`
+ * and `body` for SSE) are preserved through the spread.
+ *
+ * @param item - The collection item containing the request.
+ * @param collectionFilename - The owning collection's filename.
+ * @param collectionName - The owning collection's display name.
+ * @param itemPath - The folder path from the collection root to this item.
+ * @returns The extracted request with `sourceRef` attached.
  */
 export function extractRequestFromItem(
   item: CollectionItem,
   collectionFilename: string,
   collectionName: string,
   itemPath: string[]
-): CollectionRequest {
+): AnyCollectionRequest {
   const request = item.request;
   
   if (!request) {
@@ -380,21 +390,30 @@ export function extractRequestFromItem(
       collectionName,
       itemPath,
     },
-  };
+  } as AnyCollectionRequest;
 }
 
 /**
- * Converts a CollectionRequest back to CollectionItem format for saving.
- * Strips runtime-only fields (id, name are kept on the item level).
+ * Converts an `AnyCollectionRequest` back to `CollectionItem` format for saving.
+ *
+ * Strips runtime-only fields (`sourceRef`) — `id` and `name` are promoted to
+ * the item level. All protocol-specific fields (`protocol`, `method`, `body`,
+ * `validation`, `url`, `header`, `query`, `description`, `authId`) are
+ * preserved on the nested `request` payload.
+ *
+ * @param request - The protocol-discriminated request to convert.
+ * @returns A `CollectionItem` ready for persistence.
  */
-export function requestToCollectionItem(request: CollectionRequest): CollectionItem {
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const { id, name, sourceRef, ...requestData } = request;
-  
+export function requestToCollectionItem(request: AnyCollectionRequest): CollectionItem {
+  // Destructure out the fields that live on the CollectionItem level
+  // and the runtime-only sourceRef. The rest forms the persisted request body.
+  // We use a generic spread so that WS/SSE-specific fields are never lost.
+  const { id, name, sourceRef: _sourceRef, ...requestData } = request as AnyCollectionRequest & { sourceRef?: unknown };
+
   return {
     id,
     name,
-    request: requestData as CollectionRequest,
+    request: requestData as AnyCollectionRequest,
   };
 }
 

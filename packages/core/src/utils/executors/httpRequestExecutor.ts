@@ -10,7 +10,7 @@
  */
 
 import type { HttpRequestConfig, HttpResponseResult } from '../../types/adapters';
-import type { CollectionRequest } from '../../types/collection';
+import type { CollectionRequest, AnyCollectionRequest } from '../../types/collection';
 import type { FlowNode, Flow } from '../../types/flow';
 import type {
     IItemExecutor,
@@ -96,7 +96,18 @@ export class HttpRequestExecutor implements IItemExecutor<HttpExecutionInput, Ht
         }
         
         const { item: collectionItem } = found;
-        const request = collectionItem.request!;
+        const anyRequest: AnyCollectionRequest = collectionItem.request!;
+        
+        // HttpRequestExecutor only handles HTTP requests — WS/SSE are handled by their own executors
+        if (anyRequest.protocol === 'ws' || anyRequest.protocol === 'sse') {
+            return this.createErrorResult(
+                executionId,
+                input.referenceId,
+                `Request "${collectionItem.name}" uses protocol "${anyRequest.protocol}" which cannot be run as an HTTP request`,
+                startedAt
+            );
+        }
+        const request = anyRequest as CollectionRequest;
         
         // Build the request configuration
         const buildResult = await this.buildRequestConfig(
@@ -178,7 +189,18 @@ export class HttpRequestExecutor implements IItemExecutor<HttpExecutionInput, Ht
         }
         
         const { item: collectionItem } = found;
-        const request = collectionItem.request!;
+        const anyRequest: AnyCollectionRequest = collectionItem.request!;
+        
+        // HttpRequestExecutor only handles HTTP requests
+        if (anyRequest.protocol === 'ws' || anyRequest.protocol === 'sse') {
+            return this.createErrorResult(
+                executionId,
+                node.requestId,
+                `Request "${collectionItem.name}" uses protocol "${anyRequest.protocol}" which cannot be run as a flow HTTP node`,
+                startedAt
+            );
+        }
+        const request = anyRequest as CollectionRequest;
         
         // Get dynamic env vars from flow context
         let dynamicEnvVars: Record<string, string> = {};

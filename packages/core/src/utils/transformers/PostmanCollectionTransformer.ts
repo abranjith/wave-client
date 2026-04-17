@@ -402,7 +402,7 @@ export class PostmanCollectionTransformer extends BaseCollectionTransformer<Post
 
         // If it's a request
         if (item.request) {
-            postmanItem.request = this.transformRequestToPostman(item.request);
+            postmanItem.request = this.transformRequestToPostman(item.request as CollectionRequest);
         }
 
         // Transform responses

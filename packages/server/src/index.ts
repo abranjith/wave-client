@@ -24,6 +24,8 @@ import { registerTestSuiteRoutes } from './routes/test-suites.js';
 import { registerWebSocketRoutes } from './routes/websocket.js';
 import { registerFileRoutes } from './routes/files.js';
 import { registerArenaRoutes } from './routes/arena.js';
+import { registerRealtimeWsRoutes } from './routes/realtime-ws.js';
+import { registerRealtimeSseRoutes } from './routes/realtime-sse.js';
 import { initializeServices } from './services/init.js';
 
 //TODO: Make PORT and HOST configurable via environment variables or config file
@@ -66,6 +68,8 @@ async function main() {
     await registerFlowRoutes(fastify);
     await registerTestSuiteRoutes(fastify);
     await registerWebSocketRoutes(fastify);
+    await registerRealtimeWsRoutes(fastify);
+    await registerRealtimeSseRoutes(fastify);
     await registerFileRoutes(fastify);
     await registerArenaRoutes(fastify);
 
@@ -75,6 +79,7 @@ async function main() {
         console.log(`\n🌊 Wave Client Server running at http://${HOST}:${PORT}`);
         console.log(`   Health check: http://${HOST}:${PORT}/health`);
         console.log(`   WebSocket: ws://${HOST}:${PORT}/ws\n`);
+        console.log(`   Realtime APIs: /api/ws/* and /api/sse/*\n`);
     } catch (err) {
         fastify.log.error(err);
         process.exit(1);

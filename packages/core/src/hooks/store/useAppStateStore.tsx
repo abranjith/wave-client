@@ -13,6 +13,7 @@ import createValidationRulesSlice from "./createValidationRulesSlice"
 import createFlowsSlice from "./createFlowsSlice"
 import createTestSuitesSlice from "./createTestSuitesSlice"
 import createArenaSlice from "./createArenaSlice"
+import createRealtimeSlice from "./createRealtimeSlice"
 
 // Combined store type that includes all slices
 type AppStateStore = 
@@ -29,7 +30,8 @@ type AppStateStore =
     ReturnType<typeof createValidationRulesSlice> &
     ReturnType<typeof createFlowsSlice> &
     ReturnType<typeof createTestSuitesSlice> &
-    ReturnType<typeof createArenaSlice>
+    ReturnType<typeof createArenaSlice> &
+    ReturnType<typeof createRealtimeSlice>
 
 // Global App state management store
 const useAppStateStore = create<AppStateStore>()((...args) => ({
@@ -47,6 +49,7 @@ const useAppStateStore = create<AppStateStore>()((...args) => ({
     ...createFlowsSlice(...args),
     ...createTestSuitesSlice(...args),
     ...createArenaSlice(...args),
+    ...createRealtimeSlice(...args),
 }))
 
 // Force update

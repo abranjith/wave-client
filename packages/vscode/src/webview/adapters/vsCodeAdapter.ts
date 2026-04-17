@@ -30,6 +30,7 @@ import {
     type INotificationAdapter,
     type IArenaAdapter,
     type IClipboardAdapter,
+    type IRealtimeAdapter,
     type IAdapterEvents,
     type HttpRequestConfig,
     type HttpResponseResult,
@@ -45,6 +46,13 @@ import {
     type Flow,
     type TestSuite,
     type CollectionRequest,
+    type WsConnectionConfig,
+    type WsConnectionHandle,
+    type SseConnectionConfig,
+    type SseConnectionHandle,
+    type WsMessage,
+    type SseEvent,
+    type ConnectionStatus,
 } from '@wave-client/core';
 
 import { createVSCodeArenaAdapter } from './vsCodeArenaAdapter';
@@ -69,6 +77,127 @@ interface VSCodeAPI {
     postMessage(message: unknown): void;
     getState(): unknown;
     setState(state: unknown): void;
+}
+
+// ============================================================================
+// Realtime Handle Interfaces (internal — not exported)
+// ============================================================================
+
+/**
+ * Internal extension of `WsConnectionHandle` that exposes dispatch methods
+ * used by the push-event router in `handleMessage` to forward extension-host
+ * events to registered webview listeners.
+ */
+interface WsVSCodeHandle extends WsConnectionHandle {
+    dispatchMessage(msg: WsMessage): void;
+    dispatchStatus(status: ConnectionStatus): void;
+    dispatchError(error: string): void;
+    dispatchHeaders(headers: Record<string, string>): void;
+}
+
+/**
+ * Internal extension of `SseConnectionHandle` that exposes dispatch methods
+ * used by the push-event router in `handleMessage`.
+ */
+interface SseVSCodeHandle extends SseConnectionHandle {
+    dispatchEvent(event: SseEvent): void;
+    dispatchStatus(status: ConnectionStatus): void;
+    dispatchError(error: string): void;
+    dispatchHeaders(headers: Record<string, string>): void;
+}
+
+/**
+ * Creates an in-memory WS handle for the webview side.
+ *
+ * Each `on*` registration stores the callback in a `Set` and returns an
+ * `Unsubscribe` that removes it. Each `dispatch*` method invokes all
+ * callbacks currently in the corresponding set.
+ *
+ * @param connectionId - Must match `WsConnectionConfig.id`.
+ */
+function createWsVSCodeHandle(connectionId: string): WsVSCodeHandle {
+    const messageListeners = new Set<(msg: WsMessage) => void>();
+    const statusListeners = new Set<(status: ConnectionStatus) => void>();
+    const errorListeners = new Set<(error: string) => void>();
+    const headerListeners = new Set<(headers: Record<string, string>) => void>();
+
+    return {
+        connectionId,
+        onMessage(cb) {
+            messageListeners.add(cb);
+            return () => messageListeners.delete(cb);
+        },
+        onStatusChange(cb) {
+            statusListeners.add(cb);
+            return () => statusListeners.delete(cb);
+        },
+        onError(cb) {
+            errorListeners.add(cb);
+            return () => errorListeners.delete(cb);
+        },
+        onHeaders(cb) {
+            headerListeners.add(cb);
+            return () => headerListeners.delete(cb);
+        },
+        dispatchMessage(msg) {
+            messageListeners.forEach((cb) => cb(msg));
+        },
+        dispatchStatus(status) {
+            statusListeners.forEach((cb) => cb(status));
+        },
+        dispatchError(error) {
+            errorListeners.forEach((cb) => cb(error));
+        },
+        dispatchHeaders(headers) {
+            headerListeners.forEach((cb) => cb(headers));
+        },
+    };
+}
+
+/**
+ * Creates an in-memory SSE handle for the webview side.
+ *
+ * Mirrors the `createWsVSCodeHandle` pattern for SSE-specific event callbacks.
+ *
+ * @param connectionId - Must match `SseConnectionConfig.id`.
+ */
+function createSseVSCodeHandle(connectionId: string): SseVSCodeHandle {
+    const eventListeners = new Set<(event: SseEvent) => void>();
+    const statusListeners = new Set<(status: ConnectionStatus) => void>();
+    const errorListeners = new Set<(error: string) => void>();
+    const headerListeners = new Set<(headers: Record<string, string>) => void>();
+
+    return {
+        connectionId,
+        onEvent(cb) {
+            eventListeners.add(cb);
+            return () => eventListeners.delete(cb);
+        },
+        onStatusChange(cb) {
+            statusListeners.add(cb);
+            return () => statusListeners.delete(cb);
+        },
+        onError(cb) {
+            errorListeners.add(cb);
+            return () => errorListeners.delete(cb);
+        },
+        onHeaders(cb) {
+            headerListeners.add(cb);
+            return () => headerListeners.delete(cb);
+        },
+        dispatchEvent(event) {
+            eventListeners.forEach((cb) => cb(event));
+        },
+        dispatchStatus(status) {
+            statusListeners.forEach((cb) => cb(status));
+        },
+        dispatchError(error) {
+            errorListeners.forEach((cb) => cb(error));
+        },
+        dispatchHeaders(headers) {
+            headerListeners.forEach((cb) => cb(headers));
+        },
+    };
 }
 
 // ============================================================================
@@ -812,6 +941,144 @@ function createVSCodeClipboardAdapter(
 }
 
 // ============================================================================
+// VS Code Realtime Adapter
+// ============================================================================
+
+/**
+ * Creates the VS Code realtime adapter that implements `IRealtimeAdapter`.
+ *
+ * The adapter is purely a postMessage bridge: it creates in-memory handles
+ * (via `createWsVSCodeHandle` / `createSseVSCodeHandle`), stores them in the
+ * shared `wsHandles` / `sseHandles` registries, and sends `ws.*` / `sse.*`
+ * commands to the extension host via `vsCodeApi.postMessage`.
+ *
+ * Push events arriving from the extension host (delivered by `handleMessage`
+ * in the `createVSCodeAdapter` closure) are routed back to the correct handle
+ * via the `dispatch*` methods — see TASK-005 routing code.
+ *
+ * @param wsHandles - Shared registry of active WS handles (keyed by connectionId).
+ * @param sseHandles - Shared registry of active SSE handles (keyed by connectionId).
+ * @param vsCodeApi - The VS Code webview API for sending postMessages.
+ * @param pendingRequests - Shared map for request/response correlation.
+ * @param defaultTimeout - Timeout in ms for `sendAndWait` operations.
+ */
+function createVSCodeRealtimeAdapter(
+    wsHandles: Map<string, WsVSCodeHandle>,
+    sseHandles: Map<string, SseVSCodeHandle>,
+    vsCodeApi: VSCodeAPI,
+    pendingRequests: Map<string, PendingRequest<unknown>>,
+    defaultTimeout: number
+): IRealtimeAdapter {
+    /**
+     * Sends a realtime command and waits for the extension host's response
+     * using requestId correlation. Returns `Result<T, string>`.
+     *
+     * `responseDataMap` is empty for all realtime operations because they are
+     * void (the host replies with an error field or nothing at all).
+     */
+    function sendAndWait<T>(
+        type: string,
+        data?: Record<string, unknown>
+    ): Promise<Result<T, string>> {
+        return new Promise((resolve) => {
+            const requestId = generateRequestId();
+
+            const timeout = setTimeout(() => {
+                pendingRequests.delete(requestId);
+                resolve(err(`Request timed out: ${type}`));
+            }, defaultTimeout);
+
+            const responseDataMap: Record<string, string> = {
+                'ws.disconnect': '',    // void — no data field
+                'ws.send': '',          // void — no data field
+                'sse.disconnect': '',   // void — no data field
+            };
+
+            pendingRequests.set(requestId, {
+                resolve: (value) => {
+                    const response = value as any;
+                    if (response && response.error) {
+                        resolve(err(response.error as string));
+                    } else {
+                        const dataField = responseDataMap[type];
+                        const responseData = dataField ? response[dataField] : undefined;
+                        resolve(ok(responseData as T));
+                    }
+                },
+                reject: (error) => resolve(err(error.message)),
+                timeout,
+            });
+
+            vsCodeApi.postMessage({ type, requestId, ...data });
+        });
+    }
+
+    return {
+        /**
+         * Opens a WebSocket connection.
+         *
+         * Creates a local `WsVSCodeHandle`, registers it in `wsHandles`, and
+         * sends `ws.connect` to the extension host. The handle is returned
+         * immediately; callers register callbacks on it to receive push events
+         * that the extension host will forward once the real socket is open.
+         */
+        connectWebSocket(config: WsConnectionConfig): WsConnectionHandle {
+            const handle = createWsVSCodeHandle(config.id);
+            wsHandles.set(config.id, handle);
+            vsCodeApi.postMessage({ type: 'ws.connect', config });
+            return handle;
+        },
+
+        /**
+         * Closes the WebSocket connection identified by `connectionId`.
+         *
+         * Sends `ws.disconnect` and awaits `ws.disconnectResponse`. The handle
+         * is removed from the registry after the host responds.
+         */
+        async disconnectWebSocket(connectionId: string): Promise<Result<void, string>> {
+            const result = await sendAndWait<void>('ws.disconnect', { connectionId });
+            wsHandles.delete(connectionId);
+            return result;
+        },
+
+        /**
+         * Sends a text message over an active WebSocket connection.
+         *
+         * Sends `ws.send` and awaits `ws.sendResponse` from the extension host.
+         */
+        async sendWebSocketMessage(connectionId: string, message: string): Promise<Result<void, string>> {
+            return sendAndWait<void>('ws.send', { connectionId, message });
+        },
+
+        /**
+         * Opens a Server-Sent Events connection.
+         *
+         * Creates a local `SseVSCodeHandle`, registers it in `sseHandles`, and
+         * sends `sse.connect` to the extension host. The handle is returned
+         * immediately; callers register callbacks on it to receive push events.
+         */
+        connectSse(config: SseConnectionConfig): SseConnectionHandle {
+            const handle = createSseVSCodeHandle(config.id);
+            sseHandles.set(config.id, handle);
+            vsCodeApi.postMessage({ type: 'sse.connect', config });
+            return handle;
+        },
+
+        /**
+         * Closes the SSE stream identified by `connectionId`.
+         *
+         * Sends `sse.disconnect` and awaits `sse.disconnectResponse`. The handle
+         * is removed from the registry after the host responds.
+         */
+        async disconnectSse(connectionId: string): Promise<Result<void, string>> {
+            const result = await sendAndWait<void>('sse.disconnect', { connectionId });
+            sseHandles.delete(connectionId);
+            return result;
+        },
+    };
+}
+
+// ============================================================================
 // Create VS Code Adapter Factory
 // ============================================================================
 
@@ -848,6 +1115,11 @@ export function createVSCodeAdapter(
     // Create event emitter for push notifications
     const events: IAdapterEvents = createAdapterEventEmitter();
 
+    // Realtime handle registries — shared between the realtime adapter and the push-event router.
+    // These maps live in the createVSCodeAdapter closure so both can access them by reference.
+    const wsHandles = new Map<string, WsVSCodeHandle>();
+    const sseHandles = new Map<string, SseVSCodeHandle>();
+
     // Create adapters
     const storage = createVSCodeStorageAdapter(vsCodeApi, pendingRequests, defaultTimeout);
     const http = createVSCodeHttpAdapter(vsCodeApi, pendingRequests, defaultTimeout);
@@ -858,6 +1130,7 @@ export function createVSCodeAdapter(
     const clipboard = createVSCodeClipboardAdapter(vsCodeApi, pendingRequests, defaultTimeout);
     const { adapter: arena, handleStreamMessage: arenaHandleStreamMessage } =
         createVSCodeArenaAdapter(vsCodeApi, pendingRequests, events, defaultTimeout);
+    const realtime = createVSCodeRealtimeAdapter(wsHandles, sseHandles, vsCodeApi, pendingRequests, defaultTimeout);
 
     /**
      * Message handler for both request/response and push events.
@@ -894,6 +1167,53 @@ export function createVSCodeAdapter(
 
         // 3. Handle push events (no requestId, no streamId)
         switch (message.type) {
+            // ── WebSocket push events ────────────────────────────────────────
+            // These are routed by connectionId to the correct WsVSCodeHandle.
+            // A missing handle (e.g., stale event after disconnect) is silently
+            // ignored via optional chaining — no error is thrown.
+            case 'ws.message': {
+                const handle = wsHandles.get(message.connectionId);
+                handle?.dispatchMessage(message.message as WsMessage);
+                break;
+            }
+            case 'ws.status': {
+                const handle = wsHandles.get(message.connectionId);
+                handle?.dispatchStatus(message.status as ConnectionStatus);
+                break;
+            }
+            case 'ws.headers': {
+                const handle = wsHandles.get(message.connectionId);
+                handle?.dispatchHeaders(message.headers as Record<string, string>);
+                break;
+            }
+            case 'ws.error': {
+                const handle = wsHandles.get(message.connectionId);
+                handle?.dispatchError(message.error as string);
+                break;
+            }
+            // ── SSE push events ──────────────────────────────────────────────
+            // Same routing strategy as WS: lookup by connectionId, no-op on miss.
+            case 'sse.event': {
+                const handle = sseHandles.get(message.connectionId);
+                handle?.dispatchEvent(message.event as SseEvent);
+                break;
+            }
+            case 'sse.status': {
+                const handle = sseHandles.get(message.connectionId);
+                handle?.dispatchStatus(message.status as ConnectionStatus);
+                break;
+            }
+            case 'sse.headers': {
+                const handle = sseHandles.get(message.connectionId);
+                handle?.dispatchHeaders(message.headers as Record<string, string>);
+                break;
+            }
+            case 'sse.error': {
+                const handle = sseHandles.get(message.connectionId);
+                handle?.dispatchError(message.error as string);
+                break;
+            }
+
             // Banner/notification events
             case 'bannerSuccess':
                 events.emit('banner', { type: 'success', message: message.message, link: message.link, timeoutSeconds: message.timeoutSeconds });
@@ -954,6 +1274,13 @@ export function createVSCodeAdapter(
             pending.reject(new Error('Adapter disposed'));
         });
         pendingRequests.clear();
+
+        // Fire-and-forget disconnect for all active realtime connections.
+        // Handles are cleared so no stale push events are routed after disposal.
+        wsHandles.forEach((_, id) => { void realtime.disconnectWebSocket(id); });
+        sseHandles.forEach((_, id) => { void realtime.disconnectSse(id); });
+        wsHandles.clear();
+        sseHandles.clear();
     };
 
     const adapter: IPlatformAdapter = {
@@ -966,6 +1293,7 @@ export function createVSCodeAdapter(
         notification,
         arena,
         clipboard,
+        realtime,
         events,
 
         initialize: async () => {

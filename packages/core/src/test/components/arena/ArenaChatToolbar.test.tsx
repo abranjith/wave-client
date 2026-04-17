@@ -9,9 +9,11 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import React from 'react';
 import { ArenaChatToolbar } from '../../../components/arena/ArenaChatToolbar';
+import { AdapterProvider } from '../../../hooks/useAdapter';
 import type { ArenaChatToolbarProps } from '../../../components/arena/ArenaChatToolbar';
 import { getDefaultProviderSettings, ARENA_AGENT_IDS } from '../../../config/arenaConfig';
 import { DEFAULT_ARENA_SETTINGS } from '../../../types/arena';
+import { createMockAdapter } from '../../mocks/mockAdapter';
 
 // ============================================================================
 // Fixtures
@@ -33,23 +35,28 @@ beforeEach(() => {
   vi.clearAllMocks();
 });
 
+function renderToolbar(overrides: Partial<ArenaChatToolbarProps> = {}) {
+  const adapter = createMockAdapter().adapter;
+  return render(
+    <AdapterProvider adapter={adapter}>
+      <ArenaChatToolbar {...defaultProps} {...overrides} />
+    </AdapterProvider>,
+  );
+}
+
 // ============================================================================
 // Tests
 // ============================================================================
 
 describe('ArenaChatToolbar (FEAT-015)', () => {
   it('does not render a References button', () => {
-    render(<ArenaChatToolbar {...defaultProps} />);
+    renderToolbar();
     expect(screen.queryByTitle('Manage references')).toBeNull();
     expect(screen.queryByText('References')).toBeNull();
   });
 
   it('does not render MetadataSection stats (messages / tokens / duration)', () => {
-    render(
-      <ArenaChatToolbar
-        {...defaultProps}
-      />,
-    );
+    renderToolbar();
 
     // These stat labels/icons were part of MetadataSection — should be gone
     expect(screen.queryByTitle('Messages')).toBeNull();
@@ -58,43 +65,43 @@ describe('ArenaChatToolbar (FEAT-015)', () => {
   });
 
   it('renders the back button', () => {
-    render(<ArenaChatToolbar {...defaultProps} />);
+    renderToolbar();
     expect(screen.getByLabelText('Back to agents')).toBeInTheDocument();
   });
 
   it('calls onBack when back button is clicked', () => {
     const onBack = vi.fn();
-    render(<ArenaChatToolbar {...defaultProps} onBack={onBack} />);
+    renderToolbar({ onBack });
     fireEvent.click(screen.getByLabelText('Back to agents'));
     expect(onBack).toHaveBeenCalledOnce();
   });
 
   it('renders the agent name for the current agent', () => {
-    render(<ArenaChatToolbar {...defaultProps} agentId={ARENA_AGENT_IDS.WAVE_CLIENT} />);
+    renderToolbar({ agentId: ARENA_AGENT_IDS.WAVE_CLIENT });
     expect(screen.getByText('Wave Client')).toBeInTheDocument();
   });
 
   it('renders the context panel toggle button', () => {
-    render(<ArenaChatToolbar {...defaultProps} />);
+    renderToolbar();
     expect(screen.getByTitle('Toggle context panel')).toBeInTheDocument();
   });
 
   it('calls onToggleRightPane when context panel toggle is clicked', () => {
     const onToggle = vi.fn();
-    render(<ArenaChatToolbar {...defaultProps} onToggleRightPane={onToggle} />);
+    renderToolbar({ onToggleRightPane: onToggle });
     fireEvent.click(screen.getByTitle('Toggle context panel'));
     expect(onToggle).toHaveBeenCalledOnce();
   });
 
   it('renders provider and model in the dropdown button', () => {
-    render(<ArenaChatToolbar {...defaultProps} />);
+    renderToolbar();
     // Provider label and model are in separate spans
     expect(screen.getByText('Google Gemini')).toBeInTheDocument();
     expect(screen.getByText('gemini-2.0-flash')).toBeInTheDocument();
   });
 
   it('opens provider popover when provider button is clicked', () => {
-    render(<ArenaChatToolbar {...defaultProps} />);
+    renderToolbar();
     // Provider & Model is shown as a button; clicking it opens the popover
     const modelText = screen.getByText(/gemini-2\.0-flash/i);
     fireEvent.click(modelText.closest('button')!);
@@ -104,13 +111,7 @@ describe('ArenaChatToolbar (FEAT-015)', () => {
 
   it('calls onEnableStreamingChange when the streaming toggle is clicked', () => {
     const onToggle = vi.fn();
-    render(
-      <ArenaChatToolbar
-        {...defaultProps}
-        enableStreaming={true}
-        onEnableStreamingChange={onToggle}
-      />,
-    );
+    renderToolbar({ enableStreaming: true, onEnableStreamingChange: onToggle });
 
     const toggleBtn = screen.getByTitle('Streaming enabled');
     fireEvent.click(toggleBtn);
@@ -118,7 +119,7 @@ describe('ArenaChatToolbar (FEAT-015)', () => {
   });
 
   it('shows streaming disabled state when enableStreaming is false', () => {
-    render(<ArenaChatToolbar {...defaultProps} enableStreaming={false} />);
+    renderToolbar({ enableStreaming: false });
     expect(screen.getByTitle('Streaming disabled')).toBeInTheDocument();
   });
 });

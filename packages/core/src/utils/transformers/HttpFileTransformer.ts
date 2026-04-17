@@ -337,18 +337,19 @@ export class HttpFileTransformer extends BaseCollectionTransformer<string> {
                 lines.push('');
                 this.convertItemsToHttp(item.item, lines, depth + 1);
             } else if (item.request) {
-                // Request
+                // Request (HTTP-only format; WS/SSE requests fall back to GET with URL only)
+                const req = item.request as CollectionRequest;
                 lines.push(`### ${item.name}`);
                 
-                const url = typeof item.request.url === 'string' 
-                    ? item.request.url 
-                    : item.request.url?.raw || '';
+                const url = typeof req.url === 'string' 
+                    ? req.url 
+                    : req.url?.raw || '';
                 
-                lines.push(`${item.request.method || 'GET'} ${url}`);
+                lines.push(`${req.method || 'GET'} ${url}`);
 
                 // Add headers
-                if (item.request.header) {
-                    for (const header of item.request.header) {
+                if (req.header) {
+                    for (const header of req.header) {
                         if (!header.disabled) {
                             lines.push(`${header.key}: ${header.value}`);
                         }
@@ -356,9 +357,9 @@ export class HttpFileTransformer extends BaseCollectionTransformer<string> {
                 }
 
                 // Add body
-                if (item.request.body?.mode === 'raw' && item.request.body.raw) {
+                if (req.body?.mode === 'raw' && req.body.raw) {
                     lines.push('');
-                    lines.push(item.request.body.raw);
+                    lines.push(req.body.raw);
                 }
 
                 lines.push('');

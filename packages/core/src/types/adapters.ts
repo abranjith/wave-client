@@ -41,6 +41,12 @@ import type {
 import type { ArenaReference } from '../config/arenaConfig';
 import type { ArenaProviderSettingsMap } from '../config/arenaConfig';
 import type { DynamicModelInfo } from '../config/arenaConfig';
+import type {
+    WsConnectionConfig,
+    WsConnectionHandle,
+    SseConnectionConfig,
+    SseConnectionHandle,
+} from './realtime';
 
 // ============================================================================
 // Common Types
@@ -543,6 +549,107 @@ export interface IClipboardAdapter {
 }
 
 // ============================================================================
+// Realtime Adapter Interface
+// ============================================================================
+
+/**
+ * Adapter interface for managing long-lived WebSocket and SSE connections.
+ *
+ * This interface is optional on `IPlatformAdapter` — platforms that have not yet
+ * implemented realtime connectivity (e.g., before FEAT-008/009 land) may omit
+ * it without breaking TypeScript. Components and hooks that require realtime
+ * must guard against `adapter.realtime` being `undefined`.
+ *
+ * **WebSocket** connections are established synchronously — `connectWebSocket`
+ * returns a `WsConnectionHandle` immediately. Auth resolution and the actual
+ * network handshake happen inside the adapter; callers learn about status
+ * changes, messages, headers, and errors via the handle's event callbacks.
+ *
+ * **SSE** connections follow the same callback-based handle model.
+ *
+ * @example
+ * ```ts
+ * const handle = adapter.realtime.connectWebSocket(config);
+ * const unsubStatus = handle.onStatusChange(status => updateStore(status));
+ * const unsubMsg    = handle.onMessage(msg => appendMessage(msg));
+ * // ... later:
+ * unsubStatus();
+ * unsubMsg();
+ * await adapter.realtime.disconnectWebSocket(handle.connectionId);
+ * ```
+ */
+export interface IRealtimeAdapter {
+    // ── WebSocket ────────────────────────────────────────────────────────────
+
+    /**
+     * Opens a WebSocket connection described by `config` and returns an
+     * event-driven handle immediately. The connection is established
+     * asynchronously; callers register callbacks on the handle to receive
+     * status changes, messages, headers, and errors.
+     *
+     * The URL in `config` must use the `ws:` or `wss:` scheme — the
+     * implementation must reject other schemes before any network I/O.
+     *
+     * @param config - Connection parameters (URL, headers, auth, query params).
+     * @returns A `WsConnectionHandle` whose `connectionId` matches `config.id`.
+     *
+     * @example
+     * ```ts
+     * const handle = adapter.realtime.connectWebSocket({
+     *   id: crypto.randomUUID(),
+     *   url: 'wss://api.example.com/ws',
+     *   headers: { 'x-client': 'wave' },
+     * });
+     * const unsub = handle.onMessage(msg => console.log(msg.content));
+     * // later: unsub(); await adapter.realtime.disconnectWebSocket(handle.connectionId);
+     * ```
+     */
+    connectWebSocket(config: WsConnectionConfig): WsConnectionHandle;
+
+    /**
+     * Gracefully closes the active WebSocket connection identified by
+     * `connectionId`. Resolves when the close handshake completes or the
+     * connection is already gone.
+     *
+     * @param connectionId - The `connectionId` from the originating `WsConnectionHandle`.
+     * @returns `ok(undefined)` on success; `err(message)` if the disconnect fails.
+     */
+    disconnectWebSocket(connectionId: string): Promise<Result<void, string>>;
+
+    /**
+     * Sends a text message over the active WebSocket connection identified by
+     * `connectionId`. The sent message also appears in the message timeline
+     * (echoed by the service with `direction: 'sent'`).
+     *
+     * @param connectionId - The `connectionId` from the originating `WsConnectionHandle`.
+     * @param message - The UTF-8 text payload to send.
+     * @returns `ok(undefined)` on success; `err(message)` if the send fails.
+     */
+    sendWebSocketMessage(connectionId: string, message: string): Promise<Result<void, string>>;
+
+    // ── SSE ──────────────────────────────────────────────────────────────────
+
+    /**
+     * Opens a Server-Sent Events connection described by `config` and returns
+     * an event-driven handle immediately. Supports GET and POST-based SSE
+     * endpoints (controlled by `config.method`). Status changes, events,
+     * headers, and errors are delivered via the handle's callbacks.
+     *
+     * @param config - Connection parameters (method, URL, headers, auth, body).
+     * @returns A `SseConnectionHandle` whose `connectionId` matches `config.id`.
+     */
+    connectSse(config: SseConnectionConfig): SseConnectionHandle;
+
+    /**
+     * Closes the active SSE stream identified by `connectionId`.
+     *
+     * @param connectionId - The `connectionId` from the originating `SseConnectionHandle`.
+     * @returns `ok(undefined)` on success; `err(message)` if the disconnect fails.
+     */
+    disconnectSse(connectionId: string): Promise<Result<void, string>>;
+}
+
+// ============================================================================
 // Combined Platform Adapter Interface
 // ============================================================================
 
@@ -561,6 +668,13 @@ export interface IPlatformAdapter {
 
     /** Platform clipboard adapter — routes read/write through the active platform. */
     clipboard: IClipboardAdapter;
+
+    /**
+     * Optional realtime adapter for WebSocket and SSE connections.
+     * Absent until FEAT-008 (VS Code) and FEAT-009 (Web) implement it.
+     * Components and hooks must guard against this being `undefined`.
+     */
+    realtime?: IRealtimeAdapter;
 
     /**
      * Event emitter for push notifications from the platform.

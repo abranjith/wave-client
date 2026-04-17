@@ -124,6 +124,11 @@ async function createWebviewPanel(context: vscode.ExtensionContext): Promise<vsc
 	}
 	messageQueue.length = 0;
 
+	// Dispose all active WS/SSE connections when the panel is closed.
+	panel.onDidDispose(() => {
+		messageHandler?.dispose();
+	}, undefined, context.subscriptions);
+
 	return panel;
 }
 

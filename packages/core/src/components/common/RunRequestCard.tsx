@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { ChevronDownIcon, ChevronRightIcon, LoaderCircle, CheckCircle2, XCircle, Circle } from 'lucide-react';
-import { CollectionRequest } from '../../types/collection';
+import { AnyCollectionRequest } from '../../types/collection';
+import { isWsRequest } from '../../utils/requestTypeGuards';
 import { ValidationResult } from '../../types/validation';
 import { getHttpMethodColor } from '../../utils/common';
 import { Checkbox } from '../ui/checkbox';
@@ -15,7 +16,7 @@ export interface RunRequestData {
   name: string;
   method: string;
   url: string;
-  request: CollectionRequest;
+  request: AnyCollectionRequest;
   folderPath: string[];
   // Run state
   runStatus: RunStatus;
@@ -164,7 +165,7 @@ const CardTabContent: React.FC<CardTabContentProps> = ({ activeTab, data }) => {
     }
 
     case 'Request Body': {
-      const body = data.request.body;
+      const body = isWsRequest(data.request) ? undefined : data.request.body;
       if (!body || body.mode === 'none') {
         return <div className="text-slate-500 text-sm italic">No body</div>;
       }

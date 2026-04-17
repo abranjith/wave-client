@@ -15,7 +15,9 @@
     "dev": "tsx watch src/index.ts",
     "start": "node dist/index.js",
     "clean": "rimraf dist",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "dependencies": {
     "@wave-client/core": "workspace:*",
@@ -30,6 +32,7 @@
     "@types/node": "^22.10.2",
     "@types/ws": "^8.5.13",
     "rimraf": "^6.0.1",
+    "vitest": "^3.2.2",
     "tsx": "^4.19.2",
     "typescript": "^5.7.2"
   },

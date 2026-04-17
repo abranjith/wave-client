@@ -34,6 +34,7 @@ import {
     type INotificationAdapter,
     type IArenaAdapter,
     type IClipboardAdapter,
+    type IRealtimeAdapter,
     type IAdapterEvents,
     type HttpRequestConfig,
     type HttpResponseResult,
@@ -43,6 +44,12 @@ import {
     type EncryptionStatus,
     type AppSettings,
 } from '../../types/adapters';
+import type {
+    WsConnectionConfig,
+    WsConnectionHandle,
+    SseConnectionConfig,
+    SseConnectionHandle,
+} from '../../types/realtime';
 import type {
     ArenaSession,
     ArenaMessage,
@@ -891,6 +898,31 @@ export function createMockAdapter(options: CreateMockAdapterOptions = {}): {
     const notificationLog = options.notificationLog ?? [];
     const clipboard = createMockClipboardAdapter(options.clipboard);
 
+    /**
+     * Stub realtime adapter — returns no-op handles and resolves all mutations
+     * to `ok(undefined)`. Tests that need controlled realtime behaviour should
+     * replace this with a spy or a custom `IRealtimeAdapter` implementation.
+     */
+    const mockRealtimeAdapter: IRealtimeAdapter = {
+        connectWebSocket: (config: WsConnectionConfig): WsConnectionHandle => ({
+            connectionId: config.id,
+            onMessage: () => () => {},
+            onStatusChange: () => () => {},
+            onError: () => () => {},
+            onHeaders: () => () => {},
+        }),
+        disconnectWebSocket: async () => ok(undefined),
+        sendWebSocketMessage: async () => ok(undefined),
+        connectSse: (config: SseConnectionConfig): SseConnectionHandle => ({
+            connectionId: config.id,
+            onEvent: () => () => {},
+            onStatusChange: () => () => {},
+            onError: () => () => {},
+            onHeaders: () => () => {},
+        }),
+        disconnectSse: async () => ok(undefined),
+    };
+
     const adapter: IPlatformAdapter = {
         platform: 'test',
         storage: createMockStorageAdapter(store),
@@ -902,6 +934,7 @@ export function createMockAdapter(options: CreateMockAdapterOptions = {}): {
         arena: createMockArenaAdapter(store),
         events: createAdapterEventEmitter(),
         clipboard,
+        realtime: mockRealtimeAdapter,
     };
 
     return { adapter, store, notificationLog, clipboard };
