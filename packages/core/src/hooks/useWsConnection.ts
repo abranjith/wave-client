@@ -209,26 +209,38 @@ export function useWsConnection() {
 
     const sendMessage = useCallback(
         async (message: string) => {
-            const handle = handleRef.current;
-            if (!handle || !adapter.realtime) {
+            if (!adapter.realtime) {
+                notification.showNotification('error', 'WebSocket adapter not available');
                 return;
             }
 
             const realtimeState = getRealtimeState(activeTabId);
-            if (realtimeState?.status !== 'connected') {
+            const connectionId = handleRef.current?.connectionId ?? realtimeState?.connectionId;
+            if (!connectionId) {
+                notification.showNotification('error', 'WebSocket is not connected');
                 return;
             }
 
             const result = await adapter.realtime.sendWebSocketMessage(
-                handle.connectionId,
+                connectionId,
                 message
             );
 
             if (!result.isOk) {
                 notification.showNotification('error', result.error);
+                return;
             }
+
+            // Reflect successful sends in the timeline immediately.
+            appendWsMessage(activeTabId, {
+                id: crypto.randomUUID(),
+                direction: 'sent',
+                content: message,
+                size: new TextEncoder().encode(message).length,
+                timestamp: Date.now(),
+            });
         },
-        [adapter, activeTabId, getRealtimeState, notification]
+        [adapter, activeTabId, appendWsMessage, getRealtimeState, notification]
     );
 
     return { connect, disconnect, sendMessage };

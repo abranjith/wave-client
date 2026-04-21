@@ -69,6 +69,8 @@ interface ActiveWsConnection {
     status: ConnectionStatus;
     /** Unix epoch ms when the connection transitioned to 'connected'. */
     connectedAt?: number;
+    /** Cached upgrade-response headers from the handshake (if available). */
+    responseHeaders: Record<string, string>;
     /** Listeners for incoming text-frame messages. */
     messageListeners: Set<(msg: WsMessage) => void>;
     /** Listeners for status transitions. */
@@ -215,6 +217,7 @@ export class WebSocketService {
             ws,
             config,
             status: 'connecting',
+            responseHeaders: {},
             messageListeners: new Set(),
             statusListeners: new Set(),
             errorListeners: new Set(),
@@ -267,6 +270,7 @@ export class WebSocketService {
 
             conn.status = 'connected';
             conn.connectedAt = Date.now();
+            conn.responseHeaders = responseHeaders;
             this._emitStatus(config.id, 'connected');
             this._emitHeaders(config.id, responseHeaders);
 
@@ -433,6 +437,11 @@ export class WebSocketService {
 
             onHeaders(cb: (headers: Record<string, string>) => void): Unsubscribe {
                 conn.headerListeners.add(cb);
+                // If handshake headers already arrived before this listener was
+                // registered, replay the latest snapshot immediately.
+                if (conn.status === 'connected' && Object.keys(conn.responseHeaders).length > 0) {
+                    cb(conn.responseHeaders);
+                }
                 return () => { conn.headerListeners.delete(cb); };
             },
         };

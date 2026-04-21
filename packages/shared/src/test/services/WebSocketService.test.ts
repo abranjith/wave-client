@@ -299,6 +299,16 @@ describe('WebSocketService', () => {
         expect(typeof unsub).toBe('function');
     });
 
+    // ── T10b: late onHeaders subscribers receive cached handshake headers ─
+    it('T10b: late onHeaders subscriber immediately receives cached headers after open', async () => {
+        const handle = await connectAndOpen(service, {}, { 'sec-websocket-protocol': 'chat' });
+
+        const headersSeen: Record<string, string>[] = [];
+        handle.onHeaders((headers) => headersSeen.push(headers));
+
+        expect(headersSeen).toEqual([{ 'sec-websocket-protocol': 'chat' }]);
+    });
+
     // ── T11: onError delivers error messages ─────────────────────────────
     it('T11: onError delivers the error message string', async () => {
         const handle = await connectAndOpen(service);

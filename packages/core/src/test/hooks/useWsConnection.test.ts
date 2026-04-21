@@ -25,6 +25,7 @@ import { AdapterProvider } from '../../hooks/useAdapter';
 import { createMockAdapter } from '../mocks/mockAdapter';
 import { useWsConnection } from '../../hooks/useWsConnection';
 import useAppStateStore from '../../hooks/store/useAppStateStore';
+import { err } from '../../utils/result';
 import type { WsConnectionHandle, ConnectionStatus, WsMessage } from '../../types/realtime';
 import { createEmptyTab } from '../../types/tab';
 import type { WsCollectionRequest } from '../../types/collection';
@@ -253,7 +254,7 @@ describe('useWsConnection', () => {
     // ──────────────────────────────────────────────────────────────────────
 
     it('10 — sendMessage() when connected calls sendWebSocketMessage', async () => {
-        const { result, ctrl, adapter } = setup();
+        const { result, ctrl, adapter, activeTabId } = setup();
 
         act(() => { result.current.connect(); });
         // Simulate the adapter reporting connected status.
@@ -262,6 +263,9 @@ describe('useWsConnection', () => {
         await act(async () => { await result.current.sendMessage('ping'); });
 
         expect(adapter.realtime!.sendWebSocketMessage).toHaveBeenCalledWith('conn-abc', 'ping');
+        const state = useAppStateStore.getState().getRealtimeState(activeTabId);
+        const sent = state?.wsMessages?.find((m) => m.content === 'ping' && m.direction === 'sent');
+        expect(sent).toBeDefined();
     });
 
     it('11 — sendMessage() before connect() does not call the adapter', async () => {
@@ -272,8 +276,8 @@ describe('useWsConnection', () => {
         expect(adapter.realtime!.sendWebSocketMessage).not.toHaveBeenCalled();
     });
 
-    it('12 — sendMessage() when status is not "connected" does not call the adapter', async () => {
-        const { result, ctrl, adapter } = setup();
+    it('12 — sendMessage() when status is not "connected" still attempts adapter send using connectionId', async () => {
+        const { result, ctrl, adapter, notificationLog } = setup();
 
         act(() => { result.current.connect(); });
         // Leave status as 'connecting' (never push 'connected').
@@ -281,7 +285,47 @@ describe('useWsConnection', () => {
 
         await act(async () => { await result.current.sendMessage('ping'); });
 
-        expect(adapter.realtime!.sendWebSocketMessage).not.toHaveBeenCalled();
+        expect(adapter.realtime!.sendWebSocketMessage).toHaveBeenCalledWith('conn-abc', 'ping');
+        expect(notificationLog.some((n) => n.type === 'error' && n.message === 'WebSocket is not connected')).toBe(false);
+    });
+
+    it('12b — sendMessage() after remount uses stored connectionId and appends optimistic sent message', async () => {
+        const { result, ctrl, adapter, unmount, activeTabId } = setup();
+
+        act(() => { result.current.connect(); });
+        act(() => { ctrl.pushStatus('connected'); });
+
+        // Simulate component remount (local handleRef is lost).
+        unmount();
+
+        const wrapper = ({ children }: { children: React.ReactNode }) =>
+            React.createElement(AdapterProvider, { adapter, children });
+        const { result: remounted } = renderHook(() => useWsConnection(), { wrapper });
+
+        vi.mocked(adapter.realtime!.sendWebSocketMessage).mockClear();
+
+        await act(async () => { await remounted.current.sendMessage('ping-after-remount'); });
+
+        expect(adapter.realtime!.sendWebSocketMessage).toHaveBeenCalledWith('conn-abc', 'ping-after-remount');
+        const state = useAppStateStore.getState().getRealtimeState(activeTabId);
+        const sent = state?.wsMessages?.find((m) => m.content === 'ping-after-remount' && m.direction === 'sent');
+        expect(sent).toBeDefined();
+    });
+
+    it('12c — sendMessage() does not append optimistic message when adapter send fails', async () => {
+        const { result, ctrl, adapter, activeTabId, notificationLog } = setup();
+
+        vi.mocked(adapter.realtime!.sendWebSocketMessage).mockResolvedValueOnce(err('send failed'));
+
+        act(() => { result.current.connect(); });
+        act(() => { ctrl.pushStatus('connected'); });
+
+        await act(async () => { await result.current.sendMessage('will-not-append'); });
+
+        const state = useAppStateStore.getState().getRealtimeState(activeTabId);
+        const sent = state?.wsMessages?.find((m) => m.content === 'will-not-append');
+        expect(sent).toBeUndefined();
+        expect(notificationLog.some((n) => n.type === 'error' && n.message === 'send failed')).toBe(true);
     });
 
     // ──────────────────────────────────────────────────────────────────────

@@ -178,6 +178,33 @@ describe('registerRealtimeWsRoutes', () => {
         });
     });
 
+    it('does not broadcast ws.message for sent-direction echoes', async () => {
+        const handle = createMockWsHandle('conn-2b');
+        mockWsConnect.mockResolvedValueOnce(handle);
+
+        await app.inject({
+            method: 'POST',
+            url: '/api/ws/connect',
+            payload: { config: { id: 'conn-2b', url: 'wss://example.com/socket' } },
+        });
+
+        const sentEcho = {
+            id: 'msg-sent',
+            direction: 'sent',
+            content: 'hello',
+            timestamp: Date.now(),
+            size: 5,
+        };
+
+        mockBroadcast.mockClear();
+        handle._emitMessage(sentEcho);
+
+        expect(mockBroadcast).not.toHaveBeenCalledWith('ws.message', {
+            connectionId: 'conn-2b',
+            message: sentEcho,
+        });
+    });
+
     it('broadcasts error and removes the connection on handle error callback', async () => {
         const handle = createMockWsHandle('conn-3');
         mockWsConnect.mockResolvedValueOnce(handle);

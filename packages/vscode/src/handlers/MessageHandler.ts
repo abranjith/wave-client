@@ -2031,9 +2031,13 @@ export class MessageHandler {
             handle.onStatusChange((status: string) =>
                 this.postMessage({ type: 'ws.status', connectionId, status })
             ),
-            handle.onMessage((msg: unknown) =>
-                this.postMessage({ type: 'ws.message', connectionId, message: msg })
-            ),
+            handle.onMessage((msg: unknown) => {
+                const wsMessage = msg as { direction?: string };
+                if (wsMessage.direction === 'sent') {
+                    return;
+                }
+                this.postMessage({ type: 'ws.message', connectionId, message: msg });
+            }),
             handle.onHeaders((headers: Record<string, string>) =>
                 this.postMessage({ type: 'ws.headers', connectionId, headers })
             ),

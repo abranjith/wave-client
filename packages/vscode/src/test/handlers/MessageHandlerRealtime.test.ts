@@ -215,6 +215,23 @@ describe('MessageHandler — WebSocket Handlers', () => {
     );
   });
 
+  it('ws.connect — does not push ws.message for sent-direction echo messages', async () => {
+    const config = { id: 'conn-4b', url: 'wss://example.com/ws' };
+    const mockHandle = createMockWsHandle('conn-4b');
+    mockWsConnect.mockResolvedValue(mockHandle);
+    const sentEcho = { id: 'msg-sent', direction: 'sent', content: 'hello', timestamp: 1000, size: 5 };
+
+    await handler.handleMessage({ type: 'ws.connect', config });
+    const callsBefore = mockPanel.webview.postMessage.mock.calls.length;
+    mockHandle._emitMessage(sentEcho);
+    const wsMessageCalls = mockPanel.webview.postMessage.mock.calls.filter(
+      (args: unknown[]) => (args[0] as { type?: string }).type === 'ws.message'
+    );
+
+    expect(mockPanel.webview.postMessage.mock.calls.length).toBe(callsBefore);
+    expect(wsMessageCalls).toHaveLength(0);
+  });
+
   it('ws.connect — push ws.headers to webview on upgrade headers', async () => {
     const config = { id: 'conn-5', url: 'wss://example.com/ws' };
     const mockHandle = createMockWsHandle('conn-5');

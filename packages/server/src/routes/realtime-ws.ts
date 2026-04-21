@@ -103,6 +103,9 @@ export async function registerRealtimeWsRoutes(fastify: FastifyInstance): Promis
                     }
                 }),
                 handle.onMessage((message: WsMessage) => {
+                    if (message.direction === 'sent') {
+                        return;
+                    }
                     broadcast('ws.message', { connectionId: config.id, message });
                 }),
                 handle.onHeaders((headers: Record<string, string>) => {
