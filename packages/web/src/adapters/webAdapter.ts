@@ -265,25 +265,34 @@ function handleWebSocketMessage(message: {
     // or as top-level fields (future compatibility).
     case 'ws.message': {
       const payload = getRealtimePayload(message);
-      const handle = wsHandles.get(payload.connectionId as string);
+      const connectionId = payload.connectionId as string;
+      const handle = wsHandles.get(connectionId);
+      console.log('[WebAdapter] ws.message received', { connectionId, hasHandle: !!handle, messageSize: (payload.message as WsMessage)?.size });
       handle?.dispatchMessage(payload.message as WsMessage);
       break;
     }
     case 'ws.status': {
       const payload = getRealtimePayload(message);
-      const handle = wsHandles.get(payload.connectionId as string);
-      handle?.dispatchStatus(payload.status as ConnectionStatus);
+      const connectionId = payload.connectionId as string;
+      const status = payload.status as ConnectionStatus;
+      const handle = wsHandles.get(connectionId);
+      console.log('[WebAdapter] ws.status received', { connectionId, status, hasHandle: !!handle });
+      handle?.dispatchStatus(status);
       break;
     }
     case 'ws.headers': {
       const payload = getRealtimePayload(message);
-      const handle = wsHandles.get(payload.connectionId as string);
+      const connectionId = payload.connectionId as string;
+      const handle = wsHandles.get(connectionId);
+      console.log('[WebAdapter] ws.headers received', { connectionId, hasHandle: !!handle });
       handle?.dispatchHeaders(payload.headers as Record<string, string>);
       break;
     }
     case 'ws.error': {
       const payload = getRealtimePayload(message);
-      const handle = wsHandles.get(payload.connectionId as string);
+      const connectionId = payload.connectionId as string;
+      const handle = wsHandles.get(connectionId);
+      console.log('[WebAdapter] ws.error received', { connectionId, hasHandle: !!handle, error: payload.error });
       handle?.dispatchError(payload.error as string);
       break;
     }

@@ -89,9 +89,11 @@ export async function registerRealtimeWsRoutes(fastify: FastifyInstance): Promis
 
             const unsubscribers: Array<() => void> = [
                 handle.onStatusChange((status: ConnectionStatus) => {
+                    console.log('[Realtime WS] status change', { connectionId: config.id, status });
                     latestStatus = status;
                     broadcast('ws.status', { connectionId: config.id, status });
                     if (status === 'disconnected' || status === 'error') {
+                        console.log('[Realtime WS] terminal status - cleaning up connection', { connectionId: config.id, status });
                         removeWsConnection(config.id);
                     }
                     if (
@@ -104,14 +106,18 @@ export async function registerRealtimeWsRoutes(fastify: FastifyInstance): Promis
                 }),
                 handle.onMessage((message: WsMessage) => {
                     if (message.direction === 'sent') {
+                        console.log('[Realtime WS] sent message (not broadcasting)', { connectionId: config.id, size: message.size });
                         return;
                     }
+                    console.log('[Realtime WS] received message - broadcasting', { connectionId: config.id, size: message.size, direction: message.direction });
                     broadcast('ws.message', { connectionId: config.id, message });
                 }),
                 handle.onHeaders((headers: Record<string, string>) => {
+                    console.log('[Realtime WS] headers received - broadcasting', { connectionId: config.id, headerCount: Object.keys(headers).length });
                     broadcast('ws.headers', { connectionId: config.id, headers });
                 }),
                 handle.onError((error: string) => {
+                    console.error('[Realtime WS] error - broadcasting', { connectionId: config.id, error });
                     broadcast('ws.error', { connectionId: config.id, error });
                     latestStatus = 'error';
                     removeWsConnection(config.id);
@@ -151,6 +157,11 @@ export async function registerRealtimeWsRoutes(fastify: FastifyInstance): Promis
 
     /**
      * Closes an active server-managed WebSocket connection.
+     *
+     * Note: Connection cleanup (removeWsConnection) is handled by the onStatusChange
+     * listener when the 'disconnected' status is broadcast. Do NOT call
+     * removeWsConnection here, as disconnect() emits 'disconnected' asynchronously
+     * when the close frame is acknowledged by the server.
      */
     fastify.post('/api/ws/disconnect', async (
         request: FastifyRequest<{ Body: { connectionId?: string } }>,
@@ -163,13 +174,15 @@ export async function registerRealtimeWsRoutes(fastify: FastifyInstance): Promis
 
         const existing = wsHandles.get(connectionId);
         if (!existing) {
+            console.info('[Realtime WS] disconnect requested for unknown connection', { connectionId });
             return reply.send({ isOk: true, value: undefined });
         }
 
         try {
             console.info('[Realtime WS] disconnect requested', { connectionId });
             const result = await webSocketService.disconnect(connectionId);
-            removeWsConnection(connectionId);
+            // DO NOT call removeWsConnection here!
+            // Cleanup happens in onStatusChange listener when 'disconnected' status is broadcast.
 
             if (!result.isOk) {
                 console.error('[Realtime WS] disconnect failed', {
@@ -179,6 +192,7 @@ export async function registerRealtimeWsRoutes(fastify: FastifyInstance): Promis
                 return reply.status(500).send({ isOk: false, error: result.error });
             }
 
+            console.info('[Realtime WS] disconnect initiated (cleanup on status broadcast)', { connectionId });
             return reply.send({ isOk: true, value: undefined });
         } catch (error) {
             const message = error instanceof Error ? error.message : 'Unknown error';

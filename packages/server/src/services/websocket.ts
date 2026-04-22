@@ -28,11 +28,16 @@ export function removeClient(ws: WebSocket): void {
  */
 export function broadcast(type: string, data?: unknown): void {
     const message = JSON.stringify({ type, data, timestamp: Date.now() });
+    const openClients = Array.from(clients).filter(c => c.readyState === 1);
     
-    for (const client of clients) {
-        if (client.readyState === 1) { // WebSocket.OPEN
-            client.send(message);
-        }
+    console.log(`[WebSocket Service] Broadcasting '${type}' to ${openClients.length} client(s)`, { 
+        totalClients: clients.size,
+        openClients: openClients.length,
+        type 
+    });
+    
+    for (const client of openClients) {
+        client.send(message);
     }
 }
 

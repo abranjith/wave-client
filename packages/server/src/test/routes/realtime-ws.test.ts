@@ -252,13 +252,17 @@ describe('registerRealtimeWsRoutes', () => {
         expect(first.statusCode).toBe(200);
         expect(mockWsDisconnect).toHaveBeenCalledWith('conn-4');
 
+        // Simulate the async 'disconnected' status that triggers cleanup
+        handle._emitStatus('disconnected');
+
+        // Now the handle should be removed, so second disconnect is idempotent
         const second = await app.inject({
             method: 'POST',
             url: '/api/ws/disconnect',
             payload: { connectionId: 'conn-4' },
         });
         expect(second.statusCode).toBe(200);
-        expect(mockWsDisconnect).toHaveBeenCalledTimes(1);
+        expect(mockWsDisconnect).toHaveBeenCalledTimes(1); // Not called again
     });
 
     it('returns 500 when service disconnect reports an error', async () => {
@@ -282,6 +286,100 @@ describe('registerRealtimeWsRoutes', () => {
         expect(response.json()).toEqual({ isOk: false, error: 'disconnect failed' });
     });
 
+    it('broadcasts disconnected status after async disconnect completes', async () => {
+        // REGRESSION TEST: Fix for disconnect getting stuck in 'disconnecting' state
+        // The disconnect route must NOT remove the connection handle immediately.
+        // Instead, cleanup happens when the status listener receives 'disconnected'.
+        const handle = createMockWsHandle('conn-5b', 'connecting');
+        mockWsConnect.mockResolvedValueOnce(handle);
+        mockWsDisconnect.mockResolvedValueOnce({ isOk: true, value: undefined });
+
+        // 1. Connect
+        await app.inject({
+            method: 'POST',
+            url: '/api/ws/connect',
+            payload: { config: { id: 'conn-5b', url: 'wss://example.com/socket' } },
+        });
+
+        // 2. Simulate connection becoming connected
+        handle._emitStatus('connected');
+        mockBroadcast.mockClear();
+
+        // 3. Call disconnect route
+        const disconnectResponse = await app.inject({
+            method: 'POST',
+            url: '/api/ws/disconnect',
+            payload: { connectionId: 'conn-5b' },
+        });
+
+        expect(disconnectResponse.statusCode).toBe(200);
+        expect(mockWsDisconnect).toHaveBeenCalledWith('conn-5b');
+
+        // 4. At this point, the handle should still exist (not yet removed)
+        // Now simulate the async WebSocket 'close' event firing (which emits 'disconnected')
+        handle._emitStatus('disconnected');
+
+        // 5. Verify that 'disconnected' status was broadcast
+        expect(mockBroadcast).toHaveBeenCalledWith('ws.status', {
+            connectionId: 'conn-5b',
+            status: 'disconnected',
+        });
+
+        // 6. Verify cleanup happened after status broadcast
+        // (Connection handle should now be removed, so second disconnect is idempotent)
+        const secondDisconnect = await app.inject({
+            method: 'POST',
+            url: '/api/ws/disconnect',
+            payload: { connectionId: 'conn-5b' },
+        });
+
+        expect(secondDisconnect.statusCode).toBe(200);
+        expect(mockWsDisconnect).toHaveBeenCalledTimes(1); // Not called again
+    });
+
+    it('broadcasts disconnecting status before disconnect completes', async () => {
+        // REGRESSION TEST: Verify that 'disconnecting' status is properly broadcast
+        const handle = createMockWsHandle('conn-5c', 'connected');
+        mockWsConnect.mockResolvedValueOnce(handle);
+        mockWsDisconnect.mockResolvedValueOnce({ isOk: true, value: undefined });
+
+        // 1. Connect
+        await app.inject({
+            method: 'POST',
+            url: '/api/ws/connect',
+            payload: { config: { id: 'conn-5c', url: 'wss://example.com/socket' } },
+        });
+
+        mockBroadcast.mockClear();
+
+        // 2. Call disconnect route
+        const disconnectPromise = app.inject({
+            method: 'POST',
+            url: '/api/ws/disconnect',
+            payload: { connectionId: 'conn-5c' },
+        });
+
+        // 3. Simulate WebSocketService emitting 'disconnecting' synchronously
+        handle._emitStatus('disconnecting');
+
+        // 4. Verify 'disconnecting' was broadcast
+        expect(mockBroadcast).toHaveBeenCalledWith('ws.status', {
+            connectionId: 'conn-5c',
+            status: 'disconnecting',
+        });
+
+        await disconnectPromise;
+
+        // 5. Simulate async 'disconnected' status
+        handle._emitStatus('disconnected');
+
+        // 6. Verify 'disconnected' was also broadcast
+        expect(mockBroadcast).toHaveBeenCalledWith('ws.status', {
+            connectionId: 'conn-5c',
+            status: 'disconnected',
+        });
+    });
+
     it('sends websocket message and returns ok result', async () => {
         mockWsSendMessage.mockResolvedValueOnce({ isOk: true, value: undefined });
 
@@ -294,6 +392,54 @@ describe('registerRealtimeWsRoutes', () => {
         expect(response.statusCode).toBe(200);
         expect(response.json()).toEqual({ isOk: true, value: undefined });
         expect(mockWsSendMessage).toHaveBeenCalledWith('conn-6', 'ping');
+    });
+
+    it('broadcasts received messages but not sent echoes', async () => {
+        // REGRESSION TEST: Verify message reception flow and sent/received filtering
+        const handle = createMockWsHandle('conn-6b');
+        mockWsConnect.mockResolvedValueOnce(handle);
+
+        await app.inject({
+            method: 'POST',
+            url: '/api/ws/connect',
+            payload: { config: { id: 'conn-6b', url: 'wss://echo.example.com' } },
+        });
+
+        mockBroadcast.mockClear();
+
+        // 1. Simulate receiving a message from the WebSocket server
+        const receivedMsg = {
+            id: 'msg-recv-1',
+            direction: 'received',
+            content: 'hello from server',
+            timestamp: Date.now(),
+            size: 17,
+        };
+        handle._emitMessage(receivedMsg);
+
+        // 2. Verify received message was broadcast
+        expect(mockBroadcast).toHaveBeenCalledWith('ws.message', {
+            connectionId: 'conn-6b',
+            message: receivedMsg,
+        });
+
+        mockBroadcast.mockClear();
+
+        // 3. Simulate a sent message echo (WebSocketService echoes sent messages)
+        const sentEcho = {
+            id: 'msg-sent-1',
+            direction: 'sent',
+            content: 'hello from client',
+            timestamp: Date.now(),
+            size: 17,
+        };
+        handle._emitMessage(sentEcho);
+
+        // 4. Verify sent echo was NOT broadcast (filtered out)
+        expect(mockBroadcast).not.toHaveBeenCalledWith('ws.message', {
+            connectionId: 'conn-6b',
+            message: sentEcho,
+        });
     });
 
     it('returns 500 when send message fails', async () => {
