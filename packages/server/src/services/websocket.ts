@@ -12,7 +12,7 @@ const clients = new Set<WebSocket>();
  */
 export function addClient(ws: WebSocket): void {
     clients.add(ws);
-    console.log(`WebSocket client connected. Total clients: ${clients.size}`);
+    console.log(`[WebSocket Service] ✅ CLIENT ADDED at ${new Date().toISOString()}. Total clients: ${clients.size}, readyState: ${ws.readyState}`);
 }
 
 /**
@@ -20,20 +20,22 @@ export function addClient(ws: WebSocket): void {
  */
 export function removeClient(ws: WebSocket): void {
     clients.delete(ws);
-    console.log(`WebSocket client disconnected. Total clients: ${clients.size}`);
+    console.log(`[WebSocket Service] ❌ CLIENT REMOVED at ${new Date().toISOString()}. Total clients: ${clients.size}`);
 }
 
 /**
  * Broadcast a message to all connected clients
  */
 export function broadcast(type: string, data?: unknown): void {
+    const timestamp = new Date().toISOString();
     const message = JSON.stringify({ type, data, timestamp: Date.now() });
     const openClients = Array.from(clients).filter(c => c.readyState === 1);
     
-    console.log(`[WebSocket Service] Broadcasting '${type}' to ${openClients.length} client(s)`, { 
+    console.log(`[WebSocket Service] 📡 Broadcasting '${type}' at ${timestamp}`, { 
         totalClients: clients.size,
         openClients: openClients.length,
-        type 
+        type,
+        clientReadyStates: Array.from(clients).map(c => c.readyState)
     });
     
     for (const client of openClients) {

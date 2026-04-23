@@ -255,3 +255,44 @@ To verify the fix works in production:
    - `[WebSocket Service] Broadcasting 'ws.message' to N client(s)`
 
 If all logs appear and UI behaves correctly, the fix is working as intended. The diagnostic logging can be reduced in a future refactoring if desired, but it's valuable for debugging production issues.
+
+
+## Reference only
+
+### Current flow
+
+How it actually works
+
+UI control plane (connect/disconnect/send commands) is HTTP
+RequestEditor.tsx:133 wires WS actions from useWsConnection.
+RequestEditor.tsx:430 passes connect/disconnect into ConnectionControls.
+RequestEditor.tsx:474 passes sendMessage into WsOutputArea.
+In the hook, connect calls adapter.realtime.connectWebSocket at useWsConnection.ts:152.
+Send calls adapter.realtime.sendWebSocketMessage at useWsConnection.ts:224.
+Web adapter maps those to HTTP endpoints:
+connect -> /api/ws/connect at webRealtimeAdapter.ts:159
+send -> /api/ws/send at webRealtimeAdapter.ts:197
+Server data plane (actual target WS socket) is in shared WebSocketService
+Server route calls shared service connect at realtime-ws.ts:75.
+Shared service stores live sockets in memory map at WebSocketService.ts:124 and inserts on connect at WebSocketService.ts:226.
+Later HTTP send uses connectionId to find that same socket and call ws.send at WebSocketService.ts:369 and WebSocketService.ts:394.
+So your exact question:
+How can stateless API calls maintain a WebSocket?
+Answer: they do not maintain it themselves. They address a server-resident socket object already stored in singleton memory, keyed by connectionId.
+
+Event return path (server -> UI) uses a separate push WebSocket
+Browser has a persistent socket to Wave server at /ws, created in webAdapter.
+Server endpoint for that push channel is websocket.ts:9.
+Realtime route broadcasts WS lifecycle/message events through this push channel, for example:
+status at realtime-ws.ts:93
+message at realtime-ws.ts:109
+Browser receives these and dispatches into local handle maps:
+ws.message handler at webAdapter.ts:266
+ws.status handler at webAdapter.ts:272
+That dispatch triggers callbacks registered by useWsConnection:
+onStatusChange at useWsConnection.ts:158
+onMessage at useWsConnection.ts:164
+Those callbacks update Zustand realtime state, and WsOutputArea renders from that store at WsOutputArea.tsx:48.
+Handler pattern end-to-end in one line
+
+RequestEditor -> useWsConnection -> webRealtimeAdapter handle -> server /api/ws/* -> shared WebSocketService socket -> server broadcast ws.* -> webAdapter dispatch -> handle callbacks -> Zustand -> WsOutputArea.

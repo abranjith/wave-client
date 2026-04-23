@@ -120,7 +120,8 @@ export async function registerRealtimeWsRoutes(fastify: FastifyInstance): Promis
                     console.error('[Realtime WS] error - broadcasting', { connectionId: config.id, error });
                     broadcast('ws.error', { connectionId: config.id, error });
                     latestStatus = 'error';
-                    removeWsConnection(config.id);
+                    // Don't call removeWsConnection here - let onStatusChange handle cleanup
+                    // when 'error' or 'disconnected' status is received
                     if (resolveReady) {
                         resolveReady();
                         resolveReady = null;

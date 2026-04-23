@@ -159,7 +159,7 @@ export function createWebRealtimeAdapter(api: AxiosInstance): IRealtimeAdapter {
                     const response = await api.post('/api/ws/connect', { config });
                     if (!response.data?.isOk) {
                         const message = response.data?.error || 'Failed to connect WebSocket';
-                        wsHandles.delete(config.id);
+                        // Don't delete handle - let ws.status routing clean it up
                         handle.dispatchStatus('error');
                         handle.dispatchError(message);
                     }
@@ -167,7 +167,7 @@ export function createWebRealtimeAdapter(api: AxiosInstance): IRealtimeAdapter {
                         handle.dispatchStatus(response.data.value.status);
                     }
                 } catch (error) {
-                    wsHandles.delete(config.id);
+                    // Don't delete handle - let ws.status routing clean it up
                     handle.dispatchStatus('error');
                     handle.dispatchError(normalizeErrorMessage(error, 'Failed to connect WebSocket'));
                 }
@@ -179,7 +179,8 @@ export function createWebRealtimeAdapter(api: AxiosInstance): IRealtimeAdapter {
         async disconnectWebSocket(connectionId: string): Promise<Result<void, string>> {
             try {
                 const response = await api.post('/api/ws/disconnect', { connectionId });
-                wsHandles.delete(connectionId);
+                // Don't delete handle here - let ws.status routing clean it up when
+                // 'disconnected' status is received so late status updates aren't lost
 
                 if (response.data?.isOk) {
                     return ok(undefined);
@@ -187,7 +188,7 @@ export function createWebRealtimeAdapter(api: AxiosInstance): IRealtimeAdapter {
 
                 return err(response.data?.error || 'Failed to disconnect WebSocket');
             } catch (error) {
-                wsHandles.delete(connectionId);
+                // Don't delete handle here either - let status routing handle cleanup
                 return err(normalizeErrorMessage(error, 'Failed to disconnect WebSocket'));
             }
         },
@@ -214,12 +215,12 @@ export function createWebRealtimeAdapter(api: AxiosInstance): IRealtimeAdapter {
                     const response = await api.post('/api/sse/connect', { config });
                     if (!response.data?.isOk) {
                         const message = response.data?.error || 'Failed to connect SSE';
-                        sseHandles.delete(config.id);
+                        // Don't delete handle - let sse.status routing clean it up
                         handle.dispatchStatus('error');
                         handle.dispatchError(message);
                     }
                 } catch (error) {
-                    sseHandles.delete(config.id);
+                    // Don't delete handle - let sse.status routing clean it up
                     handle.dispatchStatus('error');
                     handle.dispatchError(normalizeErrorMessage(error, 'Failed to connect SSE'));
                 }
@@ -231,7 +232,7 @@ export function createWebRealtimeAdapter(api: AxiosInstance): IRealtimeAdapter {
         async disconnectSse(connectionId: string): Promise<Result<void, string>> {
             try {
                 const response = await api.post('/api/sse/disconnect', { connectionId });
-                sseHandles.delete(connectionId);
+                // Don't delete handle - let sse.status routing clean it up
 
                 if (response.data?.isOk) {
                     return ok(undefined);
@@ -239,7 +240,7 @@ export function createWebRealtimeAdapter(api: AxiosInstance): IRealtimeAdapter {
 
                 return err(response.data?.error || 'Failed to disconnect SSE');
             } catch (error) {
-                sseHandles.delete(connectionId);
+                // Don't delete handle - let status routing handle cleanup
                 return err(normalizeErrorMessage(error, 'Failed to disconnect SSE'));
             }
         },

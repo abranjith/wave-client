@@ -222,6 +222,9 @@ describe('registerRealtimeWsRoutes', () => {
             error: 'socket failed',
         });
 
+        // Emit 'error' status to trigger cleanup in onStatusChange listener
+        handle._emitStatus('error');
+
         const disconnectResponse = await app.inject({
             method: 'POST',
             url: '/api/ws/disconnect',

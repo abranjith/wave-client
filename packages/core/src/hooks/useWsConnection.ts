@@ -197,12 +197,13 @@ export function useWsConnection() {
 
         if (!result.isOk) {
             notification.showNotification('error', result.error);
+            return;
         }
 
-        // Unsubscribe all handle listeners.
-        unsubsRef.current.forEach((fn) => fn());
-        unsubsRef.current = [];
-        handleRef.current = null;
+        // Don't unsubscribe listeners here! The 'disconnected' status will arrive
+        // via the onStatusChange callback. Listeners will be cleaned up either:
+        // - On component unmount (useEffect cleanup)
+        // - When reconnecting (connect() clears old listeners before opening new connection)
     }, [adapter, activeTabId, notification, setRealtimeStatus]);
 
     // ── sendMessage ──────────────────────────────────────────────────────────

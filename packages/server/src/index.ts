@@ -76,8 +76,12 @@ async function main() {
     // Start server
     try {
         await fastify.listen({ port: PORT, host: HOST });
-        console.log(`\n🌊 Wave Client Server running at http://${HOST}:${PORT}`);
+        console.log(`\n${'='.repeat(60)}`);
+        console.log(`🌊 Wave Client Server STARTED at ${new Date().toISOString()}`);
+        console.log(`   URL: http://${HOST}:${PORT}`);
         console.log(`   Health check: http://${HOST}:${PORT}/health`);
+        console.log(`   WebSocket: ws://${HOST}:${PORT}/ws`);
+        console.log(`${'='.repeat(60)}\n`);
         console.log(`   WebSocket: ws://${HOST}:${PORT}/ws\n`);
         console.log(`   Realtime APIs: /api/ws/* and /api/sse/*\n`);
     } catch (err) {

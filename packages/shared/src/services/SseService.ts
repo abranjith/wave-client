@@ -2,6 +2,7 @@ import axios from 'axios';
 import * as https from 'https';
 
 import { ok, err, Result } from '@wave-client/core';
+import { getGlobalSettings } from './BaseStorageService';
 import type {
     ConnectionStatus,
     SseEvent,
@@ -395,10 +396,25 @@ export class SseService {
             targetUrl = `${targetUrl}${separator}${config.params}`;
         }
 
-        // 6. Retrieve HTTPS agent for https:// (respects proxy / cert settings)
+        // 6. Retrieve HTTPS agent for https:// (respects cert settings and
+        // ignoreCertificateValidation global toggle)
         let agent: https.Agent | undefined;
         if (parsedUrl.protocol === 'https:') {
-            agent = (await storeService.getHttpsAgentForUrl(config.url)) ?? undefined;
+            const settings = await getGlobalSettings();
+            const customAgent = await storeService.getHttpsAgentForUrl(config.url);
+
+            if (settings.ignoreCertificateValidation) {
+                if (customAgent) {
+                    agent = new https.Agent({
+                        ...customAgent.options,
+                        rejectUnauthorized: false,
+                    });
+                } else {
+                    agent = new https.Agent({ rejectUnauthorized: false });
+                }
+            } else {
+                agent = customAgent ?? undefined;
+            }
         }
 
         // 7. Create AbortController for this connection

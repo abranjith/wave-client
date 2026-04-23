@@ -68,11 +68,13 @@ const api: AxiosInstance = axios.create({
  */
 let wsConnection: WebSocket | null = null;
 let wsReconnectAttempts = 0;
-const RECONNECT_DELAY = 2000;
-const MAX_RECONNECT_DELAY = 15000;
+const RECONNECT_DELAY = 5000;
+const MAX_RECONNECT_DELAY = 30000;
 let wsReconnectTimer: ReturnType<typeof setTimeout> | null = null;
 let wsShouldReconnect = true;
 let wsConnectionIssueNotified = false;
+let wsInitCallCount = 0; // Track initialization attempts
+let wsInitialized = false; // Guard against duplicate initialization
 
 /**
  * Event emitter for adapter events
@@ -145,18 +147,49 @@ async function reportWebSocketConnectionIssue(): Promise<void> {
  * Initialize WebSocket connection
  */
 function initWebSocket(): void {
-  if (
-    wsConnection?.readyState === WebSocket.OPEN ||
-    wsConnection?.readyState === WebSocket.CONNECTING
-  ) {
+  wsInitCallCount++;
+  console.log(`[WebAdapter] initWebSocket() called (attempt #${wsInitCallCount})`);
+  
+  // Only skip if we already have an ACTIVE connection
+  // Don't skip if connection is null, closed, or closing
+  if (wsConnection && (
+    wsConnection.readyState === WebSocket.OPEN ||
+    wsConnection.readyState === WebSocket.CONNECTING
+  )) {
+    console.log('[WebAdapter] Push channel already active, skipping initWebSocket. Current state:', wsConnection.readyState);
     return;
   }
 
+  // If we have a stale connection or initialization flag but no active connection, reset
+  if (!wsConnection || wsConnection.readyState === WebSocket.CLOSED || wsConnection.readyState === WebSocket.CLOSING) {
+    wsInitialized = false;
+  }
+  
+  // Guard against duplicate initialization (important for React.StrictMode)
+  if (wsInitialized && wsConnection) {
+    console.log('[WebAdapter] WebSocket already initialized, skipping duplicate init');
+    return;
+  }
+
+  // Close any existing connection in CLOSING or CLOSED state before creating new one
+  if (wsConnection) {
+    console.log('[WebAdapter] Cleaning up previous connection with state:', wsConnection.readyState);
+    try {
+      wsConnection.close();
+    } catch (e) {
+      console.log('[WebAdapter] Error closing previous connection:', e);
+    }
+    wsConnection = null;
+  }
+
   try {
+    console.log('[WebAdapter] Attempting to connect push channel to:', WS_URL);
     wsConnection = new WebSocket(WS_URL);
+    wsInitialized = true; // Mark as initialized once connection is created
 
     wsConnection.onopen = () => {
-      console.log('WebSocket connected to Wave Client Server');
+      console.log('[WebAdapter] ✅ Push channel OPENED to Wave Client Server at:', WS_URL);
+      console.log('[WebAdapter] Push channel readyState:', wsConnection?.readyState);
       wsReconnectAttempts = 0;
       clearReconnectTimer();
 
@@ -171,15 +204,20 @@ function initWebSocket(): void {
 
     wsConnection.onmessage = (event) => {
       try {
+        console.log('[WebAdapter] 📨 Received push message:', event.data);
         const message = JSON.parse(event.data);
+        console.log('[WebAdapter] 📨 Parsed message:', message);
         handleWebSocketMessage(message);
-      } catch {
-        // Ignore invalid messages
+      } catch (error) {
+        console.error('[WebAdapter] ❌ Error processing push message:', error);
+        // Don't close connection on parse errors - ignore invalid messages
       }
     };
 
     wsConnection.onclose = (event) => {
+      console.log('[WebAdapter] ❌ Push channel CLOSED - code:', event.code, 'reason:', event.reason, 'wasClean:', event.wasClean);
       wsConnection = null;
+      wsInitialized = false; // Allow re-initialization after close
 
       if (!wsShouldReconnect) {
         return;
@@ -193,7 +231,8 @@ function initWebSocket(): void {
       scheduleReconnect();
     };
 
-    wsConnection.onerror = () => {
+    wsConnection.onerror = (error) => {
+      console.error('[WebAdapter] Push channel WebSocket error:', error);
       void reportWebSocketConnectionIssue();
     };
   } catch (error) {
@@ -211,7 +250,10 @@ function handleWebSocketMessage(message: {
   message?: string;
   [key: string]: unknown;
 }): void {
-  switch (message.type) {
+  console.log('[WebAdapter] 🔍 Handling message type:', message.type);
+  
+  try {
+    switch (message.type) {
     case 'connected':
       console.log('Server:', message.message);
       break;
@@ -278,6 +320,11 @@ function handleWebSocketMessage(message: {
       const handle = wsHandles.get(connectionId);
       console.log('[WebAdapter] ws.status received', { connectionId, status, hasHandle: !!handle });
       handle?.dispatchStatus(status);
+      // Clean up handle on terminal states
+      if (status === 'disconnected' || status === 'error') {
+        console.log('[WebAdapter] terminal status - removing handle', { connectionId, status });
+        wsHandles.delete(connectionId);
+      }
       break;
     }
     case 'ws.headers': {
@@ -304,8 +351,14 @@ function handleWebSocketMessage(message: {
     }
     case 'sse.status': {
       const payload = getRealtimePayload(message);
-      const handle = sseHandles.get(payload.connectionId as string);
-      handle?.dispatchStatus(payload.status as ConnectionStatus);
+      const connectionId = payload.connectionId as string;
+      const status = payload.status as ConnectionStatus;
+      const handle = sseHandles.get(connectionId);
+      handle?.dispatchStatus(status);
+      // Clean up handle on terminal states
+      if (status === 'disconnected' || status === 'error') {
+        sseHandles.delete(connectionId);
+      }
       break;
     }
     case 'sse.headers': {
@@ -320,6 +373,10 @@ function handleWebSocketMessage(message: {
       handle?.dispatchError(payload.error as string);
       break;
     }
+  }
+  } catch (error) {
+    console.error('[WebAdapter] ❌ Error in handleWebSocketMessage:', error, 'Message:', message);
+    // Don't propagate error - keep connection alive
   }
 }
 
@@ -1257,7 +1314,9 @@ export function createWebAdapter(): IPlatformAdapter {
   wsConnectionIssueNotified = false;
 
   // Initialize WebSocket connection
+  console.log('[WebAdapter] Initializing adapter, about to call initWebSocket()');
   initWebSocket();
+  console.log('[WebAdapter] initWebSocket() called, connection state:', wsConnection?.readyState);
 
   return {
     storage: new WebStorageAdapter(),
@@ -1280,10 +1339,22 @@ export function createWebAdapter(): IPlatformAdapter {
           '⚠️ Wave Client Server is not running. Start it with: pnpm dev:server'
         );
       }
+      
+      // If WebSocket was closed (e.g., by dispose), attempt to reconnect
+      if (!wsConnection || wsConnection.readyState === WebSocket.CLOSED) {
+        console.log('[WebAdapter] initialize() detected closed WebSocket, attempting to reconnect');
+        wsShouldReconnect = true;
+        wsInitialized = false;
+        initWebSocket();
+      }
     },
 
     dispose() {
-      wsShouldReconnect = false;
+      console.log('[WebAdapter] 🔥 dispose() called - closing WebSocket connection');
+      console.trace('[WebAdapter] dispose() call stack:');
+      
+      // Don't permanently disable reconnection - this allows React.StrictMode remounting
+      // We just clean up the current connection
       clearReconnectTimer();
 
       wsHandles.forEach((_handle, id) => {
@@ -1296,8 +1367,16 @@ export function createWebAdapter(): IPlatformAdapter {
       sseHandles.clear();
 
       if (wsConnection) {
+        console.log('[WebAdapter] Closing WebSocket in dispose(), readyState:', wsConnection.readyState);
+        // Temporarily disable reconnection during intentional close
+        const shouldReconnectBackup = wsShouldReconnect;
+        wsShouldReconnect = false;
         wsConnection.close();
         wsConnection = null;
+        // Restore reconnection flag after a brief delay to allow clean shutdown
+        setTimeout(() => {
+          wsShouldReconnect = shouldReconnectBackup;
+        }, 100);
       }
     },
   };

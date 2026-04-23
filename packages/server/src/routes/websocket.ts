@@ -6,8 +6,12 @@ import type { FastifyInstance } from 'fastify';
 import { addClient, removeClient } from '../services/websocket.js';
 
 export async function registerWebSocketRoutes(fastify: FastifyInstance): Promise<void> {
-    fastify.get('/ws', { websocket: true }, (socket, _request) => {
+    console.log('[Push Channel] /ws endpoint registered and ready');
+    
+    fastify.get('/ws', { websocket: true }, (socket, request) => {
+        console.log('[Push Channel] ✅ Browser client CONNECTING from:', request.headers.origin || request.headers.host);
         addClient(socket);
+        console.log('[Push Channel] ✅ Client ADDED, readyState:', socket.readyState);
 
         socket.on('message', (message: Buffer) => {
             try {
@@ -21,12 +25,13 @@ export async function registerWebSocketRoutes(fastify: FastifyInstance): Promise
             }
         });
 
-        socket.on('close', () => {
+        socket.on('close', (code, reason) => {
+            console.log('[Push Channel] ❌ Client DISCONNECTED - code:', code, 'reason:', reason.toString());
             removeClient(socket);
         });
 
         socket.on('error', (error) => {
-            console.error('WebSocket error:', error);
+            console.error('[Push Channel] ❌ WebSocket ERROR:', error);
             removeClient(socket);
         });
 

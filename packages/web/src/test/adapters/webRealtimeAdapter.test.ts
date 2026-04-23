@@ -68,7 +68,8 @@ describe('createWebRealtimeAdapter', () => {
 
         expect(onStatus).toHaveBeenCalledWith('error');
         expect(onError).toHaveBeenCalledWith('connect failed');
-        expect(wsHandles.has('ws-2')).toBe(false);
+        // Handle is not removed immediately - cleanup happens via push channel status events
+        expect(wsHandles.has('ws-2')).toBe(true);
     });
 
     it('disconnectWebSocket posts to /api/ws/disconnect and removes handle', async () => {
@@ -84,7 +85,9 @@ describe('createWebRealtimeAdapter', () => {
         expect(mockAxios.post).toHaveBeenCalledWith('/api/ws/disconnect', {
             connectionId: 'ws-3',
         });
-        expect(wsHandles.has('ws-3')).toBe(false);
+        // Handle is not removed immediately - cleanup happens when 'disconnected' status
+        // is received from the server via the push channel
+        expect(wsHandles.has('ws-3')).toBe(true);
     });
 
     it('sendWebSocketMessage forwards payload and propagates service errors', async () => {
@@ -128,7 +131,9 @@ describe('createWebRealtimeAdapter', () => {
         expect(mockAxios.post).toHaveBeenCalledWith('/api/sse/disconnect', {
             connectionId: 'sse-2',
         });
-        expect(sseHandles.has('sse-2')).toBe(false);
+        // Handle is not removed immediately - cleanup happens when 'disconnected' status
+        // is received from the server via the push channel
+        expect(sseHandles.has('sse-2')).toBe(true);
     });
 
     it('ws handle unsubscribe removes listeners from dispatch', () => {
