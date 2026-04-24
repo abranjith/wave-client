@@ -182,7 +182,10 @@ class SseFrameParser {
     private _processLine(line: string): void {
         if (line === '') {
             // Blank line → dispatch accumulated event (if any data)
-            this._dispatchIfReady();
+            // Skip if no data to avoid unnecessary state resets from consecutive empty lines
+            if (this._dataBuffer !== '') {
+                this._dispatchIfReady();
+            }
             return;
         }
 
@@ -716,7 +719,7 @@ export class SseService {
      */
     private _emitStatus(connectionId: string, status: ConnectionStatus): void {
         const conn = this._connections.get(connectionId);
-        if (!conn) return;
+        if (!conn) { return; }
         conn.status = status;
         for (const cb of conn.statusListeners) {
             cb(status);
@@ -728,7 +731,7 @@ export class SseService {
      */
     private _emitHeaders(connectionId: string, headers: Record<string, string>): void {
         const conn = this._connections.get(connectionId);
-        if (!conn) return;
+        if (!conn) { return; }
         for (const cb of conn.headerListeners) {
             cb(headers);
         }

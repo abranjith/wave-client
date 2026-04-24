@@ -374,6 +374,9 @@ const RequestEditor: React.FC<RequestEditorProps> = ({
 
         {/* Top Bar - Protocol Selector, Method (HTTP/SSE only), URL, Send / Connection Controls */}
         <div className="px-6 py-4 flex items-center gap-3 flex-shrink-0 border-b border-slate-200 dark:border-slate-700">
+          {/* Protocol selector — leftmost in the toolbar */}
+          <ProtocolSelector />
+
           {/* HTTP Method Dropdown — hidden for WS (WS has no HTTP verb) */}
           {protocol !== 'ws' && (
           <div className="*:not-first:mt-2">
@@ -434,9 +437,6 @@ const RequestEditor: React.FC<RequestEditorProps> = ({
               disabled={!Boolean(url?.trim())}
             />
           )}
-
-          {/* Protocol selector — always visible in the toolbar */}
-          <ProtocolSelector />
         </div>
 
         {/* Split View: Request (top half) and Response (bottom half) */}

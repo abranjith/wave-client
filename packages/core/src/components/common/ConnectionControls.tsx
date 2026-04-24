@@ -14,9 +14,11 @@
  */
 
 import React from 'react';
+import { Link2Icon, Link2OffIcon } from 'lucide-react';
 import { PrimaryButton } from '../ui/PrimaryButton';
 import useAppStateStore from '../../hooks/store/useAppStateStore';
 import type { ConnectionStatus } from '../../types/realtime';
+import { Tooltip, TooltipTrigger, TooltipContent } from '../ui/tooltip';
 
 // ──────────────────────────────────────────────────────────────────────────────
 // Props
@@ -86,35 +88,37 @@ const ConnectionControls: React.FC<ConnectionControlsProps> = ({
 
     const dotColorClass = STATUS_DOT_COLOR[status];
     const label = STATUS_LABEL[status];
+    const tooltipText = errorDetails ? `${label}: ${errorDetails}` : label;
 
     return (
         <div className="flex items-center gap-3">
-            {/* Status indicator */}
-            <div
-                className="flex items-center gap-1.5"
-                aria-label={`Connection status: ${label}`}
-            >
-                {/* Filled circle dot */}
-                <svg
-                    className={`w-2.5 h-2.5 fill-current flex-shrink-0 ${dotColorClass} ${status === 'connecting' ? 'animate-pulse' : ''}`}
-                    viewBox="0 0 8 8"
-                    aria-hidden="true"
-                >
-                    <circle cx="4" cy="4" r="4" />
-                </svg>
-                <span
-                    className="text-xs text-slate-500 dark:text-slate-400 select-none"
-                    title={errorDetails || undefined}
-                >
-                    {errorDetails ? `${label}: ${errorDetails}` : label}
-                </span>
-            </div>
+            {/* Status indicator — dot only, label shown in tooltip */}
+            <Tooltip>
+                <TooltipTrigger asChild>
+                    <div
+                        className="flex items-center cursor-default"
+                        aria-label={`Connection status: ${tooltipText}`}
+                    >
+                        <svg
+                            className={`w-2.5 h-2.5 fill-current flex-shrink-0 ${dotColorClass} ${status === 'connecting' ? 'animate-pulse' : ''}`}
+                            viewBox="0 0 8 8"
+                            aria-hidden="true"
+                        >
+                            <circle cx="4" cy="4" r="4" />
+                        </svg>
+                    </div>
+                </TooltipTrigger>
+                <TooltipContent className="px-2 py-1 text-xs">
+                    {tooltipText}
+                </TooltipContent>
+            </Tooltip>
 
-            {/* Action button */}
+            {/* Action button — icon only */}
             <PrimaryButton
                 onClick={isConnectAction ? onConnect : onDisconnect}
-                text={isConnectAction ? 'Connect' : 'Disconnect'}
+                icon={isConnectAction ? <Link2Icon /> : <Link2OffIcon />}
                 colorTheme={isConnectAction ? 'main' : 'error'}
+                tooltip={isConnectAction ? 'Connect' : 'Disconnect'}
                 disabled={isButtonDisabled}
                 className="px-4 py-2"
             />

@@ -22,9 +22,6 @@ const { MockWebSocket, lastWsRef } = vi.hoisted(() => {
         close: ReturnType<typeof vi.fn>;
         send: ReturnType<typeof vi.fn>;
 
-        /** Simulated upgrade-response headers exposed via the internal _req field. */
-        _req: { res: { headers: Record<string, string | string[]> } } | undefined;
-
         constructor() {
             super();
             this.readyState = MockWebSocket.CONNECTING;
@@ -38,11 +35,20 @@ const { MockWebSocket, lastWsRef } = vi.hoisted(() => {
             this.send = vi.fn();
         }
 
-        /** Fire the 'open' event and advance readyState to OPEN. */
+        /**
+         * Simulate the ws library's upgrade-then-open sequence.
+         *
+         * The real ws library emits 'upgrade' with the http.IncomingMessage BEFORE
+         * setting _req = null and before emitting 'open'. This method replicates
+         * that ordering so WebSocketService's 'upgrade' handler captures headers
+         * before the 'open' handler runs.
+         */
         simulateOpen(responseHeaders?: Record<string, string>): void {
             this.readyState = MockWebSocket.OPEN;
             if (responseHeaders) {
-                this._req = { res: { headers: responseHeaders } };
+                // Fire 'upgrade' first, just like the real ws library does before
+                // nullifying _req and calling setSocket (which emits 'open').
+                this.emit('upgrade', { headers: responseHeaders });
             }
             this.emit('open');
         }
@@ -307,6 +313,25 @@ describe('WebSocketService', () => {
         handle.onHeaders((headers) => headersSeen.push(headers));
 
         expect(headersSeen).toEqual([{ 'sec-websocket-protocol': 'chat' }]);
+    });
+
+    // ── T10c: early onHeaders subscriber receives headers via upgrade event ──
+    it('T10c: early onHeaders subscriber receives upgrade headers when open fires', async () => {
+        // Mirrors the real production pattern: useWsConnection registers onHeaders
+        // on the handle BEFORE the network 'open' event fires.
+        const config = makeConfig();
+        const handle = await service.connect(config);
+        if (!handle) throw new Error('Expected non-null WsConnectionHandle');
+
+        const headersSeen: Record<string, string>[] = [];
+        handle.onHeaders((headers) => headersSeen.push(headers));
+
+        // Simulate the ws library sequence: 'upgrade' fires first with response
+        // headers, then 'open' fires (at which point _req is already null in the
+        // real ws library — hence why we no longer rely on _req?.res?.headers).
+        lastMockWs().simulateOpen({ 'upgrade': 'websocket', 'sec-websocket-accept': 'abc123' });
+
+        expect(headersSeen).toEqual([{ 'upgrade': 'websocket', 'sec-websocket-accept': 'abc123' }]);
     });
 
     // ── T11: onError delivers error messages ─────────────────────────────

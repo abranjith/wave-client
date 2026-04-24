@@ -1,5 +1,6 @@
 import WebSocket from 'ws';
 import * as https from 'https';
+import type { IncomingMessage } from 'http';
 
 import { ok, err, Result } from '@wave-client/core';
 import { getGlobalSettings } from './BaseStorageService';
@@ -251,28 +252,31 @@ export class WebSocketService {
         };
 
         // 8. Wire ws event handlers
-        ws.on('open', () => {
-            // Capture upgrade-response headers from the raw HTTP response
-            const rawHeaders = (ws as WebSocket & { _socket?: unknown } & {
-                // ws exposes the response via the internal `_req` field after upgrade
-                _req?: { res?: { headers?: Record<string, string | string[] | undefined> } };
-            })._req?.res?.headers ?? {};
 
-            // Normalise header values to plain strings
-            const responseHeaders: Record<string, string> = {};
-            for (const [k, v] of Object.entries(rawHeaders)) {
+        // Capture upgrade-response headers from the official 'upgrade' event.
+        // The ws library sets _req = null BEFORE emitting 'open' (in the internal
+        // upgrade handler), so accessing _req?.res?.headers inside 'open' always
+        // returns undefined. The 'upgrade' event fires just before that nullification
+        // and provides the http.IncomingMessage with the full 101 response headers.
+        let capturedResponseHeaders: Record<string, string> = {};
+        ws.on('upgrade', (response: IncomingMessage) => {
+            const normalized: Record<string, string> = {};
+            for (const [k, v] of Object.entries(response.headers)) {
                 if (typeof v === 'string') {
-                    responseHeaders[k] = v;
+                    normalized[k] = v;
                 } else if (Array.isArray(v)) {
-                    responseHeaders[k] = v.join(', ');
+                    normalized[k] = v.join(', ');
                 }
             }
+            capturedResponseHeaders = normalized;
+        });
 
+        ws.on('open', () => {
             conn.status = 'connected';
             conn.connectedAt = Date.now();
-            conn.responseHeaders = responseHeaders;
+            conn.responseHeaders = capturedResponseHeaders;
             this._emitStatus(config.id, 'connected');
-            this._emitHeaders(config.id, responseHeaders);
+            this._emitHeaders(config.id, capturedResponseHeaders);
 
             console.info(`[WebSocketService] connected id=${config.id}`);
         });

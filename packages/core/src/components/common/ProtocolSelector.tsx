@@ -8,7 +8,7 @@
  * Design constraints:
  * - Platform-agnostic — no VS Code or browser-specific imports.
  * - Renders `null` when there is no active tab.
- * - Styled to match the Method dropdown in `RequestEditor` (same height/border).
+ * - Trigger shows icon-only (with tooltip) to save toolbar width.
  */
 
 import React from 'react';
@@ -18,8 +18,8 @@ import {
     SelectContent,
     SelectItem,
     SelectTrigger,
-    SelectValue,
 } from '../ui/select';
+import { Tooltip, TooltipTrigger, TooltipContent } from '../ui/tooltip';
 import useAppStateStore from '../../hooks/store/useAppStateStore';
 import type { RequestProtocol } from '../../types/collection';
 
@@ -62,6 +62,8 @@ const PROTOCOL_OPTIONS: ProtocolOption[] = [
 /**
  * Renders the protocol dropdown for the active request editor tab.
  * Returns `null` when no tab is open.
+ * The trigger shows only the current protocol's icon (with a tooltip for the
+ * label) to save toolbar width. The dropdown still shows icon + label.
  */
 const ProtocolSelector: React.FC = () => {
     const activeTab = useAppStateStore((state) => state.getActiveTab());
@@ -72,13 +74,23 @@ const ProtocolSelector: React.FC = () => {
     }
 
     const protocol = activeTab.protocol ?? 'http';
+    const selectedOption = PROTOCOL_OPTIONS.find((o) => o.value === protocol);
 
     return (
         <Select value={protocol} onValueChange={(val) => updateProtocol(val as RequestProtocol)}>
-            <SelectTrigger className="w-auto min-w-[120px] bg-white border-slate-300 text-slate-900 hover:bg-slate-50 dark:bg-slate-800 dark:border-slate-600 dark:text-slate-100 dark:hover:bg-slate-700">
-                <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
+            <Tooltip>
+                <TooltipTrigger asChild>
+                    <SelectTrigger className="w-auto px-2 bg-white border-slate-300 text-slate-900 hover:bg-slate-50 dark:bg-slate-800 dark:border-slate-600 dark:text-slate-100 dark:hover:bg-slate-700">
+                        <span className={selectedOption?.colorClass}>
+                            {selectedOption?.icon}
+                        </span>
+                    </SelectTrigger>
+                </TooltipTrigger>
+                <TooltipContent className="px-2 py-1 text-xs">
+                    {selectedOption?.label ?? 'Protocol'}
+                </TooltipContent>
+            </Tooltip>
+            <SelectContent className="min-w-[8rem]">
                 {PROTOCOL_OPTIONS.map((option) => (
                     <SelectItem
                         key={option.value}

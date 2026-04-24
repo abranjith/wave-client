@@ -332,12 +332,15 @@ const RequestEditor: React.FC<RequestEditorProps> = ({
 
                 {/* Top Bar - Protocol Selector, Method (HTTP/SSE only), URL, Send / Connection Controls */}
                 <div className="px-6 py-4 flex items-center gap-3 flex-shrink-0 border-b border-slate-200 dark:border-slate-700">
+                    {/* Protocol selector — leftmost in the toolbar */}
+                    <ProtocolSelector />
+
                     {/* HTTP Method Dropdown — hidden for WS (WS has no HTTP verb) */}
                     {protocol !== 'ws' && (
                         <div className="*:not-first:mt-2">
                             <Select value={method || 'GET'} onValueChange={updateMethod}>
-                                <SelectTrigger 
-                                    id={httpMethodSelectId} 
+                                <SelectTrigger
+                                    id={httpMethodSelectId}
                                     className="w-auto max-w-full min-w-24 bg-white border-slate-300 text-slate-900 hover:bg-slate-50 dark:bg-slate-800 dark:border-slate-600 dark:text-slate-100 dark:hover:bg-slate-700"
                                 >
                                     <SelectValue placeholder="Select Method" />
@@ -368,8 +371,8 @@ const RequestEditor: React.FC<RequestEditorProps> = ({
                     {protocol === 'http' ? (
                         <PrimaryButton
                             onClick={() => onSendRequest(activeTabId)}
-                            icon={isRequestProcessing 
-                                ? <LoaderCircleIcon className="animate-spin" /> 
+                            icon={isRequestProcessing
+                                ? <LoaderCircleIcon className="animate-spin" />
                                 : <SendHorizonalIcon />
                             }
                             colorTheme="main"
@@ -385,9 +388,6 @@ const RequestEditor: React.FC<RequestEditorProps> = ({
                             disabled={!Boolean(url?.trim())}
                         />
                     )}
-
-                    {/* Protocol selector — always visible in the toolbar */}
-                    <ProtocolSelector />
                 </div>
 
                 {/* Split View: Request (top half) and Response (bottom half) */}

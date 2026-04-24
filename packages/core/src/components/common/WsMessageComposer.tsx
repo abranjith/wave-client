@@ -20,6 +20,7 @@
 
 import React, { useState, useCallback } from 'react';
 import { SendHorizonalIcon } from 'lucide-react';
+import { PrimaryButton } from '../ui/PrimaryButton';
 
 // ── Props ─────────────────────────────────────────────────────────────────────
 
@@ -83,20 +84,14 @@ const WsMessageComposer: React.FC<WsMessageComposerProps> = ({ onSend, disabled 
                         : 'border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200 placeholder-slate-400 dark:placeholder-slate-500'
                 }`}
             />
-            <button
+            <PrimaryButton
                 onClick={handleSend}
+                icon={<SendHorizonalIcon />}
+                colorTheme="main"
+                tooltip="Send"
                 disabled={isSendDisabled}
-                title="Send"
-                aria-label="Send"
-                className={`flex items-center gap-1.5 px-3 py-2 rounded-md text-sm font-medium transition-colors flex-shrink-0 ${
-                    isSendDisabled
-                        ? 'bg-slate-100 dark:bg-slate-800 text-slate-400 dark:text-slate-500 cursor-not-allowed'
-                        : 'bg-blue-600 hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-600 text-white'
-                }`}
-            >
-                <SendHorizonalIcon size={15} />
-                <span>Send</span>
-            </button>
+                className="px-6 py-2"
+            />
         </div>
     );
 };
