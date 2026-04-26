@@ -1,5 +1,5 @@
 import React, { useState, useEffect, JSX } from 'react';
-import { Trash2Icon, PlusIcon, CopyIcon, ClipboardPasteIcon } from 'lucide-react';
+import { MinusIcon, PlusIcon, CopyIcon, ClipboardPasteIcon } from 'lucide-react';
 import { Button } from '../ui/button';
 import { SecondaryButton } from '../ui/SecondaryButton';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
@@ -16,6 +16,7 @@ const RequestParams: React.FC = () => {
   const activeTab = useAppStateStore((state) => state.getActiveTab());
   const params: ParamRow[] = activeTab?.params || [];
   const addEmptyParam = useAppStateStore((state) => state.addEmptyParam);
+  const insertParamAfter = useAppStateStore((state) => state.insertParamAfter);
   const upsertParam = useAppStateStore((state) => state.upsertParam);
   const removeParam = useAppStateStore((state) => state.removeParam);
   const toggleParamEnabled = useAppStateStore((state) => state.toggleParamEnabled);
@@ -163,7 +164,7 @@ const RequestParams: React.FC = () => {
         </div>
       </div>
 
-      <div className="overflow-x-auto border border-slate-200 dark:border-slate-700 rounded-t-lg">
+      <div className="overflow-x-auto border border-slate-200 dark:border-slate-700 rounded-lg">
         <Table>
           <TableHeader>
             <TableRow>
@@ -215,13 +216,20 @@ const RequestParams: React.FC = () => {
                     />
                   </TableCell>
                   <TableCell>
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-1">
+                      <SecondaryButton
+                        size="sm"
+                        onClick={() => insertParamAfter(param.id)}
+                        colorTheme="main"
+                        icon={<PlusIcon />}
+                        tooltip="Add row below"
+                      />
                       {params.length > 1 && (
                         <SecondaryButton
                           size="sm"
                           onClick={() => removeParam(param.id)}
                           colorTheme="error"
-                          icon={<Trash2Icon />}
+                          icon={<MinusIcon />}
                           tooltip="Delete parameter"
                         />
                       )}
@@ -234,15 +242,6 @@ const RequestParams: React.FC = () => {
         </Table>
       </div>
       
-      <div className="flex items-center border border-t-0 border-slate-200 dark:border-slate-700 rounded-b-lg p-3 bg-slate-50 dark:bg-slate-800">
-        <SecondaryButton
-          size="sm"
-          onClick={addEmptyParam}
-          colorTheme="main"
-          icon={<PlusIcon />}
-          text="Add Parameter"
-        />
-      </div>
     </div>
   );
 };

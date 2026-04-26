@@ -108,6 +108,10 @@ const TabsBar: React.FC<TabsBarProps> = ({ className, onSave }) => {
                 return 'text-gray-600 dark:text-gray-400';
             case 'OPTIONS':
                 return 'text-indigo-600 dark:text-indigo-400';
+            case 'WS':
+                return 'text-teal-600 dark:text-teal-400';
+            case 'SSE':
+                return 'text-orange-600 dark:text-orange-400';
             default:
                 return 'text-slate-600 dark:text-slate-400';
         }
@@ -159,7 +163,7 @@ const TabsBar: React.FC<TabsBarProps> = ({ className, onSave }) => {
                                         tab.protocol === 'ws'
                                             ? 'text-teal-600 dark:text-teal-400'
                                             : tab.protocol === 'sse'
-                                                ? 'text-purple-600 dark:text-purple-400'
+                                                ? 'text-orange-600 dark:text-orange-400'
                                                 : getMethodColor(tab.method)
                                     )}>
                                         {tab.protocol === 'ws'
@@ -203,31 +207,22 @@ const TabsBar: React.FC<TabsBarProps> = ({ className, onSave }) => {
                         </Tooltip>
                     </TooltipProvider>
                 ))}
-            </div>
 
-            {/* Sticky Add Tab Button - always visible on the right */}
-            {canAddTab() && (
-                <div className="flex-shrink-0 bg-slate-100 dark:bg-slate-800 border-l border-slate-200 dark:border-slate-700">
-                    <TooltipProvider delayDuration={300}>
-                        <Tooltip>
-                            <TooltipTrigger asChild>
-                                <SecondaryButton
-                                    variant="ghost"
-                                    onClick={handleAddTab}
-                                    icon={<PlusIcon size={20} />}
-                                    text="New Tab"
-                                    colorTheme="main"
-                                    className="h-[38px] w-[120px] px-4 py-2 rounded-none"
-                                    aria-label="New tab"
-                                />
-                            </TooltipTrigger>
-                            <TooltipContent className="px-2 py-1 text-xs">
-                                New Tab (Ctrl+T) • {tabs.length}/{TAB_CONSTANTS.MAX_TABS}
-                            </TooltipContent>
-                        </Tooltip>
-                    </TooltipProvider>
-                </div>
-            )}
+                {/* Add Tab Button - inline after last tab, sticks to right of viewport on overflow */}
+                {canAddTab() && (
+                    <div className="sticky right-0 flex-shrink-0 bg-slate-100 dark:bg-slate-800 border-l border-slate-200 dark:border-slate-700">
+                        <PrimaryButton
+                            variant="ghost"
+                            onClick={handleAddTab}
+                            icon={<PlusIcon className="!h-6 !w-6"/>}
+                            colorTheme="main"
+                            className="h-[38px] w-[60px] rounded-none"
+                            aria-label="New tab"
+                            tooltip={`New Tab • ${tabs.length}/${TAB_CONSTANTS.MAX_TABS}`}
+                        />
+                    </div>
+                )}
+            </div>
 
             <Dialog open={!!tabToClose} onOpenChange={(open) => !open && setTabToClose(null)}>
                 <DialogContent>

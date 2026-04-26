@@ -118,12 +118,14 @@ export interface RequestTabsSlice {
     
     // Headers management
     addEmptyHeader: () => void;
+    insertHeaderAfter: (id: string) => void;
     upsertHeader: (id: string, key: string | undefined, value: string | undefined) => void;
     removeHeader: (id: string) => void;
     toggleHeaderEnabled: (id: string, currentDisabled: boolean) => void;
     
     // URL Parameters management
     addEmptyParam: () => void;
+    insertParamAfter: (id: string) => void;
     upsertParam: (id: string, key: string | undefined, value: string | undefined) => void;
     removeParam: (id: string) => void;
     toggleParamEnabled: (id: string, currentDisabled: boolean) => void;
@@ -931,12 +933,28 @@ const createRequestTabsSlice: StateCreator<RequestTabsSliceStore, [], [], Reques
         addEmptyHeader: () => {
             const tab = getActiveTabInternal();
             if (!tab) return;
-            
+
             const newHeader = createEmptyHeaderRow();
             updateActiveTab({
                 headers: [...tab.headers, newHeader],
                 isDirty: true
             });
+        },
+
+        insertHeaderAfter: (id: string) => {
+            const tab = getActiveTabInternal();
+            if (!tab) return;
+
+            const currentHeaders = tab.headers || [];
+            const index = currentHeaders.findIndex(h => h.id === id);
+            const insertAt = index !== -1 ? index + 1 : currentHeaders.length;
+            const newHeader = createEmptyHeaderRow();
+            const updatedHeaders = [
+                ...currentHeaders.slice(0, insertAt),
+                newHeader,
+                ...currentHeaders.slice(insertAt),
+            ];
+            updateActiveTab({ headers: updatedHeaders, isDirty: true });
         },
         
         upsertHeader: (id: string, key: string | undefined, value: string | undefined) => {
@@ -987,16 +1005,33 @@ const createRequestTabsSlice: StateCreator<RequestTabsSliceStore, [], [], Reques
         addEmptyParam: () => {
             const tab = getActiveTabInternal();
             if (!tab) return;
-            
+
             const newParam = createEmptyParamRow();
             const updatedParams = [...tab.params, newParam];
             const updatedUrl = updateUrlWithParams(tab.url, updatedParams);
-            
+
             updateActiveTab({
                 params: updatedParams,
                 url: updatedUrl,
                 isDirty: true
             });
+        },
+
+        insertParamAfter: (id: string) => {
+            const tab = getActiveTabInternal();
+            if (!tab) return;
+
+            const currentParams = tab.params || [];
+            const index = currentParams.findIndex(p => p.id === id);
+            const insertAt = index !== -1 ? index + 1 : currentParams.length;
+            const newParam = createEmptyParamRow();
+            const updatedParams = [
+                ...currentParams.slice(0, insertAt),
+                newParam,
+                ...currentParams.slice(insertAt),
+            ];
+            const updatedUrl = updateUrlWithParams(tab.url, updatedParams);
+            updateActiveTab({ params: updatedParams, url: updatedUrl, isDirty: true });
         },
         
         upsertParam: (id: string, key: string | undefined, value: string | undefined) => {

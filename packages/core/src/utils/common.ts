@@ -532,12 +532,17 @@ export function getHttpMethodColor(method: string): string {
       return 'bg-gray-100 text-gray-800 hover:bg-gray-200';
     case 'OPTIONS':
       return 'bg-indigo-100 text-indigo-800 hover:bg-indigo-200';
+    case 'WS':
+      return 'bg-teal-100 text-teal-800 hover:bg-teal-200';
+    case 'SSE':
+      return 'bg-orange-100 text-orange-800 hover:bg-orange-200';
     default:
       return 'bg-slate-100 text-slate-800 hover:bg-slate-200';
   }
 }
 
-/** * Removes the protocol (http:// or https://) from a given URL string.
+/**
+ * Removes the protocol (http:// or https://) from a given URL string.
  * If the URL is empty or only contains the protocol, returns an empty string.
  * @param fullUrl - The full URL string
  * @returns The URL without the protocol

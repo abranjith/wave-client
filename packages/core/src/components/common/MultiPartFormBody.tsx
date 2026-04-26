@@ -1,5 +1,5 @@
 import React, { useState, useEffect, JSX, useMemo } from 'react';
-import { Trash2Icon, PlusIcon, XIcon, PaperclipIcon } from 'lucide-react';
+import { MinusIcon, PlusIcon, XIcon, PaperclipIcon } from 'lucide-react';
 import { SecondaryButton } from '../ui/SecondaryButton';
 import { Input } from '../ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
@@ -256,6 +256,18 @@ const MultiPartFormBody: React.FC<MultiPartFormBodyProps> = ({ dropdownElement }
     updateBody([...formFields, { id: crypto.randomUUID(), key: '', value: '', fieldType: 'text', disabled: false }]);
   };
 
+  const insertFieldAfter = (id: string) => {
+    const index = formFields.findIndex((f: MultiPartFormField) => f.id === id);
+    const insertAt = index !== -1 ? index + 1 : formFields.length;
+    const newField = { id: crypto.randomUUID(), key: '', value: '', fieldType: 'text' as const, disabled: false };
+    const updated = [
+      ...formFields.slice(0, insertAt),
+      newField,
+      ...formFields.slice(insertAt),
+    ];
+    updateBody(updated);
+  };
+
   const removeField = (id: string) => {
     if (formFields.length > 1) {
       const filteredFields = formFields.filter((field: MultiPartFormField) => field.id !== id);
@@ -429,7 +441,7 @@ const MultiPartFormBody: React.FC<MultiPartFormBodyProps> = ({ dropdownElement }
                     {renderValueInput(field)}
                   </TableCell>
                   <TableCell>
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-1">
                       {field.fieldType === 'file' && isFileReference(field.value) && (
                         <SecondaryButton
                           size="sm"
@@ -439,12 +451,19 @@ const MultiPartFormBody: React.FC<MultiPartFormBodyProps> = ({ dropdownElement }
                           tooltip="Clear file"
                         />
                       )}
+                      <SecondaryButton
+                        size="sm"
+                        onClick={() => insertFieldAfter(field.id)}
+                        colorTheme="main"
+                        icon={<PlusIcon />}
+                        tooltip="Add row below"
+                      />
                       {formFields.length > 1 && (
                         <SecondaryButton
                           size="sm"
                           onClick={() => removeField(field.id)}
                           colorTheme="error"
-                          icon={<Trash2Icon />}
+                          icon={<MinusIcon />}
                           tooltip="Delete field"
                         />
                       )}
@@ -457,16 +476,6 @@ const MultiPartFormBody: React.FC<MultiPartFormBodyProps> = ({ dropdownElement }
         </Table>
       </div>
 
-      {/* Add Field Button */}
-      <div className="flex-shrink-0 flex justify-start mt-4">
-        <SecondaryButton
-          size="sm"
-          onClick={addEmptyField}
-          colorTheme="main"
-          icon={<PlusIcon />}
-          text="Add Field"
-        />
-      </div>
     </div>
   );
 };

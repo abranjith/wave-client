@@ -31,6 +31,21 @@
  *  17.  Typing an https:// URL on a WS tab does NOT auto-revert protocol (one-directional).
  *  18.  URL-based WS auto-switch initializes realtime tab state.
  *  19.  URL-based WS auto-switch clears body to mode 'none'.
+ *
+ *  insertParamAfter — insert-after semantics
+ *  20.  Inserts a new empty param directly after the specified row.
+ *  21.  Inserting after the first row places the new row at index 1.
+ *  22.  Inserting after the last row appends to the end.
+ *  23.  Unknown id appends to the end.
+ *  24.  New param has empty key and value.
+ *  25.  URL is updated after insert (disabled params not included in query string).
+ *
+ *  insertHeaderAfter — insert-after semantics
+ *  26.  Inserts a new empty header directly after the specified row.
+ *  27.  Inserting after the first row places the new row at index 1.
+ *  28.  Inserting after the last row appends to the end.
+ *  29.  Unknown id appends to the end.
+ *  30.  New header has empty key and value.
  */
 
 import { describe, it, expect, beforeEach } from 'vitest';
@@ -247,5 +262,139 @@ describe('createRequestTabsSlice — protocol-aware tab drafts (TASK-001)', () =
         const tab = useAppStateStore.getState().getActiveTab();
         expect(tab?.protocol).toBe('ws');
         expect(tab?.body?.mode).toBe('none');
+    });
+});
+
+// ── Helpers for row-insertion tests ───────────────────────────────────────────
+
+function seedParams(keys: string[]) {
+    const tab = useAppStateStore.getState().getActiveTab()!;
+    const rows = keys.map(k => ({ id: `p-${k}`, key: k, value: `v-${k}`, disabled: false }));
+    useAppStateStore.setState({
+        tabs: useAppStateStore.getState().tabs.map(t =>
+            t.id === tab.id ? { ...t, params: rows } : t
+        ),
+    });
+    return rows;
+}
+
+function seedHeaders(keys: string[]) {
+    const tab = useAppStateStore.getState().getActiveTab()!;
+    const rows = keys.map(k => ({ id: `h-${k}`, key: k, value: `v-${k}`, disabled: false }));
+    useAppStateStore.setState({
+        tabs: useAppStateStore.getState().tabs.map(t =>
+            t.id === tab.id ? { ...t, headers: rows } : t
+        ),
+    });
+    return rows;
+}
+
+// ── insertParamAfter ───────────────────────────────────────────────────────────
+
+describe('insertParamAfter', () => {
+    it('inserts a new row directly after the target row', () => {
+        const rows = seedParams(['a', 'b', 'c']);
+        useAppStateStore.getState().insertParamAfter(rows[1].id); // after 'b'
+        const params = useAppStateStore.getState().getActiveTab()!.params;
+        expect(params).toHaveLength(4);
+        expect(params[2].key).toBe('');  // new empty row at index 2
+        expect(params[1].key).toBe('b'); // 'b' stays at index 1
+        expect(params[3].key).toBe('c'); // 'c' pushed to index 3
+    });
+
+    it('inserts at index 1 when targeting the first row', () => {
+        const rows = seedParams(['a', 'b']);
+        useAppStateStore.getState().insertParamAfter(rows[0].id);
+        const params = useAppStateStore.getState().getActiveTab()!.params;
+        expect(params[0].key).toBe('a');
+        expect(params[1].key).toBe('');
+        expect(params[2].key).toBe('b');
+    });
+
+    it('appends when targeting the last row', () => {
+        const rows = seedParams(['a', 'b']);
+        useAppStateStore.getState().insertParamAfter(rows[1].id);
+        const params = useAppStateStore.getState().getActiveTab()!.params;
+        expect(params).toHaveLength(3);
+        expect(params[2].key).toBe('');
+    });
+
+    it('appends when the id is not found', () => {
+        const rows = seedParams(['a', 'b']);
+        useAppStateStore.getState().insertParamAfter('unknown-id');
+        const params = useAppStateStore.getState().getActiveTab()!.params;
+        expect(params).toHaveLength(3);
+        expect(params[2].key).toBe('');
+    });
+
+    it('new row has empty key and value', () => {
+        const rows = seedParams(['a']);
+        useAppStateStore.getState().insertParamAfter(rows[0].id);
+        const params = useAppStateStore.getState().getActiveTab()!.params;
+        const newRow = params[1];
+        expect(newRow.key).toBe('');
+        expect(newRow.value).toBe('');
+        expect(newRow.disabled).toBe(false);
+    });
+
+    it('marks the tab dirty', () => {
+        const rows = seedParams(['a']);
+        useAppStateStore.getState().insertParamAfter(rows[0].id);
+        expect(useAppStateStore.getState().getActiveTab()!.isDirty).toBe(true);
+    });
+});
+
+// ── insertHeaderAfter ─────────────────────────────────────────────────────────
+
+describe('insertHeaderAfter', () => {
+    it('inserts a new row directly after the target row', () => {
+        const rows = seedHeaders(['a', 'b', 'c']);
+        useAppStateStore.getState().insertHeaderAfter(rows[1].id); // after 'b'
+        const headers = useAppStateStore.getState().getActiveTab()!.headers;
+        expect(headers).toHaveLength(4);
+        expect(headers[2].key).toBe('');
+        expect(headers[1].key).toBe('b');
+        expect(headers[3].key).toBe('c');
+    });
+
+    it('inserts at index 1 when targeting the first row', () => {
+        const rows = seedHeaders(['a', 'b']);
+        useAppStateStore.getState().insertHeaderAfter(rows[0].id);
+        const headers = useAppStateStore.getState().getActiveTab()!.headers;
+        expect(headers[0].key).toBe('a');
+        expect(headers[1].key).toBe('');
+        expect(headers[2].key).toBe('b');
+    });
+
+    it('appends when targeting the last row', () => {
+        const rows = seedHeaders(['a', 'b']);
+        useAppStateStore.getState().insertHeaderAfter(rows[1].id);
+        const headers = useAppStateStore.getState().getActiveTab()!.headers;
+        expect(headers).toHaveLength(3);
+        expect(headers[2].key).toBe('');
+    });
+
+    it('appends when the id is not found', () => {
+        const rows = seedHeaders(['a', 'b']);
+        useAppStateStore.getState().insertHeaderAfter('unknown-id');
+        const headers = useAppStateStore.getState().getActiveTab()!.headers;
+        expect(headers).toHaveLength(3);
+        expect(headers[2].key).toBe('');
+    });
+
+    it('new row has empty key and value', () => {
+        const rows = seedHeaders(['a']);
+        useAppStateStore.getState().insertHeaderAfter(rows[0].id);
+        const headers = useAppStateStore.getState().getActiveTab()!.headers;
+        const newRow = headers[1];
+        expect(newRow.key).toBe('');
+        expect(newRow.value).toBe('');
+        expect(newRow.disabled).toBe(false);
+    });
+
+    it('marks the tab dirty', () => {
+        const rows = seedHeaders(['a']);
+        useAppStateStore.getState().insertHeaderAfter(rows[0].id);
+        expect(useAppStateStore.getState().getActiveTab()!.isDirty).toBe(true);
     });
 });

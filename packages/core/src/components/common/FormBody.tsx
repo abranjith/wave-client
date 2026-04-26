@@ -1,5 +1,5 @@
 import React, { useState, useEffect, JSX, useMemo } from 'react';
-import { Trash2Icon, CopyIcon, ClipboardPasteIcon, PlusIcon } from 'lucide-react';
+import { MinusIcon, CopyIcon, ClipboardPasteIcon, PlusIcon } from 'lucide-react';
 import { Button } from '../ui/button';
 import { SecondaryButton } from '../ui/SecondaryButton';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
@@ -122,8 +122,19 @@ const FormBody: React.FC<FormBodyProps> = ({ dropdownElement }) => {
   };
 
   const addEmptyField = () => {
-    let emptyRow = { id: crypto.randomUUID(), key: '', value: '', disabled: false };
-    updateBody([...formFields, emptyRow]);
+    updateBody([...formFields, { id: crypto.randomUUID(), key: '', value: '', disabled: false }]);
+  };
+
+  const insertFieldAfter = (id: string) => {
+    const index = formFields.findIndex((f: FormField) => f.id === id);
+    const insertAt = index !== -1 ? index + 1 : formFields.length;
+    const newField = { id: crypto.randomUUID(), key: '', value: '', disabled: false };
+    const updated = [
+      ...formFields.slice(0, insertAt),
+      newField,
+      ...formFields.slice(insertAt),
+    ];
+    updateBody(updated);
   };
 
   const removeField = (id: string) => {
@@ -294,13 +305,20 @@ const FormBody: React.FC<FormBodyProps> = ({ dropdownElement }) => {
                     />
                   </TableCell>
                   <TableCell>
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-1">
+                      <SecondaryButton
+                        size="sm"
+                        onClick={() => insertFieldAfter(field.id)}
+                        colorTheme="main"
+                        icon={<PlusIcon />}
+                        tooltip="Add row below"
+                      />
                       {formFields.length > 1 && (
                         <SecondaryButton
                           size="sm"
                           onClick={() => removeField(field.id)}
                           colorTheme="error"
-                          icon={<Trash2Icon />}
+                          icon={<MinusIcon />}
                           tooltip="Delete field"
                         />
                       )}
@@ -313,16 +331,6 @@ const FormBody: React.FC<FormBodyProps> = ({ dropdownElement }) => {
         </Table>
       </div>
 
-      {/* Add Field Button */}
-      <div className="flex-shrink-0 flex justify-start mt-4">
-        <SecondaryButton
-          size="sm"
-          onClick={addEmptyField}
-          colorTheme="main"
-          icon={<PlusIcon />}
-          text="Add Field"
-        />
-      </div>
     </div>
   );
 };

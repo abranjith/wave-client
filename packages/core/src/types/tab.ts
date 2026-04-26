@@ -103,7 +103,7 @@ export interface TabData {
 // ==================== Tab Configuration ====================
 
 export const TAB_CONSTANTS = {
-    MAX_TABS: 5,
+    MAX_TABS: 25,
     DEFAULT_NAME: 'Untitled Request',
     DEFAULT_METHOD: 'GET',
     /** Default request protocol for new tabs. */
@@ -133,8 +133,8 @@ export function getDefaultRequestSection(protocol: RequestProtocol): RequestSect
  * - `'sse'`  → Params, Headers, Body (SSE supports a request body but not validation)
  */
 export function getRequestTabsForProtocol(protocol: RequestProtocol): RequestSectionTab[] {
-    if (protocol === 'ws') return ['Params', 'Headers'];
-    if (protocol === 'sse') return ['Params', 'Headers', 'Body'];
+    if (protocol === 'ws') {return ['Params', 'Headers'];}
+    if (protocol === 'sse') {return ['Params', 'Headers', 'Body'];}
     return ['Params', 'Headers', 'Body', 'Validation'];
 }
 
@@ -149,8 +149,8 @@ export function getRequestTabsForProtocol(protocol: RequestProtocol): RequestSec
  * - `'sse'`  → Events, Headers (SSE stream rendered in FEAT-007)
  */
 export function getResponseTabsForProtocol(protocol: RequestProtocol): ResponseSectionTab[] {
-    if (protocol === 'ws') return ['Messages', 'Headers'];
-    if (protocol === 'sse') return ['Events', 'Headers'];
+    if (protocol === 'ws') {return ['Messages', 'Headers'];}
+    if (protocol === 'sse') {return ['Events', 'Headers'];}
     return ['Body', 'Headers', 'Validation'];
 }
 
@@ -162,8 +162,8 @@ export function getResponseTabsForProtocol(protocol: RequestProtocol): ResponseS
  * - SSE:  `'Events'` (SSE event stream)
  */
 export function getDefaultResponseSection(protocol: RequestProtocol): ResponseSectionTab {
-    if (protocol === 'ws') return 'Messages';
-    if (protocol === 'sse') return 'Events';
+    if (protocol === 'ws') {return 'Messages';}
+    if (protocol === 'sse') {return 'Events';}
     return 'Body';
 }
 

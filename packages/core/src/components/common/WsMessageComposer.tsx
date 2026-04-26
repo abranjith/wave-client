@@ -90,6 +90,7 @@ const WsMessageComposer: React.FC<WsMessageComposerProps> = ({ onSend, disabled 
                 colorTheme="main"
                 tooltip="Send"
                 disabled={isSendDisabled}
+                aria-label="Send"
                 className="px-6 py-2"
             />
         </div>

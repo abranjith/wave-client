@@ -34,15 +34,17 @@ vi.mock('../../../components/ui/PrimaryButton', () => ({
     PrimaryButton: ({
         onClick,
         text,
+        tooltip,
         disabled,
     }: {
         onClick: () => void;
         text?: string;
+        tooltip?: string;
         disabled?: boolean;
         [key: string]: unknown;
     }) => (
         <button onClick={onClick} disabled={disabled} data-testid="action-button">
-            {text}
+            {text ?? tooltip}
         </button>
     ),
 }));
@@ -100,21 +102,21 @@ describe('ConnectionControls', () => {
         seedRealtimeState('idle');
         renderControls();
         expect(screen.getByTestId('action-button')).toHaveTextContent('Connect');
-        expect(screen.getByText('Idle')).toBeInTheDocument();
+        expect(screen.getByLabelText('Connection status: Idle')).toBeInTheDocument();
     });
 
     it('shows "Connect" button when status is disconnected', () => {
         seedRealtimeState('disconnected');
         renderControls();
         expect(screen.getByTestId('action-button')).toHaveTextContent('Connect');
-        expect(screen.getByText('Disconnected')).toBeInTheDocument();
+        expect(screen.getByLabelText('Connection status: Disconnected')).toBeInTheDocument();
     });
 
     it('shows "Connect" button and "Error" label when status is error', () => {
         seedRealtimeState('error');
         renderControls();
         expect(screen.getByTestId('action-button')).toHaveTextContent('Connect');
-        expect(screen.getByText('Error')).toBeInTheDocument();
+        expect(screen.getByLabelText('Connection status: Error')).toBeInTheDocument();
     });
 
     it('shows error details in status text when available', () => {
@@ -133,7 +135,7 @@ describe('ConnectionControls', () => {
 
         renderControls();
         expect(
-            screen.getByText('Error: connect ECONNREFUSED 127.0.0.1:7192')
+            screen.getByLabelText('Connection status: Error: connect ECONNREFUSED 127.0.0.1:7192')
         ).toBeInTheDocument();
     });
 
@@ -141,21 +143,21 @@ describe('ConnectionControls', () => {
         seedRealtimeState('connected');
         renderControls();
         expect(screen.getByTestId('action-button')).toHaveTextContent('Disconnect');
-        expect(screen.getByText('Connected')).toBeInTheDocument();
+        expect(screen.getByLabelText('Connection status: Connected')).toBeInTheDocument();
     });
 
     it('shows "Disconnect" button and "Connecting…" label when status is connecting', () => {
         seedRealtimeState('connecting');
         renderControls();
         expect(screen.getByTestId('action-button')).toHaveTextContent('Disconnect');
-        expect(screen.getByText('Connecting…')).toBeInTheDocument();
+        expect(screen.getByLabelText('Connection status: Connecting…')).toBeInTheDocument();
     });
 
     it('shows "Disconnect" button and "Disconnecting…" label when status is disconnecting', () => {
         seedRealtimeState('disconnecting');
         renderControls();
         expect(screen.getByTestId('action-button')).toHaveTextContent('Disconnect');
-        expect(screen.getByText('Disconnecting…')).toBeInTheDocument();
+        expect(screen.getByLabelText('Connection status: Disconnecting…')).toBeInTheDocument();
     });
 
     it('button is disabled when disabled prop is true', () => {

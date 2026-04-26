@@ -136,11 +136,11 @@ describe('TabsBar — protocol badge', () => {
         expect(screen.getByText('SSE')).toBeInTheDocument();
     });
 
-    it('SSE badge has purple color class', () => {
+    it('SSE badge has orange color class', () => {
         seedTabs([makeTab('sse')]);
         renderTabsBar();
         const badge = screen.getByText('SSE');
-        expect(badge.className).toMatch(/purple/);
+        expect(badge.className).toMatch(/orange/);
     });
 
     it('clicking a tab activates it via setActiveTab', () => {

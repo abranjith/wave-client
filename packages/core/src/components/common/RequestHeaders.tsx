@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, JSX } from 'react';
-import { Trash2Icon, PlusIcon, CopyIcon, ClipboardPasteIcon } from 'lucide-react';
+import { MinusIcon, PlusIcon, CopyIcon, ClipboardPasteIcon } from 'lucide-react';
 import { Button } from '../ui/button';
 import { SecondaryButton } from '../ui/SecondaryButton';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
@@ -18,6 +18,7 @@ const RequestHeaders: React.FC = () => {
   const activeTab = useAppStateStore((state) => state.getActiveTab());
   const headers: HeaderRow[] = activeTab?.headers || [];
   const addEmptyHeader = useAppStateStore((state) => state.addEmptyHeader);
+  const insertHeaderAfter = useAppStateStore((state) => state.insertHeaderAfter);
   const upsertHeader = useAppStateStore((state) => state.upsertHeader);
   const removeHeader = useAppStateStore((state) => state.removeHeader);
   const toggleHeaderEnabled = useAppStateStore((state) => state.toggleHeaderEnabled);
@@ -174,7 +175,7 @@ const RequestHeaders: React.FC = () => {
         </div>
       </div>
 
-      <div className="overflow-x-auto border border-slate-200 dark:border-slate-700 rounded-t-lg">
+      <div className="overflow-x-auto border border-slate-200 dark:border-slate-700 rounded-lg">
         <Table>
           <TableHeader>
             <TableRow>
@@ -227,13 +228,20 @@ const RequestHeaders: React.FC = () => {
                     />
                   </TableCell>
                   <TableCell>
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-1">
+                      <SecondaryButton
+                        size="sm"
+                        onClick={() => insertHeaderAfter(header.id)}
+                        colorTheme="main"
+                        icon={<PlusIcon />}
+                        tooltip="Add row below"
+                      />
                       {headers.length > 1 && (
                         <SecondaryButton
                           size="sm"
                           onClick={() => removeHeader(header.id)}
                           colorTheme="error"
-                          icon={<Trash2Icon />}
+                          icon={<MinusIcon />}
                           tooltip="Delete header"
                         />
                       )}
@@ -246,15 +254,6 @@ const RequestHeaders: React.FC = () => {
         </Table>
       </div>
       
-      <div className="flex items-center border border-t-0 border-slate-200 dark:border-slate-700 rounded-b-lg p-3 bg-slate-50 dark:bg-slate-800">
-        <SecondaryButton
-          size="sm"
-          onClick={addEmptyHeader}
-          colorTheme="main"
-          icon={<PlusIcon />}
-          text="Add Header"
-        />
-      </div>
     </div>
   );
 };
