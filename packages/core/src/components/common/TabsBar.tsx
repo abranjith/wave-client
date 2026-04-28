@@ -214,7 +214,7 @@ const TabsBar: React.FC<TabsBarProps> = ({ className, onSave }) => {
                         <PrimaryButton
                             variant="ghost"
                             onClick={handleAddTab}
-                            icon={<PlusIcon className="!h-6 !w-6"/>}
+                            icon={<PlusIcon className="!h-5 !w-5"/>}
                             colorTheme="main"
                             className="h-[38px] w-[60px] rounded-none"
                             aria-label="New tab"
