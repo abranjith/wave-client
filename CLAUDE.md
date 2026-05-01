@@ -1,106 +1,62 @@
-# CLAUDE.md
+<!-- spec-lite managed — regenerated on spec-lite init/update -->
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+# Project Instructions
 
-## Project Overview
+This project uses [spec-lite](https://github.com/abranjith/spec-lite) agent and skill prompts
+for structured software engineering workflows.
 
-Wave Client is a modern REST API client that runs as both a VS Code extension and a standalone web app. It uses a monorepo with an adapter pattern to share 100% of the UI logic across platforms while delegating system operations (file I/O, HTTP, storage, security) to platform-specific adapters.
+## Available Agents & Skills
 
-## Monorepo Structure (pnpm workspaces + Turborepo)
+The following specialist agents and skills are available:
 
-- **`packages/core`** - Platform-agnostic React UI, components, hooks, state management, and business logic. Zero platform-specific code. Built with Vite as a library (ES + CJS). This is where most development happens.
-- **`packages/shared`** - Backend services (HTTP, storage, collections, environments, cookies, WebSocket, SSE, auth) used by both the VS Code extension and the server. Node.js-only.
-- **`packages/vscode`** - VS Code extension. Extension backend (`extension.ts` + `MessageHandler.ts`) runs in Node.js; webview frontend renders core components via `vsCodeAdapter`. Built with webpack.
-- **`packages/web`** - Standalone web app. Renders core components via `webAdapter` using browser APIs. Built with Vite.
-- **`packages/server`** - Fastify server powering the web app with secure I/O (avoids CORS, provides file system access, encryption).
-- **`packages/arena`** - AI agent engine using LangGraph/LangChain with MCP tool integration. Lazy-loaded in VS Code to avoid blocking extension activation.
-- **`packages/mcp-server`** - MCP (Model Context Protocol) server exposing Wave Client tools to AI agents.
+**Agent files** (`.claude/agents/`):
 
-## Common Commands
+- [spec.architect](.claude/agents/spec.architect.md)
+- [spec.brainstormer](.claude/agents/spec.brainstormer.md)
+- [spec.explorer](.claude/agents/spec.explorer.md)
+- [spec.feature_planner](.claude/agents/spec.feature_planner.md)
+- [spec.yolo](.claude/agents/spec.yolo.md)
+- [spec.devops](.claude/agents/spec.devops.md)
+- [spec.feature](.claude/agents/spec.feature.md)
+- [spec.fixer](.claude/agents/spec.fixer.md)
+- [spec.implementer](.claude/agents/spec.implementer.md)
+- [spec.memorize](.claude/agents/spec.memorize.md)
+- [spec.todo](.claude/agents/spec.todo.md)
+- [spec.tool_helper](.claude/agents/spec.tool_helper.md)
 
-```bash
-pnpm install                # Install all dependencies
-pnpm build                  # Build all packages (via Turborepo, respects dependency order)
-pnpm test                   # Run all tests across packages
-pnpm lint                   # ESLint across all packages
+**Command files** (`.claude/commands/`):
 
-# Package-specific builds
-pnpm build:core             # Build core package only
-pnpm build:shared           # Build shared package only
-pnpm build:vscode           # Build VS Code extension
-pnpm build:web              # Build web app
+- [spec.architect](.claude/commands/spec.architect.md)
+- [spec.brainstorm](.claude/commands/spec.brainstorm.md)
+- [spec.explore](.claude/commands/spec.explore.md)
+- [spec.plan_feature](.claude/commands/spec.plan_feature.md)
+- [spec.yolo](.claude/commands/spec.yolo.md)
+- [spec.devops](.claude/commands/spec.devops.md)
+- [spec.feature](.claude/commands/spec.feature.md)
+- [spec.fix](.claude/commands/spec.fix.md)
+- [spec.implement](.claude/commands/spec.implement.md)
+- [spec.memorize](.claude/commands/spec.memorize.md)
+- [spec.todo](.claude/commands/spec.todo.md)
+- [spec.tool_help](.claude/commands/spec.tool_help.md)
 
-# Development
-pnpm watch                  # Watch-build VS Code extension (extension + webview)
-pnpm dev:web                # Vite dev server for web app
-pnpm dev:server             # Dev server with hot reload (tsx watch)
+## Usage
 
-# Testing (all use Vitest)
-cd packages/core && pnpm test          # Run core tests
-cd packages/core && pnpm test:watch    # Watch mode
-cd packages/core && pnpm test:coverage # With coverage (v8)
-cd packages/core && npx vitest run src/test/utils/transformers/SwaggerTransformer.test.ts  # Single test file
+To use an agent, reference its prompt file in your conversation:
+
+```text
+Use the planner from .claude/agents/spec.planner.md to create a technical plan for this project.
 ```
 
-## Running the VS Code Extension
+## Output Directory
 
-1. `pnpm build` (or `pnpm watch` for continuous rebuilds)
-2. In VS Code: Run and Debug > "Run Extension" (or "Run Extension (with build)")
-3. In the Extension Development Host: `Ctrl+Alt+W` / `Cmd+Alt+W` or command palette > "Wave Client: Open Wave Client"
+Agent and skill outputs are written to the `.spec-lite/` directory:
 
-## Architecture: The Adapter Pattern
-
-The core architectural concept. All platform I/O is abstracted behind adapter interfaces defined in `packages/core/src/types/adapters.ts`:
-
-- **`IPlatformAdapter`** - Top-level adapter composed of sub-adapters
-- Sub-adapters: `IStorageAdapter`, `IHttpAdapter`, `IFileAdapter`, `ISecretAdapter`, `ISecurityAdapter`, `INotificationAdapter`, `IArenaAdapter`, `IClipboardAdapter`, `IRealtimeAdapter`
-- Components access adapters via hooks: `useAdapter()`, `useStorageAdapter()`, `useHttpAdapter()`, etc.
-- Each platform implements its own adapter:
-  - `packages/vscode/src/webview/adapters/vsCodeAdapter.ts` - bridges webview postMessage to extension backend
-  - `packages/web/src/adapters/webAdapter.ts` - uses browser APIs + server calls
-
-**Key rule:** `packages/core` must never import platform-specific APIs (no `vscode`, no `localStorage`, no `fs`).
-
-## State Management
-
-Global state uses **Zustand** with a slice pattern. The store is composed from ~15 slices in `packages/core/src/hooks/store/useAppStateStore.tsx`:
-
-- `createCollectionsSlice`, `createEnvironmentsSlice`, `createRequestTabsSlice`, `createHistorySlice`, `createFlowsSlice`, `createTestSuitesSlice`, `createArenaSlice`, `createRealtimeSlice`, `createSettingsSlice`, etc.
-
-Access via `useAppStateStore` hook. Prefer global state over prop-drilling; avoid duplicating global state in local component state.
-
-## VS Code Extension: Message-based Communication
-
-The VS Code adapter uses a request/response pattern over `postMessage`:
-1. Webview calls adapter method -> sends `postMessage` with a `requestId`
-2. `MessageHandler.ts` in the extension host processes the message, calls shared services
-3. Extension sends response back with matching `requestId`
-4. Adapter resolves the corresponding promise
-
-Push events (banners, state changes) use the adapter event emitter system (no `requestId`).
-
-## Result Pattern
-
-All fallible operations use `Result<T, E>` from `packages/core/src/utils/result.ts`:
-```typescript
-{ isOk: true, value: data }   // Success
-{ isOk: false, error: message } // Error
+```text
+.spec-lite/
+├── brainstorm.md
+├── plan.md                    # Default plan (simple projects)
+├── plan_<name>.md              # Named plans (complex projects)
+├── TODO.md
+├── features/
+└── reviews/
 ```
-Constructors: `ok(value)` and `err(error)`. Avoid bare try/catch; use Result for consistency.
-
-## Testing
-
-- **Framework:** Vitest with jsdom environment and React Testing Library
-- **Test location:** `packages/core/src/test/` mirroring source structure
-- **Mock adapter:** `packages/core/src/test/mocks/mockAdapter.ts` - use `createMockAdapter()` for components that need `useAdapter()`
-- **Pattern:** Wrap components in `<AdapterProvider adapter={mockAdapter}>`, assert on user-visible behavior
-- **Coverage thresholds:** 70% lines/functions/statements, 65% branches (core package)
-
-## Key Conventions
-
-- **TypeScript** across all packages. Strict mode enabled.
-- **React + Tailwind CSS** for UI. Component library primitives from Radix UI. Icons from Lucide React.
-- **Result pattern** for all fallible adapter/service calls. Show errors via `notification.showNotification('error', message)`.
-- Collection import/export uses transformer classes in `packages/core/src/utils/transformers/` (Postman, Swagger/OpenAPI, HTTP file, Wave native format).
-- HTTP request execution flows through `packages/core/src/utils/executors/` (`HttpRequestExecutor`, `FlowExecutor`) which delegate to the adapter's `IHttpAdapter`.
-- Arena (AI) service is lazy-loaded via dynamic `import()` in `MessageHandler.ts` to keep extension activation fast.

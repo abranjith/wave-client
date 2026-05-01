@@ -3,7 +3,7 @@
  *
  * Centralises all streaming protocol concerns for Arena chat:
  *   - State machine: idle → connecting → streaming → complete / error
- *   - Safety timeout: 120 s with reset on every chunk or heartbeat
+ *   - Safety timeout: 180 s with reset on every chunk or heartbeat
  *   - Single-stream enforcement: auto-cancels previous stream on startStream()
  *   - Content accumulation in local React state
  *   - Zustand message updates via updateArenaMessage
@@ -30,7 +30,7 @@ import type { ArenaStreamState, ArenaStreamManager, ArenaStreamCallbacks } from 
 // ============================================================================
 
 /** Cancel stream if no chunk / heartbeat arrives within this window (ms). */
-const SAFETY_TIMEOUT_MS = 120_000;
+const SAFETY_TIMEOUT_MS = 180_000;
 
 /**
  * Maximum number of out-of-order chunks held in the reorder buffer before a

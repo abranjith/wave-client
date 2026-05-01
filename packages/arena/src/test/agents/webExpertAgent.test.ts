@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { createWebExpertAgent } from '../../agents/webExpertAgent';
 import type { BaseChatModel } from '@langchain/core/language_models/chat_models';
 import type { BaseMessage } from '@langchain/core/messages';
-import { AIMessage } from '@langchain/core/messages';
+import { AIMessage, SystemMessage } from '@langchain/core/messages';
 
 // ---------------------------------------------------------------------------
 // Mock global fetch so webFetcher never makes real HTTP requests
@@ -134,6 +134,65 @@ describe('webExpertAgent — LLM timeout', () => {
         const lastChunk = chunks[chunks.length - 1];
         expect(lastChunk.done).toBe(true);
         expect(lastChunk.error).toBeUndefined();
+    }, 5_000);
+});
+
+// ---------------------------------------------------------------------------
+// Inlined system prompt wiring
+// ---------------------------------------------------------------------------
+
+describe('webExpertAgent — inlined system prompt', () => {
+    it('passes the full inlined prompt as the system message', async () => {
+        const capturedMessages: BaseMessage[][] = [];
+        const mockLLM = {
+            invoke: vi.fn().mockImplementation((messages: BaseMessage[]) => {
+                capturedMessages.push(messages);
+                return Promise.resolve(new AIMessage('response'));
+            }),
+        } as unknown as BaseChatModel;
+
+        const agent = createWebExpertAgent({ llm: mockLLM, _llmTimeoutMs: TEST_TIMEOUT_MS });
+
+        const chunks = [];
+        for await (const chunk of agent.chat([], 'hello')) {
+            chunks.push(chunk);
+            if (chunk.done) break;
+        }
+
+        expect(capturedMessages.length).toBe(1);
+        const systemMsg = capturedMessages[0][0];
+        expect(systemMsg).toBeInstanceOf(SystemMessage);
+        // Marker that exists only in the full prompt, not in the previous stub
+        expect(systemMsg.content).toContain('Tier 1 — Specifications & Standards');
+        expect(systemMsg.content).toContain('webauthn.guide');
+        expect(systemMsg.content).toContain('Reference Sources');
+    }, 5_000);
+
+    it('systemPrompt override replaces the inlined prompt', async () => {
+        const capturedMessages: BaseMessage[][] = [];
+        const mockLLM = {
+            invoke: vi.fn().mockImplementation((messages: BaseMessage[]) => {
+                capturedMessages.push(messages);
+                return Promise.resolve(new AIMessage('response'));
+            }),
+        } as unknown as BaseChatModel;
+
+        const agent = createWebExpertAgent({
+            llm: mockLLM,
+            systemPrompt: 'CUSTOM_PROMPT_FOR_TEST',
+            _llmTimeoutMs: TEST_TIMEOUT_MS,
+        });
+
+        const chunks = [];
+        for await (const chunk of agent.chat([], 'hello')) {
+            chunks.push(chunk);
+            if (chunk.done) break;
+        }
+
+        expect(capturedMessages.length).toBe(1);
+        const systemMsg = capturedMessages[0][0];
+        expect(systemMsg).toBeInstanceOf(SystemMessage);
+        expect(systemMsg.content).toBe('CUSTOM_PROMPT_FOR_TEST');
     }, 5_000);
 });
 

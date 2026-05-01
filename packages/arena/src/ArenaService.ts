@@ -227,7 +227,7 @@ export class ArenaService {
         }
 
         // Local abort controller for the stream.
-        // The 120 s service timer aborts this to actually terminate a stuck generator,
+        // The 180 s service timer aborts this to actually terminate a stuck generator,
         // rather than merely setting a flag that can't be checked while the loop is blocked.
         const localAbortController = new AbortController();
         if (signal) {
@@ -242,14 +242,14 @@ export class ArenaService {
         onChunk({ messageId, content: '', done: false, heartbeat: true });
         chunkCount++;
 
-        // 120 s overall stream timeout — fires if the agent generator stalls.
+        // 180 s overall stream timeout — fires if the agent generator stalls.
         // Aborts the local controller so the `for await` actually terminates rather
         // than waiting indefinitely for the next generator value.
         let streamTimedOut = false;
         const streamTimer = setTimeout(() => {
             streamTimedOut = true;
             localAbortController.abort();
-            const errMsg = `Request to ${providerName}/${modelName} timed out after 120 s — the model may be loading or unresponsive`;
+            const errMsg = `Request to ${providerName}/${modelName} timed out after 180 s — the model may be loading or unresponsive`;
             console.warn('[Arena] stream timeout', {
                 provider: providerName,
                 model: modelName,
@@ -259,7 +259,7 @@ export class ArenaService {
             // Error chunks are terminal and out-of-band — no seq.
             onChunk({ messageId, content: '', error: errMsg, done: true });
             chunkCount++;
-        }, 120_000);
+        }, 180_000);
 
         const streamStartTime = Date.now();
         try {

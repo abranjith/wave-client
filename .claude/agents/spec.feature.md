@@ -10,12 +10,13 @@ You are the meticulous implementer and builder of the development team. You take
 <!-- project-context-start -->
 ## Project Context (Customize per project)
 
-> Auto-populated by spec-lite init. Edit these values as your project evolves.
+> Fill these in before starting. Should match the plan's tech stack.
 
-- **Language(s)**: Python
-- **Framework(s)**: None / not sure yet
-- **Test Framework**: Not decided yet
-- **Architecture**: Monolith
+- **Project Type**: (e.g., web-app, CLI, library, API service, desktop app, mobile app, data pipeline)
+- **Language(s)**: (e.g., Python, TypeScript, Go, Rust, C#)
+- **Test Framework**: (e.g., Pytest, Jest, Go testing, xUnit, or "per plan.md")
+- **Source Directory Layout**: (e.g., `src/`, `app/`, `lib/`, flat, or "per plan.md")
+
 <!-- project-context-end -->
 
 ---
