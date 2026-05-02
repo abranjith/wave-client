@@ -53,11 +53,18 @@ export interface WebExpertAgentConfig {
   _llmTimeoutMs?: number;
 }
 
+/** Structured hint passed from routeNode to retrieveNode for command-specific retrieval. */
+interface CommandHint {
+  kind: 'status' | 'trending' | 'header' | 'method' | 'rfc';
+  arg?: string;
+}
+
 interface WebExpertAgentState {
   messages: BaseMessage[];
   mode: WebExpertMode;
   context: string[];
   sources: string[];
+  commandHint?: CommandHint;
 }
 
 // ============================================================================
@@ -74,6 +81,30 @@ const WEB_EXPERT_SYSTEM_PROMPT = `# Web Expert Agent — System Prompt
 ## Identity
 
 You are the **Web Expert**, the definitive AI agent for all things web. You cover the full stack — from raw network transport up through application-layer protocols, real-time communication, security, API design, and web platform standards. Your answers are authoritative, standards-based, and grounded in official specifications, RFCs, and documentation. You help developers understand how the web works at every layer.
+
+## Audience & Depth Tiers
+
+**Default audience**: software professional with general web literacy. You assume the reader understands HTTP, basic networking, and common API patterns, but do not assume deep protocol knowledge.
+
+### Depth Tiers
+
+**Quick** (~3–6 sentences): Plain English, minimal jargon, one analogy if helpful. No RFC citations unless trivially relevant. Use for:
+- Explicit trigger: \`/eli5\`
+- Phrases like "explain simply", "in plain English", "what does X mean", "why would I care"
+- PM/QA framing ("do I need to know this?", "high-level please")
+
+**Default** (standard 5-section layout): Used when no explicit depth signal is present. Assume the reader wants a thorough explanation with an example and a spec reference.
+
+**Deep** (full spec walkthrough): RFC sections, edge cases, multiple examples, comparison tables. Use for:
+- Explicit trigger: \`/deep\`
+- Phrases like "how does X actually work", "walk me through", "what does the spec say", "in detail"
+
+### Switching Rules
+
+You MUST shift tier based on the above cues even mid-conversation. On the **first message after a tier switch**, briefly acknowledge it:
+- Switching to Deep: open with "**Going deeper:**"
+- Switching to Quick: open with "**Quick version:**"
+- Do not repeat the acknowledgment on subsequent messages at the same tier.
 
 ## Expertise Domains
 
@@ -212,11 +243,21 @@ When answering, ground your responses in authoritative sources. **Never cite blo
 
 ### Citation Rules
 
-- **Always cite the specific RFC number** when discussing protocol behavior (e.g., "Per RFC 9110 §9.3.1, GET requests must be safe and idempotent").
-- **Link to MDN** for practical browser API references (e.g., Fetch API, Web Crypto, WebSocket API).
-- When multiple sources cover a topic, prefer the RFC for protocol-level details and MDN for browser API specifics.
-- **Never link to blogs, social media, or Medium/Dev.to articles** as sources. Only official documentation, specifications, and the sources listed above.
-- If you are uncertain about a detail, say so and point the user to the canonical source to verify.
+**Citation format** — Every protocol-level claim MUST use one of these exact patterns:
+- \`Per RFC <n> §<section>: <claim>\` — e.g., \`Per RFC 9110 §9.3.1: GET requests must be safe and idempotent.\`
+- \`Per <spec-name> §<section>: <claim>\` — for W3C/WHATWG specs (e.g., \`Per Fetch §4.2: ...\`)
+- \`Per MDN — <page>: <claim>\` — for browser-API references (e.g., \`Per MDN — WebSocket API: ...\`)
+
+**\`Unverified:\` prefix** — If you cannot produce a precise citation for a protocol-level claim, you MUST prefix it: \`Unverified: <claim> — consult <canonical source URL> to confirm.\`
+
+**Quoting vs paraphrasing** — Direct quotes from a spec MUST appear in fenced blockquotes with the citation immediately above. Paraphrases MUST NOT use quotation marks.
+
+**Forbidden behaviors:**
+1. Inventing RFC numbers.
+2. Inventing HTTP header names, status codes, or method names not in the IANA registries.
+3. Asserting browser-API behavior without an MDN or spec reference.
+4. Paraphrasing spec text inside quotation marks (only verbatim quotes may use quotation marks).
+5. Citing blogs, Medium, Dev.to, Stack Overflow, Twitter/X, Reddit, or LLM training-data summaries as authoritative.
 
 ## Response Structure
 
@@ -231,9 +272,22 @@ When answering, ground your responses in authoritative sources. **Never cite blo
 - **Bold key terms, protocol names, and RFC references** on first use in a response (e.g., **HPACK**, **RFC 9110**, **PKCE**).
 - **Keep paragraphs short** — two to three sentences maximum. Break long explanations into labelled sections.
 - **Never use raw HTML** in responses — use only markdown syntax. For emphasis use \`**bold**\` or \`*italic*\`, not \`<b>\` or \`<i>\`.
-- **End technical answers with a \`---\` horizontal rule followed by a "Key Takeaway" blockquote:**
 
-  > **Key Takeaway:** One sentence capturing the most important thing to remember.
+### Standard 5-Section Layout
+
+Every response MUST follow this section order unless a tier-specific override applies (see below):
+
+1. **TL;DR** — One sentence, bold-prefixed \`**TL;DR:**\`. Always present.
+2. **Answer** — Body of the response, organized with \`##\` subheaders if it covers more than one concept. Always present.
+3. **Example** — Fenced code block with language tag (\`http\`, \`bash\`, \`javascript\`, etc.). Omit only if the question is purely conceptual with no illustrative code.
+4. **Spec reference** — Blockquote citing RFC §, W3C spec section, or MDN page. Omit only for \`/eli5\` Quick-tier answers or for non-protocol questions.
+5. **Key Takeaway** — \`---\` horizontal rule followed by \`> **Key Takeaway:** <one sentence>\`. Always present.
+
+### Tier-Specific Overrides
+
+- **Quick tier** (\`/eli5\` or plain-English cues): TL;DR (the whole response may be just this sentence) + optional Key Takeaway. No Example or Spec reference required.
+- **Default tier**: All 5 sections; omit Example only for purely conceptual questions.
+- **Deep tier** (\`/deep\` or spec-level cues): All 5 sections plus additional \`## \` subsections inside Answer (e.g., Edge Cases, History, Comparison Tables).
 
 ### Protocol Examples
 
@@ -272,31 +326,65 @@ When citing RFCs, use a blockquote with bold formatting:
 
 ## Web Fetcher Integration
 
-You have access to a web fetcher tool that can retrieve content from URLs. Use it to:
+You have access to a web fetcher tool that can retrieve content from URLs.
 
-1. **Fetch RFC text** when you need to quote specific sections accurately
-2. **Retrieve MDN documentation** to provide current, accurate API references
-3. **Check specification drafts** for the latest updates to evolving standards
-4. **Fetch Hacker News front page** when the user invokes \`/trending\`
+### MUST fetch
 
-### When to Fetch
+You are **required** to call the fetcher before answering when:
+- The user pastes a URL and asks you to analyze it.
+- The user asks for an exact quote from a spec or RFC.
+- The user invokes \`/rfc <n>\` — fetch the RFC text to support your answer.
+- The user invokes \`/trending\` — fetch https://news.ycombinator.com/ and summarize.
+- The question concerns specs published or revised after your knowledge cutoff (e.g., recent IETF drafts).
+- The user asks for current draft status or "what's the latest on X".
 
-- When the user asks for an exact quote or specific section of an RFC
-- When you need to verify a detail you're not fully confident about
-- When the user references a URL and asks you to analyze it
-- When the user invokes \`/trending\` — fetch https://news.ycombinator.com/ and summarize
-- Do **not** fetch for common knowledge you can answer from training data
+### MAY fetch
+
+You may optionally call the fetcher when:
+- You are uncertain about a detail and the canonical source is a Tier 1 reference.
+
+### MUST NOT fetch
+
+Skip the fetcher when:
+- The answer is common foundational knowledge you hold confidently in training data (basic HTTP semantics, well-known status codes, widely implemented standards).
+- The same URL or query has already been fetched in the current conversation.
+
+## Uncertainty & Version Honesty
+
+When you cannot produce a verified citation, choose exactly one of these three phrasings (do not invent alternatives):
+
+1. \`Unverified: <claim> — consult <canonical URL> to confirm.\`
+2. \`The spec doesn't define this; common implementations do <X> (see <source>).\`
+3. \`This was true as of <date / version>; check <source> for current status.\`
+
+### Version-Status Disclosure
+
+When discussing any of the following, you MUST disclose status and date:
+- **IETF drafts** — cite \`draft-<wg>-<name>-<NN>\` and "as of <date>".
+- **W3C Working Drafts / Candidate Recommendations** — cite the status level and date.
+- **Living standards** (e.g., HTML/Fetch) — note "living standard, current as of <date>".
+- **Any proposal not yet published as a final RFC** — state it is a proposal/draft, not a ratified standard.
+
+### Knowledge-Cutoff Acknowledgment
+
+When a question concerns specs likely revised after your knowledge cutoff, you MUST either:
+- Trigger a fetch per the MUST-fetch conditions in \`## Web Fetcher Integration\`, or
+- Use uncertainty phrasing #3 above.
 
 ## Behavioral Rules
 
-1. **Be authoritative but honest** — State facts confidently when you know them. Say "I'm not certain" when you don't, and cite where to verify.
-2. **Correct misconceptions gently** — If a user has a wrong mental model (e.g., "REST requires JSON"), clarify with "Actually, REST is media-type agnostic — JSON is conventional but not required by the architectural style. See Fielding's dissertation §5.2."
-3. **Prefer standards over opinions** — Do not recommend one approach over another unless the specification or established best practices clearly favor it. Present trade-offs.
-4. **Bridge theory and practice** — After explaining the specification, provide a concrete code example or curl command when applicable.
-5. **Stay in scope** — If the user asks about Wave Client features (collections, environments, flows, tests), redirect: "That's a Wave Client question — the **Wave Client Assistant** can help you with that. Switch to it with \`/\` in the input bar."
-6. **Go deep when asked** — If the user asks "how does TLS 1.3 work?", give the full handshake flow. Don't oversimplify unless they ask for a summary.
-7. **No blogs or social media** — Never cite or link to blog posts, Medium articles, Dev.to, Twitter/X, Reddit, or Stack Overflow as authoritative sources. Only reference official specifications, documentation, and the approved sources listed above. The sole exception is Hacker News for the \`/trending\` command.
-8. **Stay current** — When discussing specifications, note the latest published version. If a draft is superseding a published RFC, mention both.
+1. **Lead with the TL;DR.** Open every response with the bolded TL;DR sentence. No throat-clearing ('Great question…'), no restating the user's question, no preamble.
+2. **Match depth to the cue.** Before answering, decide which depth tier (Quick / Default / Deep) applies per \`## Audience & Depth Tiers\`, and structure accordingly.
+3. **Cite or disclaim — never vague.** Every protocol-level claim either cites a specific RFC §/spec section, or is prefixed with \`Unverified:\` per \`## Uncertainty & Version Honesty\`. There is no third option.
+4. **Honor MUST-fetch triggers.** Before answering, scan the user message for the MUST-fetch conditions in \`## Web Fetcher Integration\`. If any apply, call the fetcher first.
+5. **Be authoritative but honest** — State facts confidently when you know them. Say "I'm not certain" when you don't, and cite where to verify.
+6. **Correct misconceptions gently** — If a user has a wrong mental model (e.g., "REST requires JSON"), clarify with "Actually, REST is media-type agnostic — JSON is conventional but not required by the architectural style. See Fielding's dissertation §5.2."
+7. **Prefer standards over opinions** — Do not recommend one approach over another unless the specification or established best practices clearly favor it. Present trade-offs.
+8. **Bridge theory and practice** — After explaining the specification, provide a concrete code example or curl command when applicable.
+9. **Stay in scope** — If the user asks about Wave Client features (collections, environments, flows, tests), redirect: "That's a Wave Client question — the **Wave Client Assistant** can help you with that. Switch to it with \`/\` in the input bar."
+10. **Go deep when asked** — If the user asks "how does TLS 1.3 work?", give the full handshake flow. Don't oversimplify unless they ask for a summary.
+11. **No blogs or social media** — Never cite or link to blog posts, Medium articles, Dev.to, Twitter/X, Reddit, or Stack Overflow as authoritative sources. Only reference official specifications, documentation, and the approved sources listed above. The sole exception is Hacker News for the \`/trending\` command.
+12. **Stay current** — When discussing specifications, note the latest published version. If a draft is superseding a published RFC, mention both.
 
 ## Commands
 
@@ -306,14 +394,138 @@ You have access to a web fetcher tool that can retrieve content from URLs. Use i
 | \`/protocols\` | Focus on HTTP, WebSocket, gRPC, GraphQL, and transport protocols |
 | \`/security\` | Auth, TLS, CORS, OWASP, cryptography, and web security |
 | \`/standards\` | Focus on RFCs, W3C specs, WHATWG standards, and API design |
-| \`/http\` | HTTP protocol deep-dive (any version: 1.1, 2, 3) |
-| \`/ws\` | WebSocket, WebTransport, and real-time protocol guidance |
 | \`/api\` | REST, GraphQL, gRPC, AsyncAPI design guidance |
 | \`/rfc <number>\` | Look up and explain a specific RFC |
-| \`/network\` | TCP/IP, UDP, QUIC, DNS, and transport-layer topics |
-| \`/crypto\` | Web Crypto API, JOSE, hashing, post-quantum cryptography |
+| \`/status <code>\` | Look up an HTTP status code with RFC 9110 reference |
+| \`/header <name>\` | Explain an HTTP header's purpose, syntax, and RFC reference |
+| \`/method <verb>\` | Explain an HTTP method's semantics, safety, and idempotency |
+| \`/eli5\` | Explain in plain English — Quick depth, no jargon |
+| \`/deep\` | Spec-level deep dive — Deep depth with edge cases |
 | \`/trending\` | Fetch and summarize trending web/dev topics from Hacker News |
 `;
+
+// ============================================================================
+// Smart Retrieval Helpers (module-level — no closure dependencies)
+// ============================================================================
+
+/** Matches 3-digit HTTP status codes (100–599) in prose text. Global flag required for matchAll. */
+const STATUS_CODE_PATTERN = /\b([1-5]\d{2})\b/g;
+
+/**
+ * IANA-registered HTTP status codes.
+ * Used to filter false positives from STATUS_CODE_PATTERN (e.g., port numbers like 8080).
+ */
+const KNOWN_STATUS_CODES: ReadonlySet<number> = new Set([
+  100, 101, 102, 103,
+  200, 201, 202, 203, 204, 205, 206, 207, 208, 226,
+  300, 301, 302, 303, 304, 305, 307, 308,
+  400, 401, 402, 403, 404, 405, 406, 407, 408, 409, 410,
+  411, 412, 413, 414, 415, 416, 417, 418, 421, 422, 423,
+  424, 425, 426, 428, 429, 431, 451,
+  500, 501, 502, 503, 504, 505, 506, 507, 508, 510, 511,
+]);
+
+/**
+ * Detect IANA-registered HTTP status codes mentioned in the query.
+ * Returns up to 5 unique codes in order of first occurrence.
+ *
+ * @param query - Raw user query text.
+ */
+function detectStatusCodes(query: string): number[] {
+  const seen = new Set<number>();
+  const result: number[] = [];
+  const MAX_STATUS_CODES = 5;
+
+  for (const match of query.matchAll(STATUS_CODE_PATTERN)) {
+    const code = parseInt(match[1], 10);
+    if (KNOWN_STATUS_CODES.has(code) && !seen.has(code)) {
+      seen.add(code);
+      result.push(code);
+      if (result.length >= MAX_STATUS_CODES) break;
+    }
+  }
+
+  return result;
+}
+
+/** Matches http/https URLs in prose text. Global flag required for matchAll. */
+const URL_PATTERN = /\bhttps?:\/\/[^\s)]+/g;
+
+/**
+ * Detect pasted http/https URLs in the query.
+ * Returns up to 2 unique URLs in order of first occurrence.
+ *
+ * @param query - Raw user query text.
+ */
+function detectUrls(query: string): string[] {
+  const seen = new Set<string>();
+  const result: string[] = [];
+  const MAX_URL_DETECTIONS = 2;
+
+  for (const match of query.matchAll(URL_PATTERN)) {
+    const url = match[0];
+    if (!seen.has(url)) {
+      seen.add(url);
+      result.push(url);
+      if (result.length >= MAX_URL_DETECTIONS) break;
+    }
+  }
+
+  return result;
+}
+
+/**
+ * Lowercased canonical names of well-known HTTP headers (curated from the IANA
+ * Message Header Field Registry). Used for case-insensitive word-boundary
+ * detection in user queries.
+ */
+const KNOWN_HEADERS: ReadonlySet<string> = new Set([
+  'accept', 'accept-encoding', 'accept-language', 'authorization',
+  'cache-control', 'content-type', 'content-length', 'content-encoding',
+  'cookie', 'set-cookie', 'etag', 'expires', 'host', 'if-match',
+  'if-none-match', 'last-modified', 'location', 'origin', 'referer',
+  'user-agent', 'vary', 'www-authenticate', 'x-forwarded-for',
+  'strict-transport-security', 'content-security-policy', 'x-frame-options',
+  'access-control-allow-origin', 'access-control-allow-methods',
+  'access-control-allow-headers', 'access-control-allow-credentials',
+  'access-control-expose-headers', 'access-control-max-age',
+  'access-control-request-method', 'access-control-request-headers',
+  'sec-fetch-mode', 'sec-fetch-site', 'sec-fetch-dest', 'sec-fetch-user',
+  'sec-websocket-key', 'sec-websocket-accept', 'sec-websocket-protocol',
+  'sec-websocket-version', 'upgrade', 'connection', 'transfer-encoding',
+  'content-disposition', 'range', 'accept-ranges', 'content-range',
+  'server', 'date', 'allow', 'alt-svc', 'link', 'permissions-policy',
+  'cross-origin-opener-policy', 'cross-origin-embedder-policy',
+  'cross-origin-resource-policy', 'referrer-policy', 'x-content-type-options',
+  'x-xss-protection', 'forwarded', 'via', 'retry-after', 'age',
+  'max-forwards', 'pragma', 'warning', 'te', 'trailer', 'expect',
+  'accept-ch', 'dpr', 'save-data', 'viewport-width', 'width',
+  'early-data', 'priority',
+]);
+
+/**
+ * Detect well-known HTTP header names mentioned in the query.
+ * Matching is case-insensitive and word-boundary-anchored.
+ * Returns up to 5 unique canonical (lowercase) header names in detection order.
+ *
+ * @param query - Raw user query text.
+ */
+function detectHeaders(query: string): string[] {
+  const lowerQuery = query.toLowerCase();
+  const detected: string[] = [];
+  const MAX_HEADER_DETECTIONS = 5;
+
+  for (const header of KNOWN_HEADERS) {
+    if (detected.length >= MAX_HEADER_DETECTIONS) break;
+    // Escape regex special chars; hyphens are not special outside character classes.
+    const escaped = header.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    if (new RegExp(`\\b${escaped}\\b`).test(lowerQuery)) {
+      detected.push(header);
+    }
+  }
+
+  return detected;
+}
 
 // ============================================================================
 // Web Expert Agent Implementation
@@ -390,6 +602,10 @@ export function createWebExpertAgent(config: WebExpertAgentConfig) {
         value: (x: string[], y: string[]) => [...new Set([...x, ...y])],
         default: () => [],
       },
+      commandHint: {
+        value: (_x: CommandHint | undefined, y: CommandHint | undefined) => y,
+        default: () => undefined as CommandHint | undefined,
+      },
     },
   });
 
@@ -398,19 +614,26 @@ export function createWebExpertAgent(config: WebExpertAgentConfig) {
   // ---------------------------------------------------------------------------
 
   const COMMAND_FOCUS: Record<string, string> = {
-    '/protocols': 'Focus on HTTP, WebSocket, gRPC, GraphQL, and transport protocols.',
-    '/security': 'Focus on TLS, OAuth, CORS, CSP, OWASP, cryptography, and web security.',
-    '/standards': 'Focus on RFCs, W3C specs, WHATWG standards, OpenAPI, and API design.',
-    '/http': 'Focus on HTTP protocol details (HTTP/1.1, HTTP/2, HTTP/3).',
-    '/ws': 'Focus on WebSocket, WebTransport, and real-time protocol guidance.',
-    '/api': 'Focus on REST, GraphQL, gRPC, and AsyncAPI design guidance.',
-    '/network': 'Focus on TCP/IP, UDP, QUIC, DNS, and transport-layer topics.',
-    '/crypto': 'Focus on Web Crypto API, JOSE, hashing, and post-quantum cryptography.',
+    '/protocols': 'Focus on HTTP, WebSocket, gRPC, GraphQL, and transport protocols. Use the Default depth tier unless the user indicates otherwise.',
+    '/security': 'Focus on TLS, OAuth, CORS, CSP, OWASP, cryptography, and web security. Use the Default depth tier unless the user indicates otherwise.',
+    '/standards': 'Focus on RFCs, W3C specs, WHATWG standards, OpenAPI, and API design. Use the Default depth tier unless the user indicates otherwise.',
+    '/api': 'Focus on REST, GraphQL, gRPC, and AsyncAPI design guidance. Use the Default depth tier unless the user indicates otherwise.',
+    '/help': "Respond with the complete commands list and what each does, then stop. Use the GFM table from the prompt's ## Commands section verbatim. Do not answer any other question in the same response.",
+    '/eli5': 'Use the Quick depth tier per ## Audience & Depth Tiers. Plain English, no jargon, one analogy if helpful, skip RFC citations.',
+    '/deep': 'Use the Deep depth tier per ## Audience & Depth Tiers. Walk through the spec section by section, include edge cases, comparison tables, and multiple examples.',
   };
 
   /**
    * Detect command prefixes (e.g. `/protocols How does HTTP/2 work?`) and
-   * strip the prefix from the message while adding a context-focus hint.
+   * Detect command prefixes and strip the prefix from the message while adding
+   * a context-focus hint.
+   *
+   * Argument-bearing commands handled before the COMMAND_FOCUS loop:
+   * - /rfc <n>       — Look up a specific RFC by number (1–5 digits)
+   * - /status <code> — HTTP status code lookup (100–599)
+   * - /header <name> — HTTP header explanation
+   * - /method <verb> — HTTP method explanation (uppercase verb required, e.g. PATCH)
+   * - /trending      — Fetch trending web/dev topics from Hacker News
    */
   const routeNode = async (
     state: WebExpertAgentState,
@@ -418,9 +641,107 @@ export function createWebExpertAgent(config: WebExpertAgentConfig) {
     const lastMessage = state.messages[state.messages.length - 1];
     const text = lastMessage?.content?.toString().trim() ?? '';
 
+    // --- Argument-bearing commands (processed before COMMAND_FOCUS loop) ---
+
+    // /rfc <n>
+    if (text.startsWith('/rfc')) {
+      const match = text.match(/^\/rfc\s+(\d{1,5})\b/);
+      if (match) {
+        const n = match[1];
+        console.info(`[WebExpert/route] command matched: /rfc ${n}`);
+        return {
+          messages: [
+            ...state.messages.slice(0, -1),
+            new HumanMessage(`Explain RFC ${n}: cite the abstract, key sections, and relationships to other RFCs.`),
+          ],
+          context: [`Focus on RFC ${n}. Cite section numbers.`],
+          commandHint: { kind: 'rfc', arg: n },
+        };
+      }
+      return {
+        context: ['User invoked /rfc with an invalid argument. Reply with the correct syntax and a one-line example: /rfc <number> (e.g., /rfc 9110).'],
+      };
+    }
+
+    // /status <code>
+    if (text.startsWith('/status')) {
+      const match = text.match(/^\/status\s+([1-5]\d{2})\b/);
+      if (match) {
+        const code = match[1];
+        console.info(`[WebExpert/route] command matched: /status ${code}`);
+        return {
+          messages: [
+            ...state.messages.slice(0, -1),
+            new HumanMessage(`Explain HTTP status code ${code}: meaning, RFC 9110 section, and typical use cases.`),
+          ],
+          context: [`Focus on HTTP status code ${code} per RFC 9110.`],
+          commandHint: { kind: 'status', arg: code },
+        };
+      }
+      return {
+        context: ['User invoked /status with an invalid argument. Reply with the correct syntax and a one-line example: /status <code> (e.g., /status 429).'],
+      };
+    }
+
+    // /header <name>
+    if (text.startsWith('/header')) {
+      const match = text.match(/^\/header\s+([A-Za-z][A-Za-z0-9-]*)\b/);
+      if (match) {
+        const name = match[1];
+        console.info(`[WebExpert/route] command matched: /header ${name}`);
+        return {
+          messages: [
+            ...state.messages.slice(0, -1),
+            new HumanMessage(`Explain the HTTP header '${name}': purpose, syntax, RFC reference, and example values.`),
+          ],
+          context: [`Focus on HTTP header ${name}. Prefer RFC 9110/9111/9112/9113/9114 and MDN.`],
+          commandHint: { kind: 'header', arg: name },
+        };
+      }
+      return {
+        context: ['User invoked /header with an invalid argument. Reply with the correct syntax and a one-line example: /header <name> (e.g., /header Cache-Control).'],
+      };
+    }
+
+    // /method <verb>  (uppercase verb required, e.g. GET, POST, PATCH)
+    if (text.startsWith('/method')) {
+      const match = text.match(/^\/method\s+([A-Z]+)\b/);
+      if (match) {
+        const verb = match[1];
+        console.info(`[WebExpert/route] command matched: /method ${verb}`);
+        return {
+          messages: [
+            ...state.messages.slice(0, -1),
+            new HumanMessage(`Explain the HTTP method ${verb}: semantics, safety, idempotency, and RFC 9110 section.`),
+          ],
+          context: [`Focus on HTTP method ${verb} per RFC 9110 §9.3.`],
+          commandHint: { kind: 'method', arg: verb },
+        };
+      }
+      return {
+        context: ['User invoked /method with an invalid argument. Reply with the correct syntax and a one-line example: /method <VERB> (e.g., /method PATCH). Note: the verb must be uppercase.'],
+      };
+    }
+
+    // /trending
+    if (text === '/trending' || text.startsWith('/trending ')) {
+      console.info('[WebExpert/route] command matched: /trending');
+      return {
+        messages: [
+          ...state.messages.slice(0, -1),
+          new HumanMessage('Summarize the current trending web/dev topics from Hacker News.'),
+        ],
+        context: ['Source: Hacker News front page. Trigger fetch.'],
+        commandHint: { kind: 'trending' },
+      };
+    }
+
+    // --- No-arg COMMAND_FOCUS commands ---
+
     for (const [prefix, focus] of Object.entries(COMMAND_FOCUS)) {
       if (text.startsWith(prefix)) {
         const stripped = text.slice(prefix.length).trim();
+        console.info(`[WebExpert/route] command matched: ${prefix}`);
         // Replace the last message with the stripped text
         const updatedMessages = [
           ...state.messages.slice(0, -1),
@@ -441,16 +762,19 @@ export function createWebExpertAgent(config: WebExpertAgentConfig) {
   // Query → category mapping for retrieve
   // ---------------------------------------------------------------------------
 
-  /** Maps query keywords to reference website categories for targeted retrieval. */
+  /**
+   * Maps query keywords to reference website categories for targeted retrieval.
+   * Each entry maps a keyword (lowercased) to the category tags passed to webFetcher.search().
+   */
   const QUERY_CATEGORY_KEYWORDS: Record<string, string[]> = {
     rfc: ['rfc', 'standards'],
     http: ['http', 'protocols', 'standards'],
     websocket: ['protocols', 'web'],
     grpc: ['protocols', 'api'],
     graphql: ['api', 'web'],
-    tls: ['standards', 'protocols'],
-    oauth: ['standards', 'web'],
-    cors: ['http', 'web'],
+    tls: ['standards', 'protocols', 'security'],
+    oauth: ['standards', 'security', 'web'],
+    cors: ['security', 'http', 'web'],
     rest: ['rest', 'api', 'http'],
     openapi: ['api', 'rest'],
     dns: ['protocols', 'standards'],
@@ -459,11 +783,34 @@ export function createWebExpertAgent(config: WebExpertAgentConfig) {
     dom: ['dom', 'web'],
     html: ['html', 'web'],
     css: ['css', 'web'],
-    crypto: ['web', 'standards'],
+    crypto: ['web', 'standards', 'security'],
+    // Additional common web technology keywords (FEAT-FP-WEX-005)
+    cookie: ['http', 'web'],
+    cache: ['http', 'web'],
+    etag: ['http', 'standards'],
+    redirect: ['http', 'standards'],
+    sse: ['protocols', 'web'],
+    webhook: ['api', 'web'],
+    jwt: ['standards', 'security'],
+    pkce: ['standards', 'security'],
+    oidc: ['standards', 'security'],
+    csp: ['security', 'web'],
+    hsts: ['security', 'standards'],
+    mime: ['http', 'standards'],
+    multipart: ['http', 'standards'],
+    proxy: ['http', 'standards'],
+    cdn: ['http', 'web'],
+    compression: ['http', 'standards'],
+    hpack: ['protocols', 'standards'],
+    qpack: ['protocols', 'standards'],
+    mtls: ['security', 'standards'],
+    webrtc: ['protocols', 'web'],
+    webtransport: ['protocols', 'web'],
+    mcp: ['protocols', 'api'],
   };
 
-  /** RFC number pattern: "RFC 1234", "rfc1234", "RFC-1234" */
-  const RFC_PATTERN = /\brfc[\s-]?(\d{1,5})\b/i;
+  /** RFC number pattern: "RFC 1234", "rfc1234", "RFC-1234". Global flag for matchAll. */
+  const RFC_PATTERN = /\brfc[\s-]?(\d{1,5})\b/gi;
 
   /**
    * Detect categories relevant to the query by scanning for known keywords.
@@ -490,33 +837,151 @@ export function createWebExpertAgent(config: WebExpertAgentConfig) {
     const sources: string[] = [];
 
     if (state.mode === 'web' || state.mode === 'auto') {
-      // Check for explicit RFC reference
-      const rfcMatch = query.match(RFC_PATTERN);
-      if (rfcMatch) {
-        try {
-          const result = await webFetcher.fetchRfc(rfcMatch[1]);
-          context.push(`[RFC ${rfcMatch[1]}] ${result.title}\n${result.content}`);
-          sources.push(result.url);
-        } catch (error) {
-          console.warn(`[WebExpert/retrieve] Failed to fetch RFC ${rfcMatch[1]}:`, error);
-        }
-      }
+      const hint = state.commandHint;
 
-      // Search reference websites by detected categories
-      const categories = detectCategories(query);
-      try {
-        const results = await webFetcher.search(query, categories.length > 0 ? categories : undefined);
-        for (const result of results) {
+      if (hint?.kind === 'trending') {
+        // Fetch HN front page for /trending command
+        try {
+          const result = await webFetcher.fetchTrending();
           context.push(`[${result.title}] (${result.url})\n${result.content}`);
           sources.push(result.url);
+        } catch (error) {
+          console.warn('[WebExpert/retrieve] Failed to fetch HN trending:', error);
         }
-      } catch (error) {
-        console.warn('[WebExpert/retrieve] Web search failed:', error);
-      }
-    }
+      } else if (hint?.kind === 'status' && hint.arg) {
+        // Fetch RFC 9110 to ground HTTP status code explanations
+        try {
+          const result = await webFetcher.fetchRfc('9110');
+          context.push(`[RFC 9110 — HTTP Semantics] (${result.url})\n${result.content}`);
+          sources.push(result.url);
+        } catch (error) {
+          console.warn('[WebExpert/retrieve] Failed to fetch RFC 9110 for status code lookup:', error);
+        }
+      } else if (hint?.kind === 'header' && hint.arg) {
+        // Targeted search for an HTTP header
+        try {
+          const results = await webFetcher.search(hint.arg, ['http', 'web']);
+          for (const result of results) {
+            context.push(`[${result.title}] (${result.url})\n${result.content}`);
+            sources.push(result.url);
+          }
+        } catch (error) {
+          console.warn('[WebExpert/retrieve] Header search failed:', error);
+        }
+      } else if (hint?.kind === 'method' && hint.arg) {
+        // Targeted search for an HTTP method
+        try {
+          const results = await webFetcher.search(hint.arg, ['http', 'standards']);
+          for (const result of results) {
+            context.push(`[${result.title}] (${result.url})\n${result.content}`);
+            sources.push(result.url);
+          }
+        } catch (error) {
+          console.warn('[WebExpert/retrieve] Method search failed:', error);
+        }
+      } else {
+        // Default retrieval: multi-signal detection + keyword-based web search
 
-    if (state.mode === 'local' || state.mode === 'auto') {
-      // TODO: Wire vector store retrieval (local docs) — deferred
+        // Maximum RFC fetches per message (guards against N+1 fan-out).
+        const MAX_RFC_FETCHES = 3;
+        /**
+         * Tracks RFC numbers fetched in this call — shared between explicit RFC
+         * detection and status-code detection so RFC 9110 is never fetched twice.
+         */
+        const fetchedRfcNums = new Set<string>();
+
+        // --- RFC detection: find all mentions, fetch up to MAX_RFC_FETCHES ---
+        const rfcMatches = [...query.matchAll(RFC_PATTERN)]
+          .map(m => m[1])
+          .filter((n, i, arr) => arr.indexOf(n) === i); // dedup by number
+
+        for (const rfcNum of rfcMatches.slice(0, MAX_RFC_FETCHES)) {
+          try {
+            const result = await webFetcher.fetchRfc(rfcNum);
+            if (!sources.includes(result.url)) {
+              context.push(`[RFC ${rfcNum}] ${result.title}\n${result.content}`);
+              sources.push(result.url);
+            }
+            fetchedRfcNums.add(rfcNum);
+          } catch (error) {
+            console.warn(`[WebExpert/retrieve] Failed to fetch RFC ${rfcNum}:`, error);
+          }
+        }
+
+        // --- Status-code detection: coalesce all detected codes into one RFC 9110 fetch ---
+        const detectedCodes = detectStatusCodes(query);
+        if (detectedCodes.length > 0) {
+          console.info('[WebExpert/retrieve] detected status codes', { codes: detectedCodes });
+          // Fetch RFC 9110 once — skip if already fetched by RFC detection or cap reached.
+          if (!fetchedRfcNums.has('9110') && fetchedRfcNums.size < MAX_RFC_FETCHES) {
+            try {
+              const result = await webFetcher.fetchRfc('9110');
+              if (!sources.includes(result.url)) {
+                context.push(`[RFC 9110 — HTTP Semantics] (${result.url})\n${result.content}`);
+                sources.push(result.url);
+              }
+              fetchedRfcNums.add('9110');
+            } catch (error) {
+              console.warn('[WebExpert/retrieve] Failed to fetch RFC 9110 for status codes:', error);
+            }
+          }
+          context.push(`Status code(s) referenced: ${detectedCodes.join(', ')}. See RFC 9110 §15.`);
+        }
+
+        // --- Header-name detection: add context hint and augment search categories ---
+        const detectedHeaders = detectHeaders(query);
+        if (detectedHeaders.length > 0) {
+          console.info('[WebExpert/retrieve] detected HTTP headers', { headers: detectedHeaders });
+          context.push(`HTTP header(s) referenced: ${detectedHeaders.join(', ')}. Cite RFC and MDN.`);
+        }
+
+        // Build search categories (augmented by header detection).
+        const categories = detectCategories(query);
+        if (detectedHeaders.length > 0) {
+          if (!categories.includes('http')) categories.push('http');
+          if (!categories.includes('web')) categories.push('web');
+        }
+
+        // --- URL detection: fetch allowlisted URLs; note others per policy ---
+        const MAX_URL_FETCHES = 2;
+        const detectedUrlList = detectUrls(query);
+        if (detectedUrlList.length > 0) {
+          console.info('[WebExpert/retrieve] detected URLs', {
+            urls: detectedUrlList.map(u => u.substring(0, 80)),
+          });
+        }
+
+        for (const url of detectedUrlList.slice(0, MAX_URL_FETCHES)) {
+          try {
+            const result = await webFetcher.fetchUrl(url);
+            if (!sources.includes(result.url)) {
+              if (result.content) {
+                context.push(`[${result.title}] (${result.url})\n${result.content}`);
+              } else {
+                context.push(
+                  `User pasted external URL ${result.url}; not auto-fetched per allowlist policy. Ask the user if they want it fetched explicitly.`,
+                );
+              }
+              sources.push(result.url);
+            }
+          } catch (error) {
+            console.warn(`[WebExpert/retrieve] Failed to fetch URL ${url}:`, error);
+          }
+        }
+
+        // --- Web search by detected categories ---
+        try {
+          const results = await webFetcher.search(query, categories.length > 0 ? categories : undefined);
+          for (const result of results) {
+            if (!sources.includes(result.url)) {
+              context.push(`[${result.title}] (${result.url})\n${result.content}`);
+              sources.push(result.url);
+            }
+          }
+        } catch (error) {
+          console.warn('[WebExpert/retrieve] Web search failed:', error);
+        }
+      }
     }
 
     return { context, sources };
@@ -727,9 +1192,12 @@ export function createWebExpertAgent(config: WebExpertAgentConfig) {
       }
     },
 
-    /** Get available retrieval modes */
+    /**
+     * Get available retrieval modes.
+     * 'local' mode (vector store) is deferred — only 'web' and 'auto' are active.
+     */
     getModes(): WebExpertMode[] {
-      return ['web', 'local', 'auto'];
+      return ['web', 'auto'];
     },
 
     /** Get the active settings */

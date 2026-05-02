@@ -267,15 +267,144 @@ export function createWebFetcher(config: WebFetcherConfig = {}) {
     },
 
     /**
-     * Fetch RFC document by number
+     * Fetch RFC document by number.
+     * @param rfcNumber - RFC number as string or integer
+     * @param section   - Optional section identifier appended as an anchor to the HTML URL
+     *                    (e.g. '15.5.30' produces …/rfc9110#section-15.5.30).
+     *                    Only used when provided; plain .txt URL is used otherwise.
      */
-    async fetchRfc(rfcNumber: string | number): Promise<FetchResult> {
+    async fetchRfc(rfcNumber: string | number, section?: string): Promise<FetchResult> {
       const num = typeof rfcNumber === 'string' 
         ? rfcNumber.replace(/^rfc\s*/i, '') 
         : rfcNumber;
-      
-      const url = `https://www.rfc-editor.org/rfc/rfc${num}.txt`;
+
+      const url = section
+        ? `https://www.rfc-editor.org/rfc/rfc${num}#section-${section}`
+        : `https://www.rfc-editor.org/rfc/rfc${num}.txt`;
       return this.fetch(url);
+    },
+
+    /**
+     * Fetch the Hacker News front page and extract the top story titles and
+     * URLs into a markdown summary.
+     * Reuses the shared rate-limiting and caching infrastructure.
+     */
+    async fetchTrending(): Promise<FetchResult> {
+      const url = 'https://news.ycombinator.com/';
+
+      const cached = checkCache(url);
+      if (cached) return cached;
+
+      const domain = getDomain(url);
+      await waitForRateLimit(domain);
+
+      try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+        const response = await fetch(url, {
+          signal: controller.signal,
+          headers: {
+            'User-Agent': 'Wave-Client/1.0 (AI Assistant)',
+            'Accept': 'text/html,application/xhtml+xml,text/plain,*/*',
+          },
+        });
+
+        clearTimeout(timeoutId);
+
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+
+        const html = await response.text();
+        const $ = cheerio.load(html);
+
+        const stories: Array<{ title: string; href: string }> = [];
+        $('.titleline > a').each((_i, el) => {
+          const title = $(el).text().trim();
+          const href = $(el).attr('href') ?? '';
+          if (title && stories.length < 30) {
+            const storyUrl = href.startsWith('http') ? href : `https://news.ycombinator.com/${href}`;
+            stories.push({ title, href: storyUrl });
+          }
+        });
+
+        const content = stories.length > 0
+          ? `## Trending on Hacker News\n\n${stories.map((s, i) => `${i + 1}. [${s.title}](${s.href})`).join('\n')}`
+          : '## Trending on Hacker News\n\nNo stories found.';
+
+        const result: FetchResult = {
+          url,
+          title: 'Hacker News — Top Stories',
+          content,
+          fetchedAt: Date.now(),
+          cached: false,
+        };
+
+        addToCache(url, result);
+        return result;
+      } catch (error) {
+        if (error instanceof Error && error.name === 'AbortError') {
+          throw new Error(`Request timeout for ${url}`);
+        }
+        throw error;
+      }
+    },
+
+    /**
+     * Fetch a URL provided by the user.
+     *
+     * **Allowlist policy (option B):** Only URLs whose origin matches a configured
+     * reference website are fetched automatically. Unknown origins are returned with
+     * empty content and a `console.warn` — the caller surfaces the policy message to
+     * the model. This prevents SSRF via user-controlled URLs while keeping the
+     * existing rate-limit and allowlist contract intact.
+     *
+     * RFC Editor URLs (rfc-editor.org/rfc/rfcNNNN) are normalised to the canonical
+     * `.txt` form via `fetchRfc` so that dedup with explicit RFC detection works
+     * correctly (both paths produce the same URL in `sources`).
+     *
+     * @param url - The URL to fetch (must be a valid http/https URL).
+     */
+    async fetchUrl(url: string): Promise<FetchResult> {
+      // Normalise RFC Editor URLs to canonical .txt form for source dedup.
+      const rfcMatch = url.match(/rfc-editor\.org\/rfc\/rfc(\d+)/i);
+      if (rfcMatch) {
+        return this.fetchRfc(rfcMatch[1]);
+      }
+
+      let origin: string;
+      try {
+        origin = new URL(url).origin;
+      } catch {
+        console.warn('[WebFetcher/fetchUrl] Invalid URL — not fetched:', { url });
+        return { url, title: '<invalid URL>', content: '', fetchedAt: Date.now(), cached: false };
+      }
+
+      // Check if origin is in the configured reference-website allowlist.
+      const isAllowed = websites.some(site => {
+        try {
+          return new URL(site.url).origin === origin;
+        } catch {
+          return false;
+        }
+      });
+
+      if (isAllowed) {
+        return this.fetch(url);
+      }
+
+      console.warn('[WebFetcher/fetchUrl] URL origin not in allowlist — not fetched:', {
+        url: url.substring(0, 120),
+        origin,
+      });
+      return {
+        url,
+        title: '<external URL>',
+        content: '',
+        fetchedAt: Date.now(),
+        cached: false,
+      };
     },
 
     /**

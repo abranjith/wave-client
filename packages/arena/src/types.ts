@@ -74,10 +74,9 @@ export interface ChatChunk {
 /**
  * Web Expert agent query mode
  * - 'web': Query curated reference websites (RFCs, MDN, W3C, etc.)
- * - 'local': Search user-uploaded documents via vector store
  * - 'auto': Automatically determine the best source based on query
  */
-export type WebExpertMode = 'web' | 'local' | 'auto';
+export type WebExpertMode = 'web' | 'auto';
 
 /**
  * Definition of an available agent
