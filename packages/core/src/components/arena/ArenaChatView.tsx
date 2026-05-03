@@ -9,7 +9,7 @@ import { Globe, Zap, User, Bot, ExternalLink, AlertCircle, Cpu, HelpCircle } fro
 import { cn } from '../../utils/styling';
 import type { ArenaSession, ArenaMessage, ArenaMessageSource, ArenaCommandId, ArenaChatBlock } from '../../types/arena';
 import type { ArenaStreamState } from '../../types/arenaStreaming';
-import { ARENA_COMMAND_DEFINITIONS } from '../../types/arena';
+import { ARENA_COMMAND_DEFINITIONS, ARENA_COMMANDS } from '../../types/arena';
 import { ARENA_AGENT_IDS, getAgentDefinition } from '../../config/arenaConfig';
 import type { ArenaAgentId } from '../../config/arenaConfig';
 import { SecondaryButton } from '../ui/SecondaryButton';
@@ -152,9 +152,9 @@ export function ArenaChatView({
 
 const AGENT_EXAMPLE_QUESTIONS: Record<string, readonly string[]> = {
   [ARENA_AGENT_IDS.WAVE_CLIENT]: [
-    'List all available API collections with summary information',
-    'I need to understand more about the GitHub API. Can you show me the details of the "GitHub REST API" collection?',
-    'Run test suite "User API tests" and show me the results',
+    '/collections list all available collections',
+    '/requests login',
+    '/run-tests User API tests',
   ],
   [ARENA_AGENT_IDS.WEB_EXPERT]: [
     'Explain HTTP/2 server push and when to use it',
@@ -183,6 +183,18 @@ function ArenaWelcomeMessage({
   const examples = AGENT_EXAMPLE_QUESTIONS[agentId] ?? [];
   // Show agent-specific command chips (filter by current agent, exclude universal)
   const agentSpecificCommands = commands.filter(cmd => !cmd.universal && cmd.agent === agentId);
+  const waveQuickCommandOrder: ArenaCommandId[] = [
+    ARENA_COMMANDS.COLLECTIONS,
+    ARENA_COMMANDS.REQUESTS,
+    ARENA_COMMANDS.RUN_FLOW,
+    ARENA_COMMANDS.RUN_TESTS,
+  ];
+
+  const quickCommands = agentId === ARENA_AGENT_IDS.WAVE_CLIENT
+    ? waveQuickCommandOrder
+      .map((id) => agentSpecificCommands.find((cmd) => cmd.id === id))
+      .filter((cmd): cmd is (typeof agentSpecificCommands)[number] => Boolean(cmd))
+    : agentSpecificCommands.slice(0, 4);
 
   return (
     <div className="text-center py-8">
@@ -215,7 +227,7 @@ function ArenaWelcomeMessage({
         <div className="mt-2">
           <p className="text-xs text-slate-400 uppercase tracking-wide font-semibold mb-2">Quick commands</p>
           <div className="flex flex-wrap justify-center gap-2">
-            {agentSpecificCommands.slice(0, 4).map((cmd) => (
+            {quickCommands.map((cmd) => (
               <SecondaryButton
                 key={cmd.id}
                 size="sm"

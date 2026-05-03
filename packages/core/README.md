@@ -12,6 +12,23 @@ The platform-agnostic core library of Wave Client - a modern REST client for VS 
 
 This platform independence is achieved through the **Adapter Pattern**, which abstracts all platform-specific I/O operations (file system, HTTP, storage, security) into a common interface.
 
+## Arena Command Metadata
+
+Arena command metadata lives in `src/types/arena.ts` as `ARENA_COMMANDS` and `ARENA_COMMAND_DEFINITIONS`.
+
+Wave Client command surface:
+
+- `/help`
+- `/collections`
+- `/requests`
+- `/environments`
+- `/flows`
+- `/tests`
+- `/run-flow`
+- `/run-tests`
+
+Argument-bearing Wave commands provide placeholders in metadata so the input bar can guide users with command-specific prompts.
+
 ## Architecture
 
 ### High-Level Architecture Diagram

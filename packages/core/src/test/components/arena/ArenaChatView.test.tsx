@@ -13,6 +13,7 @@
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import React from 'react';
 import { ArenaChatView } from '../../../components/arena/ArenaChatView';
 import type { ArenaSession, ArenaMessage } from '../../../types/arena';
@@ -36,6 +37,12 @@ const mockSession: ArenaSession = {
     createdAt: Date.now(),
     updatedAt: Date.now(),
     messageCount: 0,
+};
+
+const mockWebExpertSession: ArenaSession = {
+    ...mockSession,
+    id: 'session-2',
+    agent: ARENA_AGENT_IDS.WEB_EXPERT,
 };
 
 function makeMessage(overrides: Partial<ArenaMessage> = {}): ArenaMessage {
@@ -305,5 +312,57 @@ describe('ArenaChatView — streamState wiring (TASK-003)', () => {
         // Bouncing dots present (belongs to the streaming message)
         const bouncingDots = container.querySelectorAll('.animate-bounce');
         expect(bouncingDots.length).toBeGreaterThanOrEqual(3);
+    });
+});
+
+describe('ArenaChatView — Wave quick command sync', () => {
+    it('wave welcome renders updated quick command chips', () => {
+        render(
+            <ArenaChatView
+                {...defaultProps}
+                session={mockSession}
+                messages={[]}
+                streamState="idle"
+            />,
+        );
+
+        expect(screen.getByRole('button', { name: '/collections' })).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: '/requests' })).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: '/run-flow' })).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: '/run-tests' })).toBeInTheDocument();
+    });
+
+    it('web expert welcome remains unaffected by wave command chips', () => {
+        render(
+            <ArenaChatView
+                {...defaultProps}
+                session={mockWebExpertSession}
+                messages={[]}
+                streamState="idle"
+            />,
+        );
+
+        expect(screen.queryByRole('button', { name: '/run-flow' })).not.toBeInTheDocument();
+        expect(screen.queryByRole('button', { name: '/run-tests' })).not.toBeInTheDocument();
+        expect(screen.getByRole('button', { name: '/protocols' })).toBeInTheDocument();
+    });
+
+    it('clicking wave command chip preselects expected command metadata in input', async () => {
+        const user = userEvent.setup();
+
+        render(
+            <ArenaChatView
+                {...defaultProps}
+                session={mockSession}
+                messages={[]}
+                streamState="idle"
+            />,
+        );
+
+        await user.click(screen.getByRole('button', { name: '/run-flow' }));
+
+        expect(screen.getByLabelText('Clear command')).toBeInTheDocument();
+        expect(screen.getByText('Resolve and run a flow with explicit confirmation')).toBeInTheDocument();
+        expect(screen.getByRole('textbox')).toHaveAttribute('placeholder', 'Enter flow name or ID to run...');
     });
 });

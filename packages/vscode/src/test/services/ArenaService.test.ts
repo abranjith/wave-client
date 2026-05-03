@@ -503,9 +503,9 @@ describe('ArenaService', () => {
             const chunks: ArenaChatStreamChunk[] = [];
             await service.streamChat(makeRequest(), (c) => chunks.push(c));
 
-            // Advance well past the 120 s stream timeout — no error chunk should appear
+            // Advance well past the 180 s stream timeout — no error chunk should appear
             // because the timer was cleared on normal completion.
-            vi.advanceTimersByTime(121_000);
+            vi.advanceTimersByTime(181_000);
 
             expect(chunks.every((c) => !c.error)).toBe(true);
 
@@ -513,8 +513,8 @@ describe('ArenaService', () => {
         });
     });
 
-    describe('streamChat — 120 s stream timeout', () => {
-        it('emits error chunk and returns after 120 s of generator silence', async () => {
+    describe('streamChat — 180 s stream timeout', () => {
+        it('emits error chunk and returns after 180 s of generator silence', async () => {
             vi.useFakeTimers();
 
             // Generator that never yields (simulates a completely stalled LLM)
@@ -528,7 +528,7 @@ describe('ArenaService', () => {
 
             // Do NOT await — the generator is permanently stuck so streamChat
             // will never resolve.  We only verify the side-effect: onChunk is
-            // called with an error chunk when the 120 s timer fires.
+            // called with an error chunk when the 180 s timer fires.
             service.streamChat(makeRequest(), (c) => chunks.push(c)); // intentionally unawaited
 
             // Flush enough microtask ticks to let streamChat complete its async
@@ -536,8 +536,8 @@ describe('ArenaService', () => {
             // and register the streamTimer before we advance fake timers.
             for (let i = 0; i < 10; i++) await Promise.resolve();
 
-            // Advance fake timers past the 120 s stream timeout
-            vi.advanceTimersByTime(120_001);
+            // Advance fake timers past the 180 s stream timeout
+            vi.advanceTimersByTime(180_001);
 
             const timeoutChunk = chunks.find((c) => c.error);
             expect(timeoutChunk).toBeDefined();

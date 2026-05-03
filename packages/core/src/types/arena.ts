@@ -105,12 +105,24 @@ export {
 export const ARENA_COMMANDS = {
   HELP: '/help',
   COLLECTIONS: '/collections',
+  REQUESTS: '/requests',
   ENVIRONMENTS: '/environments',
   FLOWS: '/flows',
   TESTS: '/tests',
+  RUN_FLOW: '/run-flow',
+  RUN_TESTS: '/run-tests',
   PROTOCOLS: '/protocols',
   SECURITY: '/security',
   STANDARDS: '/standards',
+  // Web Expert agent — additional commands supported by webExpertAgent.ts routeNode
+  API: '/api',
+  RFC: '/rfc',
+  STATUS: '/status',
+  HEADER: '/header',
+  METHOD: '/method',
+  ELI5: '/eli5',
+  DEEP: '/deep',
+  TRENDING: '/trending',
 } as const;
 
 export type ArenaCommandId = typeof ARENA_COMMANDS[keyof typeof ARENA_COMMANDS];
@@ -149,6 +161,13 @@ export const ARENA_COMMAND_DEFINITIONS: ArenaCommand[] = [
     placeholder: 'Ask about collections...',
   },
   {
+    id: ARENA_COMMANDS.REQUESTS,
+    label: 'Requests',
+    description: 'Search requests by name, path, or keyword',
+    agent: 'wave-client',
+    placeholder: 'Enter a request query (e.g. login, /users, auth)...',
+  },
+  {
     id: ARENA_COMMANDS.ENVIRONMENTS,
     label: 'Environments',
     description: 'List environments and inspect variables',
@@ -170,6 +189,20 @@ export const ARENA_COMMAND_DEFINITIONS: ArenaCommand[] = [
     placeholder: 'Ask about tests...',
   },
   {
+    id: ARENA_COMMANDS.RUN_FLOW,
+    label: 'Run Flow',
+    description: 'Resolve and run a flow with explicit confirmation',
+    agent: 'wave-client',
+    placeholder: 'Enter flow name or ID to run...',
+  },
+  {
+    id: ARENA_COMMANDS.RUN_TESTS,
+    label: 'Run Tests',
+    description: 'Resolve and run a test suite with explicit confirmation',
+    agent: 'wave-client',
+    placeholder: 'Enter test suite name or ID to run...',
+  },
+  {
     id: ARENA_COMMANDS.PROTOCOLS,
     label: 'Protocols',
     description: 'Ask about HTTP, WebSocket, gRPC, GraphQL, and transport protocols',
@@ -189,6 +222,62 @@ export const ARENA_COMMAND_DEFINITIONS: ArenaCommand[] = [
     description: 'Ask about RFCs, W3C specs, WHATWG standards, and API design',
     agent: 'web-expert',
     placeholder: 'Ask about standards...',
+  },
+  {
+    id: ARENA_COMMANDS.API,
+    label: 'API Design',
+    description: 'REST, GraphQL, gRPC, and AsyncAPI design guidance',
+    agent: 'web-expert',
+    placeholder: 'Ask about API design...',
+  },
+  {
+    id: ARENA_COMMANDS.RFC,
+    label: 'RFC',
+    description: 'Look up and explain a specific RFC by number',
+    agent: 'web-expert',
+    placeholder: 'Enter RFC number (e.g. 9110)…',
+  },
+  {
+    id: ARENA_COMMANDS.STATUS,
+    label: 'HTTP Status',
+    description: 'Look up an HTTP status code with RFC 9110 reference',
+    agent: 'web-expert',
+    placeholder: 'Enter status code (e.g. 429)…',
+  },
+  {
+    id: ARENA_COMMANDS.HEADER,
+    label: 'HTTP Header',
+    description: "Explain an HTTP header's purpose, syntax, and RFC reference",
+    agent: 'web-expert',
+    placeholder: 'Enter header name (e.g. Cache-Control)…',
+  },
+  {
+    id: ARENA_COMMANDS.METHOD,
+    label: 'HTTP Method',
+    description: "Explain an HTTP method's semantics, safety, and idempotency",
+    agent: 'web-expert',
+    placeholder: 'Enter HTTP verb in uppercase (e.g. PATCH)…',
+  },
+  {
+    id: ARENA_COMMANDS.ELI5,
+    label: 'Explain Simply',
+    description: 'Explain in plain English — quick depth, no jargon',
+    agent: 'web-expert',
+    placeholder: 'What would you like explained simply?',
+  },
+  {
+    id: ARENA_COMMANDS.DEEP,
+    label: 'Deep Dive',
+    description: 'Spec-level deep dive with edge cases and comparison tables',
+    agent: 'web-expert',
+    placeholder: 'What would you like a deep dive on?',
+  },
+  {
+    id: ARENA_COMMANDS.TRENDING,
+    label: 'Trending',
+    description: 'Fetch and summarize trending web/dev topics from Hacker News',
+    agent: 'web-expert',
+    placeholder: 'Fetch current trending topics…',
   },
 ];
 

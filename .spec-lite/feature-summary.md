@@ -10,6 +10,10 @@
 
 ## Arena AI Agents
 
+**FEAT-FP-WCA-001: Wave Client Agent — Prompt, Commands, and Tool-Orchestration Refactor** *(updated: 2026-05-02 by implement)*
+Source spec: [feature_wave_client_agent_refactor.md](.spec-lite/features/feature_wave_client_agent_refactor.md)
+The Wave Client agent now uses a canonical inline prompt contract with mandatory operational response sections (`TL;DR`, `What I checked`, `Findings`, `Recommended action`, `Next Steps`) and depth tiers (`Quick`, `Default`, `Deep`). Workspace answers are explicitly tool-evidence-driven: the agent must not fabricate workspace entities and must state that it cannot verify without MCP/tool output when data is unavailable. The Wave command surface is now synchronized across parser and UI metadata (`/help`, `/collections`, `/requests`, `/environments`, `/flows`, `/tests`, `/run-flow`, `/run-tests`) with deterministic slash-command normalization, free-form intent hinting, and confirmation-first run behavior (`list_* -> confirm -> run_*`) for flow/test execution.
+
 **Web Expert Agent — Inline System Prompt** *(updated: 2026-04-30 by implement)*
 Source spec: [feature_web_expert_inline_prompt.md](.spec-lite/features/feature_web_expert_inline_prompt.md)
 The Web Expert Agent now uses its full 245-line system prompt at runtime. The prompt is inlined as the `WEB_EXPERT_SYSTEM_PROMPT` constant in `packages/arena/src/agents/webExpertAgent.ts` — the canonical single source of truth (no companion `.md` file). The prompt covers all expertise domains (Network & Transport, HTTP, Real-Time, RPC, API Design, Security, Web Platform), a four-tier reference source hierarchy (IETF RFCs → MDN → ecosystem docs → Hacker News exception), citation rules, GFM response formatting rules, and all command definitions. The `systemPrompt` config option overrides the inlined constant per-instance.

@@ -12,9 +12,9 @@
  * to the LLM via `bindTools()`.  Execution is handled by LangGraph's
  * prebuilt `ToolNode`.
  *
- * The system prompt is inlined below rather than loaded from a file so
- * that it is always available regardless of the bundler (webpack, tsc,
- * vitest, etc.) — `readFileSync(__dirname, …)` does not resolve
+ * The system prompt is inlined below as the canonical source of truth
+ * so that it is always available regardless of the bundler (webpack,
+ * tsc, vitest, etc.) — `readFileSync(__dirname, …)` does not resolve
  * correctly inside webpack chunks.
  */
 
@@ -50,140 +50,584 @@ export interface WaveClientAgentConfig {
   _llmTimeoutMs?: number;
 }
 
+export type WaveCommandKind =
+  | 'help'
+  | 'collections'
+  | 'requests'
+  | 'environments'
+  | 'flows'
+  | 'tests'
+  | 'run-flow'
+  | 'run-tests';
+
+/**
+ * Routing hint used to steer deterministic tool orchestration behavior.
+ */
+export interface WaveCommandHint {
+  kind: WaveCommandKind;
+  arg?: string;
+  requiresConfirmation?: boolean;
+}
+
+export interface ParsedWaveCommandResult {
+  isSlashCommand: boolean;
+  command?: WaveSupportedCommand;
+  arg?: string;
+  hint?: WaveCommandHint;
+  normalizedMessage: string;
+  unknownCommand?: string;
+}
+
+export interface WaveInputPreprocessResult {
+  normalizedMessage: string;
+  commandHint?: WaveCommandHint;
+  intentHint?: WaveCommandHint;
+  unknownCommand?: string;
+}
+
+export const WAVE_SUPPORTED_COMMANDS = [
+  '/help',
+  '/collections',
+  '/requests',
+  '/environments',
+  '/flows',
+  '/tests',
+  '/run-flow',
+  '/run-tests',
+] as const;
+
+type WaveSupportedCommand = typeof WAVE_SUPPORTED_COMMANDS[number];
+
+const WAVE_SUPPORTED_COMMAND_SET = new Set<WaveSupportedCommand>(WAVE_SUPPORTED_COMMANDS);
+
+const WAVE_COMMAND_TO_KIND: Record<WaveSupportedCommand, WaveCommandKind> = {
+  '/help': 'help',
+  '/collections': 'collections',
+  '/requests': 'requests',
+  '/environments': 'environments',
+  '/flows': 'flows',
+  '/tests': 'tests',
+  '/run-flow': 'run-flow',
+  '/run-tests': 'run-tests',
+};
+
+const WAVE_KIND_TO_COMMAND: Record<WaveCommandKind, WaveSupportedCommand> = {
+  help: '/help',
+  collections: '/collections',
+  requests: '/requests',
+  environments: '/environments',
+  flows: '/flows',
+  tests: '/tests',
+  'run-flow': '/run-flow',
+  'run-tests': '/run-tests',
+};
+
+/**
+ * Stable command-to-focus guidance injected into the user message context.
+ */
+export const WAVE_COMMAND_FOCUS: Record<WaveCommandKind, string> = {
+  help: 'Provide a concise command guide tailored for Wave Client operations.',
+  collections: 'Focus on collections inventory and collection-level details.',
+  requests: 'Focus on request search and request-level lookup using a query.',
+  environments: 'Focus on environment inventory and environment variables.',
+  flows: 'Focus on flow inventory and flow execution planning.',
+  tests: 'Focus on test suite inventory and test execution planning.',
+  'run-flow': 'Focus on safely executing a flow with confirmation-first behavior.',
+  'run-tests': 'Focus on safely executing a test suite with confirmation-first behavior.',
+};
+
+const WAVE_COMMAND_HELP_TEXT = WAVE_SUPPORTED_COMMANDS.join(', ');
+
 // ============================================================================
-// System Prompt (inlined — must stay in sync with prompts/wave-client-agent.md)
+// Command and intent preprocessing helpers
+// ============================================================================
+
+function truncatePreview(value: string, maxLength = 80): string {
+  return value.length <= maxLength ? value : `${value.substring(0, maxLength)}...`;
+}
+
+function normalizeHintArg(arg: string | undefined): string | undefined {
+  if (!arg) { return undefined; }
+  const trimmed = arg.trim();
+  if (!trimmed) { return undefined; }
+
+  const quotedMatch = trimmed.match(/^(['"])([\s\S]+)\1$/);
+  const unwrapped = quotedMatch ? quotedMatch[2] : trimmed;
+  return unwrapped.trim() || undefined;
+}
+
+function sanitizeRunTarget(target: string | undefined): string | undefined {
+  if (!target) { return undefined; }
+
+  const withoutTrailingContext = target
+    .trim()
+    .replace(/\s+(in|on|with|using|against|via)\s+.+$/i, '');
+
+  const cleaned = withoutTrailingContext
+    .replace(/^['"`]|['"`]$/g, '')
+    .replace(/[.,;:!?]+$/g, '')
+    .trim();
+
+  return cleaned || undefined;
+}
+
+/**
+ * Extracts a run target from free-form text for flow/test execution intents.
+ */
+export function extractRunTarget(message: string, kind: 'flow' | 'test'): string | undefined {
+  const trimmed = message.trim();
+  if (!trimmed) { return undefined; }
+
+  const quoted = trimmed.match(/['"]([^'"\n]+)['"]/);
+  if (quoted?.[1]) {
+    return sanitizeRunTarget(quoted[1]);
+  }
+
+  const flowPattern = /\b(?:run|execute)\s+(?:the\s+)?flow\s+(.+)$/i;
+  const testPattern = /\b(?:run|execute)\s+(?:the\s+)?(?:tests?|test suites?)\s+(.+)$/i;
+  const genericPattern = /\b(?:run|execute)\s+(.+)$/i;
+
+  const directMatch = kind === 'flow'
+    ? trimmed.match(flowPattern)
+    : trimmed.match(testPattern);
+
+  if (directMatch?.[1]) {
+    return sanitizeRunTarget(directMatch[1]);
+  }
+
+  if (kind === 'test') {
+    const shortTestPattern = /\btest suite\s+(.+)$/i;
+    const shortMatch = trimmed.match(shortTestPattern);
+    if (shortMatch?.[1]) {
+      return sanitizeRunTarget(shortMatch[1]);
+    }
+  }
+
+  const genericMatch = trimmed.match(genericPattern);
+  if (!genericMatch?.[1]) {
+    return undefined;
+  }
+
+  const genericTarget = sanitizeRunTarget(genericMatch[1]);
+  if (!genericTarget) {
+    return undefined;
+  }
+
+  if (kind === 'flow' && /\btests?\b/i.test(genericTarget)) {
+    return undefined;
+  }
+  if (kind === 'test' && /\bflows?\b/i.test(genericTarget)) {
+    return undefined;
+  }
+
+  return genericTarget;
+}
+
+function extractEntityTarget(message: string, entity: 'collection' | 'environment' | 'request'): string | undefined {
+  const trimmed = message.trim();
+  if (!trimmed) { return undefined; }
+
+  const quoted = trimmed.match(/['"]([^'"\n]+)['"]/);
+  if (quoted?.[1]) {
+    return normalizeHintArg(quoted[1]);
+  }
+
+  const patterns: Record<typeof entity, RegExp[]> = {
+    collection: [
+      /\bcollection\s+(?:named|called|id)\s+(.+)$/i,
+      /\bcollection\s+(.+)$/i,
+    ],
+    environment: [
+      /\b(?:environment|env)\s+(?:named|called|id)\s+(.+)$/i,
+      /\b(?:environment|env)\s+(.+)$/i,
+    ],
+    request: [
+      /\brequests?\s+(?:named|called|matching)\s+(.+)$/i,
+      /\b(?:find|search)\s+(?:for\s+)?requests?\s+(.+)$/i,
+      /\b(?:find|search)\s+(.+)$/i,
+    ],
+  };
+
+  for (const pattern of patterns[entity]) {
+    const match = trimmed.match(pattern);
+    if (match?.[1]) {
+      return normalizeHintArg(match[1]);
+    }
+  }
+
+  return undefined;
+}
+
+function normalizeCommandPrompt(command: WaveSupportedCommand, arg?: string): string {
+  switch (command) {
+    case '/help':
+      return 'Show a concise Wave Client command guide with one practical example per command.';
+    case '/collections':
+      return arg
+        ? `Inspect collection details for "${arg}" and summarize key requests.`
+        : 'List all collections with a concise summary for each.';
+    case '/requests':
+      return arg
+        ? `Search requests using query "${arg}" and summarize the top matches.`
+        : 'The user ran /requests without a query. Ask for a search query and give one usage example: /requests login.';
+    case '/environments':
+      return arg
+        ? `Show variables for environment "${arg}" and summarize important values safely.`
+        : 'List all environments and summarize their variable counts.';
+    case '/flows':
+      return arg
+        ? `Check whether flow "${arg}" exists and summarize how to run it safely.`
+        : 'List all flows and summarize their status/readiness.';
+    case '/tests':
+      return arg
+        ? `Check whether test suite "${arg}" exists and summarize how to run it safely.`
+        : 'List all test suites and summarize their purpose/readiness.';
+    case '/run-flow':
+      return arg
+        ? `Prepare to run flow "${arg}". Resolve the target first, then request explicit confirmation before execution.`
+        : 'The user ran /run-flow without a target. Ask for flow name or ID and show one usage example: /run-flow Smoke Tests.';
+    case '/run-tests':
+      return arg
+        ? `Prepare to run test suite "${arg}". Resolve the target first, then request explicit confirmation before execution.`
+        : 'The user ran /run-tests without a target. Ask for suite name or ID and show one usage example: /run-tests Regression Suite.';
+  }
+}
+
+function buildToolPlanHint(hint: WaveCommandHint): string {
+  switch (hint.kind) {
+    case 'help':
+      return 'No MCP tool required. Provide command guidance only.';
+    case 'collections':
+      return hint.arg
+        ? `Call get_collection with target "${hint.arg}". If it fails to resolve, call list_collections first.`
+        : 'Call list_collections.';
+    case 'requests':
+      return hint.arg
+        ? `Call search_requests with query "${hint.arg}".`
+        : 'Call search_requests after asking the user for a query.';
+    case 'environments':
+      return hint.arg
+        ? `Call get_environment_variables for "${hint.arg}". If unresolved, call list_environments first.`
+        : 'Call list_environments.';
+    case 'flows':
+      return 'Call list_flows.';
+    case 'tests':
+      return 'Call list_test_suites.';
+    case 'run-flow':
+      return hint.arg
+        ? `Call list_flows to resolve "${hint.arg}". Ask for explicit confirmation. Only then call run_flow.`
+        : 'Call list_flows, ask for target selection, then request explicit confirmation before run_flow.';
+    case 'run-tests':
+      return hint.arg
+        ? `Call list_test_suites to resolve "${hint.arg}". Ask for explicit confirmation. Only then call run_test_suite.`
+        : 'Call list_test_suites, ask for target selection, then request explicit confirmation before run_test_suite.';
+  }
+}
+
+function buildRoutingContext(
+  commandHint?: WaveCommandHint,
+  intentHint?: WaveCommandHint,
+  unknownCommand?: string,
+): string {
+  if (unknownCommand) {
+    return [
+      'Wave routing hint:',
+      `- unknownCommand: ${unknownCommand}`,
+      `- supportedCommands: ${WAVE_COMMAND_HELP_TEXT}`,
+      '- action: explain valid command syntax and request corrected input.',
+    ].join('\n');
+  }
+
+  const activeHint = commandHint ?? intentHint;
+  if (!activeHint) {
+    return '';
+  }
+
+  const commandLabel = WAVE_KIND_TO_COMMAND[activeHint.kind];
+  const sourceLabel = commandHint ? 'commandMatched' : 'intentKind';
+
+  const lines = [
+    'Wave routing hint:',
+    `- ${sourceLabel}: ${commandLabel}`,
+    `- focus: ${WAVE_COMMAND_FOCUS[activeHint.kind]}`,
+    `- toolPlan: ${buildToolPlanHint(activeHint)}`,
+  ];
+
+  if (activeHint.arg) {
+    lines.push(`- targetArg: ${activeHint.arg}`);
+  }
+
+  if (activeHint.requiresConfirmation) {
+    lines.push('- requiresConfirmation: true');
+  }
+
+  return lines.join('\n');
+}
+
+/**
+ * Parses a slash command and normalizes it into an operational user prompt.
+ */
+export function parseWaveCommand(message: string): ParsedWaveCommandResult {
+  const trimmed = message.trim();
+  if (!trimmed.startsWith('/')) {
+    return { isSlashCommand: false, normalizedMessage: trimmed };
+  }
+
+  const match = trimmed.match(/^\/([a-z-]+)(?:\s+([\s\S]+))?$/i);
+  if (!match) {
+    return {
+      isSlashCommand: true,
+      normalizedMessage: `The command syntax is invalid. Use one of: ${WAVE_COMMAND_HELP_TEXT}.`,
+      unknownCommand: trimmed,
+    };
+  }
+
+  const commandToken = `/${match[1].toLowerCase()}`;
+  const arg = normalizeHintArg(match[2]);
+
+  if (!WAVE_SUPPORTED_COMMAND_SET.has(commandToken as WaveSupportedCommand)) {
+    return {
+      isSlashCommand: true,
+      normalizedMessage: `The command "${commandToken}" is not supported. Supported commands: ${WAVE_COMMAND_HELP_TEXT}.`,
+      unknownCommand: commandToken,
+    };
+  }
+
+  const command = commandToken as WaveSupportedCommand;
+  const kind = WAVE_COMMAND_TO_KIND[command];
+  const hint: WaveCommandHint = {
+    kind,
+    ...(arg ? { arg } : {}),
+    ...(kind === 'run-flow' || kind === 'run-tests' ? { requiresConfirmation: true } : {}),
+  };
+
+  return {
+    isSlashCommand: true,
+    command,
+    arg,
+    hint,
+    normalizedMessage: normalizeCommandPrompt(command, arg),
+  };
+}
+
+/**
+ * Detects free-form Wave intents and maps them to deterministic hint kinds.
+ */
+export function detectWaveIntent(message: string): WaveCommandHint | undefined {
+  const trimmed = message.trim();
+  if (!trimmed || trimmed.startsWith('/')) {
+    return undefined;
+  }
+
+  const lower = trimmed.toLowerCase();
+
+  if (/\b(?:run|execute)\b/.test(lower) && /\bflows?\b/.test(lower)) {
+    const arg = extractRunTarget(trimmed, 'flow');
+    return {
+      kind: 'run-flow',
+      ...(arg ? { arg } : {}),
+      requiresConfirmation: true,
+    };
+  }
+
+  if (
+    /\b(?:run|execute)\b/.test(lower) &&
+    (/\btests?\b/.test(lower) || /\btest suites?\b/.test(lower))
+  ) {
+    const arg = extractRunTarget(trimmed, 'test');
+    return {
+      kind: 'run-tests',
+      ...(arg ? { arg } : {}),
+      requiresConfirmation: true,
+    };
+  }
+
+  if (/\b(?:find|search|lookup)\b/.test(lower) && /\brequests?\b/.test(lower)) {
+    const arg = extractEntityTarget(trimmed, 'request');
+    return { kind: 'requests', ...(arg ? { arg } : {}) };
+  }
+
+  if (/\bcollections?\b/.test(lower)) {
+    const arg = extractEntityTarget(trimmed, 'collection');
+    return { kind: 'collections', ...(arg ? { arg } : {}) };
+  }
+
+  if (/\b(?:environment|environments|env|envs)\b/.test(lower) || /\bvariables?\b/.test(lower)) {
+    const arg = extractEntityTarget(trimmed, 'environment');
+    return { kind: 'environments', ...(arg ? { arg } : {}) };
+  }
+
+  if (/\bflows?\b/.test(lower)) {
+    return { kind: 'flows' };
+  }
+
+  if (/\btests?\b/.test(lower) || /\btest suites?\b/.test(lower)) {
+    return { kind: 'tests' };
+  }
+
+  if (/\brequests?\b/.test(lower)) {
+    const arg = extractEntityTarget(trimmed, 'request');
+    return { kind: 'requests', ...(arg ? { arg } : {}) };
+  }
+
+  return undefined;
+}
+
+/**
+ * Normalizes incoming user text into deterministic command/intent guided input.
+ */
+export function preprocessWaveInput(message: string): WaveInputPreprocessResult {
+  const trimmed = message.trim();
+  if (!trimmed) {
+    return { normalizedMessage: message };
+  }
+
+  const parsedCommand = parseWaveCommand(trimmed);
+  if (parsedCommand.isSlashCommand) {
+    const context = buildRoutingContext(parsedCommand.hint, undefined, parsedCommand.unknownCommand);
+    const normalizedMessage = context
+      ? `${parsedCommand.normalizedMessage}\n\n${context}`
+      : parsedCommand.normalizedMessage;
+
+    return {
+      normalizedMessage,
+      commandHint: parsedCommand.hint,
+      unknownCommand: parsedCommand.unknownCommand,
+    };
+  }
+
+  const intentHint = detectWaveIntent(trimmed);
+  if (!intentHint) {
+    return { normalizedMessage: trimmed };
+  }
+
+  const context = buildRoutingContext(undefined, intentHint);
+  return {
+    normalizedMessage: `${trimmed}\n\n${context}`,
+    intentHint,
+  };
+}
+
+// ============================================================================
+// System Prompt (inlined — canonical source, no companion prompt file)
 // ============================================================================
 
 /**
- * System prompt for the Wave Client agent.
+ * Canonical inlined system prompt for the Wave Client agent.
  *
  * Inlined as a constant so it is embedded into any bundle (webpack, tsc,
- * vitest, etc.) without needing `readFileSync` at runtime.  When editing
- * this prompt, also update the companion `prompts/wave-client-agent.md`
- * file so the two stay in sync.
+ * vitest, etc.) without needing `readFileSync` at runtime. Use the
+ * `systemPrompt` config option to override this prompt per instance.
  */
 const WAVE_CLIENT_SYSTEM_PROMPT = `# Wave Client Agent — System Prompt
 
-## CRITICAL RULE
-
-You MUST call the appropriate MCP tool for ANY question about the user's workspace data.
-**NEVER generate or fabricate workspace data** (collection names, environment names, request
-names, test suite names, flow names, etc.) from your own knowledge. The ONLY source of
-truth is the tool output.
-
 ## Identity
 
-You are the **Wave Client Assistant**, an expert AI agent embedded inside Wave Client — an application for making HTTP requests, managing APIs, and testing endpoints. You help users navigate features, manage their workspace, and execute actions directly through MCP tools.
+You are the **Wave Client Assistant** inside Wave Client.
+Your job is to help users inspect and operate their workspace using MCP tools.
+
+## Non-Negotiable Rules
+
+1. For workspace data, call tools first. Never answer from memory.
+2. Never invent names or IDs for collections, requests, environments, flows, or test suites.
+3. For every workspace claim, state which MCP tool produced it.
+4. If tool output is unavailable, explicitly write: "I cannot verify without MCP/tool output."
+5. Before \`run_flow\` or \`run_test_suite\`, require explicit confirmation language from the user.
+6. If a run target is ambiguous, list candidates first and ask the user to choose.
 
 ## Expertise
 
-You are an authority on every aspect of Wave Client:
+You are an authority on Wave Client collections, requests, environments, flows, test suites,
+authentication, proxies, certificates, cookies, and history.
 
-- **Collections** — Creating, organizing, importing/exporting API request collections
-- **Requests** — Crafting HTTP requests (REST, GraphQL, WebSocket), configuring headers, query params, request bodies (JSON, form-data, raw, binary)
-- **Environments** — Managing environments, variables (initial/current values), variable interpolation with \`{{variable}}\` syntax
-- **Flows** — Building automation flows that chain multiple requests together, sequential and conditional execution
-- **Test Suites** — Writing assertions, running test suites, interpreting results
-- **Authentication** — Configuring auth types (Bearer, Basic, API Key, OAuth 2.0), auth store management
-- **Proxies** — Setting up proxy configurations, per-request overrides
-- **Certificates** — Client certificate management for mTLS
-- **Cookies** — Cookie jar management, automatic cookie handling
-- **History** — Request execution history, replaying past requests
+Use Wave Client terminology precisely (collection, environment, flow, test suite).
 
-## Available Tools — Command-to-Tool Mapping
+## Command and Tool Mapping
 
-You have MCP tools bound to you. For any workspace query you MUST call the matching tool.
+You have MCP tools bound to you. Use this mapping:
 
 | User intent / command | Tool to call | Notes |
 |---|---|---|
-| List / show all collections | \`list_collections\` | Return summary table |
-| Get details of a specific collection | \`get_collection\` | Pass name or ID |
-| Search for a request | \`search_requests\` | Pass query string |
-| List environments | \`list_environments\` | Return summary table |
-| Get variables for an environment | \`get_environment_variables\` | Pass env name or ID |
-| List flows | \`list_flows\` | Return summary table |
-| Run / execute a flow | \`run_flow\` | Confirm with user first |
-| List test suites | \`list_test_suites\` | Supports search filter |
-| Run / execute a test suite | \`run_test_suite\` | Confirm with user first |
+| /help | none | Explain command usage and safe workflow |
+| /collections | list_collections, get_collection | list first; drill down when target provided |
+| /requests | search_requests | requires query |
+| /environments | list_environments, get_environment_variables | list first; fetch variables when target provided |
+| /flows | list_flows | inventory and readiness |
+| /tests | list_test_suites | inventory and readiness |
+| /run-flow | list_flows, run_flow | resolve target, confirm, then run |
+| /run-tests | list_test_suites, run_test_suite | resolve target, confirm, then run |
 
-### Orchestration Guidelines
+## Response Format (Mandatory)
 
-1. **Always call tools first** — For ANY question about collections, environments, flows, tests, or requests, call the appropriate tool BEFORE responding. Never answer from memory.
-2. **Confirm destructive actions** — Before running flows or test suites, call the list tool first, identify the target, present your plan to the user, and WAIT for confirmation before executing.
-3. **Chain tools logically** — Example: "run tests in production" → call \`list_test_suites\` → call \`list_environments\` → present plan → wait for confirmation → call \`run_test_suite\`.
-4. **Format results for humans** — When a tool returns data, format it as a clean markdown table or structured summary. Do not dump raw JSON unless the user asks for it.
-5. **NEVER fabricate data** — If a tool returns an empty result or an error, say so clearly. Under no circumstances should you invent names, IDs, or data.
+For operational answers, always use this exact section order:
 
-## Response Structure
+1. TL;DR
+2. What I checked
+3. Findings
+4. Recommended action
+5. Next Steps
 
-### Format Rules
+## Depth Control
 
-- **Use \`##\` section headers** when a response covers setup, usage, and reference as distinct parts. Keep the overall response under ~300 words unless the user asks for detail.
-- **Use bullet points or tables** for any list — do not embed multiple items in a flowing sentence.
-- **Wrap all code samples** in fenced code blocks with a language tag (\`json\`, \`http\`, \`javascript\`). This includes \`{{variable}}\` syntax examples and request bodies.
-- **Bold field names, variable names, and action verbs** that a user needs to act on (e.g., **Collection Name**, **Environment**, **Run**).
-- **End action-oriented answers with a \`**Next Steps:**\` line** listing the one or two concrete things the user should do next.
-- When answering a question that requires workspace data (collections, environments, flows, test suites), **always call the relevant tool first** — never assume names or IDs.
+- Quick: short operational response, minimal detail.
+- Default: structured actionable response with concise rationale.
+- Deep: detailed troubleshooting with explicit command/tool breakdown and alternatives.
 
-### Structured Data Blocks
+Use the depth requested by the user. If no depth is requested, use Default.
 
-When your response includes data that benefits from interactive rendering, output it in the following block format so the UI can render rich components:
+## Orchestration Rules
 
-**JSON data** — Wrap in a fenced code block tagged \`json\`:
+1. For list intents, call the matching list tool first.
+2. For detail intents, resolve with list/get tool output before answering.
+3. For run intents, do: resolve target -> ask confirmation -> run.
+4. Keep outputs structured and concise; use tables for lists when useful.
+5. Never expose or infer secrets from masked values.
 
-\`\`\`json
-{ "key": "value" }
-\`\`\`
+## Failure Handling
 
-**Request execution results** — Present with status code, timing, and body summary.
+When tools fail or return empty results:
 
-**Environment listings** — Use a markdown table:
-
-| Variable | Value |
-|----------|-------|
-| \`baseUrl\` | \`https://api.example.com\` |
-| \`apiKey\` | \`••••••••\` |
-
-### Error Responses
-
-When something goes wrong:
-
-1. State what happened in plain language
-2. Suggest the most likely cause
-3. Provide a concrete next step (e.g., "Try creating an environment named 'dev' first")
+1. State what failed.
+2. Include the tool name used.
+3. Give a concrete next step.
+4. If data is not verified, use: "I cannot verify without MCP/tool output."
 `;
 
 /**
  * Restricted system prompt used when no MCP tools are available.
  *
- * Prevents the agent from hallucinating workspace data by explicitly
- * telling the LLM it has no access to the user's workspace.
+ * Prevents fabricated workspace output by requiring explicit limitation
+ * language and no-data guarantees.
  */
 const NO_TOOLS_SYSTEM_PROMPT = `# Wave Client Agent — Limited Mode (No Tools)
 
-You are the **Wave Client Assistant**. However, your MCP workspace tools are **NOT currently available**.
+You are the **Wave Client Assistant**. MCP workspace tools are currently unavailable.
 
-## CRITICAL — What You CANNOT Do
+## Non-Negotiable Rules
 
-- You CANNOT access or list collections, environments, flows, or test suites.
-- You CANNOT execute any workspace actions.
-- You have NO knowledge of the user's workspace data.
-- **Under NO circumstances should you invent or fabricate** collection names, environment names, request names, test suite names, or any other workspace data.
+1. You cannot read workspace collections, requests, environments, flows, or test suites.
+2. You cannot execute workspace actions.
+3. Never invent workspace names, IDs, variables, or results.
+4. For any workspace question, explicitly write: "I cannot verify without MCP/tool output."
+5. Ask the user to reconnect MCP and retry.
 
-## What You MUST Do
+## Allowed Scope
 
-When the user asks about their workspace (collections, environments, requests, flows, tests):
+- Explain Wave Client concepts and best practices.
+- Provide request composition guidance (headers, body, auth setup).
+- Explain testing approaches and troubleshooting strategy at a conceptual level.
 
-1. Tell them: "MCP tools are not currently connected, so I cannot access your workspace data."
-2. Suggest: "Please check the MCP connection status or try reconnecting."
-3. Do NOT attempt to answer with made-up data.
+## Response Format (Mandatory)
 
-## What You CAN Do
+Use this exact section order when answering operational questions:
 
-- Answer general questions about Wave Client features, concepts, and best practices.
-- Explain HTTP methods, REST API design, headers, status codes, etc.
-- Help compose request bodies, query parameters, and authentication headers.
-- Provide guidance on API testing strategies and workflows.
+1. TL;DR
+2. What I checked
+3. Findings
+4. Recommended action
+5. Next Steps
+
+Do not claim workspace facts in limited mode.
 `;
 
 // ============================================================================
@@ -316,15 +760,34 @@ export function createWaveClientAgent(config: WaveClientAgentConfig) {
       userMessage: string,
       signal?: AbortSignal,
     ): AsyncGenerator<ChatChunk> {
+      const preprocessedInput = preprocessWaveInput(userMessage);
+      const commandMatched = preprocessedInput.commandHint
+        ? WAVE_KIND_TO_COMMAND[preprocessedInput.commandHint.kind]
+        : undefined;
+      const intentKind = preprocessedInput.intentHint?.kind;
+
       const messageId = `msg-${Date.now()}`;
       let chunkIndex = 0;
 
       console.info('[WaveClientAgent] chat start', {
         messageId,
         historyLength: sessionMessages.length,
-        messagePreview: userMessage.substring(0, 80),
+        messagePreview: truncatePreview(userMessage),
+        normalizedPreview: truncatePreview(preprocessedInput.normalizedMessage),
+        commandMatched,
+        intentKind,
+        unknownCommand: preprocessedInput.unknownCommand,
         toolCount: mcpTools.length,
       });
+
+      if (commandMatched || intentKind || preprocessedInput.unknownCommand) {
+        console.info('[WaveClientAgent] routing', {
+          commandMatched,
+          intentKind,
+          unknownCommand: preprocessedInput.unknownCommand,
+          messagePreview: truncatePreview(userMessage, 60),
+        });
+      }
 
       try {
         const messages: BaseMessage[] = sessionMessages.map((msg) => {
@@ -333,7 +796,7 @@ export function createWaveClientAgent(config: WaveClientAgentConfig) {
           return new SystemMessage(msg.content);
         });
 
-        messages.push(new HumanMessage(userMessage));
+        messages.push(new HumanMessage(preprocessedInput.normalizedMessage));
 
         const streamStartTime = Date.now();
 

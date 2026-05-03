@@ -9,7 +9,7 @@
  *     AdapterProvider so useArenaAdapter() resolves.
  *   - A controllable StreamHandle lets tests inject chunks/done/error
  *     synchronously inside act().
- *   - vi.useFakeTimers() controls the 120-second safety timeout.
+ *   - vi.useFakeTimers() controls the 180-second safety timeout.
  *   - The Zustand store is reset before each test to avoid state bleed.
  */
 
@@ -344,7 +344,7 @@ describe('useArenaStreamManager', () => {
     // 10. Safety timeout fires → error
     // ──────────────────────────────────────────────────────────────────
 
-    it('10 — safety timeout fires after 120 s of silence → error', () => {
+    it('10 — safety timeout fires after 180 s of silence → error', () => {
         const { result } = setup();
 
         act(() => {
@@ -362,7 +362,7 @@ describe('useArenaStreamManager', () => {
 
         // Advance time beyond the safety window
         act(() => {
-            vi.advanceTimersByTime(121_000);
+            vi.advanceTimersByTime(181_000);
         });
 
         expect(result.current.streamState).toBe('error');
@@ -804,7 +804,7 @@ describe('useArenaStreamManager', () => {
 
         // No chunks arrive — advance past the safety window
         act(() => {
-            vi.advanceTimersByTime(121_000);
+            vi.advanceTimersByTime(181_000);
         });
 
         expect(result.current.streamState).toBe('error');
