@@ -140,14 +140,14 @@ describe('waveClientAgent — prompt source and guardrails', () => {
 
         const systemPrompt = String(calls[0][0]?.content ?? '');
         expect(systemPrompt).toContain('Wave Client Agent — System Prompt');
-        expect(systemPrompt).toContain('TL;DR');
-        expect(systemPrompt).toContain('What I checked');
-        expect(systemPrompt).toContain('Findings');
-        expect(systemPrompt).toContain('Recommended action');
-        expect(systemPrompt).toContain('Next Steps');
-        expect(systemPrompt).toContain('Quick');
-        expect(systemPrompt).toContain('Default');
-        expect(systemPrompt).toContain('Deep');
+        expect(systemPrompt).toContain('orchestrator');
+        expect(systemPrompt).toContain('How You Work');
+        expect(systemPrompt).toContain('Available Tools');
+        expect(systemPrompt).toContain('Hard Rules');
+        // Old rigid response format must not leak back in.
+        expect(systemPrompt).not.toContain('TL;DR');
+        expect(systemPrompt).not.toContain('What I checked');
+        expect(systemPrompt).not.toContain('Recommended action');
     });
 
     it('systemPrompt override takes precedence over the inlined default', async () => {

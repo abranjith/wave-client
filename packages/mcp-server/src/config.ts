@@ -6,6 +6,7 @@ import {
     type ISecurityService
 } from '@wave-client/shared';
 
+//TODO - this needs to be in some common package that both arena, mcp-server etc can import from
 // Simple pass-through security service for MCP (read-only mostly)
 // In a real scenario, we might want to read the key from env
 export class SimpleSecurityService implements ISecurityService {
