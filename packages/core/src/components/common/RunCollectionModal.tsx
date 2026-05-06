@@ -1,7 +1,10 @@
 // Hook and types
 import { useCollectionRunner, CollectionRunItem, type CollectionRunResult } from '../../hooks/useCollectionRunner';
-import React, { useState, useMemo, useCallback, useId } from 'react';
-import { PlayIcon, StopCircleIcon, ChevronDownIcon, ChevronRightIcon, SearchIcon } from 'lucide-react';
+import React, { useState, useMemo, useCallback, useId, useRef, useEffect } from 'react';
+import { PlayIcon, StopCircleIcon, ChevronDownIcon, ChevronRightIcon, SearchIcon, DownloadIcon, Loader2, CheckIcon } from 'lucide-react';
+import { useReportExport } from '../../hooks/useReportExport';
+import type { CollectionReportInput } from '../../utils/reporting/builders/collectionRun';
+import type { ReportRequestNode } from '../../utils/reporting/types';
 import { CollectionItem, isRequest } from '../../types/collection';
 import { isHttpRequest } from '../../utils/requestTypeGuards';
 import { urlToString } from '../../utils/collectionParser';
@@ -233,6 +236,38 @@ const RunCollectionModal: React.FC<RunCollectionModalProps> = ({
     collections,
   });
 
+  // Report export hook
+  const { status: reportStatus, exportCollectionRun } = useReportExport();
+
+  // Refs to track run start/end timestamps for the report metadata
+  const runStartedAtRef = useRef<number>(0);
+  const runCompletedAtRef = useRef<number | undefined>(undefined);
+  const prevIsRunningRef = useRef<boolean>(false);
+
+  // Track run start/stop transitions
+  useEffect(() => {
+    if (runner.isRunning && !prevIsRunningRef.current) {
+      // Transition: idle → running
+      runStartedAtRef.current = Date.now();
+      runCompletedAtRef.current = undefined;
+    } else if (!runner.isRunning && prevIsRunningRef.current) {
+      // Transition: running → idle/done
+      runCompletedAtRef.current = Date.now();
+    }
+    prevIsRunningRef.current = runner.isRunning;
+  }, [runner.isRunning]);
+
+  // 3-second success indicator state
+  const [showSuccessIndicator, setShowSuccessIndicator] = useState(false);
+
+  useEffect(() => {
+    if (reportStatus.state === 'success') {
+      setShowSuccessIndicator(true);
+      const timer = setTimeout(() => setShowSuccessIndicator(false), 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [reportStatus.state]);
+
   // Local state
   const [selectedEnvironmentId, setSelectedEnvironmentId] = useState<string | null>(null);
   const [selectedAuthId, setSelectedAuthId] = useState<string | null>(null);
@@ -360,6 +395,79 @@ const RunCollectionModal: React.FC<RunCollectionModalProps> = ({
     runner.cancelRun();
   }, [runner]);
 
+  const handleExport = useCallback(async () => {
+    // Only export results for the requests that were selected for this run
+    const selectedRequests = displayRequests.filter((r) =>
+      selectedRequestIds.has(r.id)
+    );
+
+    const selectedEnv = environments?.find((e) => e.id === selectedEnvironmentId);
+    const selectedAuth = auths?.find((a) => a.id === selectedAuthId);
+
+    const startedAt = runStartedAtRef.current || Date.now();
+    const completedAt = runCompletedAtRef.current;
+    const totalElapsedMs =
+      completedAt !== undefined ? completedAt - startedAt : undefined;
+
+    const reportItems: ReportRequestNode[] = selectedRequests.map((r) => ({
+      id: r.id,
+      name: r.name,
+      method: r.method,
+      url: r.url,
+      folderPath: r.folderPath,
+      runStatus: r.runStatus,
+      responseStatus: r.responseStatus,
+      responseTime: r.responseTime,
+      responseHeaders: r.responseHeaders,
+      responseBody: r.responseBody,
+      isResponseEncoded: r.isResponseEncoded,
+      validationStatus: r.validationStatus,
+      validationResult: r.validationResult,
+      error: r.error,
+      request: r.request,
+    }));
+
+    const skipped =
+      metrics.totalRequests - metrics.passed - metrics.failed;
+
+    const input: CollectionReportInput = {
+      metadata: {
+        runType: 'collection',
+        subjectName: collectionName,
+        itemPath: itemPath.length > 0 ? itemPath : undefined,
+        environmentName: selectedEnv?.name,
+        defaultAuthName: selectedAuth?.name,
+        concurrentCalls: settings.concurrentCalls,
+        delayBetweenCalls: settings.delayBetweenCalls,
+        startedAt,
+        completedAt,
+        totalElapsedMs,
+      },
+      summary: {
+        total: metrics.totalRequests,
+        passed: metrics.passed,
+        failed: metrics.failed,
+        skipped: skipped >= 0 ? skipped : 0,
+        averageTimeMs: metrics.averageTime > 0 ? metrics.averageTime : undefined,
+      },
+      items: reportItems,
+    };
+
+    await exportCollectionRun(input);
+  }, [
+    displayRequests,
+    selectedRequestIds,
+    environments,
+    auths,
+    selectedEnvironmentId,
+    selectedAuthId,
+    collectionName,
+    itemPath,
+    settings,
+    metrics,
+    exportCollectionRun,
+  ]);
+
   // Derive display name
   const displayName = itemPath.length > 0 
     ? `${collectionName} / ${itemPath.join(' / ')}` 
@@ -430,7 +538,7 @@ const RunCollectionModal: React.FC<RunCollectionModalProps> = ({
               </Select>
             </div>
 
-            {/* Run/Stop Button */}
+            {/* Run/Stop Button + Export Button */}
             <div className="ml-auto flex items-center gap-2">
               {runner.isRunning ? (
                 <PrimaryButton
@@ -450,6 +558,23 @@ const RunCollectionModal: React.FC<RunCollectionModalProps> = ({
                   Run ({selectedRequestIds.size})
                 </PrimaryButton>
               )}
+              <SecondaryButton
+                onClick={handleExport}
+                disabled={
+                  runner.isRunning ||
+                  runner.progress.completed === 0 ||
+                  reportStatus.state === 'generating'
+                }
+              >
+                {reportStatus.state === 'generating' ? (
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                ) : showSuccessIndicator ? (
+                  <CheckIcon className="h-4 w-4 mr-2" />
+                ) : (
+                  <DownloadIcon className="h-4 w-4 mr-2" />
+                )}
+                Export Report
+              </SecondaryButton>
             </div>
           </div>
 

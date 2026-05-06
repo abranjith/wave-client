@@ -117,6 +117,9 @@ export const mockWorkspace = {
   })),
   workspaceFolders: undefined,
   onDidChangeConfiguration: vi.fn(),
+  fs: {
+    writeFile: vi.fn(),
+  },
 };
 
 // Mock vscode.Uri

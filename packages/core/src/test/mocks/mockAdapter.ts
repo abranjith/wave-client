@@ -23,6 +23,7 @@
  */
 
 import { ok, err, type Result } from '../../utils/result';
+import { vi } from 'vitest';
 import {
     createAdapterEventEmitter,
     type IPlatformAdapter,
@@ -377,6 +378,10 @@ function createMockStorageAdapter(store: MockDataStore): IStorageAdapter {
             }
             return ok(undefined);
         },
+
+        exportFile: vi.fn(async (fileName: string, _content: string, _mimeType: string) => {
+            return ok({ filePath: `/mock/path/${fileName}`, fileName });
+        }),
     };
 }
 

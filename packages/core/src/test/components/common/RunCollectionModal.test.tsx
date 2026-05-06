@@ -1,7 +1,8 @@
 /**
- * Unit tests for RunCollectionModal — exclusion gate (FEAT-011 TASK-001).
+ * Unit tests for RunCollectionModal — exclusion gate (FEAT-011 TASK-001) and
+ * Export Report button (FEAT-003 TASK-003).
  *
- * Tested scenarios:
+ * Tested scenarios (exclusion gate):
  *  1.  Renders HTTP requests from a mixed-protocol collection (HTTP + WS + SSE).
  *  2.  Does not render WS requests in the request list.
  *  3.  Does not render SSE requests in the request list.
@@ -12,33 +13,55 @@
  *  8.  Nested folder items are flattened — HTTP requests inside folders appear.
  *  9.  WS requests inside nested folders are excluded.
  *
+ * Tested scenarios (Export Report button):
+ *  10. Export Report button renders.
+ *  11. Export button is disabled when no requests have been completed.
+ *  12. Export button is enabled after at least one request completes.
+ *  13. Export button is disabled while a run is in progress.
+ *  14. Export button is disabled while generating (reportStatus === 'generating').
+ *  15. Clicking Export button calls exportCollectionRun.
+ *
  * Strategy:
- *  - Heavy hooks (useCollectionRunner, useAppStateStore) and UI primitives are
- *    mocked so tests run in JSDOM without real network/store dependencies.
+ *  - Heavy hooks (useCollectionRunner, useAppStateStore, useReportExport) and
+ *    UI primitives are mocked so tests run in JSDOM without real
+ *    network/store/adapter dependencies.
  *  - RunRequestCard is stubbed to render request name and method as plain text
  *    so we can assert on their presence without the card's full render logic.
- *  - The component is rendered with a mix of HTTP, WS, and SSE items each time
- *    to confirm the gate never leaks non-HTTP items.
  */
 
 import React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import type { CollectionItem } from '../../../types/collection';
+import type { ReportExportStatus } from '../../../hooks/useReportExport';
 
 // ── Mocks ────────────────────────────────────────────────────────────────────
 
-vi.mock('../../../hooks/useCollectionRunner', () => ({
-    useCollectionRunner: () => ({
-        isRunning: false,
-        progress: { completed: 0, failed: 0, total: 0 },
-        averageTime: 0,
-        results: {},
-        runCollection: vi.fn(),
-        cancelRun: vi.fn(),
-        resetResults: vi.fn(),
-        getResult: vi.fn(() => undefined),
+// Mock useReportExport so the component doesn't need a real AdapterProvider.
+const mockExportCollectionRun = vi.fn();
+let mockReportStatus: ReportExportStatus = { state: 'idle' };
+
+vi.mock('../../../hooks/useReportExport', () => ({
+    useReportExport: () => ({
+        status: mockReportStatus,
+        exportCollectionRun: mockExportCollectionRun,
     }),
+}));
+
+// Mutable runner state — override per-test for export button disabled tests.
+const mockRunnerState = {
+    isRunning: false,
+    progress: { completed: 0, failed: 0, total: 0 },
+    averageTime: 0,
+    results: {},
+    runCollection: vi.fn(),
+    cancelRun: vi.fn(),
+    resetResults: vi.fn(),
+    getResult: vi.fn(() => undefined),
+};
+
+vi.mock('../../../hooks/useCollectionRunner', () => ({
+    useCollectionRunner: () => mockRunnerState,
 }));
 
 vi.mock('../../../hooks/store/useAppStateStore', () => ({
@@ -74,10 +97,16 @@ vi.mock('../../../components/ui/SecondaryButton', () => ({
     SecondaryButton: ({
         children,
         onClick,
+        disabled,
     }: {
         children: React.ReactNode;
         onClick?: () => void;
-    }) => <button onClick={onClick}>{children}</button>,
+        disabled?: boolean;
+    }) => (
+        <button data-testid="secondary-button" onClick={onClick} disabled={disabled}>
+            {children}
+        </button>
+    ),
 }));
 
 vi.mock('../../../components/ui/input', () => ({
@@ -189,6 +218,12 @@ const DEFAULT_PROPS = {
 describe('RunCollectionModal — exclusion gate (FEAT-011)', () => {
     beforeEach(() => {
         vi.clearAllMocks();
+        // Reset mutable mocks to their defaults
+        mockReportStatus = { state: 'idle' };
+        mockRunnerState.isRunning = false;
+        mockRunnerState.progress = { completed: 0, failed: 0, total: 0 };
+        mockRunnerState.averageTime = 0;
+        mockRunnerState.results = {};
     });
 
     it('renders HTTP requests from a mixed-protocol collection', () => {
@@ -308,5 +343,86 @@ describe('RunCollectionModal — exclusion gate (FEAT-011)', () => {
 
         expect(screen.queryByText('Subscribe Events')).toBeNull();
         expect(screen.getByText('Get Users')).toBeTruthy();
+    });
+});
+
+// ── Export Report button tests ─────────────────────────────────────────────────
+
+describe('RunCollectionModal — Export Report button (FEAT-003)', () => {
+    beforeEach(() => {
+        vi.clearAllMocks();
+        mockReportStatus = { state: 'idle' };
+        mockRunnerState.isRunning = false;
+        mockRunnerState.progress = { completed: 0, failed: 0, total: 0 };
+        mockRunnerState.averageTime = 0;
+        mockRunnerState.results = {};
+    });
+
+    it('renders the Export Report button', () => {
+        render(<RunCollectionModal {...DEFAULT_PROPS} items={[makeHttpItem('h1', 'Get')]} />);
+        expect(screen.getByText(/Export Report/i)).toBeTruthy();
+    });
+
+    it('Export button is disabled when no requests have completed', () => {
+        // progress.completed === 0 → disabled
+        mockRunnerState.progress = { completed: 0, failed: 0, total: 0 };
+
+        render(<RunCollectionModal {...DEFAULT_PROPS} items={[makeHttpItem('h1', 'Get')]} />);
+
+        // Find secondary buttons (SecondaryButton mock has data-testid="secondary-button")
+        const buttons = screen.getAllByTestId('secondary-button');
+        const exportButton = buttons.find((b) => b.textContent?.includes('Export Report'));
+        expect(exportButton).toBeTruthy();
+        expect((exportButton as HTMLButtonElement).disabled).toBe(true);
+    });
+
+    it('Export button is enabled when at least one request has completed', () => {
+        mockRunnerState.progress = { completed: 1, failed: 0, total: 1 };
+
+        render(<RunCollectionModal {...DEFAULT_PROPS} items={[makeHttpItem('h1', 'Get')]} />);
+
+        const buttons = screen.getAllByTestId('secondary-button');
+        const exportButton = buttons.find((b) => b.textContent?.includes('Export Report'));
+        expect(exportButton).toBeTruthy();
+        expect((exportButton as HTMLButtonElement).disabled).toBe(false);
+    });
+
+    it('Export button is disabled while a run is in progress', () => {
+        mockRunnerState.isRunning = true;
+        // Even if some completed, isRunning disables it
+        mockRunnerState.progress = { completed: 1, failed: 0, total: 2 };
+
+        render(<RunCollectionModal {...DEFAULT_PROPS} items={[makeHttpItem('h1', 'Get')]} />);
+
+        const buttons = screen.getAllByTestId('secondary-button');
+        const exportButton = buttons.find((b) => b.textContent?.includes('Export Report'));
+        expect(exportButton).toBeTruthy();
+        expect((exportButton as HTMLButtonElement).disabled).toBe(true);
+    });
+
+    it('Export button is disabled while generating the report', () => {
+        mockReportStatus = { state: 'generating' };
+        mockRunnerState.progress = { completed: 1, failed: 0, total: 1 };
+
+        render(<RunCollectionModal {...DEFAULT_PROPS} items={[makeHttpItem('h1', 'Get')]} />);
+
+        const buttons = screen.getAllByTestId('secondary-button');
+        const exportButton = buttons.find((b) => b.textContent?.includes('Export Report'));
+        expect(exportButton).toBeTruthy();
+        expect((exportButton as HTMLButtonElement).disabled).toBe(true);
+    });
+
+    it('clicking Export button calls exportCollectionRun', () => {
+        mockRunnerState.progress = { completed: 1, failed: 0, total: 1 };
+
+        render(<RunCollectionModal {...DEFAULT_PROPS} items={[makeHttpItem('h1', 'Get')]} />);
+
+        const buttons = screen.getAllByTestId('secondary-button');
+        const exportButton = buttons.find((b) => b.textContent?.includes('Export Report'));
+        expect(exportButton).toBeTruthy();
+
+        fireEvent.click(exportButton as HTMLElement);
+
+        expect(mockExportCollectionRun).toHaveBeenCalledOnce();
     });
 });

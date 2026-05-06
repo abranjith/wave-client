@@ -4,8 +4,8 @@
  * Side panel showing flow execution results with a reusable request view.
  */
 
-import React, { useMemo } from 'react';
-import { CheckCircle2, XCircle, Circle, Trash2 } from 'lucide-react';
+import React, { useMemo, useState, useEffect, useCallback } from 'react';
+import { CheckCircle2, XCircle, Circle, Trash2, DownloadIcon, Loader2, CheckIcon } from 'lucide-react';
 import type { Flow, FlowRunResult, FlowNodeResult, FlowNodeStatus, FlowNode } from '../../types/flow';
 import type { Collection, CollectionItem, CollectionRequest, AnyCollectionRequest } from '../../types/collection';
 import { isRequest } from '../../types/collection';
@@ -15,6 +15,8 @@ import { cn } from '../../utils/common';
 import RunRequestCard, { RunRequestData, RunStatus, ValidationStatus } from '../common/RunRequestCard';
 import { Button } from '../ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/tooltip';
+import { useReportExport } from '../../hooks/useReportExport';
+import type { FlowReportInput, ReportRequestNode } from '../../utils/reporting';
 
 interface FlowResultsPanelProps {
     /** Current flow definition */
@@ -173,6 +175,19 @@ export const FlowResultsPanel: React.FC<FlowResultsPanelProps> = ({
     selectedNodeId,
     onClearResults,
 }) => {
+    const { status: reportStatus, exportFlowRun } = useReportExport();
+
+    // 3-second transient success indicator after a successful export.
+    const [showExportSuccess, setShowExportSuccess] = useState(false);
+
+    useEffect(() => {
+        if (reportStatus.state === 'success') {
+            setShowExportSuccess(true);
+            const timer = setTimeout(() => setShowExportSuccess(false), 3000);
+            return () => clearTimeout(timer);
+        }
+    }, [reportStatus.state]);
+
     const progress = result?.progress ?? {
         total: flow.nodes.length,
         completed: 0,
@@ -190,6 +205,78 @@ export const FlowResultsPanel: React.FC<FlowResultsPanelProps> = ({
             return buildRunRequestData(node, nodeResult, collections);
         });
     }, [flow.nodes, result, collections]);
+
+    /**
+     * Builds the FlowReportInput from current flow/result state and triggers
+     * the file download.
+     *
+     * Metadata note: `environmentName` and `defaultAuthName` are intentionally
+     * `undefined` — the flow runner does not currently surface the resolved
+     * environment / auth name to the results panel. See TODO.md:
+     * "Per-request resolved auth recorded by runners and surfaced in the report header".
+     */
+    const handleExport = useCallback(async () => {
+        if (!result) {
+            return;
+        }
+
+        const startedAt = new Date(result.startedAt).getTime();
+        const completedAt = result.completedAt
+            ? new Date(result.completedAt).getTime()
+            : undefined;
+        const totalElapsedMs =
+            completedAt !== undefined ? completedAt - startedAt : undefined;
+
+        // Map RunRequestData cards to ReportRequestNode — the two types share
+        // the same shape so this is a straightforward re-cast.
+        const nodes: ReportRequestNode[] = cards.map((card) => ({
+            id: card.id,
+            name: card.name,
+            method: card.method,
+            url: card.url,
+            folderPath: card.folderPath,
+            runStatus: card.runStatus,
+            responseStatus: card.responseStatus,
+            responseTime: card.responseTime,
+            validationStatus: card.validationStatus,
+            validationResult: card.validationResult,
+            responseHeaders: card.responseHeaders,
+            responseBody: card.responseBody,
+            isResponseEncoded: card.isResponseEncoded,
+            error: card.error,
+            request: card.request,
+        }));
+
+        // Compute average response time across nodes that received a response.
+        const executedNodes = nodes.filter((n) => n.responseTime !== undefined);
+        const averageTimeMs =
+            executedNodes.length > 0
+                ? executedNodes.reduce((sum, n) => sum + (n.responseTime ?? 0), 0) /
+                  executedNodes.length
+                : undefined;
+
+        const input: FlowReportInput = {
+            metadata: {
+                runType: 'flow',
+                subjectName: flow.name,
+                startedAt,
+                completedAt,
+                totalElapsedMs,
+                // environmentName and defaultAuthName are undefined for now — the
+                // flow runner does not currently surface them to the results panel.
+            },
+            summary: {
+                total: result.progress.total,
+                passed: result.progress.succeeded,
+                failed: result.progress.failed,
+                skipped: result.progress.skipped,
+                averageTimeMs,
+            },
+            nodes,
+        };
+
+        await exportFlowRun(input);
+    }, [result, cards, flow.name, exportFlowRun]);
 
     const statusColors: Record<string, string> = {
         idle: 'bg-slate-100 text-slate-600',
@@ -218,6 +305,32 @@ export const FlowResultsPanel: React.FC<FlowResultsPanelProps> = ({
                         Results
                     </h3>
                     <div className="flex items-center gap-2">
+                        {/* Export Report button — disabled when no result, running, or generating */}
+                        <Tooltip>
+                            <TooltipTrigger asChild>
+                                <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={handleExport}
+                                    disabled={
+                                        result === null ||
+                                        result.status === 'running' ||
+                                        reportStatus.state === 'generating'
+                                    }
+                                    className="h-7 w-7 p-0 text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200"
+                                    aria-label="Export HTML report"
+                                >
+                                    {reportStatus.state === 'generating' ? (
+                                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                    ) : showExportSuccess ? (
+                                        <CheckIcon className="h-3.5 w-3.5 text-green-500" />
+                                    ) : (
+                                        <DownloadIcon className="h-3.5 w-3.5" />
+                                    )}
+                                </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>Export HTML report</TooltipContent>
+                        </Tooltip>
                         {result && onClearResults && (
                             <Tooltip>
                                 <TooltipTrigger asChild>

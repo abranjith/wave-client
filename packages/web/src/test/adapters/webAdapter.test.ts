@@ -882,3 +882,110 @@ describe('checkServerHealth', () => {
     expect(result).toBe(false);
   });
 });
+
+describe('WebAdapter - exportFile', () => {
+  let adapter: ReturnType<typeof createWebAdapter>;
+  let createObjectURLSpy: ReturnType<typeof vi.fn>;
+  let revokeObjectURLSpy: ReturnType<typeof vi.fn>;
+  let appendChildSpy: ReturnType<typeof vi.fn>;
+  let removeChildSpy: ReturnType<typeof vi.fn>;
+  let clickSpy: ReturnType<typeof vi.fn>;
+  let createElementSpy: ReturnType<typeof vi.spyOn>;
+
+  beforeEach(() => {
+    adapter = createWebAdapter();
+
+    createObjectURLSpy = vi.fn().mockReturnValue('blob:mock-url');
+    revokeObjectURLSpy = vi.fn();
+    clickSpy = vi.fn();
+
+    global.URL.createObjectURL = createObjectURLSpy;
+    global.URL.revokeObjectURL = revokeObjectURLSpy;
+
+    appendChildSpy = vi.fn();
+    removeChildSpy = vi.fn();
+
+    // Spy on document.createElement to capture the anchor element
+    createElementSpy = vi.spyOn(document, 'createElement').mockImplementation((tag: string) => {
+      if (tag === 'a') {
+        const el = { href: '', download: '', click: clickSpy } as unknown as HTMLAnchorElement;
+        return el;
+      }
+      return document.createElement(tag);
+    });
+
+    vi.spyOn(document.body, 'appendChild').mockImplementation(appendChildSpy);
+    vi.spyOn(document.body, 'removeChild').mockImplementation(removeChildSpy);
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('returns ok with empty filePath and the given fileName', async () => {
+    const result = await adapter.storage.exportFile('report.html', '<html/>', 'text/html');
+
+    expect(result.isOk).toBe(true);
+    if (result.isOk) {
+      expect(result.value.filePath).toBe('');
+      expect(result.value.fileName).toBe('report.html');
+    }
+  });
+
+  it('creates a Blob with the correct content and mimeType', async () => {
+    const BlobSpy = vi.spyOn(global, 'Blob').mockImplementation(
+      (parts, opts) => ({ parts, opts, size: 0, type: opts?.type ?? '' }) as unknown as Blob
+    );
+
+    await adapter.storage.exportFile('data.json', '{"a":1}', 'application/json');
+
+    expect(BlobSpy).toHaveBeenCalledWith(['{"a":1}'], { type: 'application/json' });
+    BlobSpy.mockRestore();
+  });
+
+  it('sets anchor href and download, then clicks and cleans up', async () => {
+    await adapter.storage.exportFile('report.html', '<html/>', 'text/html');
+
+    // Verify the object URL was created and revoked
+    expect(createObjectURLSpy).toHaveBeenCalledTimes(1);
+    expect(revokeObjectURLSpy).toHaveBeenCalledWith('blob:mock-url');
+
+    // Verify click was called
+    expect(clickSpy).toHaveBeenCalledTimes(1);
+
+    // Verify anchor was appended and removed
+    expect(appendChildSpy).toHaveBeenCalledTimes(1);
+    expect(removeChildSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it('sets correct download filename on anchor', async () => {
+    let capturedAnchor: HTMLAnchorElement | null = null;
+    createElementSpy.mockImplementation((tag: string) => {
+      if (tag === 'a') {
+        const el = { href: '', download: '', click: clickSpy } as unknown as HTMLAnchorElement;
+        capturedAnchor = el;
+        return el;
+      }
+      return document.createElement(tag);
+    });
+
+    await adapter.storage.exportFile('my-report.html', 'content', 'text/html');
+
+    expect(capturedAnchor).not.toBeNull();
+    expect((capturedAnchor as any).download).toBe('my-report.html');
+    expect((capturedAnchor as any).href).toBe('blob:mock-url');
+  });
+
+  it('returns err when createObjectURL throws', async () => {
+    createObjectURLSpy.mockImplementation(() => {
+      throw new Error('Blob API unavailable');
+    });
+
+    const result = await adapter.storage.exportFile('report.html', '<html/>', 'text/html');
+
+    expect(result.isOk).toBe(false);
+    if (!result.isOk) {
+      expect(result.error).toBe('Blob API unavailable');
+    }
+  });
+});

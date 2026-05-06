@@ -945,6 +945,28 @@ class WebStorageAdapter implements IStorageAdapter {
       return err(`Server error: ${message}`);
     }
   }
+
+  async exportFile(
+    fileName: string,
+    content: string,
+    mimeType: string
+  ): Promise<Result<{ filePath: string; fileName: string }, string>> {
+    try {
+      const blob = new Blob([content], { type: mimeType });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = fileName;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      return ok({ filePath: '', fileName });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      return err(message);
+    }
+  }
 }
 
 /**

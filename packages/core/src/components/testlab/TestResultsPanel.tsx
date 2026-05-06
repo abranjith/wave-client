@@ -5,8 +5,8 @@
  * Supports both request and flow items, with flow items expandable to show node results.
  */
 
-import React, { useMemo, useState } from 'react';
-import { CheckCircle2, XCircle, Circle, Trash2, ChevronDown, ChevronRight, GitBranchIcon, BeakerIcon } from 'lucide-react';
+import React, { useMemo, useState, useCallback, useEffect } from 'react';
+import { CheckCircle2, XCircle, Circle, Trash2, ChevronDown, ChevronRight, GitBranchIcon, BeakerIcon, DownloadIcon, Loader2, CheckIcon } from 'lucide-react';
 import type { TestSuite, TestSuiteRunResult, TestItemResult, TestItem, TestCaseResult, RequestTestItemResult, FlowTestCaseResult, FlowTestItemResult } from '../../types/testSuite';
 import type { FlowRunResult, FlowNodeResult, FlowNode, Flow } from '../../types/flow';
 import type { Collection, CollectionItem, CollectionRequest, AnyCollectionRequest } from '../../types/collection';
@@ -18,6 +18,8 @@ import { cn } from '../../utils/common';
 import RunRequestCard, { RunRequestData, RunStatus, ValidationStatus } from '../common/RunRequestCard';
 import { Button } from '../ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/tooltip';
+import { useReportExport } from '../../hooks/useReportExport';
+import type { ReportRequestNode, TestSuiteReportInput, TestSuiteReportItem, TestSuiteFlowTestCase } from '../../utils/reporting';
 
 // ============================================================================
 // Types
@@ -647,6 +649,19 @@ export const TestResultsPanel: React.FC<TestResultsPanelProps> = ({
     selectedItemId,
     onClearResults,
 }) => {
+    const { status: reportStatus, exportTestSuiteRun } = useReportExport();
+
+    // 3-second transient success indicator after a successful export.
+    const [showExportSuccess, setShowExportSuccess] = useState(false);
+
+    useEffect(() => {
+        if (reportStatus.state === 'success') {
+            setShowExportSuccess(true);
+            const timer = setTimeout(() => setShowExportSuccess(false), 3000);
+            return () => clearTimeout(timer);
+        }
+    }, [reportStatus.state]);
+
     const progress = result?.progress ?? {
         total: suite.items.length,
         completed: 0,
@@ -657,6 +672,183 @@ export const TestResultsPanel: React.FC<TestResultsPanelProps> = ({
 
     const status = result?.status ?? 'idle';
     const totalForBar = Math.max(progress.total, 1);
+
+    /**
+     * Builds a TestSuiteReportInput from the current suite/result state and
+     * triggers an HTML file download.
+     *
+     * Each enabled item (sorted by order) is mapped to a TestSuiteReportItem:
+     * - request items without test cases → { kind: 'request', single: ReportRequestNode }
+     * - request items with test cases   → { kind: 'request', testCases: ReportRequestNode[] }
+     * - flow items without test cases   → { kind: 'flow', nodes: ReportRequestNode[] }
+     * - flow items with test cases      → { kind: 'flow', testCases: TestSuiteFlowTestCase[] }
+     */
+    const handleExport = useCallback(async () => {
+        if (!result) return;
+
+        const startedAt = new Date(result.startedAt).getTime();
+        const completedAt = result.completedAt
+            ? new Date(result.completedAt).getTime()
+            : undefined;
+        const totalElapsedMs =
+            completedAt !== undefined ? completedAt - startedAt : undefined;
+
+        /**
+         * Build a ReportRequestNode array from a flow's nodes + a FlowRunResult.
+         * Mirrors the logic in FlowResultSubPanel.
+         */
+        function buildFlowNodes(
+            flow: import('../../types/flow').Flow,
+            flowRunResult: import('../../types/flow').FlowRunResult,
+        ): ReportRequestNode[] {
+            return flow.nodes.map((node) => {
+                const nodeResult = flowRunResult.nodeResults.get(node.id);
+                const lookup = findRequestMeta(node.requestId, collections);
+                const request: AnyCollectionRequest = lookup?.request ?? {
+                    method: node.method,
+                    url: 'Unknown URL',
+                } as AnyCollectionRequest;
+                const url = lookup?.url || (typeof request.url === 'string' ? request.url : urlToString(request.url));
+
+                let validationStatus: ValidationStatus = 'idle';
+                if (nodeResult?.response?.validationResult) {
+                    validationStatus = nodeResult.response.validationResult.allPassed ? 'pass' : 'fail';
+                }
+
+                return {
+                    id: node.id,
+                    name: node.alias || lookup?.name || node.name,
+                    method: ((!isWsRequest(request) ? request.method : undefined) || node.method || 'GET').toUpperCase(),
+                    url,
+                    request,
+                    folderPath: lookup?.folderPath ?? [],
+                    runStatus: toRunStatus(nodeResult?.status),
+                    responseStatus: nodeResult?.response?.status,
+                    responseTime: nodeResult?.response?.elapsedTime,
+                    validationStatus,
+                    validationResult: nodeResult?.response?.validationResult,
+                    responseHeaders: nodeResult?.response?.headers,
+                    responseBody: nodeResult?.response?.body,
+                    isResponseEncoded: nodeResult?.response?.isEncoded,
+                    error: nodeResult?.error || (nodeResult?.status === 'skipped' ? 'Skipped (condition not met)' : undefined),
+                };
+            });
+        }
+
+        const enabledItems = suite.items
+            .filter((item) => item.enabled)
+            .sort((a, b) => a.order - b.order);
+
+        const reportItems: TestSuiteReportItem[] = enabledItems.map((item) => {
+            const itemResult = result.itemResults.get(item.id);
+
+            if (isRequestTestItem(item)) {
+                const lookup = findRequestMeta(item.referenceId, collections);
+                const request: AnyCollectionRequest = lookup?.request ?? {
+                    id: item.id,
+                    name: item.name || 'Unknown Request',
+                    method: 'GET',
+                    url: 'Unknown URL',
+                } as AnyCollectionRequest;
+                const url = lookup?.url || (typeof request.url === 'string' ? request.url : urlToString(request.url));
+                const reqItemResult = itemResult && isRequestTestItemResult(itemResult) ? itemResult : undefined;
+
+                const hasTestCases = !!(reqItemResult?.testCaseResults && reqItemResult.testCaseResults.size > 0);
+
+                if (hasTestCases) {
+                    const tcArray = Array.from(reqItemResult!.testCaseResults!.values());
+                    return {
+                        kind: 'request',
+                        name: item.name || lookup?.name || 'Unknown Request',
+                        status: toRunStatus(itemResult?.status),
+                        testCases: tcArray.map((tc) => convertTestCaseToRunRequestData(tc, request)),
+                    } satisfies TestSuiteReportItem;
+                }
+
+                // Single execution (no data-driven test cases)
+                const single: ReportRequestNode = {
+                    id: item.id,
+                    name: item.name || lookup?.name || 'Unknown Request',
+                    method: ((!isWsRequest(request) ? request.method : undefined) || 'GET').toUpperCase(),
+                    url,
+                    request,
+                    folderPath: lookup?.folderPath ?? [],
+                    runStatus: toRunStatus(itemResult?.status),
+                    responseStatus: reqItemResult?.response?.status,
+                    responseTime: reqItemResult?.response?.elapsedTime,
+                    validationStatus: toValidationStatus(itemResult?.validationStatus),
+                    validationResult: reqItemResult?.response?.validationResult,
+                    responseHeaders: reqItemResult?.response?.headers,
+                    responseBody: reqItemResult?.response?.body,
+                    isResponseEncoded: reqItemResult?.response?.isEncoded,
+                    error: deriveError(itemResult),
+                };
+
+                return {
+                    kind: 'request',
+                    name: item.name || lookup?.name || 'Unknown Request',
+                    status: toRunStatus(itemResult?.status),
+                    single,
+                } satisfies TestSuiteReportItem;
+            }
+
+            // Flow item
+            const flow = flows.find((f) => f.id === item.referenceId);
+            const flowItemResult = itemResult && isFlowTestItemResult(itemResult) ? itemResult : undefined;
+            const hasTestCases = !!(flowItemResult?.testCaseResults && flowItemResult.testCaseResults.size > 0);
+
+            if (hasTestCases && flow) {
+                const tcArray = Array.from(flowItemResult!.testCaseResults!.values());
+                return {
+                    kind: 'flow',
+                    name: item.name || flow?.name || 'Unknown Flow',
+                    status: toRunStatus(itemResult?.status),
+                    testCases: tcArray.map((tc): TestSuiteFlowTestCase => ({
+                        id: tc.testCaseId,
+                        name: tc.testCaseName,
+                        status: toRunStatus(tc.status),
+                        nodes: tc.flowResult ? buildFlowNodes(flow, tc.flowResult) : [],
+                    })),
+                } satisfies TestSuiteReportItem;
+            }
+
+            // Flat flow run (no data-driven test cases)
+            const nodes: ReportRequestNode[] =
+                flow && flowItemResult?.flowResult
+                    ? buildFlowNodes(flow, flowItemResult.flowResult)
+                    : [];
+
+            return {
+                kind: 'flow',
+                name: item.name || flow?.name || 'Unknown Flow',
+                status: toRunStatus(itemResult?.status),
+                nodes,
+            } satisfies TestSuiteReportItem;
+        });
+
+        const input: TestSuiteReportInput = {
+            metadata: {
+                runType: 'testsuite',
+                subjectName: suite.name,
+                startedAt,
+                completedAt,
+                totalElapsedMs,
+            },
+            summary: {
+                total: result.progress.total,
+                passed: result.progress.passed,
+                failed: result.progress.failed,
+                skipped: result.progress.skipped,
+                averageTimeMs:
+                    result.averageTime !== undefined && result.averageTime > 0
+                        ? result.averageTime
+                        : undefined,
+            },
+            items: reportItems,
+        };
+
+        await exportTestSuiteRun(input);
+    }, [result, suite, collections, flows, exportTestSuiteRun]);
 
     const statusColors: Record<string, string> = {
         idle: 'bg-slate-100 text-slate-600',
@@ -679,7 +871,7 @@ export const TestResultsPanel: React.FC<TestResultsPanelProps> = ({
 
             {/* Header */}
             <div className="p-3 border-b border-slate-200 dark:border-slate-700">
-                {/* Status + Clear Button Row */}
+                {/* Status + Action Buttons Row */}
                 <div className="flex items-center justify-between mb-3">
                     <span className={cn(
                         'text-xs font-medium px-2 py-1 rounded-full capitalize',
@@ -688,21 +880,50 @@ export const TestResultsPanel: React.FC<TestResultsPanelProps> = ({
                         {status}
                     </span>
 
-                    {onClearResults && result && status !== 'running' && (
+                    <div className="flex items-center gap-1">
+                        {/* Export Report button */}
                         <Tooltip>
                             <TooltipTrigger asChild>
                                 <Button
                                     variant="ghost"
                                     size="sm"
+                                    onClick={handleExport}
+                                    disabled={
+                                        result === null ||
+                                        result.status === 'running' ||
+                                        reportStatus.state === 'generating'
+                                    }
                                     className="h-6 w-6 p-0"
-                                    onClick={onClearResults}
+                                    aria-label="Export HTML report"
                                 >
-                                    <Trash2 className="h-3.5 w-3.5 text-slate-500" />
+                                    {reportStatus.state === 'generating' ? (
+                                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                    ) : showExportSuccess ? (
+                                        <CheckIcon className="h-3.5 w-3.5 text-green-500" />
+                                    ) : (
+                                        <DownloadIcon className="h-3.5 w-3.5 text-slate-500" />
+                                    )}
                                 </Button>
                             </TooltipTrigger>
-                            <TooltipContent>Clear Results</TooltipContent>
+                            <TooltipContent>Export HTML report</TooltipContent>
                         </Tooltip>
-                    )}
+
+                        {onClearResults && result && status !== 'running' && (
+                            <Tooltip>
+                                <TooltipTrigger asChild>
+                                    <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        className="h-6 w-6 p-0"
+                                        onClick={onClearResults}
+                                    >
+                                        <Trash2 className="h-3.5 w-3.5 text-slate-500" />
+                                    </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>Clear Results</TooltipContent>
+                            </Tooltip>
+                        )}
+                    </div>
                 </div>
 
                 {/* Summary Stats */}

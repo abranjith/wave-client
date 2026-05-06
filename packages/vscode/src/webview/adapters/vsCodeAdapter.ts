@@ -614,6 +614,36 @@ function createVSCodeStorageAdapter(
             });
             return ok(undefined);
         },
+
+        async exportFile(fileName: string, content: string, mimeType: string): Promise<Result<{ filePath: string; fileName: string }, string>> {
+            return new Promise((resolve) => {
+                const requestId = generateRequestId();
+
+                const timeout = setTimeout(() => {
+                    pendingRequests.delete(requestId);
+                    resolve(err(`Request timed out: exportFile`));
+                }, defaultTimeout);
+
+                pendingRequests.set(requestId, {
+                    resolve: (value) => {
+                        const response = value as any;
+                        if (response && response.error) {
+                            resolve(err(response.error));
+                        } else {
+                            resolve(ok({ filePath: response.filePath, fileName: response.fileName }));
+                        }
+                    },
+                    reject: (error) => resolve(err(error.message)),
+                    timeout,
+                });
+
+                vsCodeApi.postMessage({
+                    type: 'exportFile',
+                    requestId,
+                    data: { fileName, content, mimeType }
+                });
+            });
+        },
     };
 }
 

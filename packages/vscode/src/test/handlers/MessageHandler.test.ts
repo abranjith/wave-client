@@ -3,12 +3,13 @@ import { createMockWebviewPanel } from '../mocks/vscode.js';
 
 // Mock vscode module
 vi.mock('vscode', async () => {
-  const { createMockExtensionContext, mockWindow, mockWorkspace } = await import(
+  const { createMockExtensionContext, mockWindow, mockWorkspace, mockUri } = await import(
     '../mocks/vscode.js'
   );
   return {
     window: mockWindow,
     workspace: mockWorkspace,
+    Uri: mockUri,
   };
 });
 
@@ -735,6 +736,108 @@ describe('MessageHandler', () => {
       expect(completeCall?.[1]).toMatchObject({ streamId: 'stream-log', sessionId: 'sess-log' });
 
       consoleSpy.mockRestore();
+    });
+  });
+
+  describe('exportFile handler', () => {
+    it('posts fileExported with filePath and fileName when user picks a save location', async () => {
+      const { mockWindow, mockWorkspace } = await import('../mocks/vscode.js');
+
+      const savedUri = { fsPath: '/home/user/Downloads/report.html' };
+      (mockWindow.showSaveDialog as any).mockResolvedValue(savedUri);
+      (mockWorkspace.fs.writeFile as any).mockResolvedValue(undefined);
+
+      const message = {
+        type: 'exportFile',
+        requestId: 'req-ef-1',
+        data: { fileName: 'report.html', content: '<html/>', mimeType: 'text/html' },
+      };
+
+      await handler.handleMessage(message);
+
+      expect(mockWorkspace.fs.writeFile).toHaveBeenCalledWith(
+        savedUri,
+        expect.any(Uint8Array)
+      );
+      expect(mockPanel.webview.postMessage).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: 'fileExported',
+          requestId: 'req-ef-1',
+          filePath: '/home/user/Downloads/report.html',
+          fileName: 'report.html',
+        })
+      );
+    });
+
+    it('posts fileExported with error when user cancels the save dialog', async () => {
+      const { mockWindow, mockWorkspace } = await import('../mocks/vscode.js');
+
+      (mockWindow.showSaveDialog as any).mockResolvedValue(undefined);
+
+      const message = {
+        type: 'exportFile',
+        requestId: 'req-ef-2',
+        data: { fileName: 'report.html', content: '<html/>', mimeType: 'text/html' },
+      };
+
+      await handler.handleMessage(message);
+
+      expect(mockWorkspace.fs.writeFile).not.toHaveBeenCalled();
+      expect(mockPanel.webview.postMessage).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: 'fileExported',
+          requestId: 'req-ef-2',
+          error: 'Export cancelled by user',
+        })
+      );
+    });
+
+    it('posts fileExported with error when writeFile throws', async () => {
+      const { mockWindow, mockWorkspace } = await import('../mocks/vscode.js');
+
+      const savedUri = { fsPath: '/home/user/Downloads/data.json' };
+      (mockWindow.showSaveDialog as any).mockResolvedValue(savedUri);
+      (mockWorkspace.fs.writeFile as any).mockRejectedValue(new Error('Permission denied'));
+
+      const message = {
+        type: 'exportFile',
+        requestId: 'req-ef-3',
+        data: { fileName: 'data.json', content: '{}', mimeType: 'application/json' },
+      };
+
+      await handler.handleMessage(message);
+
+      expect(mockPanel.webview.postMessage).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: 'fileExported',
+          requestId: 'req-ef-3',
+          error: 'Permission denied',
+        })
+      );
+    });
+
+    it.each([
+      ['text/html', 'HTML', 'html'],
+      ['application/json', 'JSON', 'json'],
+      ['text/plain', 'All Files', '*'],
+    ])('uses correct file filter for mimeType %s', async (mimeType, filterLabel, filterExt) => {
+      const { mockWindow, mockWorkspace } = await import('../mocks/vscode.js');
+
+      (mockWindow.showSaveDialog as any).mockResolvedValue(undefined);
+
+      await handler.handleMessage({
+        type: 'exportFile',
+        requestId: 'req-ef-mime',
+        data: { fileName: 'file.bin', content: 'data', mimeType },
+      });
+
+      expect(mockWindow.showSaveDialog).toHaveBeenCalledWith(
+        expect.objectContaining({
+          filters: expect.objectContaining({
+            [filterLabel]: [filterExt],
+          }),
+        })
+      );
     });
   });
 });

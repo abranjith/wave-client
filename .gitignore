@@ -438,5 +438,9 @@ TODO.md
 .github/agents
 .github/prompts
 .github/plan
+.github/skills
 .github/images
+.claude/agents
+.claude/commands
+.claude/skills
 specs/

@@ -199,6 +199,7 @@ The following specialist agents and skills are available:
 - [spec.architect](.github/agents/spec.architect.agent.md)
 - [spec.brainstormer](.github/agents/spec.brainstormer.agent.md)
 - [spec.explorer](.github/agents/spec.explorer.agent.md)
+- [spec.planner](.github/agents/spec.planner.agent.md)
 - [spec.feature_planner](.github/agents/spec.feature_planner.agent.md)
 - [spec.yolo](.github/agents/spec.yolo.agent.md)
 - [spec.devops](.github/agents/spec.devops.agent.md)
@@ -224,6 +225,7 @@ The following specialist agents and skills are available:
 - [spec.architect](.github/prompts/spec.architect.prompt.md)
 - [spec.brainstorm](.github/prompts/spec.brainstorm.prompt.md)
 - [spec.explore](.github/prompts/spec.explore.prompt.md)
+- [spec.plan](.github/prompts/spec.plan.prompt.md)
 - [spec.plan_feature](.github/prompts/spec.plan_feature.prompt.md)
 - [spec.yolo](.github/prompts/spec.yolo.prompt.md)
 

@@ -127,6 +127,9 @@ export class MessageHandler {
             case 'exportCollection':
                 await this.handleExportCollection(message);
                 break;
+            case 'exportFile':
+                await this.handleExportFile(message);
+                break;
             case 'loadEnvironments':
                 await this.handleLoadEnvironments(message);
                 break;
@@ -584,6 +587,57 @@ export class MessageHandler {
             this.postMessage({
                 type: 'bannerError',
                 message: `Failed to export collection: ${error.message}`
+            });
+        }
+    }
+
+    private async handleExportFile(message: any): Promise<void> {
+        const requestId = message.requestId;
+        try {
+            const { fileName, content, mimeType } = message.data;
+            console.info(`[MessageHandler] exportFile: fileName=${fileName}, contentLength=${content?.length ?? 0}`);
+
+            // Map MIME type to VS Code file filter
+            let filterLabel: string;
+            let filterExt: string;
+            if (mimeType === 'text/html') {
+                filterLabel = 'HTML';
+                filterExt = 'html';
+            } else if (mimeType === 'application/json') {
+                filterLabel = 'JSON';
+                filterExt = 'json';
+            } else {
+                filterLabel = 'All Files';
+                filterExt = '*';
+            }
+
+            const uri = await vscode.window.showSaveDialog({
+                defaultUri: vscode.Uri.file(path.join(os.homedir(), 'Downloads', fileName)),
+                filters: { [filterLabel]: [filterExt], 'All Files': ['*'] }
+            });
+
+            if (uri) {
+                await vscode.workspace.fs.writeFile(uri, new TextEncoder().encode(content));
+                this.postMessage({
+                    type: 'fileExported',
+                    requestId,
+                    filePath: uri.fsPath,
+                    fileName: path.basename(uri.fsPath)
+                });
+            } else {
+                // User cancelled the save dialog
+                this.postMessage({
+                    type: 'fileExported',
+                    requestId,
+                    error: 'Export cancelled by user'
+                });
+            }
+        } catch (error: any) {
+            console.error(`[MessageHandler] exportFile error: ${error.message}`);
+            this.postMessage({
+                type: 'fileExported',
+                requestId,
+                error: error.message
             });
         }
     }

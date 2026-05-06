@@ -216,6 +216,36 @@ export interface IStorageAdapter {
     // Settings
     loadSettings(): Promise<Result<AppSettings, string>>;
     saveSettings(settings: AppSettings): Promise<Result<void, string>>;
+
+    /**
+     * Saves an in-memory string to disk as a file chosen by the user.
+     *
+     * @param fileName - Suggested file name shown in the save dialog (VS Code) or used as
+     *   the `download` attribute (Web). The caller is responsible for sanitization and
+     *   correct extension; this method does not modify the name.
+     * @param content - UTF-8 text content to write. Must not contain sensitive data that
+     *   should not be logged.
+     * @param mimeType - Content type (e.g. `"text/html"`, `"application/json"`). Used to
+     *   build the save-dialog filter on VS Code and the `Blob` type on Web.
+     *
+     * @returns On success: `{ filePath, fileName }` where `filePath` is the absolute path
+     *   chosen by the user (VS Code) or `''` (Web, which has no path concept) and
+     *   `fileName` is the actual file name used (may differ from `fileName` param on VS
+     *   Code if the user changed it in the dialog).
+     *
+     * **VS Code**: Opens a native save dialog. If the user cancels, resolves with
+     * `err('Export cancelled by user')`. File-system errors resolve with `err(<reason>)`.
+     *
+     * **Web**: Triggers a browser download via a hidden `<a download>` element. Browser
+     * download dialogs cannot report cancellation, so the method always resolves
+     * `ok({ filePath: '', fileName })` after triggering the click. Only throws when
+     * `Blob` construction or URL handling fails.
+     */
+    exportFile(
+        fileName: string,
+        content: string,
+        mimeType: string
+    ): Promise<Result<{ filePath: string; fileName: string }, string>>;
 }
 
 // ============================================================================
