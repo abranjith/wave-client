@@ -111,6 +111,14 @@ describe('INTERACTIVITY_JS', () => {
     expect(INTERACTIVITY_JS).toContain('data-tab-panel');
   });
 
+  it('references data-summary-filter for status filtering', () => {
+    expect(INTERACTIVITY_JS).toContain('data-summary-filter');
+  });
+
+  it('references data-report-search for free-text filtering', () => {
+    expect(INTERACTIVITY_JS).toContain('data-report-search');
+  });
+
   it('references aria-selected attribute', () => {
     expect(INTERACTIVITY_JS).toContain('aria-selected');
   });
@@ -250,5 +258,72 @@ describe('INTERACTIVITY_JS — tab switching (jsdom integration)', () => {
 
     expect(requestPanel.hasAttribute('hidden')).toBe(false);
     expect(requestBtn.getAttribute('aria-selected')).toBe('true');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// INTERACTIVITY_JS — jsdom integration: summary status filter + search
+// ---------------------------------------------------------------------------
+
+describe('INTERACTIVITY_JS — summary filter + search (jsdom integration)', () => {
+  beforeEach(() => {
+    document.body.innerHTML = `
+      <div class="wc-summary-controls">
+        <input data-report-search />
+      </div>
+      <div class="wc-summary-grid">
+        <button data-summary-filter="all" aria-pressed="false">Total</button>
+        <button data-summary-filter="passed" aria-pressed="false">Passed</button>
+        <button data-summary-filter="failed" aria-pressed="false">Failed</button>
+      </div>
+      <section class="wc-items">
+        <div data-report-item="request" data-filter-status="passed" data-search-text="get users api"></div>
+        <div data-report-item="request" data-filter-status="failed" data-search-text="create order api"></div>
+      </section>
+    `;
+
+    // eslint-disable-next-line no-eval
+    eval(INTERACTIVITY_JS);
+  });
+
+  it('shows all top-level report items initially', () => {
+    const items = document.querySelectorAll('.wc-items > [data-report-item]');
+    const hiddenCount = Array.from(items).filter((item) => item.hasAttribute('hidden')).length;
+    expect(hiddenCount).toBe(0);
+  });
+
+  it('clicking Passed filters to only passed items', () => {
+    const passedBtn = document.querySelector('[data-summary-filter="passed"]') as HTMLButtonElement;
+    const passedItem = document.querySelector('[data-filter-status="passed"]') as HTMLElement;
+    const failedItem = document.querySelector('[data-filter-status="failed"]') as HTMLElement;
+
+    passedBtn.click();
+
+    expect(passedBtn.getAttribute('aria-pressed')).toBe('true');
+    expect(passedItem.hasAttribute('hidden')).toBe(false);
+    expect(failedItem.hasAttribute('hidden')).toBe(true);
+  });
+
+  it('clicking the same status filter again resets the filter', () => {
+    const passedBtn = document.querySelector('[data-summary-filter="passed"]') as HTMLButtonElement;
+    const failedItem = document.querySelector('[data-filter-status="failed"]') as HTMLElement;
+
+    passedBtn.click(); // apply
+    passedBtn.click(); // reset
+
+    expect(passedBtn.getAttribute('aria-pressed')).toBe('false');
+    expect(failedItem.hasAttribute('hidden')).toBe(false);
+  });
+
+  it('search input filters by data-search-text', () => {
+    const search = document.querySelector('[data-report-search]') as HTMLInputElement;
+    const passedItem = document.querySelector('[data-filter-status="passed"]') as HTMLElement;
+    const failedItem = document.querySelector('[data-filter-status="failed"]') as HTMLElement;
+
+    search.value = 'order';
+    search.dispatchEvent(new Event('input', { bubbles: true }));
+
+    expect(passedItem.hasAttribute('hidden')).toBe(true);
+    expect(failedItem.hasAttribute('hidden')).toBe(false);
   });
 });

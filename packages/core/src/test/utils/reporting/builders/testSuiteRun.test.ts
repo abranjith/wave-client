@@ -118,9 +118,9 @@ describe('buildTestSuiteRunReport', () => {
       expect(html).toContain('Get User Item');
     });
 
-    it('renders the ITEM method badge for request items', () => {
+    it('renders the SUITE method badge for request items', () => {
       const html = buildTestSuiteRunReport(makeInput(items));
-      expect(html).toContain('ITEM');
+      expect(html).toContain('SUITE');
     });
 
     it('renders the request node name', () => {

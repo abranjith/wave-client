@@ -63,6 +63,12 @@ describe('renderRequestDetail — HTTP happy path', () => {
     expect(out).toContain('wc-card');
   });
 
+  it('adds report filter metadata attributes to the card root', () => {
+    expect(out).toContain('data-report-item="request"');
+    expect(out).toContain('data-filter-status="passed"');
+    expect(out).toContain('data-search-text=');
+  });
+
   it('renders the request name in the card header', () => {
     expect(out).toContain('Get Users');
   });
@@ -85,7 +91,11 @@ describe('renderRequestDetail — HTTP happy path', () => {
   });
 
   it('renders the success status pill', () => {
-    expect(out).toContain('wc-status--success');
+    expect(out).toContain('data-run-indicator="success"');
+  });
+
+  it('renders a validation status indicator when request run succeeded', () => {
+    expect(out).toContain('data-validation-indicator="pass"');
   });
 
   it('includes data-toggle="card" on the header for interactivity', () => {
@@ -125,7 +135,7 @@ describe('renderRequestDetail — failed request with error', () => {
   );
 
   it('renders the failed status pill', () => {
-    expect(out).toContain('wc-status--failed');
+    expect(out).toContain('data-run-indicator="failed"');
   });
 
   it('renders the error message', () => {
@@ -134,6 +144,23 @@ describe('renderRequestDetail — failed request with error', () => {
 
   it('renders an error block element', () => {
     expect(out).toContain('wc-error-block');
+  });
+});
+
+describe('renderRequestDetail — failed request with response metadata', () => {
+  const out = renderRequestDetail(
+    makeNode({
+      runStatus: 'failed',
+      responseStatus: 500,
+      responseTime: 215,
+      error: 'Internal Server Error',
+    }),
+  );
+
+  it('renders response status code and time even when run status is failed', () => {
+    expect(out).toContain('>500<');
+    expect(out).toContain('215ms');
+    expect(out).toContain('data-run-indicator="failed"');
   });
 });
 
@@ -147,8 +174,7 @@ describe('renderRequestDetail — skipped status', () => {
   );
 
   it('renders the skipped status pill', () => {
-    expect(out).toContain('wc-status--skipped');
-    expect(out).toContain('Skipped');
+    expect(out).toContain('data-run-indicator="skipped"');
   });
 });
 
@@ -171,6 +197,28 @@ describe('renderRequestDetail — binary response', () => {
 
   it('does not render the raw base64 body', () => {
     expect(out).not.toContain('iVBORw0KGgoAAAANSUhEUg==');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Encoded text response
+// ---------------------------------------------------------------------------
+
+describe('renderRequestDetail — encoded text response', () => {
+  const out = renderRequestDetail(
+    makeNode({
+      responseHeaders: { 'content-type': 'application/json' },
+      responseBody: 'eyJvayI6dHJ1ZX0=',
+      isResponseEncoded: true,
+    }),
+  );
+
+  it('decodes base64 text body and renders decoded content', () => {
+    expect(out).toContain('&quot;ok&quot;: true');
+  });
+
+  it('does not render the binary placeholder for encoded text content', () => {
+    expect(out).not.toContain(BINARY_PLACEHOLDER);
   });
 });
 
@@ -287,6 +335,26 @@ describe('renderRequestDetail — validation panel', () => {
   it('renders expected and actual values', () => {
     expect(out).toContain('Expected:');
     expect(out).toContain('Actual:');
+  });
+});
+
+describe('renderRequestDetail — validation status indicator', () => {
+  it('shows Validation Fail in header when run succeeds but validation fails', () => {
+    const out = renderRequestDetail(
+      makeNode({ runStatus: 'success', validationStatus: 'fail' }),
+    );
+
+    expect(out).toContain('data-validation-indicator="fail"');
+    expect(out).toContain('Validation Fail');
+  });
+
+  it('shows Validation Pending in header when validation is pending', () => {
+    const out = renderRequestDetail(
+      makeNode({ runStatus: 'success', validationStatus: 'pending' }),
+    );
+
+    expect(out).toContain('data-validation-indicator="pending"');
+    expect(out).toContain('Validation Pending');
   });
 });
 

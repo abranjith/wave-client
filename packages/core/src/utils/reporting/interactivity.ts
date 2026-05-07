@@ -67,5 +67,78 @@ export const INTERACTIVITY_JS = `
     });
   });
 
+  /* ------------------------------------------------------------------ */
+  /* Report filters — summary status toggles + free-text search         */
+  /* ------------------------------------------------------------------ */
+
+  var reportItems = Array.prototype.slice.call(
+    document.querySelectorAll('.wc-items > [data-report-item]')
+  );
+  var summaryFilterButtons = Array.prototype.slice.call(
+    document.querySelectorAll('[data-summary-filter]')
+  );
+  var searchInput = document.querySelector('[data-report-search]');
+
+  var activeStatusFilter = null;
+  var activeSearchTerm = '';
+
+  function applyReportFilters() {
+    reportItems.forEach(function (item) {
+      var itemStatus = item.getAttribute('data-filter-status') || 'other';
+      var searchText = (item.getAttribute('data-search-text') || '').toLowerCase();
+
+      var matchesStatus = activeStatusFilter === null || itemStatus === activeStatusFilter;
+      var matchesSearch =
+        activeSearchTerm.length === 0 || searchText.indexOf(activeSearchTerm) !== -1;
+
+      if (matchesStatus && matchesSearch) {
+        item.removeAttribute('hidden');
+      } else {
+        item.setAttribute('hidden', '');
+      }
+    });
+  }
+
+  function updateSummaryButtons() {
+    summaryFilterButtons.forEach(function (btn) {
+      var filter = btn.getAttribute('data-summary-filter');
+      var isPressed = activeStatusFilter !== null && filter === activeStatusFilter;
+
+      btn.setAttribute('aria-pressed', isPressed ? 'true' : 'false');
+      if (isPressed) {
+        btn.classList.add('wc-tile-label-btn--active');
+      } else {
+        btn.classList.remove('wc-tile-label-btn--active');
+      }
+    });
+  }
+
+  summaryFilterButtons.forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var selected = btn.getAttribute('data-summary-filter');
+
+      if (!selected || selected === 'all') {
+        activeStatusFilter = null;
+      } else if (activeStatusFilter === selected) {
+        activeStatusFilter = null;
+      } else {
+        activeStatusFilter = selected;
+      }
+
+      updateSummaryButtons();
+      applyReportFilters();
+    });
+  });
+
+  if (searchInput) {
+    searchInput.addEventListener('input', function () {
+      activeSearchTerm = (searchInput.value || '').trim().toLowerCase();
+      applyReportFilters();
+    });
+  }
+
+  updateSummaryButtons();
+  applyReportFilters();
+
 })();
 `.trim();

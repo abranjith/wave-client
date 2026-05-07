@@ -26,6 +26,14 @@ describe('renderSummary', () => {
     expect(out).toContain('wc-summary-grid');
   });
 
+  it('renders a search input for report filtering', () => {
+    const out = renderSummary(makeSummary());
+    expect(out).toContain('data-report-search');
+    expect(out).toContain('wc-search-input');
+    expect(out).not.toContain('wc-search-label');
+    expect(out).not.toContain('<label');
+  });
+
   it('renders a Total tile with the correct value', () => {
     const out = renderSummary(makeSummary({ total: 42 }));
     expect(out).toContain('Total');
@@ -57,6 +65,14 @@ describe('renderSummary', () => {
     expect(out).toContain('wc-tile-value--failed');
     expect(out).toContain('wc-tile-value--skipped');
     expect(out).toContain('wc-tile-value--time');
+  });
+
+  it('renders clickable summary filters for total/passed/failed/skipped', () => {
+    const out = renderSummary(makeSummary());
+    expect(out).toContain('data-summary-filter="all"');
+    expect(out).toContain('data-summary-filter="passed"');
+    expect(out).toContain('data-summary-filter="failed"');
+    expect(out).toContain('data-summary-filter="skipped"');
   });
 });
 

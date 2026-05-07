@@ -226,10 +226,12 @@ function renderItemBody(item: TestSuiteReportItem): string {
  */
 function renderItem(item: TestSuiteReportItem): string {
   const badge =
-    item.kind === 'flow' ? renderFlowBadge() : `<span class="wc-method wc-method--OTHER">ITEM</span>`;
+    item.kind === 'flow' ? renderFlowBadge() : `<span class="wc-method wc-method--OTHER">SUITE</span>`;
   const body = renderItemBody(item);
+  const status = toSummaryFilterStatus(item.status);
+  const searchText = `${item.kind} ${item.name}`;
 
-  return `<div class="wc-suite-item">
+  return `<div class="wc-suite-item" data-report-item="suite" data-filter-status="${escapeAttr(status)}" data-search-text="${escapeAttr(searchText)}">
   <div class="wc-suite-item-header" data-toggle="card">
     ${badge}
     <span class="wc-suite-item-name">${escapeHtml(item.name)}</span>
@@ -246,6 +248,19 @@ function renderItems(items: ReadonlyArray<TestSuiteReportItem>): string {
     return `<p class="wc-placeholder">No items in this test suite.</p>`;
   }
   return `<section class="wc-items">${items.map(renderItem).join('')}</section>`;
+}
+
+function toSummaryFilterStatus(status: RunStatus): 'passed' | 'failed' | 'skipped' | 'other' {
+  if (status === 'success') {
+    return 'passed';
+  }
+  if (status === 'failed' || status === 'cancelled') {
+    return 'failed';
+  }
+  if (status === 'skipped') {
+    return 'skipped';
+  }
+  return 'other';
 }
 
 // ============================================================================

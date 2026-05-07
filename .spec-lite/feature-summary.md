@@ -81,3 +81,11 @@ Flow deletion in the Flows pane is now guarded by the shared `useConfirmDialog` 
 
 **FEAT-003: Test Lab Pane — Remove Run Hover Button, Add Delete Confirmation** *(updated: 2026-04-09 by implement)*
 Test suite rows in the Test Lab pane no longer render a per-row hover run shortcut button (PlayIcon). The `onTestSuiteRun` prop has been removed from `TestLabPane` and its callers (`ConfigPanel` in both vscode and web packages). Delete is now guarded by the shared `useConfirmDialog` hook: clicking Delete opens a titled confirmation dialog; the adapter call (`deleteTestSuite`) only proceeds on explicit user confirmation; the Zustand store is mutated (`removeTestSuite`) only on adapter success; adapter errors surface via `notification.showNotification('error', ...)`. The `Running...` status label and inline rename behavior are preserved. Covered by 13 new component tests in `TestLabPane.test.tsx`.
+
+---
+
+## Run Reporting
+
+**HTML Run Report Interactivity and Response Rendering** *(updated: 2026-05-06 by fix)*
+Source spec: [feature_run_reporting_foundation.md](.spec-lite/features/feature_run_reporting_foundation.md)
+HTML reports now include lightweight client-side filtering and search controls: the summary tile titles for Total, Passed, Failed, and Skipped are clickable filters, and clicking the same status filter again resets to the unfiltered view. A search field is rendered above the summary tiles and filters top-level report cards by card data (name, method, URL, and related card metadata). Request detail cards now include report metadata attributes used by the interactivity layer. Response rendering now decodes base64-encoded text responses before pretty-printing/escaping, so encoded JSON/text payloads display correctly in the Response tab while binary responses still show the binary placeholder. Card headers now also surface validation status for successful request runs, reducing ambiguity between transport/run success and validation outcome.
