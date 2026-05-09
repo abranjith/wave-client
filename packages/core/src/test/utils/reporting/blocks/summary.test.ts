@@ -74,6 +74,26 @@ describe('renderSummary', () => {
     expect(out).toContain('data-summary-filter="failed"');
     expect(out).toContain('data-summary-filter="skipped"');
   });
+
+  // The user reported having to click directly on the small label text to
+  // filter; clicking the surrounding tile area did nothing. The whole tile is
+  // now the button (a <button> with class `wc-tile`) so any click on the tile
+  // toggles the filter.
+  it('makes the entire summary tile a button (whole-tile click target)', () => {
+    const out = renderSummary(makeSummary());
+    // The Total tile button must be a <button> carrying both wc-tile and the
+    // filter dataset attribute, not a label-only inner button.
+    expect(out).toMatch(/<button[^>]*class="wc-tile wc-tile-btn"[^>]*data-summary-filter="all"/);
+    expect(out).toMatch(/<button[^>]*class="wc-tile wc-tile-btn"[^>]*data-summary-filter="passed"/);
+    expect(out).toMatch(/<button[^>]*class="wc-tile wc-tile-btn"[^>]*data-summary-filter="failed"/);
+    expect(out).toMatch(/<button[^>]*class="wc-tile wc-tile-btn"[^>]*data-summary-filter="skipped"/);
+  });
+
+  it('renders Expand All and Collapse All bulk-toggle buttons', () => {
+    const out = renderSummary(makeSummary());
+    expect(out).toContain('data-bulk-toggle="expand"');
+    expect(out).toContain('data-bulk-toggle="collapse"');
+  });
 });
 
 // ---------------------------------------------------------------------------

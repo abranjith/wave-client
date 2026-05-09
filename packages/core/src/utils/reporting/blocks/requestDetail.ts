@@ -58,14 +58,14 @@ function renderCardHeader(node: ReportRequestNode): string {
   const statusIndicators = renderStatusIndicators(node);
   const folderPath =
     node.folderPath.length > 0
-      ? `<span class="wc-folder-path">${node.folderPath.map((s) => escapeHtml(s)).join(' / ')}</span>`
+      ? `<span class="wc-folder-path" title="${escapeAttr(node.folderPath.join(' / '))}">${node.folderPath.map((s) => escapeHtml(s)).join(' / ')}</span>`
       : '';
 
   return `<div class="wc-card" data-report-item="request" data-filter-status="${escapeAttr(getCardFilterStatus(node))}" data-search-text="${escapeAttr(getCardSearchText(node))}">
   <div class="wc-card-header" data-toggle="card">
     ${methodBadge}
-    <span class="wc-card-name">${escapeHtml(node.name)}</span>
-    <span class="wc-card-url">${escapeHtml(node.url)}</span>
+    <span class="wc-card-name" title="${escapeAttr(node.name)}">${escapeHtml(node.name)}</span>
+    <span class="wc-card-url" title="${escapeAttr(node.url)}">${escapeHtml(node.url)}</span>
     ${statusIndicators}
     ${folderPath}
   </div>`;
@@ -159,7 +159,7 @@ function renderRequestBodySection(body: CollectionBody | undefined): string {
 
   let content = '';
   if (body.mode === 'raw') {
-    content = `<pre class="wc-pre">${escapeHtml(body.raw)}</pre>`;
+    content = `<pre class="wc-pre wc-pre--scroll"><code>${escapeHtml(body.raw)}</code></pre>`;
   } else if (body.mode === 'urlencoded' && body.urlencoded.length > 0) {
     const rows = body.urlencoded
       .filter((f) => !f.disabled)
@@ -247,10 +247,10 @@ function renderResponsePanel(node: ReportRequestNode): string {
   if (node.responseBody !== undefined) {
     let bodyContent: string;
     if (!isText) {
-      bodyContent = `<pre class="wc-pre">${escapeHtml(BINARY_PLACEHOLDER)}</pre>`;
+      bodyContent = `<pre class="wc-pre wc-pre--scroll"><code>${escapeHtml(BINARY_PLACEHOLDER)}</code></pre>`;
     } else {
       const pretty = prettyPrintIfJson(decodedBody, contentType);
-      bodyContent = `<pre class="wc-pre">${escapeHtml(pretty)}</pre>`;
+      bodyContent = `<pre class="wc-pre wc-pre--scroll"><code>${escapeHtml(pretty)}</code></pre>`;
     }
     sections.push(`<div class="wc-pre-wrap">
   <div class="wc-pre-label">Response Body</div>
@@ -269,7 +269,15 @@ function getContentTypeFromHeaders(headers: Record<string, string>): string | un
   return key !== undefined ? headers[key] : undefined;
 }
 
-function getCardFilterStatus(node: ReportRequestNode): 'passed' | 'failed' | 'skipped' | 'other' {
+/**
+ * Classifies a request node for the summary filter buttons.
+ *
+ * Exported so report builders can derive summary tile counts from the same
+ * logic the per-card filter uses, ensuring tile counts match what filtering
+ * actually shows. A successful HTTP request with a failed validation is
+ * counted as `'failed'`.
+ */
+export function getCardFilterStatus(node: ReportRequestNode): 'passed' | 'failed' | 'skipped' | 'other' {
   if (node.runStatus === 'skipped') {
     return 'skipped';
   }
@@ -305,6 +313,22 @@ function getCardSearchText(node: ReportRequestNode): string {
 // Validation panel
 // ============================================================================
 
+/**
+ * Renders an Expected/Actual/Error row inside the validation meta block.
+ *
+ * Long values are wrapped in a horizontally-scrollable `<pre><code>` block so
+ * a multi-kilobyte JSON payload doesn't blow out the card. Short values
+ * (single-line, <= 80 chars) render inline to keep the typical case compact.
+ */
+function renderValidationField(label: string, value: string): string {
+  const isLong = value.length > 80 || value.includes('\n');
+  const labelHtml = `<span class="wc-validation-meta-label">${escapeHtml(label)}:</span>`;
+  if (!isLong) {
+    return `<span class="wc-validation-meta-row">${labelHtml} <span class="wc-validation-meta-value">${escapeHtml(value)}</span></span>`;
+  }
+  return `<div class="wc-validation-meta-row wc-validation-meta-row--block">${labelHtml}<pre class="wc-pre wc-pre--scroll"><code>${escapeHtml(value)}</code></pre></div>`;
+}
+
 function renderValidationPanel(node: ReportRequestNode): string {
   const vr = node.validationResult;
 
@@ -318,19 +342,19 @@ function renderValidationPanel(node: ReportRequestNode): string {
       const label = r.passed
         ? '<span class="wc-status wc-status--success">PASS</span>'
         : '<span class="wc-status wc-status--failed">FAIL</span>';
-      const meta: string[] = [];
+      const rows: string[] = [];
       if (r.expected !== undefined) {
-        meta.push(`Expected: ${escapeHtml(r.expected)}`);
+        rows.push(renderValidationField('Expected', r.expected));
       }
       if (r.actual !== undefined) {
-        meta.push(`Actual: ${escapeHtml(r.actual)}`);
+        rows.push(renderValidationField('Actual', r.actual));
       }
       if (r.error) {
-        meta.push(`Error: ${escapeHtml(r.error)}`);
+        rows.push(renderValidationField('Error', r.error));
       }
       const metaHtml =
-        meta.length > 0
-          ? `<div class="wc-validation-meta">${meta.map((m) => `<span>${m}</span>`).join('')}</div>`
+        rows.length > 0
+          ? `<div class="wc-validation-meta">${rows.join('')}</div>`
           : '';
       return `<li class="wc-validation-item ${escapeAttr(cls)}">
   ${label}
@@ -389,7 +413,6 @@ function renderRunStatusIndicator(
 ): string {
   const indicatorName = getRunIndicatorName(status);
   const indicatorLabel = getRunIndicatorLabel(status);
-  const indicatorIcon = getRunIndicatorIcon(status);
 
   if (responseStatus !== undefined) {
     const statusClass = responseStatus >= 200 && responseStatus < 300
@@ -401,29 +424,28 @@ function renderRunStatusIndicator(
           : 'wc-status-http--neutral';
 
     return `<span class="wc-status-http-wrap" data-run-indicator="${escapeAttr(indicatorName)}" title="${escapeAttr(indicatorLabel)}" aria-label="${escapeAttr(indicatorLabel)}">
-  <span class="wc-status-chip__icon wc-status-http-icon wc-status-http-icon--${escapeAttr(indicatorName)}" aria-hidden="true">${escapeHtml(indicatorIcon)}</span>
   <span class="wc-status-http ${escapeAttr(statusClass)}">${responseStatus}</span>
   ${responseTime !== undefined ? `<span class="wc-status-time">${escapeHtml(formatDuration(responseTime))}</span>` : ''}
 </span>`;
   }
 
   if (status === 'running') {
-    return '<span class="wc-status-chip wc-status-chip--running" data-run-indicator="running" title="Running" aria-label="Running"><span class="wc-status-chip__icon wc-status-icon--running" aria-hidden="true">◌</span><span class="wc-status-chip__text">Running</span></span>';
+    return '<span class="wc-status-chip wc-status-chip--running" data-run-indicator="running" title="Running" aria-label="Running"><span class="wc-status-chip__text">Running</span></span>';
   }
 
   if (status === 'pending') {
-    return '<span class="wc-status-chip wc-status-chip--pending" data-run-indicator="pending" title="Pending" aria-label="Pending"><span class="wc-status-chip__icon" aria-hidden="true">○</span><span class="wc-status-chip__text">Pending</span></span>';
+    return '<span class="wc-status-chip wc-status-chip--pending" data-run-indicator="pending" title="Pending" aria-label="Pending"><span class="wc-status-chip__text">Pending</span></span>';
   }
 
   if (status === 'failed' || status === 'cancelled') {
-    return '<span class="wc-status-chip wc-status-chip--failed" data-run-indicator="failed" title="Failed" aria-label="Failed"><span class="wc-status-chip__icon" aria-hidden="true">✕</span><span class="wc-status-chip__text">Failed</span></span>';
+    return '<span class="wc-status-chip wc-status-chip--failed" data-run-indicator="failed" title="Failed" aria-label="Failed"><span class="wc-status-chip__text">Failed</span></span>';
   }
 
   if (status === 'skipped') {
-    return '<span class="wc-status-chip wc-status-chip--skipped" data-run-indicator="skipped" title="Skipped" aria-label="Skipped"><span class="wc-status-chip__icon" aria-hidden="true">○</span><span class="wc-status-chip__text">Skipped</span></span>';
+    return '<span class="wc-status-chip wc-status-chip--skipped" data-run-indicator="skipped" title="Skipped" aria-label="Skipped"><span class="wc-status-chip__text">Skipped</span></span>';
   }
 
-  return '<span class="wc-status-chip wc-status-chip--idle" data-run-indicator="idle" title="Idle" aria-label="Idle"><span class="wc-status-chip__icon" aria-hidden="true">○</span><span class="wc-status-chip__text">Idle</span></span>';
+  return '<span class="wc-status-chip wc-status-chip--idle" data-run-indicator="idle" title="Idle" aria-label="Idle"><span class="wc-status-chip__text">Idle</span></span>';
 }
 
 function renderValidationIndicator(status: 'idle' | 'pending' | 'pass' | 'fail'): string {
@@ -432,14 +454,14 @@ function renderValidationIndicator(status: 'idle' | 'pending' | 'pass' | 'fail')
   }
 
   if (status === 'pending') {
-    return '<span class="wc-status-chip wc-status-chip--pending" data-validation-indicator="pending" title="Validation pending" aria-label="Validation pending"><span class="wc-status-chip__icon wc-status-icon--running" aria-hidden="true">◌</span><span class="wc-status-chip__text">Pending</span></span>';
+    return '<span class="wc-status-chip wc-status-chip--pending" data-validation-indicator="pending" title="Validation Pending" aria-label="Validation Pending"><span class="wc-status-chip__text">Pending</span></span>';
   }
 
   if (status === 'pass') {
-    return '<span class="wc-status-chip wc-status-chip--success" data-validation-indicator="pass" title="Validation pass" aria-label="Validation pass"><span class="wc-status-chip__icon" aria-hidden="true">✓</span><span class="wc-status-chip__text">Passed</span></span>';
+    return '<span class="wc-status-chip wc-status-chip--success" data-validation-indicator="pass" title="Validation Pass" aria-label="Validation Pass"><span class="wc-status-chip__text">Passed</span></span>';
   }
 
-  return '<span class="wc-status-chip wc-status-chip--failed" data-validation-indicator="fail" title="Validation fail" aria-label="Validation fail"><span class="wc-status-chip__icon" aria-hidden="true">✕</span><span class="wc-status-chip__text">Failed</span></span>';
+  return '<span class="wc-status-chip wc-status-chip--failed" data-validation-indicator="fail" title="Validation Fail" aria-label="Validation Fail"><span class="wc-status-chip__text">Failed</span></span>';
 }
 
 function getRunIndicatorName(status: RunStatus): string {
@@ -459,15 +481,3 @@ function getRunIndicatorLabel(status: RunStatus): string {
   return status.charAt(0).toUpperCase() + status.slice(1);
 }
 
-function getRunIndicatorIcon(status: RunStatus): string {
-  if (status === 'success') {
-    return '✓';
-  }
-  if (status === 'failed' || status === 'cancelled') {
-    return '✕';
-  }
-  if (status === 'running') {
-    return '◌';
-  }
-  return '○';
-}

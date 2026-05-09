@@ -148,6 +148,31 @@ a:hover { text-decoration: underline; }
   margin-bottom: 12px;
 }
 
+.wc-summary-actions {
+  display: inline-flex;
+  gap: 6px;
+  margin-left: auto;
+}
+
+.wc-action-btn {
+  appearance: none;
+  background: var(--wc-surface);
+  color: var(--wc-text);
+  border: 1px solid var(--wc-border);
+  border-radius: 6px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  padding: 6px 12px;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+
+.wc-action-btn:hover {
+  background: var(--wc-surface-2);
+  border-color: var(--wc-accent);
+  color: var(--wc-accent);
+}
+
 .wc-search-input {
   width: min(100%, 380px);
   border: 1px solid var(--wc-border);
@@ -190,22 +215,30 @@ a:hover { text-decoration: underline; }
   color: var(--wc-muted);
 }
 
-.wc-tile-label-btn {
+.wc-tile-btn {
   appearance: none;
-  background: transparent;
-  border: 0;
-  cursor: pointer;
-  display: block;
-  width: 100%;
-  padding: 2px 0;
+  font: inherit;
   text-align: left;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, transform 0.05s;
 }
 
-.wc-tile-label-btn:hover {
-  color: var(--wc-accent);
+.wc-tile-btn:hover {
+  background: var(--wc-surface-2);
+  border-color: var(--wc-accent);
 }
 
-.wc-tile-label-btn--active {
+.wc-tile-btn:active {
+  transform: translateY(1px);
+}
+
+.wc-tile-btn--active {
+  border-color: var(--wc-accent);
+  background: var(--wc-surface-2);
+  box-shadow: inset 0 0 0 1px var(--wc-accent);
+}
+
+.wc-tile-btn--active .wc-tile-label {
   color: var(--wc-accent);
 }
 
@@ -417,8 +450,9 @@ a:hover { text-decoration: underline; }
 }
 
 .wc-card-body {
-  padding: 0 14px 14px;
+  padding: 4px 14px 14px;
   border-top: 1px solid var(--wc-border);
+  background: var(--wc-bg);
 }
 
 /* ----- Tab strip ------------------------------------------- */
@@ -437,13 +471,14 @@ a:hover { text-decoration: underline; }
   cursor: pointer;
   font-size: 0.8rem;
   font-weight: 500;
-  color: var(--wc-muted);
+  color: #64748b;
   padding: 4px 12px 6px;
   transition: color 0.15s, border-color 0.15s;
 }
 
 .wc-tab-btn[aria-selected="true"] {
-  color: var(--wc-accent);
+  color: #f8fafc;
+  font-weight: 600;
   border-bottom-color: var(--wc-accent);
 }
 
@@ -481,6 +516,25 @@ pre.wc-pre {
   margin: 0;
 }
 
+/*
+ * Horizontal-scroll variant: long single-line payloads (large JSON blobs,
+ * uri-encoded bodies) stay on one line and scroll horizontally instead of
+ * wrapping into an unreadable wall of text.
+ */
+pre.wc-pre.wc-pre--scroll {
+  white-space: pre;
+  word-break: normal;
+  max-height: 480px;
+  overflow: auto;
+}
+
+pre.wc-pre code {
+  font: inherit;
+  background: transparent;
+  color: inherit;
+  padding: 0;
+}
+
 /* ----- Validation result list ------------------------------ */
 .wc-validation-list {
   list-style: none;
@@ -507,9 +561,36 @@ pre.wc-pre {
 
 .wc-validation-meta {
   display: flex;
-  gap: 16px;
+  flex-direction: column;
+  gap: 6px;
   font-size: 0.75rem;
   color: var(--wc-muted);
+  margin-top: 4px;
+}
+
+.wc-validation-meta-row {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.wc-validation-meta-row--block {
+  display: block;
+}
+
+.wc-validation-meta-label {
+  font-weight: 600;
+  color: var(--wc-muted);
+}
+
+.wc-validation-meta-value {
+  color: var(--wc-text);
+  word-break: break-word;
+}
+
+.wc-validation-meta-row--block .wc-pre {
+  margin-top: 4px;
 }
 
 /* ----- Error block ----------------------------------------- */

@@ -243,6 +243,38 @@ function renderItem(item: TestSuiteReportItem): string {
 </div>`;
 }
 
+/**
+ * Reconciles the suite-level summary against the rendered suite items.
+ *
+ * Mirrors `reconcileSummaryWithItems` for collection/flow reports but
+ * classifies at the suite-item level (each item already carries an
+ * aggregated status) so the summary tiles agree with the per-item filter
+ * pills shown next to each suite item card.
+ */
+function reconcileSuiteSummary(
+  summary: ReportSummary,
+  items: ReadonlyArray<TestSuiteReportItem>,
+): ReportSummary {
+  let passed = 0;
+  let failed = 0;
+  let skipped = 0;
+
+  for (const item of items) {
+    const cls = toSummaryFilterStatus(item.status);
+    if (cls === 'passed') { passed += 1; }
+    else if (cls === 'failed') { failed += 1; }
+    else if (cls === 'skipped') { skipped += 1; }
+  }
+
+  return {
+    total: summary.total,
+    passed,
+    failed,
+    skipped,
+    averageTimeMs: summary.averageTimeMs,
+  };
+}
+
 function renderItems(items: ReadonlyArray<TestSuiteReportItem>): string {
   if (items.length === 0) {
     return `<p class="wc-placeholder">No items in this test suite.</p>`;
@@ -285,7 +317,8 @@ function toSummaryFilterStatus(status: RunStatus): 'passed' | 'failed' | 'skippe
 export function buildTestSuiteRunReport(input: TestSuiteReportInput): string {
   const { metadata, summary, items } = input;
 
-  const body = renderHeader(metadata) + renderSummary(summary) + renderItems(items);
+  const reconciledSummary = reconcileSuiteSummary(summary, items);
+  const body = renderHeader(metadata) + renderSummary(reconciledSummary) + renderItems(items);
 
   return renderShell({
     title: `Wave Test Suite — ${metadata.subjectName}`,

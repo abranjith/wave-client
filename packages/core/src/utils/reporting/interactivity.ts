@@ -106,9 +106,9 @@ export const INTERACTIVITY_JS = `
 
       btn.setAttribute('aria-pressed', isPressed ? 'true' : 'false');
       if (isPressed) {
-        btn.classList.add('wc-tile-label-btn--active');
+        btn.classList.add('wc-tile-btn--active');
       } else {
-        btn.classList.remove('wc-tile-label-btn--active');
+        btn.classList.remove('wc-tile-btn--active');
       }
     });
   }
@@ -139,6 +139,24 @@ export const INTERACTIVITY_JS = `
 
   updateSummaryButtons();
   applyReportFilters();
+
+  /* ------------------------------------------------------------------ */
+  /* Expand / Collapse All — data-bulk-toggle="expand|collapse"         */
+  /* ------------------------------------------------------------------ */
+
+  document.querySelectorAll('[data-bulk-toggle]').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var mode = btn.getAttribute('data-bulk-toggle');
+      var bodies = document.querySelectorAll('[data-card-body]');
+      bodies.forEach(function (body) {
+        if (mode === 'expand') {
+          body.removeAttribute('hidden');
+        } else {
+          body.setAttribute('hidden', '');
+        }
+      });
+    });
+  });
 
 })();
 `.trim();

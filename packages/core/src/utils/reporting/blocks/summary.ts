@@ -1,14 +1,15 @@
 /**
  * Renders the run summary tile grid.
  *
- * Above the tiles, a lightweight search box is rendered for client-side
- * filtering of top-level report cards.
+ * Above the tiles, a search box and bulk Expand/Collapse All controls are
+ * rendered for client-side filtering and toggling of report cards.
  *
  * The grid always contains five tiles:
  *   Total | Passed | Failed | Skipped | Avg Time
  *
- * The labels for Total, Passed, Failed, and Skipped are rendered as clickable
- * buttons (`data-summary-filter`) used by the report interactivity script.
+ * The Total, Passed, Failed, and Skipped tiles are themselves rendered as
+ * clickable buttons (`data-summary-filter`) so the user can click anywhere on
+ * the tile (not just the label text) to filter the list.
  *
  * The "Avg Time" tile renders `'-'` when `averageTimeMs` is `undefined`
  * (e.g., when all requests were skipped or cancelled and no timing was
@@ -39,24 +40,28 @@ export function renderSummary(summary: ReportSummary): string {
     placeholder="Search requests by name, method, URL, or folder"
     data-report-search
   />
+  <div class="wc-summary-actions">
+    <button type="button" class="wc-action-btn" data-bulk-toggle="expand" title="Expand all" aria-label="Expand all">Expand All</button>
+    <button type="button" class="wc-action-btn" data-bulk-toggle="collapse" title="Collapse all" aria-label="Collapse all">Collapse All</button>
+  </div>
 </div>
 <div class="wc-summary-grid">
-  <div class="wc-tile">
-    <button class="wc-tile-label wc-tile-label-btn" type="button" data-summary-filter="all" aria-pressed="false">Total</button>
+  <button type="button" class="wc-tile wc-tile-btn" data-summary-filter="all" aria-pressed="false">
+    <span class="wc-tile-label">Total</span>
     <span class="wc-tile-value wc-tile-value--total">${summary.total}</span>
-  </div>
-  <div class="wc-tile">
-    <button class="wc-tile-label wc-tile-label-btn" type="button" data-summary-filter="passed" aria-pressed="false">Passed</button>
+  </button>
+  <button type="button" class="wc-tile wc-tile-btn" data-summary-filter="passed" aria-pressed="false">
+    <span class="wc-tile-label">Passed</span>
     <span class="wc-tile-value wc-tile-value--passed">${summary.passed}</span>
-  </div>
-  <div class="wc-tile">
-    <button class="wc-tile-label wc-tile-label-btn" type="button" data-summary-filter="failed" aria-pressed="false">Failed</button>
+  </button>
+  <button type="button" class="wc-tile wc-tile-btn" data-summary-filter="failed" aria-pressed="false">
+    <span class="wc-tile-label">Failed</span>
     <span class="wc-tile-value wc-tile-value--failed">${summary.failed}</span>
-  </div>
-  <div class="wc-tile">
-    <button class="wc-tile-label wc-tile-label-btn" type="button" data-summary-filter="skipped" aria-pressed="false">Skipped</button>
+  </button>
+  <button type="button" class="wc-tile wc-tile-btn" data-summary-filter="skipped" aria-pressed="false">
+    <span class="wc-tile-label">Skipped</span>
     <span class="wc-tile-value wc-tile-value--skipped">${summary.skipped}</span>
-  </div>
+  </button>
   <div class="wc-tile">
     <span class="wc-tile-label">Avg Time</span>
     <span class="wc-tile-value wc-tile-value--time">${avgTime}</span>

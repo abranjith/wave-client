@@ -19,6 +19,7 @@ import { renderShell } from '../shell';
 import { renderHeader } from '../blocks/header';
 import { renderSummary } from '../blocks/summary';
 import { renderRequestDetail } from '../blocks/requestDetail';
+import { reconcileSummaryWithItems } from './summaryReconcile';
 
 // ============================================================================
 // Public Types
@@ -77,10 +78,11 @@ export function buildFlowRunReport(input: FlowReportInput): string {
   const { metadata, summary, nodes } = input;
 
   const itemsHtml = nodes.map(renderRequestDetail).join('');
+  const reconciledSummary = reconcileSummaryWithItems(summary, nodes);
 
   const body =
     renderHeader(metadata) +
-    renderSummary(summary) +
+    renderSummary(reconciledSummary) +
     `<section class="wc-items">${itemsHtml}</section>`;
 
   return renderShell({
