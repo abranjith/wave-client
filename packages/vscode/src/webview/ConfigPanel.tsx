@@ -1,5 +1,5 @@
 import React from 'react';
-import { SunIcon , MoonIcon, LibraryIcon , HistoryIcon, ShieldCheckIcon, SettingsIcon, LightbulbIcon, GitBranchIcon, FlaskConicalIcon, Sparkles } from 'lucide-react';
+import { ServerIcon , MoonIcon, LibraryIcon , HistoryIcon, ShieldCheckIcon, SettingsIcon, LightbulbIcon, GitBranchIcon, FlaskConicalIcon, Sparkles } from 'lucide-react';
 import {
   Tabs,
   TabsContent,
@@ -49,7 +49,7 @@ const TABS = [
   { key: 'testlab', label: 'Test Lab', icon: <FlaskConicalIcon size={20} /> },
   { key: 'arena', label: 'Wave Arena', icon: <Sparkles size={20} /> },
   { key: 'history', label: 'History', icon: <HistoryIcon size={20} /> },
-  { key: 'environments', label: 'Environments', icon: <SunIcon size={20} /> },
+  { key: 'environments', label: 'Environments', icon: <ServerIcon size={20} /> },
   { key: 'store', label: 'Wave Store', icon: <ShieldCheckIcon size={20} /> },
 ];
 

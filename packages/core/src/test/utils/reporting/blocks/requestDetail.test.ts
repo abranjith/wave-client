@@ -339,22 +339,39 @@ describe('renderRequestDetail — validation panel', () => {
 });
 
 describe('renderRequestDetail — validation status indicator', () => {
-  it('shows Validation Fail in header when run succeeds but validation fails', () => {
+  it('shows a FAILED chip in header when run succeeds but validation fails', () => {
     const out = renderRequestDetail(
       makeNode({ runStatus: 'success', validationStatus: 'fail' }),
     );
 
     expect(out).toContain('data-validation-indicator="fail"');
-    expect(out).toContain('Validation Fail');
+    expect(out).toContain('FAILED');
   });
 
-  it('shows Validation Pending in header when validation is pending', () => {
+  it('shows a SUCCESS chip in header when run and validation both pass', () => {
+    const out = renderRequestDetail(
+      makeNode({ runStatus: 'success', validationStatus: 'pass' }),
+    );
+
+    expect(out).toContain('data-validation-indicator="pass"');
+    expect(out).toContain('SUCCESS');
+  });
+
+  // Pending is transient and not useful in a saved report — no chip rendered.
+  it('renders no validation chip when validation is pending', () => {
     const out = renderRequestDetail(
       makeNode({ runStatus: 'success', validationStatus: 'pending' }),
     );
 
-    expect(out).toContain('data-validation-indicator="pending"');
-    expect(out).toContain('Validation Pending');
+    expect(out).not.toContain('data-validation-indicator');
+  });
+
+  it('renders no validation chip when validation is idle', () => {
+    const out = renderRequestDetail(
+      makeNode({ runStatus: 'success', validationStatus: 'idle' }),
+    );
+
+    expect(out).not.toContain('data-validation-indicator');
   });
 });
 

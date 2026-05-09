@@ -414,7 +414,7 @@ function renderRunStatusIndicator(
   const indicatorName = getRunIndicatorName(status);
   const indicatorLabel = getRunIndicatorLabel(status);
 
-  if (responseStatus !== undefined) {
+  if (responseStatus !== undefined && responseStatus > 0) {
     const statusClass = responseStatus >= 200 && responseStatus < 300
       ? 'wc-status-http--success'
       : responseStatus >= 400 && responseStatus < 500
@@ -424,9 +424,9 @@ function renderRunStatusIndicator(
           : 'wc-status-http--neutral';
 
     return `<span class="wc-status-http-wrap" data-run-indicator="${escapeAttr(indicatorName)}" title="${escapeAttr(indicatorLabel)}" aria-label="${escapeAttr(indicatorLabel)}">
-  <span class="wc-status-http ${escapeAttr(statusClass)}">${responseStatus}</span>
-  ${responseTime !== undefined ? `<span class="wc-status-time">${escapeHtml(formatDuration(responseTime))}</span>` : ''}
-</span>`;
+            <span class="wc-status-http ${escapeAttr(statusClass)}">${responseStatus}</span>
+              ${responseTime !== undefined ? `<span class="wc-status-time">${escapeHtml(formatDuration(responseTime))}</span>` : ''}
+            </span>`;
   }
 
   if (status === 'running') {
@@ -449,19 +449,18 @@ function renderRunStatusIndicator(
 }
 
 function renderValidationIndicator(status: 'idle' | 'pending' | 'pass' | 'fail'): string {
-  if (status === 'idle') {
+  // Idle and pending render nothing — the header is already busy with the HTTP
+  // status pill. Pending is a transient state and offers no useful signal in a
+  // saved report.
+  if (status === 'idle' || status === 'pending') {
     return '';
   }
 
-  if (status === 'pending') {
-    return '<span class="wc-status-chip wc-status-chip--pending" data-validation-indicator="pending" title="Validation Pending" aria-label="Validation Pending"><span class="wc-status-chip__text">Pending</span></span>';
-  }
-
   if (status === 'pass') {
-    return '<span class="wc-status-chip wc-status-chip--success" data-validation-indicator="pass" title="Validation Pass" aria-label="Validation Pass"><span class="wc-status-chip__text">Passed</span></span>';
+    return '<span class="wc-status-chip wc-status-chip--success" data-validation-indicator="pass" title="Success" aria-label="Success"><span class="wc-status-chip__text">SUCCESS</span></span>';
   }
 
-  return '<span class="wc-status-chip wc-status-chip--failed" data-validation-indicator="fail" title="Validation Fail" aria-label="Validation Fail"><span class="wc-status-chip__text">Failed</span></span>';
+  return '<span class="wc-status-chip wc-status-chip--failed" data-validation-indicator="fail" title="Failed" aria-label="Failed"><span class="wc-status-chip__text">FAILED</span></span>';
 }
 
 function getRunIndicatorName(status: RunStatus): string {
