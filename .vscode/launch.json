@@ -31,7 +31,7 @@
 			"outFiles": [
 				"${workspaceFolder}/packages/vscode/dist/**/*.js"
 			],
-			"preLaunchTask": "${defaultBuildTask}",
+			"preLaunchTask": "tasks: build-vscode-once",
 			"skipFiles": [
 				"<node_internals>/**",
 				"${workspaceFolder}/node_modules/**",

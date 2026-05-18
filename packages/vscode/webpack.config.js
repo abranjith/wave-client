@@ -3,6 +3,7 @@
 'use strict';
 
 const path = require('path');
+const webpack = require('webpack');
 
 //@ts-check
 /** @typedef {import('webpack').Configuration} WebpackConfig **/
@@ -22,7 +23,12 @@ const extensionConfig = {
     },
   },
   externals: {
-    vscode: 'commonjs vscode'
+    vscode: 'commonjs vscode',
+    // ws optionally requires these native addons inside try/catch blocks.
+    // Keeping them external preserves runtime fallback behavior and removes
+    // noisy bundling warnings when they are not installed.
+    bufferutil: 'commonjs bufferutil',
+    'utf-8-validate': 'commonjs utf-8-validate'
   },
   resolve: {
     extensions: ['.ts', '.js']
@@ -53,6 +59,14 @@ const extensionConfig = {
   infrastructureLogging: {
     level: "log",
   },
+  plugins: [
+    // VS Code extension host warns/throws when legacy global `navigator`
+    // is touched by bundled deps (e.g. axios env checks). Replacing free
+    // `navigator` identifiers avoids hitting that getter in Node context.
+    new webpack.DefinePlugin({
+      navigator: 'undefined'
+    })
+  ]
 };
 
 module.exports = [extensionConfig];

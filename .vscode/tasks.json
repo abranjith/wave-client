@@ -53,6 +53,17 @@
 			"group": "build"
 		},
 		{
+			"label": "tasks: build-vscode-once",
+			"type": "shell",
+			"command": "pnpm --filter wave-client-vscode build",
+			"problemMatcher": [],
+			"presentation": {
+				"reveal": "always",
+				"panel": "dedicated",
+				"group": "build"
+			}
+		},
+		{
 			"label": "tasks: watch-tests",
 			"dependsOn": [
 				"npm: watch",
