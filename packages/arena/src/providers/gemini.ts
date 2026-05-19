@@ -84,7 +84,7 @@ export const GEMINI_MODELS = [
  * is tracked as a future TODO.
  */
 export async function listGeminiModels(apiKey: string): Promise<DynamicModelInfo[]> {
-  if (!apiKey) return [];
+  if (!apiKey) {return [];}
   try {
     const url = `https://generativelanguage.googleapis.com/v1beta/models?key=${encodeURIComponent(apiKey)}&pageSize=100`;
     const result = await httpService.send({

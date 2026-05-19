@@ -714,7 +714,7 @@ export function generateUniqueId(): string {
   }
 
   try {
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
+     
     const nodeCrypto = typeof require !== 'undefined' ? require('crypto') : undefined;
     if (nodeCrypto?.randomBytes) {
       return bytesToUuid(nodeCrypto.randomBytes(16));

@@ -293,7 +293,7 @@ export function createWebFetcher(config: WebFetcherConfig = {}) {
       const url = 'https://news.ycombinator.com/';
 
       const cached = checkCache(url);
-      if (cached) return cached;
+      if (cached) {return cached;}
 
       const domain = getDomain(url);
       await waitForRateLimit(domain);

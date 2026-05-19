@@ -30,7 +30,7 @@ function createMockEvents(): IAdapterEvents {
     const handlers = new Map<string, Set<(data: unknown) => void>>();
     const instance: IAdapterEvents = {
         on(event: string, handler: (data: unknown) => void): void {
-            if (!handlers.has(event)) handlers.set(event, new Set());
+            if (!handlers.has(event)) {handlers.set(event, new Set());}
             handlers.get(event)!.add(handler);
         },
         off(event: string, handler: (data: unknown) => void): void {
@@ -104,7 +104,7 @@ describe('createVSCodeArenaAdapter', () => {
     function resolveRequest(responseData: Record<string, unknown> = {}): void {
         const requestId = lastRequestId();
         const pending = pendingRequests.get(requestId);
-        if (!pending) throw new Error(`No pending request found for id: ${requestId}`);
+        if (!pending) {throw new Error(`No pending request found for id: ${requestId}`);}
         clearTimeout(pending.timeout);
         pending.resolve(responseData);
         pendingRequests.delete(requestId);

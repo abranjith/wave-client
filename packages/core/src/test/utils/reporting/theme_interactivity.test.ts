@@ -147,7 +147,7 @@ describe('INTERACTIVITY_JS — card toggle (jsdom integration)', () => {
     `;
     // Execute the IIFE so event listeners are registered.
     // eval() runs in the current scope which has access to jsdom's document.
-    // eslint-disable-next-line no-eval
+     
     eval(INTERACTIVITY_JS);
   });
 
@@ -205,7 +205,7 @@ describe('INTERACTIVITY_JS — tab switching (jsdom integration)', () => {
         <div data-tab-panel="validation" hidden>Validation content</div>
       </div>
     `;
-    // eslint-disable-next-line no-eval
+     
     eval(INTERACTIVITY_JS);
   });
 
@@ -282,7 +282,7 @@ describe('INTERACTIVITY_JS — summary filter + search (jsdom integration)', () 
       </section>
     `;
 
-    // eslint-disable-next-line no-eval
+     
     eval(INTERACTIVITY_JS);
   });
 

@@ -91,10 +91,10 @@ export function sanitizeRequestForSave(request: AnyCollectionRequest): AnyCollec
         name: request.name,
         url: request.url,
     };
-    if (request.header && (request.header as unknown[]).length > 0) base.header = request.header;
-    if (request.query && (request.query as unknown[]).length > 0) base.query = request.query;
-    if (request.description) base.description = request.description;
-    if (request.authId) base.authId = request.authId;
+    if (request.header && (request.header as unknown[]).length > 0) {base.header = request.header;}
+    if (request.query && (request.query as unknown[]).length > 0) {base.query = request.query;}
+    if (request.description) {base.description = request.description;}
+    if (request.authId) {base.authId = request.authId;}
     // sourceRef is runtime-only — never persisted
 
     if (isWsRequest(request) || protocol === 'ws') {

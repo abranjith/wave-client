@@ -534,7 +534,7 @@ describe('ArenaService', () => {
             // Flush enough microtask ticks to let streamChat complete its async
             // setup (buildProviderConfig + initMcpBridge retry + getOrCreateAgent)
             // and register the streamTimer before we advance fake timers.
-            for (let i = 0; i < 10; i++) await Promise.resolve();
+            for (let i = 0; i < 10; i++) {await Promise.resolve();}
 
             // Advance fake timers past the 180 s stream timeout
             vi.advanceTimersByTime(180_001);

@@ -48,7 +48,7 @@ function makeMockLLM(delay?: number) {
                 }
 
                 const cleanup = () => {
-                    if (timer !== undefined) clearTimeout(timer);
+                    if (timer !== undefined) {clearTimeout(timer);}
                     if (options?.signal) {
                         options.signal.removeEventListener('abort', onAbort);
                     }
@@ -105,7 +105,7 @@ describe('webExpertAgent — LLM timeout', () => {
         const chunks = [];
         for await (const chunk of gen) {
             chunks.push(chunk);
-            if (chunk.done) break;
+            if (chunk.done) {break;}
         }
 
         expect(chunks.length).toBeGreaterThan(0);
@@ -127,7 +127,7 @@ describe('webExpertAgent — LLM timeout', () => {
         const chunks = [];
         for await (const chunk of gen) {
             chunks.push(chunk);
-            if (chunk.done) break;
+            if (chunk.done) {break;}
         }
 
         // Should have at least a done chunk with no error
@@ -156,7 +156,7 @@ describe('webExpertAgent — inlined system prompt', () => {
         const chunks = [];
         for await (const chunk of agent.chat([], 'hello')) {
             chunks.push(chunk);
-            if (chunk.done) break;
+            if (chunk.done) {break;}
         }
 
         expect(capturedMessages.length).toBe(1);
@@ -186,7 +186,7 @@ describe('webExpertAgent — inlined system prompt', () => {
         const chunks = [];
         for await (const chunk of agent.chat([], 'hello')) {
             chunks.push(chunk);
-            if (chunk.done) break;
+            if (chunk.done) {break;}
         }
 
         expect(capturedMessages.length).toBe(1);
@@ -219,7 +219,7 @@ describe('webExpertAgent — messages reducer', () => {
         const chunks = [];
         for await (const chunk of agent.chat([], '/protocols explain multiplexing')) {
             chunks.push(chunk);
-            if (chunk.done) break;
+            if (chunk.done) {break;}
         }
 
         // LLM should have been invoked with system prompt + the stripped user message
@@ -246,7 +246,7 @@ describe('webExpertAgent — messages reducer', () => {
         const chunks = [];
         for await (const chunk of agent.chat([], 'plain question')) {
             chunks.push(chunk);
-            if (chunk.done) break;
+            if (chunk.done) {break;}
         }
 
         expect(mockLLM.invoke).toHaveBeenCalledTimes(1);
@@ -274,7 +274,7 @@ describe('webExpertAgent — retrieve pipeline', () => {
         const chunks = [];
         for await (const chunk of agent.chat([], 'explain http caching')) {
             chunks.push(chunk);
-            if (chunk.done) break;
+            if (chunk.done) {break;}
         }
 
         // webFetcher.search should have triggered at least one fetch call
@@ -295,7 +295,7 @@ describe('webExpertAgent — retrieve pipeline', () => {
         const chunks = [];
         for await (const chunk of agent.chat([], 'explain RFC 7540')) {
             chunks.push(chunk);
-            if (chunk.done) break;
+            if (chunk.done) {break;}
         }
 
         const urls = fetchSpy.mock.calls.map(c => String(c[0]));
@@ -322,7 +322,7 @@ describe('webExpertAgent — retrieve pipeline', () => {
         // Query with no known category keywords — should fall back to all enabled sites
         for await (const chunk of agent.chat([], 'custom topic query')) {
             chunks.push(chunk);
-            if (chunk.done) break;
+            if (chunk.done) {break;}
         }
 
         const urls = fetchSpy.mock.calls.map(c => String(c[0]));
@@ -350,7 +350,7 @@ describe('webExpertAgent — persona & response-structure prompt content', () =>
         const agent = createWebExpertAgent({ llm: mockLLM, _llmTimeoutMs: TEST_TIMEOUT_MS });
 
         for await (const chunk of agent.chat([], 'hello')) {
-            if (chunk.done) break;
+            if (chunk.done) {break;}
         }
 
         const systemMsg = captured[0][0];
@@ -416,7 +416,7 @@ describe('webExpertAgent — anti-hallucination & citation guardrails', () => {
         const agent = createWebExpertAgent({ llm: mockLLM, _llmTimeoutMs: TEST_TIMEOUT_MS });
 
         for await (const chunk of agent.chat([], 'hello')) {
-            if (chunk.done) break;
+            if (chunk.done) {break;}
         }
 
         const systemMsg = captured[0][0];
@@ -499,7 +499,7 @@ describe('webExpertAgent — command surface', () => {
         });
 
         for await (const chunk of agent.chat([], userMessage)) {
-            if (chunk.done) break;
+            if (chunk.done) {break;}
         }
 
         const llmMessages = captured[0] ?? [];
@@ -533,7 +533,7 @@ describe('webExpertAgent — command surface', () => {
         } as unknown as BaseChatModel;
 
         const agent = createWebExpertAgent({ llm: mockLLM, _llmTimeoutMs: TEST_TIMEOUT_MS });
-        for await (const chunk of agent.chat([], '/help')) { if (chunk.done) break; }
+        for await (const chunk of agent.chat([], '/help')) { if (chunk.done) {break;} }
 
         const systemMsg = captured[0][0];
         expect(systemMsg).toBeInstanceOf(SystemMessage);
@@ -554,7 +554,7 @@ describe('webExpertAgent — command surface', () => {
         } as unknown as BaseChatModel;
 
         const agent = createWebExpertAgent({ llm: mockLLM, _llmTimeoutMs: TEST_TIMEOUT_MS });
-        for await (const chunk of agent.chat([], '/eli5 what is CORS')) { if (chunk.done) break; }
+        for await (const chunk of agent.chat([], '/eli5 what is CORS')) { if (chunk.done) {break;} }
 
         const userContent = String(captured[0][captured[0].length - 1].content);
         expect(userContent).toContain('Quick depth tier');
@@ -570,7 +570,7 @@ describe('webExpertAgent — command surface', () => {
         } as unknown as BaseChatModel;
 
         const agent = createWebExpertAgent({ llm: mockLLM, _llmTimeoutMs: TEST_TIMEOUT_MS });
-        for await (const chunk of agent.chat([], '/deep TLS handshake')) { if (chunk.done) break; }
+        for await (const chunk of agent.chat([], '/deep TLS handshake')) { if (chunk.done) {break;} }
 
         const userContent = String(captured[0][captured[0].length - 1].content);
         expect(userContent).toContain('Deep depth tier');
@@ -660,7 +660,7 @@ describe('webExpertAgent — command surface', () => {
         } as unknown as BaseChatModel;
 
         const agent = createWebExpertAgent({ llm: mockLLM, _llmTimeoutMs: TEST_TIMEOUT_MS });
-        for await (const chunk of agent.chat([], '/rfc xyz')) { if (chunk.done) break; }
+        for await (const chunk of agent.chat([], '/rfc xyz')) { if (chunk.done) {break;} }
 
         const userContent = String(captured[0][captured[0].length - 1].content);
         expect(userContent).toContain('invalid argument');
@@ -677,7 +677,7 @@ describe('webExpertAgent — command surface', () => {
         } as unknown as BaseChatModel;
 
         const agent = createWebExpertAgent({ llm: mockLLM, _llmTimeoutMs: TEST_TIMEOUT_MS });
-        for await (const chunk of agent.chat([], '/status xyz')) { if (chunk.done) break; }
+        for await (const chunk of agent.chat([], '/status xyz')) { if (chunk.done) {break;} }
 
         const userContent = String(captured[0][captured[0].length - 1].content);
         expect(userContent).toContain('invalid argument');
@@ -702,7 +702,7 @@ describe('webExpertAgent — command surface', () => {
         } as unknown as BaseChatModel;
 
         const agent = createWebExpertAgent({ llm: mockLLM, _llmTimeoutMs: TEST_TIMEOUT_MS });
-        for await (const chunk of agent.chat([], 'hello')) { if (chunk.done) break; }
+        for await (const chunk of agent.chat([], 'hello')) { if (chunk.done) {break;} }
 
         const content = String(captured[0][0].content);
 
@@ -755,7 +755,7 @@ describe('webExpertAgent — smart retrieval detection', () => {
         });
 
         for await (const chunk of agent.chat([], userMessage)) {
-            if (chunk.done) break;
+            if (chunk.done) {break;}
         }
 
         const llmMessages = captured[0] ?? [];

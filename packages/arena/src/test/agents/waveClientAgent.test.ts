@@ -35,7 +35,7 @@ function makeMockLLM(delay?: number) {
                 }
 
                 const cleanup = () => {
-                    if (timer !== undefined) clearTimeout(timer);
+                    if (timer !== undefined) {clearTimeout(timer);}
                     if (options?.signal) {
                         options.signal.removeEventListener('abort', onAbort);
                     }
@@ -81,7 +81,7 @@ async function collectChunks(agent: ReturnType<typeof createWaveClientAgent>, me
     const chunks = [] as Array<{ done: boolean; content: string; error?: string }>;
     for await (const chunk of agent.chat([], message)) {
         chunks.push(chunk);
-        if (chunk.done) break;
+        if (chunk.done) {break;}
     }
     return chunks;
 }

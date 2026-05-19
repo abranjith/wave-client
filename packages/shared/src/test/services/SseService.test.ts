@@ -64,7 +64,7 @@ async function connectAndReady(
 
     const config = makeConfig(overrides);
     const handle = await service.connect(config);
-    if (!handle) throw new Error('Expected non-null SseConnectionHandle from connectAndReady');
+    if (!handle) {throw new Error('Expected non-null SseConnectionHandle from connectAndReady');}
 
     return { handle, stream };
 }
@@ -345,7 +345,7 @@ describe('SseService', () => {
 
             const config = makeConfig();
             const handle = await service.connect(config);
-            if (!handle) throw new Error('Expected non-null handle');
+            if (!handle) {throw new Error('Expected non-null handle');}
 
             const statuses: ConnectionStatus[] = [];
             handle.onStatusChange(s => statuses.push(s));
@@ -370,7 +370,7 @@ describe('SseService', () => {
             mockAxios.mockReturnValueOnce(new Promise(r => { resolveAxios = r; }));
 
             const handle = await service.connect(makeConfig());
-            if (!handle) throw new Error('Expected non-null handle');
+            if (!handle) {throw new Error('Expected non-null handle');}
 
             const receivedHeaders: Record<string, string>[] = [];
             handle.onHeaders(h => receivedHeaders.push(h));

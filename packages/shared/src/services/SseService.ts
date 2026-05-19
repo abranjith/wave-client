@@ -548,7 +548,7 @@ export class SseService {
             );
 
             // Pipe the readable stream through the parser
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+             
             const stream = response.data as NodeJS.ReadableStream;
 
             stream.on('data', (chunk: Buffer | string) => {

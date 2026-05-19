@@ -473,9 +473,9 @@ export function getEnabledProviders(
  */
 export function isProviderConfigured(providerSettings: ArenaProviderSettingsMap): boolean {
   return Object.values(providerSettings).some((settings) => {
-    if (!settings.enabled) return false;
+    if (!settings.enabled) {return false;}
     const def = PROVIDER_DEFINITIONS.find((p) => p.id === settings.providerId);
-    if (!def) return false;
+    if (!def) {return false;}
     if (def.requiresApiKey) {
       return typeof settings.apiKey === 'string' && settings.apiKey.trim().length > 0;
     }

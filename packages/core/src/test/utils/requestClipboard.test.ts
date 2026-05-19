@@ -57,7 +57,7 @@ describe('parseRequestClipboard — JSON object', () => {
         const text = JSON.stringify({ name: 'John', age: '30' });
         const result = parseRequestClipboard(text);
         expect(result.isOk).toBe(true);
-        if (!result.isOk) return;
+        if (!result.isOk) {return;}
         expect(result.value.format).toBe('json-object');
         expect(result.value.entries).toEqual([
             { key: 'name', value: 'John' },
@@ -69,7 +69,7 @@ describe('parseRequestClipboard — JSON object', () => {
         const text = JSON.stringify({ active: true, count: 42 });
         const result = parseRequestClipboard(text);
         expect(result.isOk).toBe(true);
-        if (!result.isOk) return;
+        if (!result.isOk) {return;}
         expect(result.value.entries).toEqual([
             { key: 'active', value: 'true' },
             { key: 'count', value: '42' },
@@ -99,7 +99,7 @@ describe('parseRequestClipboard — equals-lines', () => {
         const text = 'Content-Type=application/json\nAuthorization=Bearer token';
         const result = parseRequestClipboard(text);
         expect(result.isOk).toBe(true);
-        if (!result.isOk) return;
+        if (!result.isOk) {return;}
         expect(result.value.format).toBe('equals-lines');
         expect(result.value.entries).toEqual([
             { key: 'Content-Type', value: 'application/json' },
@@ -111,7 +111,7 @@ describe('parseRequestClipboard — equals-lines', () => {
         const text = 'token=abc=def==';
         const result = parseRequestClipboard(text);
         expect(result.isOk).toBe(true);
-        if (!result.isOk) return;
+        if (!result.isOk) {return;}
         expect(result.value.entries[0]).toEqual({ key: 'token', value: 'abc=def==' });
     });
 
@@ -119,7 +119,7 @@ describe('parseRequestClipboard — equals-lines', () => {
         const text = 'a=1,\nb=2,';
         const result = parseRequestClipboard(text);
         expect(result.isOk).toBe(true);
-        if (!result.isOk) return;
+        if (!result.isOk) {return;}
         expect(result.value.entries).toEqual([
             { key: 'a', value: '1' },
             { key: 'b', value: '2' },
@@ -130,7 +130,7 @@ describe('parseRequestClipboard — equals-lines', () => {
         const text = 'Accept=text/html\nAccept=application/json';
         const result = parseRequestClipboard(text);
         expect(result.isOk).toBe(true);
-        if (!result.isOk) return;
+        if (!result.isOk) {return;}
         expect(result.value.entries).toHaveLength(2);
         expect(result.value.entries[0].key).toBe('Accept');
         expect(result.value.entries[1].key).toBe('Accept');
@@ -146,7 +146,7 @@ describe('parseRequestClipboard — colon-lines', () => {
         const text = 'Content-Type: application/json\nAuthorization: Bearer token123';
         const result = parseRequestClipboard(text);
         expect(result.isOk).toBe(true);
-        if (!result.isOk) return;
+        if (!result.isOk) {return;}
         expect(result.value.format).toBe('colon-lines');
         expect(result.value.entries).toEqual([
             { key: 'Content-Type', value: 'application/json' },
@@ -158,7 +158,7 @@ describe('parseRequestClipboard — colon-lines', () => {
         const text = 'Link: https://example.com/path';
         const result = parseRequestClipboard(text);
         expect(result.isOk).toBe(true);
-        if (!result.isOk) return;
+        if (!result.isOk) {return;}
         expect(result.value.entries[0]).toEqual({ key: 'Link', value: 'https://example.com/path' });
     });
 });
@@ -172,7 +172,7 @@ describe('parseRequestClipboard — URL-encoded', () => {
         const text = 'username=john&password=secret';
         const result = parseRequestClipboard(text);
         expect(result.isOk).toBe(true);
-        if (!result.isOk) return;
+        if (!result.isOk) {return;}
         expect(result.value.format).toBe('urlencoded');
         expect(result.value.entries).toEqual([
             { key: 'username', value: 'john' },
@@ -184,7 +184,7 @@ describe('parseRequestClipboard — URL-encoded', () => {
         const text = 'first%20name=John%20Doe&city=New%20York';
         const result = parseRequestClipboard(text);
         expect(result.isOk).toBe(true);
-        if (!result.isOk) return;
+        if (!result.isOk) {return;}
         expect(result.value.entries).toEqual([
             { key: 'first name', value: 'John Doe' },
             { key: 'city', value: 'New York' },
@@ -195,7 +195,7 @@ describe('parseRequestClipboard — URL-encoded', () => {
         const text = 'tag=frontend&tag=backend';
         const result = parseRequestClipboard(text);
         expect(result.isOk).toBe(true);
-        if (!result.isOk) return;
+        if (!result.isOk) {return;}
         expect(result.value.entries).toHaveLength(2);
     });
 });
@@ -235,7 +235,7 @@ describe('parseRequestClipboard — ordering', () => {
         const text = JSON.stringify({ c: '3', a: '1', b: '2' });
         const result = parseRequestClipboard(text);
         expect(result.isOk).toBe(true);
-        if (!result.isOk) return;
+        if (!result.isOk) {return;}
         const keys = result.value.entries.map((e) => e.key);
         expect(keys).toEqual(['c', 'a', 'b']);
     });
@@ -244,7 +244,7 @@ describe('parseRequestClipboard — ordering', () => {
         const text = 'z=last\na=first\nm=middle';
         const result = parseRequestClipboard(text);
         expect(result.isOk).toBe(true);
-        if (!result.isOk) return;
+        if (!result.isOk) {return;}
         const keys = result.value.entries.map((e) => e.key);
         expect(keys).toEqual(['z', 'a', 'm']);
     });

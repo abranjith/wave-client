@@ -226,7 +226,7 @@ describe('createRequestTabsSlice — protocol-aware tab drafts (TASK-001)', () =
     it('typing a ws:// URL initializes realtime state for the active tab', () => {
         useAppStateStore.getState().loadRequestIntoTab(mkHttp());
         const tabBefore = useAppStateStore.getState().getActiveTab();
-        if (!tabBefore) throw new Error('Expected active tab');
+        if (!tabBefore) {throw new Error('Expected active tab');}
 
         useAppStateStore.getState().updateUrl('ws://echo.example.com');
 

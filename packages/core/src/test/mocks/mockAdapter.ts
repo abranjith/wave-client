@@ -703,7 +703,7 @@ function createMockArenaAdapter(store: MockDataStore): IArenaAdapter {
 
             // Drive the stream asynchronously so listeners can register first
             setTimeout(() => {
-                if (cancelled) return;
+                if (cancelled) {return;}
 
                 for (let i = 0; i < words.length; i++) {
                     chunkCbs.forEach((cb) => cb({

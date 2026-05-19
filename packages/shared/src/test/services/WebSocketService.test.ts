@@ -5,7 +5,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 // variable they reference must be declared with vi.hoisted to be available.
 
 const { MockWebSocket, lastWsRef } = vi.hoisted(() => {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
+     
     const { EventEmitter } = require('events') as typeof import('events');
 
     /**
@@ -128,7 +128,7 @@ const mockStoreService = storeService as { getHttpsAgentForUrl: ReturnType<typeo
 
 /** Convenience accessor so tests don't have to type `lastWsRef.current!` everywhere. */
 function lastMockWs(): MockWebSocket {
-    if (!lastWsRef.current) throw new Error('No MockWebSocket created yet');
+    if (!lastWsRef.current) {throw new Error('No MockWebSocket created yet');}
     return lastWsRef.current;
 }
 
@@ -160,7 +160,7 @@ async function connectAndOpen(
 ): Promise<WsConnectionHandle> {
     const config = makeConfig(overrides);
     const handle = await service.connect(config);
-    if (!handle) throw new Error('Expected non-null WsConnectionHandle');
+    if (!handle) {throw new Error('Expected non-null WsConnectionHandle');}
     lastMockWs().simulateOpen(responseHeaders);
     return handle;
 }
@@ -227,7 +227,7 @@ describe('WebSocketService', () => {
         // Await the handle directly so lastWsRef.current is populated when we drive the mock.
         const handle = await service.connect(config);
         expect(handle).not.toBeNull();
-        if (handle) lastMockWs().simulateOpen();
+        if (handle) {lastMockWs().simulateOpen();}
 
         expect(mockStoreService.getHttpsAgentForUrl).toHaveBeenCalledWith(config.url);
     });
@@ -261,7 +261,7 @@ describe('WebSocketService', () => {
         const handlePromise = service.connect(config);
         lastMockWs().simulateOpen();
         const handle = await handlePromise;
-        if (!handle) throw new Error('null handle');
+        if (!handle) {throw new Error('null handle');}
 
         handle.onStatusChange((s) => statuses.push(s));
         expect(statuses).toContain('connected');
@@ -321,7 +321,7 @@ describe('WebSocketService', () => {
         // on the handle BEFORE the network 'open' event fires.
         const config = makeConfig();
         const handle = await service.connect(config);
-        if (!handle) throw new Error('Expected non-null WsConnectionHandle');
+        if (!handle) {throw new Error('Expected non-null WsConnectionHandle');}
 
         const headersSeen: Record<string, string>[] = [];
         handle.onHeaders((headers) => headersSeen.push(headers));

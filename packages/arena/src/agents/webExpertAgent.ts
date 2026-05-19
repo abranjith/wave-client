@@ -441,7 +441,7 @@ function detectStatusCodes(query: string): number[] {
     if (KNOWN_STATUS_CODES.has(code) && !seen.has(code)) {
       seen.add(code);
       result.push(code);
-      if (result.length >= MAX_STATUS_CODES) break;
+      if (result.length >= MAX_STATUS_CODES) {break;}
     }
   }
 
@@ -467,7 +467,7 @@ function detectUrls(query: string): string[] {
     if (!seen.has(url)) {
       seen.add(url);
       result.push(url);
-      if (result.length >= MAX_URL_DETECTIONS) break;
+      if (result.length >= MAX_URL_DETECTIONS) {break;}
     }
   }
 
@@ -516,7 +516,7 @@ function detectHeaders(query: string): string[] {
   const MAX_HEADER_DETECTIONS = 5;
 
   for (const header of KNOWN_HEADERS) {
-    if (detected.length >= MAX_HEADER_DETECTIONS) break;
+    if (detected.length >= MAX_HEADER_DETECTIONS) {break;}
     // Escape regex special chars; hyphens are not special outside character classes.
     const escaped = header.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     if (new RegExp(`\\b${escaped}\\b`).test(lowerQuery)) {
@@ -938,8 +938,8 @@ export function createWebExpertAgent(config: WebExpertAgentConfig) {
         // Build search categories (augmented by header detection).
         const categories = detectCategories(query);
         if (detectedHeaders.length > 0) {
-          if (!categories.includes('http')) categories.push('http');
-          if (!categories.includes('web')) categories.push('web');
+          if (!categories.includes('http')) {categories.push('http');}
+          if (!categories.includes('web')) {categories.push('web');}
         }
 
         // --- URL detection: fetch allowlisted URLs; note others per policy ---

@@ -342,10 +342,10 @@ export function removeItemFromTree(items: CollectionItem[], itemPath: string[], 
  * @returns The items array at that level, or `[]` if the path is invalid
  */
 export function getSiblingsAtPath(items: CollectionItem[], folderPath: string[]): CollectionItem[] {
-  if (folderPath.length === 0) return items;
+  if (folderPath.length === 0) {return items;}
   const [nextFolder, ...remainingPath] = folderPath;
   const folder = items.find(i => i.name === nextFolder && i.item !== undefined);
-  if (!folder || !folder.item) return [];
+  if (!folder || !folder.item) {return [];}
   return getSiblingsAtPath(folder.item, remainingPath);
 }
 

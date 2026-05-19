@@ -25,7 +25,7 @@ vi.mock('@wave-client/core', async () => {
             const handlers = new Map<string, Set<(d: unknown) => void>>();
             return {
                 on: (e: string, cb: (d: unknown) => void) => {
-                    if (!handlers.has(e)) handlers.set(e, new Set());
+                    if (!handlers.has(e)) {handlers.set(e, new Set());}
                     handlers.get(e)!.add(cb);
                 },
                 off: (e: string, cb: (d: unknown) => void) => handlers.get(e)?.delete(cb),
@@ -92,7 +92,7 @@ function resolveRequest(
     responseData: Record<string, unknown> = {}
 ): void {
     const pending = pendingRequests.get(requestId);
-    if (!pending) throw new Error(`No pending request for id: ${requestId}`);
+    if (!pending) {throw new Error(`No pending request for id: ${requestId}`);}
     clearTimeout(pending.timeout);
     pending.resolve(responseData);
     pendingRequests.delete(requestId);
