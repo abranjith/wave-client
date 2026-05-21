@@ -325,20 +325,6 @@ const TextBody: React.FC<TextBodyProps> = ({ dropdownElement }) => {
               <Button
                 variant="outline"
                 size="sm"
-                disabled={!bodyContent}
-                className="h-9 w-9 p-0 flex items-center justify-center"
-              >
-                <InfoIcon size={16} />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent className="px-2 py-1 text-xs">{bodyTypeInfo.description}</TooltipContent>
-          </Tooltip>
-
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="outline"
-                size="sm"
                 onClick={() => setShowExamples(!showExamples)}
                 className="h-9 w-9 p-0 flex items-center justify-center"
               >

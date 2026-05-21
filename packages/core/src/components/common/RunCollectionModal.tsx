@@ -489,7 +489,7 @@ const RunCollectionModal: React.FC<RunCollectionModalProps> = ({
             {/* Auth Selector */}
             <div className="flex items-center gap-2">
               <Label htmlFor={authSelectId} className="text-sm text-slate-600 dark:text-slate-400 whitespace-nowrap">
-                Default Auth:
+                Auth:
               </Label>
               <Select
                 value={selectedAuthId || 'none'}
@@ -515,7 +515,7 @@ const RunCollectionModal: React.FC<RunCollectionModalProps> = ({
             {/* Environment Selector */}
             <div className="flex items-center gap-2">
               <Label htmlFor={environmentSelectId} className="text-sm text-slate-600 dark:text-slate-400 whitespace-nowrap">
-                Default Env:
+                Env:
               </Label>
               <Select
                 value={selectedEnvironmentId || 'none'}
