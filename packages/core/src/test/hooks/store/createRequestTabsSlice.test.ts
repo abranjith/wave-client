@@ -50,7 +50,7 @@
 
 import { describe, it, expect, beforeEach } from 'vitest';
 import useAppStateStore from '../../../hooks/store/useAppStateStore';
-import type { CollectionRequest, WsCollectionRequest, SseCollectionRequest } from '../../../types/collection';
+import type { CollectionRequest, WsCollectionRequest, SseCollectionRequest, ResponseData } from '../../../types/collection';
 import { createEmptyTab } from '../../../types/tab';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -81,6 +81,18 @@ const mkSse = (overrides: Partial<SseCollectionRequest> = {}): SseCollectionRequ
     method: 'GET',
     url: 'https://api.example.com/events',
     header: [],
+    ...overrides,
+});
+
+const mkResponse = (overrides: Partial<ResponseData> = {}): ResponseData => ({
+    id: 'resp-1',
+    status: 200,
+    statusText: 'OK',
+    elapsedTime: 42,
+    size: 128,
+    body: btoa('{"ok":true}'),
+    headers: { 'content-type': 'application/json' },
+    isEncoded: true,
     ...overrides,
 });
 
@@ -262,6 +274,39 @@ describe('createRequestTabsSlice — protocol-aware tab drafts (TASK-001)', () =
         const tab = useAppStateStore.getState().getActiveTab();
         expect(tab?.protocol).toBe('ws');
         expect(tab?.body?.mode).toBe('none');
+    });
+
+    it('reloading an already-open HTTP request keeps the last response snapshot', () => {
+        const req = mkHttp({ id: 'persist-http' });
+        const response = mkResponse();
+
+        useAppStateStore.getState().loadRequestIntoTab(req);
+        useAppStateStore.getState().handleHttpResponse(req.id, response);
+        useAppStateStore.getState().setActiveResponseSection('Headers');
+
+        // Simulate switching away to another request tab.
+        useAppStateStore.getState().addTab();
+
+        // Re-selecting the same request should not wipe runtime response state.
+        useAppStateStore.getState().loadRequestIntoTab(req);
+
+        const tab = useAppStateStore.getState().getTabById(req.id);
+        expect(tab?.responseData).toEqual(response);
+        expect(tab?.activeResponseSection).toBe('Headers');
+    });
+
+    it('reloading same id with protocol change clears old HTTP response snapshot', () => {
+        const id = 'shared-protocol-id';
+
+        useAppStateStore.getState().loadRequestIntoTab(mkHttp({ id }));
+        useAppStateStore.getState().handleHttpResponse(id, mkResponse());
+
+        useAppStateStore.getState().loadRequestIntoTab(mkWs({ id }));
+
+        const tab = useAppStateStore.getState().getTabById(id);
+        expect(tab?.protocol).toBe('ws');
+        expect(tab?.responseData).toBeNull();
+        expect(tab?.activeResponseSection).toBe('Messages');
     });
 });
 

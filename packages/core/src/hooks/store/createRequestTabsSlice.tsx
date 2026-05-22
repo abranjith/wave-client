@@ -355,6 +355,17 @@ const createRequestTabsSlice: StateCreator<RequestTabsSliceStore, [], [], Reques
             }
             
             const protocol = getRequestProtocol(request);
+
+            // Re-selecting an already-open HTTP request should not clear its runtime
+            // response state. This allows users to switch away and back without
+            // losing the last response snapshot in the tab.
+            const shouldPreserveHttpRuntimeState = Boolean(
+                targetTab &&
+                request.id &&
+                targetTab.id === request.id &&
+                targetTab.protocol === 'http' &&
+                protocol === 'http'
+            );
             
             // Convert request headers to HeaderRow format (ensure IDs exist)
             const headerRows: HeaderRow[] = (request.header && request.header.length > 0)
@@ -403,14 +414,14 @@ const createRequestTabsSlice: StateCreator<RequestTabsSliceStore, [], [], Reques
                 collectionRef: request.sourceRef || null,
                 validation,
                 authId: request.authId || null,
-                responseData: null,
-                isRequestProcessing: false,
-                requestError: null,
-                isCancelled: false,
-                errorMessage: '',
+                responseData: shouldPreserveHttpRuntimeState ? targetTab?.responseData ?? null : null,
+                isRequestProcessing: shouldPreserveHttpRuntimeState ? targetTab?.isRequestProcessing ?? false : false,
+                requestError: shouldPreserveHttpRuntimeState ? targetTab?.requestError ?? null : null,
+                isCancelled: shouldPreserveHttpRuntimeState ? targetTab?.isCancelled ?? false : false,
+                errorMessage: shouldPreserveHttpRuntimeState ? targetTab?.errorMessage ?? '' : '',
                 isDirty: false,
-                activeRequestSection: getDefaultRequestSection(protocol),
-                activeResponseSection: getDefaultResponseSection(protocol),
+                activeRequestSection: shouldPreserveHttpRuntimeState ? targetTab?.activeRequestSection ?? getDefaultRequestSection(protocol) : getDefaultRequestSection(protocol),
+                activeResponseSection: shouldPreserveHttpRuntimeState ? targetTab?.activeResponseSection ?? getDefaultResponseSection(protocol) : getDefaultResponseSection(protocol),
             };
             
             // If the target tab exists, update it; otherwise create a new tab with this ID
