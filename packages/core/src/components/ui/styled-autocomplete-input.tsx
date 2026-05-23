@@ -216,17 +216,19 @@ const StyledAutocompleteInput = React.forwardRef<
               ref={inputRef}
               className={cn(
                 "relative z-0",
-                // Make text transparent but keep cursor visible
-                "text-transparent caret-black dark:caret-white",
+                // Keep cursor visible while overlay handles all text rendering
+                "caret-black dark:caret-white",
                 // Selection styling
                 "selection:bg-blue-500/30",
                 // Remove placeholder styling from input since overlay handles it
-                "placeholder:text-transparent",
+                "placeholder:text-transparent dark:placeholder:text-transparent",
                 // Remove shadow to prevent layout shifts
                 "shadow-none",
                 // Match the font-medium used by parameterized-text styling
                 "font-medium",
-                className
+                className,
+                // Force native glyphs fully transparent in all themes to avoid double-render blur
+                "text-transparent dark:text-transparent [-webkit-text-fill-color:transparent]"
               )}
               value={value}
               onChange={handleInputChange}

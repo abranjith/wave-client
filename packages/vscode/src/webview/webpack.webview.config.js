@@ -24,6 +24,13 @@ module.exports = {
         // Include @wave-client/core from node_modules
         exclude: /node_modules\/(?!@wave-client)/,
       },
+      {
+        test: /\.(svg|png)$/i,
+        type: 'asset/resource',
+        generator: {
+          filename: '[name][ext]',
+        },
+      },
     ],
   },
   devtool: 'source-map',

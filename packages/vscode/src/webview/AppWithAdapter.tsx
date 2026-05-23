@@ -71,7 +71,15 @@ export const AppWithAdapter: React.FC = () => {
     };
 
     useEffect(() => {
-        document.documentElement.classList.toggle('dark', theme === 'dark');
+        const isDark = theme === 'dark';
+        document.documentElement.classList.toggle('dark', isDark);
+
+        const favicon = document.getElementById('wave-client-favicon') as HTMLLinkElement | null;
+        if (favicon) {
+            const lightHref = favicon.dataset.light;
+            const darkHref = favicon.dataset.dark;
+            favicon.href = isDark && darkHref ? darkHref : lightHref || favicon.href;
+        }
     }, [theme]);
 
     useEffect(() => {

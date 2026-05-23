@@ -81,9 +81,27 @@ async function createWebviewPanel(context: vscode.ExtensionContext): Promise<vsc
 		{
 			enableScripts: true,
 			retainContextWhenHidden: true,
-			localResourceRoots: [vscode.Uri.joinPath(context.extensionUri, 'dist')],
+			localResourceRoots: [
+				vscode.Uri.joinPath(context.extensionUri, 'dist'),
+				vscode.Uri.joinPath(context.extensionUri, 'assets'),
+			],
 		}
 	);
+
+	panel.iconPath = {
+		light: vscode.Uri.joinPath(
+			context.extensionUri,
+			'assets',
+			'logos',
+			'wave-client-logo-light-32.png'
+		),
+		dark: vscode.Uri.joinPath(
+			context.extensionUri,
+			'assets',
+			'logos',
+			'wave-client-logo-dark-32.png'
+		),
+	};
 
 	// Set the webview HTML first so the panel renders immediately.
 	panel.webview.html = getWebviewContent(panel.webview, context.extensionUri);
@@ -146,6 +164,12 @@ function getWebviewContent(webview: vscode.Webview, extensionUri: vscode.Uri): s
 	const cssUri = webview.asWebviewUri(
 		vscode.Uri.joinPath(extensionUri, 'dist', 'webview', 'index.css')
 	);
+	const lightLogoUri = webview.asWebviewUri(
+		vscode.Uri.joinPath(extensionUri, 'assets', 'logos', 'wave-client-logo-light-32.png')
+	);
+	const darkLogoUri = webview.asWebviewUri(
+		vscode.Uri.joinPath(extensionUri, 'assets', 'logos', 'wave-client-logo-dark-32.png')
+	);
 
 	return `
 		<!DOCTYPE html>
@@ -153,6 +177,7 @@ function getWebviewContent(webview: vscode.Webview, extensionUri: vscode.Uri): s
 		<head>
 			<meta charset="UTF-8">
 			<meta name="viewport" content="width=device-width, initial-scale=1.0">
+			<link id="wave-client-favicon" rel="icon" type="image/png" href="${lightLogoUri}" data-light="${lightLogoUri}" data-dark="${darkLogoUri}">
 			<title>Wave Client</title>
 			<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline' ${webview.cspSource}; script-src 'unsafe-eval' 'unsafe-inline' ${webview.cspSource}; font-src ${webview.cspSource}; img-src ${webview.cspSource} data:; connect-src ${webview.cspSource} https: http:;">
 			<link rel="stylesheet" href="${cssUri}">

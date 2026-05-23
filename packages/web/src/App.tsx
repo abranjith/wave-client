@@ -889,6 +889,13 @@ function App() {
     document.body.classList.toggle('dark', isDark);
     const root = document.getElementById('root');
     root?.classList.toggle('dark', isDark);
+
+    const favicon = document.getElementById('wave-client-favicon') as HTMLLinkElement | null;
+    if (favicon) {
+      const lightHref = favicon.dataset.light;
+      const darkHref = favicon.dataset.dark;
+      favicon.href = isDark && darkHref ? darkHref : lightHref || favicon.href;
+    }
   }, [theme]);
 
   return (

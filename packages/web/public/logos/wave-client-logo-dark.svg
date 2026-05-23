@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 320" width="320" height="320">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#1F8AE0"></stop>
+      <stop offset="100%" stop-color="#0F3D6E"></stop>
+    </linearGradient>
+    <clipPath id="tile">
+      <rect x="40" y="40" width="240" height="240" rx="64"></rect>
+    </clipPath>
+  </defs>
+  <rect x="40" y="40" width="240" height="240" rx="64" fill="url(#bg)"></rect>
+  <g clip-path="url(#tile)">
+    <path d="M40,235 Q100,210 160,235 T280,235 L280,280 L40,280 Z" fill="#6BC1F0" opacity="0.35"></path>
+    <path d="M40,255 Q100,235 160,255 T280,255 L280,280 L40,280 Z" fill="#CDE9F8" opacity="0.35"></path>
+  </g>
+  <path d="M70,125 C70,225 120,225 120,158 C120,225 170,225 170,125" fill="none" stroke="#FFFFFF" stroke-width="22" stroke-linecap="round" stroke-linejoin="round"></path>
+  <path d="M250,125 A44,44 0 1,0 250,205" fill="none" stroke="#9CD5F4" stroke-width="22" stroke-linecap="round"></path>
+</svg>
