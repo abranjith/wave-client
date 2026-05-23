@@ -119,7 +119,7 @@ const SecondaryButton = React.forwardRef<HTMLButtonElement, SecondaryButtonProps
           <span className={iconClasses}>
             {React.isValidElement(icon)
               ? React.cloneElement(icon as React.ReactElement<{ className?: string }>, {
-                  className: cn("h-full w-full", (icon as React.ReactElement<{ className?: string }>).props.className),
+                  className: cn("size-full", (icon as React.ReactElement<{ className?: string }>).props.className),
                 })
               : icon}
           </span>

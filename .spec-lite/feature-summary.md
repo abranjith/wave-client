@@ -84,6 +84,13 @@ Test suite rows in the Test Lab pane no longer render a per-row hover run shortc
 
 ---
 
+## Settings UI
+
+**Settings Wizard — Collapsible Main Sections** *(updated: 2026-05-23 by fix)*
+The Settings Wizard now presents three top-level collapsible sections with simple chevron controls: General Settings, Security Settings, and Arena / AI Settings. General Settings is expanded by default and now contains both data storage controls and request-related controls; Security Settings and Arena / AI Settings are collapsed by default to reduce visual clutter on open. Main section labels are rendered one step larger (`text-base`) for clearer hierarchy and faster scanning.
+
+---
+
 ## Run Reporting
 
 **HTML Run Report Interactivity and Response Rendering** *(updated: 2026-05-08 by fix)*

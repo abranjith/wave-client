@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { SaveIcon, XIcon, FolderOpenIcon, RotateCcwIcon, InfoIcon, AlertTriangleIcon, ShieldAlertIcon, CheckCircleIcon, XCircleIcon, Key, Globe, ChevronDown, ChevronUp, Eye, EyeOff } from 'lucide-react';
+import { SaveIcon, XIcon, FolderOpenIcon, RotateCcwIcon, InfoIcon, AlertTriangleIcon, ShieldAlertIcon, CheckCircleIcon, XCircleIcon, Key, Globe, ChevronDown, ChevronUp, ChevronDownIcon, ChevronRightIcon, Eye, EyeOff } from 'lucide-react';
 import { Button } from '../ui/button';
 import { PrimaryButton } from '../ui/PrimaryButton';
 import { SecondaryButton } from '../ui/SecondaryButton';
@@ -27,6 +27,37 @@ interface SettingsWizardProps {
   defaultSaveLocation?: string; // Default location from extension (homeDir/.waveclient)
 }
 
+interface SettingsSectionHeaderProps {
+  title: string;
+  expanded: boolean;
+  controlsId: string;
+  onToggle: () => void;
+}
+
+const SettingsSectionHeader: React.FC<SettingsSectionHeaderProps> = ({
+  title,
+  expanded,
+  controlsId,
+  onToggle,
+}) => (
+  <button
+    type="button"
+    onClick={onToggle}
+    aria-expanded={expanded}
+    aria-controls={controlsId}
+    className="w-full flex items-center gap-2 text-left border-b border-slate-200 dark:border-slate-700 pb-2"
+  >
+    {expanded ? (
+      <ChevronDownIcon className="h-4 w-4 text-slate-500 dark:text-slate-400" />
+    ) : (
+      <ChevronRightIcon className="h-4 w-4 text-slate-500 dark:text-slate-400" />
+    )}
+    <span className="text-base font-semibold text-slate-700 dark:text-slate-300">
+      {title}
+    </span>
+  </button>
+);
+
 const SettingsWizard: React.FC<SettingsWizardProps> = ({
   settings,
   onSave,
@@ -50,6 +81,9 @@ const SettingsWizard: React.FC<SettingsWizardProps> = ({
   const [arenaMaxMessages, setArenaMaxMessages] = useState(settings.arena?.maxMessagesPerSession ?? DEFAULT_ARENA_APP_SETTINGS.maxMessagesPerSession);
   const [arenaProviders, setArenaProviders] = useState<ArenaProviderSettingsMap>(settings.arena?.providers ?? getDefaultProviderSettings());
   const [expandedProvider, setExpandedProvider] = useState<ArenaProviderType | null>(null);
+  const [isGeneralExpanded, setIsGeneralExpanded] = useState(true);
+  const [isSecurityExpanded, setIsSecurityExpanded] = useState(false);
+  const [isArenaExpanded, setIsArenaExpanded] = useState(false);
 
   const [errors, setErrors] = useState<Record<string, string>>({});
 
@@ -164,123 +198,136 @@ const SettingsWizard: React.FC<SettingsWizardProps> = ({
 
   return (
     <div className="space-y-6 max-h-[70vh] overflow-y-auto pr-2">
-      {/* General Settings Section */}
       <div className="space-y-4">
-        <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-300 border-b pb-2">
-          General Settings
-        </h3>
-        
-        <div>
-          <Label htmlFor="saveFilesLocation">Data Storage Location</Label>
-          <div className="flex gap-2 mt-1">
-            <Input
-              id="saveFilesLocation"
-              value={saveFilesLocation}
-              onChange={(e) => setSaveFilesLocation(e.target.value)}
-              placeholder="Defaults to ~/.waveclient if left empty"
-              className="flex-1"
-            />
-            {onBrowseDirectory && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={onBrowseDirectory}
-                title="Browse for directory"
-              >
-                <FolderOpenIcon className="h-4 w-4" />
-              </Button>
-            )}
+        <SettingsSectionHeader
+          title="General Settings"
+          expanded={isGeneralExpanded}
+          controlsId="settings-section-general"
+          onToggle={() => setIsGeneralExpanded((prev) => !prev)}
+        />
+
+        {isGeneralExpanded && (
+          <div id="settings-section-general" className="space-y-4">
+            <div>
+              <Label htmlFor="saveFilesLocation">Data Storage Location</Label>
+              <div className="flex gap-2 mt-1">
+                <Input
+                  id="saveFilesLocation"
+                  value={saveFilesLocation}
+                  onChange={(e) => setSaveFilesLocation(e.target.value)}
+                  placeholder="Defaults to ~/.waveclient if left empty"
+                  className="flex-1"
+                />
+                {onBrowseDirectory && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={onBrowseDirectory}
+                    title="Browse for directory"
+                  >
+                    <FolderOpenIcon className="h-4 w-4" />
+                  </Button>
+                )}
+              </div>
+              {errors.saveFilesLocation && (
+                <p className="text-xs text-red-500 mt-1">{errors.saveFilesLocation}</p>
+              )}
+              <div className="flex items-start gap-2 mt-2 p-2 bg-blue-50 dark:bg-blue-950/30 rounded-md border border-blue-200 dark:border-blue-800">
+                <InfoIcon className="h-4 w-4 text-blue-600 dark:text-blue-400 mt-0.5 shrink-0" />
+                <p className="text-xs text-blue-700 dark:text-blue-300">
+                  Ensure you have read/write access to this location. This is where your collections, environments, and other data will be stored.
+                </p>
+              </div>
+            </div>
+
+            <div className="space-y-4">
+              <h4 className="text-sm font-semibold text-slate-700 dark:text-slate-300 border-b pb-2">
+                Request Settings
+              </h4>
+
+              <div className="grid grid-cols-3 gap-4">
+                <div>
+                  <Label htmlFor="maxRedirects">Max Redirects</Label>
+                  <Input
+                    id="maxRedirects"
+                    type="number"
+                    min={0}
+                    value={maxRedirects}
+                    onChange={(e) => setMaxRedirects(parseInt(e.target.value) || 0)}
+                    className="mt-1"
+                  />
+                  {errors.maxRedirects && (
+                    <p className="text-xs text-red-500 mt-1">{errors.maxRedirects}</p>
+                  )}
+                  <p className="text-xs text-slate-500 mt-1">HTTP redirects to follow (0 = none)</p>
+                </div>
+
+                <div>
+                  <Label htmlFor="requestTimeoutSeconds">Request Timeout (sec)</Label>
+                  <Input
+                    id="requestTimeoutSeconds"
+                    type="number"
+                    min={0}
+                    value={requestTimeoutSeconds}
+                    onChange={(e) => setRequestTimeoutSeconds(parseInt(e.target.value) || 0)}
+                    className="mt-1"
+                  />
+                  {errors.requestTimeoutSeconds && (
+                    <p className="text-xs text-red-500 mt-1">{errors.requestTimeoutSeconds}</p>
+                  )}
+                  <p className="text-xs text-slate-500 mt-1">Timeout in seconds (0 = none)</p>
+                </div>
+
+                <div>
+                  <Label htmlFor="maxHistoryItems">Max History Items</Label>
+                  <Input
+                    id="maxHistoryItems"
+                    type="number"
+                    min={1}
+                    max={100}
+                    value={maxHistoryItems}
+                    onChange={(e) => setMaxHistoryItems(parseInt(e.target.value) || 10)}
+                    className="mt-1"
+                  />
+                  {errors.maxHistoryItems && (
+                    <p className="text-xs text-red-500 mt-1">{errors.maxHistoryItems}</p>
+                  )}
+                  <p className="text-xs text-slate-500 mt-1">Requests to keep in history</p>
+                </div>
+              </div>
+
+              <div>
+                <Label htmlFor="commonHeaderNames">Common Header Names (optional)</Label>
+                <Input
+                  id="commonHeaderNames"
+                  value={commonHeaderNames}
+                  onChange={(e) => setCommonHeaderNames(e.target.value)}
+                  placeholder="e.g., Authorization, X-API-Key, X-Request-ID"
+                  className="mt-1"
+                />
+                <p className="text-xs text-slate-500 mt-1">
+                  Comma-separated header names that will be suggested when adding headers to requests.
+                </p>
+              </div>
+            </div>
           </div>
-          {errors.saveFilesLocation && (
-            <p className="text-xs text-red-500 mt-1">{errors.saveFilesLocation}</p>
-          )}
-          <div className="flex items-start gap-2 mt-2 p-2 bg-blue-50 dark:bg-blue-950/30 rounded-md border border-blue-200 dark:border-blue-800">
-            <InfoIcon className="h-4 w-4 text-blue-600 dark:text-blue-400 mt-0.5 shrink-0" />
-            <p className="text-xs text-blue-700 dark:text-blue-300">
-              Ensure you have read/write access to this location. This is where your collections, environments, and other data will be stored.
-            </p>
-          </div>
-        </div>
+        )}
       </div>
 
-      {/* Request Settings Section */}
       <div className="space-y-4">
-        <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-300 border-b pb-2">
-          Request Settings
-        </h3>
-        
-        <div className="grid grid-cols-3 gap-4">
-          <div>
-            <Label htmlFor="maxRedirects">Max Redirects</Label>
-            <Input
-              id="maxRedirects"
-              type="number"
-              min={0}
-              value={maxRedirects}
-              onChange={(e) => setMaxRedirects(parseInt(e.target.value) || 0)}
-              className="mt-1"
-            />
-            {errors.maxRedirects && (
-              <p className="text-xs text-red-500 mt-1">{errors.maxRedirects}</p>
-            )}
-            <p className="text-xs text-slate-500 mt-1">HTTP redirects to follow (0 = none)</p>
-          </div>
+        <SettingsSectionHeader
+          title="Security Settings"
+          expanded={isSecurityExpanded}
+          controlsId="settings-section-security"
+          onToggle={() => setIsSecurityExpanded((prev) => !prev)}
+        />
 
-          <div>
-            <Label htmlFor="requestTimeoutSeconds">Request Timeout (sec)</Label>
-            <Input
-              id="requestTimeoutSeconds"
-              type="number"
-              min={0}
-              value={requestTimeoutSeconds}
-              onChange={(e) => setRequestTimeoutSeconds(parseInt(e.target.value) || 0)}
-              className="mt-1"
-            />
-            {errors.requestTimeoutSeconds && (
-              <p className="text-xs text-red-500 mt-1">{errors.requestTimeoutSeconds}</p>
-            )}
-            <p className="text-xs text-slate-500 mt-1">Timeout in seconds (0 = none)</p>
-          </div>
+        {isSecurityExpanded && (
+          <div id="settings-section-security" className="space-y-4">
 
-          <div>
-            <Label htmlFor="maxHistoryItems">Max History Items</Label>
-            <Input
-              id="maxHistoryItems"
-              type="number"
-              min={1}
-              max={100}
-              value={maxHistoryItems}
-              onChange={(e) => setMaxHistoryItems(parseInt(e.target.value) || 10)}
-              className="mt-1"
-            />
-            {errors.maxHistoryItems && (
-              <p className="text-xs text-red-500 mt-1">{errors.maxHistoryItems}</p>
-            )}
-            <p className="text-xs text-slate-500 mt-1">Requests to keep in history</p>
-          </div>
-        </div>
-
-        <div>
-          <Label htmlFor="commonHeaderNames">Common Header Names (optional)</Label>
-          <Input
-            id="commonHeaderNames"
-            value={commonHeaderNames}
-            onChange={(e) => setCommonHeaderNames(e.target.value)}
-            placeholder="e.g., Authorization, X-API-Key, X-Request-ID"
-            className="mt-1"
-          />
-          <p className="text-xs text-slate-500 mt-1">
-            Comma-separated header names that will be suggested when adding headers to requests.
-          </p>
-        </div>
-      </div>
-
-      {/* Security Settings Section */}
-      <div className="space-y-4">
-        <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-300 border-b pb-2">
-          Security Settings
-        </h3>
-        
+            {/* 
+         ** DO NOT REMOVE THIS SECTION - SECURITY KEY IS REQUIRED FOR ENCRYPTION AND WE WILL ENABLE THIS ONCE WE HAVE SOLID SUPPORT FOR SECURITY KEY FOR ALL APPS.
+          NOTE: We will enable this once we have solid support for security key for all apps.
         <div>
           <div className="flex items-center gap-2">
             <Label htmlFor="encryptionKeyEnvVar">Encryption Key Environment Variable *</Label>
@@ -308,7 +355,7 @@ const SettingsWizard: React.FC<SettingsWizardProps> = ({
             <p className="text-xs text-red-500 mt-1">{errors.encryptionKeyEnvVar}</p>
           )}
           
-          {/* Show error message if env var is invalid */}
+          // Show error message if env var is invalid
           {settings.encryptionKeyValidationStatus === 'invalid' && (
             <div className="flex items-start gap-2 mt-2 p-2 bg-red-50 dark:bg-red-950/30 rounded-md border border-red-200 dark:border-red-800">
               <XCircleIcon className="h-4 w-4 text-red-600 dark:text-red-400 mt-0.5 shrink-0" />
@@ -320,7 +367,7 @@ const SettingsWizard: React.FC<SettingsWizardProps> = ({
             </div>
           )}
           
-          {/* Warning about changing encryption key */}
+          // Warning about changing encryption key
           <div className="flex items-start gap-2 mt-2 p-2 bg-amber-50 dark:bg-amber-950/30 rounded-md border border-amber-200 dark:border-amber-800">
             <AlertTriangleIcon className="h-4 w-4 text-amber-600 dark:text-amber-400 mt-0.5 shrink-0" />
             <div className="text-xs text-amber-700 dark:text-amber-300">
@@ -333,48 +380,57 @@ const SettingsWizard: React.FC<SettingsWizardProps> = ({
               </ul>
             </div>
           </div>
-        </div>
+        </div> 
+        */}
 
-        <div className="pt-2">
-          <div className="flex items-center justify-between p-3 border border-slate-200 dark:border-slate-700 rounded-md">
-            <div className="flex-1">
-              <Label htmlFor="ignoreCertificateValidation" className="cursor-pointer">
-                Ignore Certificate Validation
-              </Label>
-              <p className="text-xs text-slate-500 mt-1">
-                Skip SSL/TLS certificate verification when making requests
-              </p>
+            <div className="pt-2">
+              <div className="flex items-center justify-between p-3 border border-slate-200 dark:border-slate-700 rounded-md">
+                <div className="flex-1">
+                  <Label htmlFor="ignoreCertificateValidation" className="cursor-pointer">
+                    Ignore Certificate Validation
+                  </Label>
+                  <p className="text-xs text-slate-500 mt-1">
+                    Skip SSL/TLS certificate verification when making requests
+                  </p>
+                </div>
+                <label className="relative inline-flex items-center cursor-pointer">
+                  <input
+                    type="checkbox"
+                    id="ignoreCertificateValidation"
+                    checked={ignoreCertificateValidation}
+                    onChange={(e) => setIgnoreCertificateValidation(e.target.checked)}
+                    className="sr-only peer"
+                  />
+                  <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 dark:peer-focus:ring-blue-800 rounded-full peer dark:bg-slate-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-slate-600 peer-checked:bg-blue-600"></div>
+                </label>
+              </div>
+
+              {ignoreCertificateValidation && (
+                <div className="flex items-start gap-2 mt-2 p-2 bg-red-50 dark:bg-red-950/30 rounded-md border border-red-200 dark:border-red-800">
+                  <ShieldAlertIcon className="h-4 w-4 text-red-600 dark:text-red-400 mt-0.5 shrink-0" />
+                  <p className="text-xs text-red-700 dark:text-red-300">
+                    <strong>SECURITY WARNING:</strong> Disabling certificate validation is highly NOT recommended for production use. Only enable this for testing purposes with self-signed certificates in development environments. This makes your connection vulnerable to man-in-the-middle attacks.
+                  </p>
+                </div>
+              )}
             </div>
-            <label className="relative inline-flex items-center cursor-pointer">
-              <input
-                type="checkbox"
-                id="ignoreCertificateValidation"
-                checked={ignoreCertificateValidation}
-                onChange={(e) => setIgnoreCertificateValidation(e.target.checked)}
-                className="sr-only peer"
-              />
-              <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 dark:peer-focus:ring-blue-800 rounded-full peer dark:bg-slate-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-slate-600 peer-checked:bg-blue-600"></div>
-            </label>
           </div>
-          
-          {ignoreCertificateValidation && (
-            <div className="flex items-start gap-2 mt-2 p-2 bg-red-50 dark:bg-red-950/30 rounded-md border border-red-200 dark:border-red-800">
-              <ShieldAlertIcon className="h-4 w-4 text-red-600 dark:text-red-400 mt-0.5 shrink-0" />
-              <p className="text-xs text-red-700 dark:text-red-300">
-                <strong>SECURITY WARNING:</strong> Disabling certificate validation is highly NOT recommended for production use. Only enable this for testing purposes with self-signed certificates in development environments. This makes your connection vulnerable to man-in-the-middle attacks.
-              </p>
-            </div>
-          )}
-        </div>
+        )}
       </div>
 
       {/* ================================================================ */}
       {/* Arena / AI Settings Section                                      */}
       {/* ================================================================ */}
       <div className="space-y-4">
-        <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-300 border-b pb-2">
-          Arena / AI Settings
-        </h3>
+        <SettingsSectionHeader
+          title="Arena / AI Settings"
+          expanded={isArenaExpanded}
+          controlsId="settings-section-arena"
+          onToggle={() => setIsArenaExpanded((prev) => !prev)}
+        />
+
+        {isArenaExpanded && (
+          <div id="settings-section-arena" className="space-y-4">
 
         {/* Default Provider */}
         <div>
@@ -470,6 +526,8 @@ const SettingsWizard: React.FC<SettingsWizardProps> = ({
             ))}
           </div>
         </div>
+          </div>
+        )}
       </div>
 
       {/* Action Buttons */}
