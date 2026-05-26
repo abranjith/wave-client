@@ -87,7 +87,6 @@ const WsMessageComposer: React.FC<WsMessageComposerProps> = ({ onSend, disabled 
             <PrimaryButton
                 onClick={handleSend}
                 icon={<SendHorizonalIcon />}
-                colorTheme="main"
                 tooltip="Send"
                 disabled={isSendDisabled}
                 aria-label="Send"

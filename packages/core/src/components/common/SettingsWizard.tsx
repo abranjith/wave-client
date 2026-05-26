@@ -535,7 +535,6 @@ const SettingsWizard: React.FC<SettingsWizardProps> = ({
         <SecondaryButton
           size="sm"
           onClick={handleReset}
-          colorTheme="main"
           icon={<RotateCcwIcon />}
           text="Reset"
           tooltip="Reset to defaults"
@@ -545,18 +544,14 @@ const SettingsWizard: React.FC<SettingsWizardProps> = ({
           <SecondaryButton
             size="sm"
             onClick={onCancel}
-            colorTheme="warning"
             icon={<XIcon />}
             text="Cancel"
-            tooltip="Cancel"
           />
           <PrimaryButton
             size="sm"
             onClick={handleSave}
-            colorTheme="success"
             icon={<SaveIcon />}
             text="Save"
-            tooltip="Save settings"
           />
         </div>
       </div>

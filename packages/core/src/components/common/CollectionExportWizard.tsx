@@ -180,14 +180,12 @@ const CollectionExportWizard: React.FC<CollectionExportWizardProps> = ({
           <SecondaryButton
             onClick={handleClose}
             disabled={isExporting}
-            colorTheme="warning"
             icon={<XIcon />}
             text="Cancel"
           />
           <PrimaryButton
             onClick={handleExport}
             disabled={!selectedCollection || isExporting || collections.length === 0}
-            colorTheme="main"
             icon={<DownloadIcon />}
             text={isExporting ? 'Exporting...' : 'Export'}
           />

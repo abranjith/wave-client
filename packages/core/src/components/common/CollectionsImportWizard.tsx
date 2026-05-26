@@ -172,14 +172,12 @@ const CollectionsImportWizard: React.FC<CollectionsImportWizardProps> = ({
           <SecondaryButton
             onClick={handleClose}
             disabled={isImporting}
-            colorTheme="warning"
             icon={<XIcon />}
             text="Cancel"
           />
           <PrimaryButton
             onClick={handleImport}
             disabled={!selectedFile || isImporting}
-            colorTheme="main"
             icon={<ImportIcon />}
             text={isImporting ? 'Importing...' : 'Import'}
           />

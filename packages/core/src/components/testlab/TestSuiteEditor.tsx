@@ -22,15 +22,17 @@ import {
     ChevronUp,
     BeakerIcon,
     PencilIcon,
+    XIcon,
+    PlusIcon,
 } from 'lucide-react';
 import type { CollectionItem, Collection } from '../../types/collection';
 import type { Auth } from '../../hooks/store/createAuthSlice';
 import type { Flow } from '../../types/flow';
-import type { TestSuite, TestItem, TestSuiteSettings, TestCase, RequestTestItem } from '../../types/testSuite';
+import type { TestSuite, TestItem, TestSuiteSettings, TestCase } from '../../types/testSuite';
 import { isRequest } from '../../types/collection';
 import { isWsRequest, isHttpRequest } from '../../utils/requestTypeGuards';
 import { urlToString } from '../../utils/collectionParser';
-import { createRequestTestItem, createFlowTestItem, isRequestTestItem, isFlowTestItem, createTestCase } from '../../types/testSuite';
+import { createRequestTestItem, createFlowTestItem, isRequestTestItem } from '../../types/testSuite';
 import useAppStateStore from '../../hooks/store/useAppStateStore';
 import { useStorageAdapter, useNotificationAdapter } from '../../hooks/useAdapter';
 import { useTestSuiteRunner } from '../../hooks/useTestSuiteRunner';
@@ -47,7 +49,7 @@ import {
     DialogHeader,
     DialogTitle,
 } from '../ui/dialog';
-import { cn } from '../../utils/common';
+import { cn, getHttpMethodColor } from '../../utils/common';
 import TestSuiteToolbar from './TestSuiteToolbar';
 import TestResultsPanel from './TestResultsPanel';
 import TestCaseEditor from './TestCaseEditor';
@@ -398,7 +400,7 @@ const AddItemDialog: React.FC<AddItemDialogProps> = ({
                                     <div
                                         key={request.referenceId}
                                         className={cn(
-                                            'flex items-center gap-3 p-3 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700/50',
+                                            'group flex items-center gap-3 p-3 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700/50',
                                             selectedIds.has(request.referenceId) && 'bg-blue-50 dark:bg-blue-900/20'
                                         )}
                                         onClick={() => handleToggleSelection(request.referenceId)}
@@ -409,11 +411,7 @@ const AddItemDialog: React.FC<AddItemDialogProps> = ({
                                         />
                                         <span className={cn(
                                             'text-xs font-mono font-semibold px-1.5 py-0.5 rounded',
-                                            request.method === 'GET' && 'bg-green-100 text-green-700',
-                                            request.method === 'POST' && 'bg-blue-100 text-blue-700',
-                                            request.method === 'PUT' && 'bg-yellow-100 text-yellow-700',
-                                            request.method === 'DELETE' && 'bg-red-100 text-red-700',
-                                            request.method === 'PATCH' && 'bg-purple-100 text-purple-700',
+                                            getHttpMethodColor(request.method),
                                         )}>
                                             {request.method}
                                         </span>
@@ -423,6 +421,9 @@ const AddItemDialog: React.FC<AddItemDialogProps> = ({
                                             </div>
                                             <div className="text-xs text-slate-500 truncate">
                                                 {request.collectionName} {request.folderPath.length > 0 && `/ ${request.folderPath.join(' / ')}`}
+                                            </div>
+                                            <div className="text-xs text-slate-400 truncate max-h-0 opacity-0 overflow-hidden transition-all group-hover:max-h-6 group-hover:opacity-100 group-hover:mt-1 group-focus-within:max-h-6 group-focus-within:opacity-100 group-focus-within:mt-1">
+                                                {request.url}
                                             </div>
                                         </div>
                                     </div>
@@ -467,13 +468,17 @@ const AddItemDialog: React.FC<AddItemDialogProps> = ({
 
                 {/* Actions */}
                 <div className="flex justify-end gap-2 pt-2">
-                    <SecondaryButton onClick={onClose}>Cancel</SecondaryButton>
+                    <SecondaryButton 
+                        onClick={onClose}
+                        icon={<XIcon />}
+                        text="Cancel"
+                    />
                     <PrimaryButton 
                         onClick={handleAdd}
                         disabled={selectedIds.size === 0}
-                    >
-                        Add {selectedIds.size > 0 && `(${selectedIds.size})`}
-                    </PrimaryButton>
+                        icon={<PlusIcon />}
+                        text={`Add ${selectedIds.size > 0 ? `(${selectedIds.size})` : ''}`}
+                    />
                 </div>
             </DialogContent>
         </Dialog>
@@ -534,15 +539,11 @@ const TestItemRow: React.FC<TestItemRowProps> = ({
         name = item.name || request?.name || 'Unknown Request';
         subtitle = request?.url || item.referenceId;
 
-        const method = request?.method || 'GET';
+        const method = (request?.method || 'GET').toUpperCase();
         icon = (
             <span className={cn(
                 'text-xs font-mono font-semibold px-1.5 py-0.5 rounded',
-                method === 'GET' && 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400',
-                method === 'POST' && 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400',
-                method === 'PUT' && 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400',
-                method === 'DELETE' && 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400',
-                method === 'PATCH' && 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400',
+                getHttpMethodColor(method),
             )}>
                 {method}
             </span>
@@ -918,9 +919,9 @@ export const TestSuiteEditor: React.FC<TestSuiteEditorProps> = ({
                                         <SecondaryButton
                                             onClick={() => setIsAddDialogOpen(true)}
                                             disabled={isRunning}
-                                            icon={<PlusCircleIcon className="h-4 w-4" />}
                                         >
-                                            Add Items
+                                            <PlusCircleIcon className="h-4 w-4 mr-1" />
+                                            Add your first test item
                                         </SecondaryButton>
                                     </div>
                                 ) : (

@@ -242,14 +242,12 @@ const RequestSaveWizard: React.FC<RequestSaveWizardProps> = ({
           <SecondaryButton
             onClick={handleClose}
             disabled={isSaving}
-            colorTheme="warning"
             icon={<XIcon />}
             text="Cancel"
           />
           <PrimaryButton
             onClick={handleSave}
             disabled={!searchQuery.trim() || !requestName.trim() || isSaving}
-            colorTheme="main"
             icon={<SaveIcon />}
             text={isSaving ? 'Saving...' : 'Save'}
           />

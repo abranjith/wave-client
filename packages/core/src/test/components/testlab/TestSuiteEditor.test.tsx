@@ -440,6 +440,21 @@ describe('TestSuiteEditor AddItemDialog — exclusion gate (FEAT-011)', () => {
         expect(screen.queryByText('Subscribe Events')).toBeNull();
     });
 
+    it('renders request URL text in request rows for hover preview', () => {
+        const suite = makeSuite('suite-1');
+        const collections = [
+            makeCollection('My API', [
+                makeHttpItem('http-1', 'Get Users'),
+            ]),
+        ];
+        seedStore({ suite, collections });
+        renderEditor(suite);
+
+        openAddDialog();
+
+        expect(screen.getByText('https://api.example.com/http-1')).toBeTruthy();
+    });
+
     it('Flows tab is unaffected — all flows are shown', () => {
         const suite = makeSuite('suite-1');
         const flows = [makeFlow('flow-1', 'My Flow'), makeFlow('flow-2', 'Another Flow')];

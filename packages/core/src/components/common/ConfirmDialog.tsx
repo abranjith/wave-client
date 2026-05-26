@@ -81,14 +81,12 @@ export function ConfirmDialog({
                 <DialogFooter>
                     <SecondaryButton
                         onClick={onCancel}
-                        colorTheme="warning"
                         icon={<XIcon />}
                         text={cancelText}
                         disabled={isConfirming}
                     />
                     <PrimaryButton
                         onClick={onConfirm}
-                        colorTheme="error"
                         icon={<CheckIcon />}
                         text={confirmText}
                         disabled={isConfirming}

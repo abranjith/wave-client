@@ -9,16 +9,18 @@
  *  5.  Shows "No requests found in collections" when all requests are WS/SSE.
  *  6.  Legacy requests (no `protocol` field) are included.
  *  7.  Search query filters within the HTTP-only subset.
- *  8.  Clicking a request calls `onSelectRequest` with HTTP request data.
+ *  8.  Selecting one or more requests and clicking Add calls `onAddRequests`.
  *  9.  HTTP requests inside nested folders are included.
  * 10.  WS requests inside nested folders are excluded.
+ * 11.  Requests already in the flow are excluded by referenceId.
+ * 12.  Request URL is rendered in each row (revealed on hover in UI).
  *
  * Strategy:
  *  - Dialog and UI primitives are mocked with simple HTML equivalents so
  *    JSDOM can render and interact without floating-UI dependencies.
  *  - Collections are constructed inline using raw object literals that conform
  *    to the Collection / CollectionItem types.
- *  - onSelectRequest is a vi.fn() spy.
+ *  - onAddRequests is a vi.fn() spy.
  */
 
 import React from 'react';
@@ -40,6 +42,42 @@ vi.mock('../../../components/ui/dialog', () => ({
 vi.mock('../../../components/ui/input', () => ({
     Input: (props: React.InputHTMLAttributes<HTMLInputElement>) => (
         <input data-testid="search-input" {...props} />
+    ),
+}));
+
+vi.mock('../../../components/ui/checkbox', () => ({
+    Checkbox: ({
+        checked,
+        onCheckedChange,
+        disabled,
+    }: {
+        checked?: boolean;
+        onCheckedChange?: (checked: boolean) => void;
+        disabled?: boolean;
+    }) => (
+        <input
+            data-testid="request-checkbox"
+            type="checkbox"
+            checked={!!checked}
+            disabled={disabled}
+            onChange={(e) => onCheckedChange?.(e.target.checked)}
+        />
+    ),
+}));
+
+vi.mock('../../../components/ui/PrimaryButton', () => ({
+    PrimaryButton: ({
+        children,
+        onClick,
+        disabled,
+    }: {
+        children: React.ReactNode;
+        onClick?: () => void;
+        disabled?: boolean;
+    }) => (
+        <button data-testid="primary-btn" onClick={onClick} disabled={disabled}>
+            {children}
+        </button>
     ),
 }));
 
@@ -136,7 +174,7 @@ const DEFAULT_PROPS = {
     isOpen: true,
     onClose: vi.fn(),
     collections: [] as Collection[],
-    onSelectRequest: vi.fn(),
+    onAddRequests: vi.fn(),
 };
 
 // ── Tests ─────────────────────────────────────────────────────────────────────
@@ -252,8 +290,8 @@ describe('FlowRequestSearch — exclusion gate (FEAT-011)', () => {
         expect(screen.queryByText('WS Get Events')).toBeNull();
     });
 
-    it('clicking a request calls onSelectRequest with HTTP request data', () => {
-        const onSelectRequest = vi.fn();
+    it('selecting a request and clicking Add calls onAddRequests with HTTP request data', () => {
+        const onAddRequests = vi.fn();
         const collections = [
             makeCollection('My API', [
                 makeHttpItem('http-1', 'Get Users', 'GET'),
@@ -264,21 +302,101 @@ describe('FlowRequestSearch — exclusion gate (FEAT-011)', () => {
             <FlowRequestSearch
                 {...DEFAULT_PROPS}
                 collections={collections}
-                onSelectRequest={onSelectRequest}
+                onAddRequests={onAddRequests}
             />
         );
 
-        // Find the request row and click it
+        // Select a request
         const requestName = screen.getByText('Get Users');
         fireEvent.click(requestName.closest('[class]') ?? requestName);
 
-        expect(onSelectRequest).toHaveBeenCalledWith(
+        // Add selected request
+        fireEvent.click(screen.getByTestId('primary-btn'));
+
+        expect(onAddRequests).toHaveBeenCalledWith([
             expect.objectContaining({
                 id: 'http-1',
+                referenceId: 'my-api.json:http-1',
                 name: 'Get Users',
                 method: 'GET',
-            })
+            }),
+        ]);
+    });
+
+    it('supports multi-select and adds selected requests in list order', () => {
+        const onAddRequests = vi.fn();
+        const collections = [
+            makeCollection('My API', [
+                makeHttpItem('http-1', 'Get Users', 'GET'),
+                makeHttpItem('http-2', 'Create User', 'POST'),
+                makeHttpItem('http-3', 'Delete User', 'DELETE'),
+            ]),
+        ];
+
+        render(
+            <FlowRequestSearch
+                {...DEFAULT_PROPS}
+                collections={collections}
+                onAddRequests={onAddRequests}
+            />
         );
+
+        fireEvent.click(screen.getByText('Delete User'));
+        fireEvent.click(screen.getByText('Get Users'));
+        fireEvent.click(screen.getByTestId('primary-btn'));
+
+        expect(onAddRequests).toHaveBeenCalledWith([
+            expect.objectContaining({ referenceId: 'my-api.json:http-1', name: 'Get Users' }),
+            expect.objectContaining({ referenceId: 'my-api.json:http-3', name: 'Delete User' }),
+        ]);
+    });
+
+    it('disables Add button until at least one request is selected', () => {
+        const collections = [
+            makeCollection('My API', [
+                makeHttpItem('http-1', 'Get Users'),
+            ]),
+        ];
+
+        render(<FlowRequestSearch {...DEFAULT_PROPS} collections={collections} />);
+
+        expect(screen.getByTestId('primary-btn')).toBeDisabled();
+
+        fireEvent.click(screen.getByText('Get Users'));
+
+        expect(screen.getByTestId('primary-btn')).not.toBeDisabled();
+    });
+
+    it('excludes requests that are already in the flow using referenceId', () => {
+        const collections = [
+            makeCollection('My API', [
+                makeHttpItem('http-1', 'Get Users'),
+                makeHttpItem('http-2', 'Create User'),
+            ]),
+        ];
+
+        render(
+            <FlowRequestSearch
+                {...DEFAULT_PROPS}
+                collections={collections}
+                existingRequestIds={['my-api.json:http-2']}
+            />
+        );
+
+        expect(screen.getByText('Get Users')).toBeTruthy();
+        expect(screen.queryByText('Create User')).toBeNull();
+    });
+
+    it('renders request URL text in rows', () => {
+        const collections = [
+            makeCollection('My API', [
+                makeHttpItem('http-1', 'Get Users'),
+            ]),
+        ];
+
+        render(<FlowRequestSearch {...DEFAULT_PROPS} collections={collections} />);
+
+        expect(screen.getByText('https://api.example.com/http-1')).toBeTruthy();
     });
 
     it('HTTP requests inside nested folders are included', () => {

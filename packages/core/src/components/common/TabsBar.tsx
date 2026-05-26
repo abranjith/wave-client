@@ -215,7 +215,6 @@ const TabsBar: React.FC<TabsBarProps> = ({ className, onSave }) => {
                             variant="ghost"
                             onClick={handleAddTab}
                             icon={<PlusIcon className="!h-5 !w-5"/>}
-                            colorTheme="main"
                             className="h-[38px] w-[60px] rounded-none"
                             aria-label="New tab"
                             tooltip={`New Tab • ${tabs.length}/${TAB_CONSTANTS.MAX_TABS}`}
@@ -237,19 +236,17 @@ const TabsBar: React.FC<TabsBarProps> = ({ className, onSave }) => {
                     <DialogFooter>
                         <SecondaryButton
                             onClick={handleConfirmClose}
-                            colorTheme="error"
+                            colorTheme="warning"
                             icon={<BanIcon />}
                             text="Don't Save"
                         />
                         <SecondaryButton
                             onClick={() => setTabToClose(null)}
-                            colorTheme="warning"
                             icon={<XIcon />}
                             text="Cancel"
                         />
                         <PrimaryButton
                             onClick={handleSaveAndClose}
-                            colorTheme="main"
                             icon={<SaveIcon />}
                             text="Save"
                         />

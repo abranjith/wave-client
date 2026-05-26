@@ -93,13 +93,11 @@ const ValidationWizard: React.FC<ValidationWizardProps> = ({
             <div className="flex justify-end space-x-2 pt-4 border-t border-gray-200 dark:border-slate-700">
                 <SecondaryButton
                     onClick={onCancel}
-                    colorTheme="warning"
                     icon={<XIcon />}
                     text="Cancel"
                 />
                 <PrimaryButton
                     onClick={handleSave}
-                    colorTheme="main"
                     icon={<PlusIcon />}
                     text={rule ? 'Update Rule' : 'Add Rule'}
                 />

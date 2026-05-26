@@ -220,19 +220,17 @@ export const TestSuiteToolbar: React.FC<TestSuiteToolbarProps> = ({
                     <PrimaryButton
                         onClick={onCancel}
                         colorTheme="error"
-                    >
-                        <StopCircleIcon className="h-4 w-4 mr-1" />
-                        Stop
-                    </PrimaryButton>
+                        icon={<StopCircleIcon className="h-4 w-4 mr-1" />}
+                        text="Stop"
+                    />
                 ) : (
                     <PrimaryButton
                         onClick={onRun}
                         disabled={enabledItemCount === 0}
                         colorTheme="purple"
-                    >
-                        <PlayIcon className="h-4 w-4 mr-1" />
-                        Run Suite
-                    </PrimaryButton>
+                        icon={<PlayIcon className="h-4 w-4 mr-1" />}
+                        text="Run Suite"
+                    />
                 )}
             </div>
         </TooltipProvider>

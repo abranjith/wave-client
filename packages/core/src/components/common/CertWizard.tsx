@@ -355,7 +355,6 @@ const CertWizard: React.FC<CertWizardProps> = ({ cert, onSave, onCancel, existin
         <SecondaryButton
           size="sm"
           onClick={onCancel}
-          colorTheme="warning"
           text="Cancel"
           icon={<XIcon />}
           tooltip="Cancel"
@@ -363,7 +362,6 @@ const CertWizard: React.FC<CertWizardProps> = ({ cert, onSave, onCancel, existin
         <PrimaryButton
           size="sm"
           onClick={handleSave}
-          colorTheme="success"
           text="Save"
           icon={<SaveIcon />}
           tooltip={isEditing ? "Update certificate" : "Save certificate"}

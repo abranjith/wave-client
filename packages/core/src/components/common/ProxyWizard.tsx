@@ -180,15 +180,12 @@ const ProxyWizard: React.FC<ProxyWizardProps> = ({ proxy, onSave, onCancel, exis
         <SecondaryButton
           size="sm"
           onClick={onCancel}
-          colorTheme="warning"
           icon={<XIcon />}
           text="Cancel"
-          tooltip="Cancel"
         />
         <PrimaryButton
           size="sm"
           onClick={handleSave}
-          colorTheme="success"
           icon={<SaveIcon />}
           text="Save"
           tooltip={isEditing ? "Update proxy" : "Save proxy"}

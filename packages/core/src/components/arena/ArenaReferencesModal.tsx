@@ -13,12 +13,13 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 import {
   X,
-  Plus,
   Trash2,
   Globe,
   Wrench,
   ExternalLink,
   Shield,
+  PlusIcon,
+  XIcon,
 } from 'lucide-react';
 import { cn } from '../../utils/styling';
 import { PrimaryButton } from '../ui/PrimaryButton';
@@ -233,9 +234,9 @@ export function ArenaReferencesModal({
                 onClick={handleAdd}
                 disabled={!newName.trim() || !newUrl.trim()}
                 size="sm"
-              >
-                Add
-              </PrimaryButton>
+                icon={<PlusIcon/>}
+                text="Add"
+              />
               <SecondaryButton
                 onClick={() => {
                   setShowAddForm(false);
@@ -245,9 +246,9 @@ export function ArenaReferencesModal({
                 size="sm"
                 variant="ghost"
                 className="text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200"
-              >
-                Cancel
-              </SecondaryButton>
+                icon={<XIcon />}
+                text="Cancel"
+              />
             </div>
           </div>
         )}
@@ -261,7 +262,7 @@ export function ArenaReferencesModal({
               variant="ghost"
               className="text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
             >
-              <Plus size={14} />
+              <PlusIcon size={14} />
               Add Reference
             </SecondaryButton>
           ) : (

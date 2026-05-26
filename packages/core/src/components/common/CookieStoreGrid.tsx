@@ -578,13 +578,11 @@ const CookieStoreGrid: React.FC<CookieStoreGridProps> = ({ onBack, onSaveCookies
           <DialogFooter>
             <SecondaryButton
               onClick={() => setConfirmDialog((prev) => ({ ...prev, isOpen: false }))}
-              colorTheme="warning"
               icon={<XIcon />}
               text="Cancel"
             />
             <PrimaryButton
               onClick={confirmDialog.onConfirm}
-              colorTheme="error"
               icon={<CheckIcon />}
               text="Confirm"
             />

@@ -82,6 +82,9 @@ Flow deletion in the Flows pane is now guarded by the shared `useConfirmDialog` 
 **FEAT-003: Test Lab Pane — Remove Run Hover Button, Add Delete Confirmation** *(updated: 2026-04-09 by implement)*
 Test suite rows in the Test Lab pane no longer render a per-row hover run shortcut button (PlayIcon). The `onTestSuiteRun` prop has been removed from `TestLabPane` and its callers (`ConfigPanel` in both vscode and web packages). Delete is now guarded by the shared `useConfirmDialog` hook: clicking Delete opens a titled confirmation dialog; the adapter call (`deleteTestSuite`) only proceeds on explicit user confirmation; the Zustand store is mutated (`removeTestSuite`) only on adapter success; adapter errors surface via `notification.showNotification('error', ...)`. The `Running...` status label and inline rename behavior are preserved. Covered by 13 new component tests in `TestLabPane.test.tsx`.
 
+**Flow Request Picker and Test Item Request List Consistency** *(updated: 2026-05-23 by fix)*
+The flow canvas empty state now uses the same dashed-panel visual pattern as the test suite editor empty state and keeps the flow-specific CTA label text (`Add your first request`). The flow request picker dialog now supports multi-select request insertion (matching test item add behavior): users can select multiple HTTP requests and add them in one action, and the new nodes are inserted in a vertical stack on the canvas (layered one below another) from a single anchor point. Request rows in both dialogs now share a consistent visual style and include request URL preview text that becomes visible on hover/focus.
+
 ---
 
 ## Settings UI

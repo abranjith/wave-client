@@ -424,7 +424,6 @@ const RequestEditor: React.FC<RequestEditorProps> = ({
                   <SendHorizonalIcon />
                 )
               }
-              colorTheme="main"
               tooltip="Send"
               disabled={isRequestProcessing || !Boolean(url?.trim())}
               className="px-6 py-2"

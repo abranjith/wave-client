@@ -210,19 +210,17 @@ export const FlowToolbar: React.FC<FlowToolbarProps> = ({
                 {isRunning ? (
                     <PrimaryButton
                         onClick={onCancel}
-                        className="bg-red-600 hover:bg-red-700"
-                    >
-                        <StopCircleIcon className="h-4 w-4 mr-1" />
-                        Stop
-                    </PrimaryButton>
+                        colorTheme="error"
+                        icon={<StopCircleIcon className="h-4 w-4 mr-1" />}
+                        text="Stop"
+                    />
                 ) : (
                     <PrimaryButton
                         onClick={onRun}
                         disabled={!hasNodes}
-                    >
-                        <PlayIcon className="h-4 w-4 mr-1" />
-                        Run Flow
-                    </PrimaryButton>
+                        icon={<PlayIcon className="h-4 w-4 mr-1" />}
+                        text="Run Flow"
+                    />
                 )}
             </div>
         </TooltipProvider>

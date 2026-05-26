@@ -14,6 +14,8 @@ import React, { useState, useCallback, useEffect } from 'react';
 import { 
     SaveIcon, 
     AlertCircleIcon,
+    PlusIcon,
+    XIcon,
 } from 'lucide-react';
 import type { TestCase, TestCaseData } from '../../types/testSuite';
 import type { Auth } from '../../hooks/store/createAuthSlice';
@@ -619,11 +621,16 @@ export const TestCaseEditor: React.FC<TestCaseEditorProps> = ({
 
                 {/* Footer Actions */}
                 <div className="flex justify-end gap-2 pt-4 border-t border-slate-200 dark:border-slate-700">
-                    <SecondaryButton onClick={onClose}>Cancel</SecondaryButton>
-                    <PrimaryButton onClick={handleSave}>
-                        <SaveIcon className="h-4 w-4 mr-1" />
-                        {isEditMode ? 'Update' : 'Create'}
-                    </PrimaryButton>
+                    <SecondaryButton 
+                        onClick={onClose}
+                        icon={<XIcon />}
+                        text="Cancel"
+                    />
+                    <PrimaryButton 
+                        onClick={handleSave}
+                        icon={<PlusIcon />}
+                        text={isEditMode ? 'Update' : 'Create'}
+                    />
                 </div>
             </DialogContent>
         </Dialog>

@@ -6,16 +6,15 @@
  */
 
 import React, { useState, useCallback, useRef, useMemo, useEffect } from 'react';
+import { PlusCircleIcon } from 'lucide-react';
 import type { Collection, Environment } from '../../types/collection';
 import type { Auth } from '../../hooks/store/createAuthSlice';
 import type { 
     Flow, 
-    FlowNode as FlowNodeType, 
     FlowConnector as FlowConnectorType,
     ConnectorCondition,
 } from '../../types/flow';
 import {
-    generateNodeId,
     generateConnectorId,
     autoLayoutFlow,
 } from '../../utils/flowUtils';
@@ -28,6 +27,8 @@ import { FlowRequestSearch, SearchableRequest } from './FlowRequestSearch';
 import { FlowResultsPanel } from './FlowResultsPanel';
 import { ConnectorConditionPopover } from './ConnectorConditionPopover';
 import { cn } from '../../utils/common';
+import { SecondaryButton } from '../ui/SecondaryButton';
+import { buildRequestNodes } from './requestNodeBuilder';
 
 // ============================================================================
 // Types
@@ -321,47 +322,23 @@ export const FlowCanvas: React.FC<FlowCanvasProps> = ({
         });
     }, [flow, updateFlowConnectors, onFlowChange, isLocked]);
     
-    // Handle add request from search
-    const handleAddRequest = useCallback((request: SearchableRequest) => {
-        if (isLocked) return;
-        // Generate unique alias from request name
-        let baseAlias = request.name
-            .replace(/[^a-zA-Z0-9]/g, '-')
-            .substring(0, 20) || 'request';
-        //remove trailing - if any
-        baseAlias = baseAlias.replace(/-+$/g, '');
+    // Handle add request(s) from search
+    const handleAddRequests = useCallback((requests: SearchableRequest[]) => {
+        if (isLocked || requests.length === 0) return;
 
-        let alias = baseAlias;
-        let counter = 1;
-        while (flow.nodes.some(n => n.alias.toLowerCase() === alias.toLowerCase())) {
-            alias = `${baseAlias}${counter}`;
-            counter++;
-        }
-        
-        // Calculate position (right of the last node, or start position)
-        const lastNode = flow.nodes[flow.nodes.length - 1];
-        const position = lastNode
-            ? { x: lastNode.position.x + 300, y: lastNode.position.y }
-            : { x: 50, y: 50 };
-        
-        const newNode: FlowNodeType = {
-            id: generateNodeId(),
-            alias,
-            requestId: request.collectionFilename 
-                ? `${request.collectionFilename}:${request.id}`
-                : request.id,
-            name: request.name,
-            method: request.method,
-            position,
-        };
-        
-        updateFlowNodes(flow.id, [...flow.nodes, newNode]);
+        const newNodes = buildRequestNodes({
+            existingNodes: flow.nodes,
+            requests,
+        });
+
+        const updatedNodes = [...flow.nodes, ...newNodes];
+        updateFlowNodes(flow.id, updatedNodes);
         onFlowChange?.({
             ...flow,
-            nodes: [...flow.nodes, newNode],
+            nodes: updatedNodes,
             updatedAt: new Date().toISOString(),
         });
-        
+
         setIsSearchOpen(false);
     }, [flow, updateFlowNodes, onFlowChange, isLocked]);
     
@@ -533,15 +510,16 @@ export const FlowCanvas: React.FC<FlowCanvasProps> = ({
                     
                     {/* Empty State */}
                     {flow.nodes.length === 0 && (
-                        <div className="absolute inset-0 flex items-center justify-center">
-                            <div className="text-center text-slate-400">
-                                <div className="text-lg mb-2">No requests in this flow</div>
-                                <button
+                        <div className="absolute inset-0 flex items-center justify-center p-6">
+                            <div className="flex w-full max-w-md flex-col items-center justify-center py-12 border-2 border-dashed border-slate-200 dark:border-slate-700 rounded-lg">
+                                <p className="text-sm text-slate-500 mb-4">No requests added yet</p>
+                                <SecondaryButton
                                     onClick={() => setIsSearchOpen(true)}
-                                    className="text-blue-600 hover:text-blue-700 font-medium"
+                                    disabled={isLocked}
                                 >
-                                    + Add your first request
-                                </button>
+                                    <PlusCircleIcon className="h-4 w-4 mr-1" />
+                                    Add your first request
+                                </SecondaryButton>
                             </div>
                         </div>
                     )}
@@ -567,7 +545,7 @@ export const FlowCanvas: React.FC<FlowCanvasProps> = ({
                 isOpen={isSearchOpen}
                 onClose={() => setIsSearchOpen(false)}
                 collections={collections}
-                onSelectRequest={handleAddRequest}
+                onAddRequests={handleAddRequests}
                 existingRequestIds={flow.nodes.map(n => n.requestId)}
                 isDisabled={isLocked}
             />

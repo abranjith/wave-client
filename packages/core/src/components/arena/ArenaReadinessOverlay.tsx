@@ -81,7 +81,6 @@ export function ArenaReadinessOverlay({
       <PrimaryButton
         text="Open Settings"
         onClick={onOpenSettings}
-        colorTheme="main"
       />
     </div>
   );

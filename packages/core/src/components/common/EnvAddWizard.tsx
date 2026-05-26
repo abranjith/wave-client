@@ -155,14 +155,12 @@ const EnvAddWizard: React.FC<EnvAddWizardProps> = ({
           <SecondaryButton
             onClick={handleClose}
             disabled={isSaving}
-            colorTheme="warning"
             icon={<XIcon />}
             text="Cancel"
           />
           <PrimaryButton
             onClick={handleSave}
             disabled={!environmentName.trim() || isSaving}
-            colorTheme="main"
             icon={<SaveIcon />}
             text={isSaving ? 'Saving...' : 'Save'}
           />

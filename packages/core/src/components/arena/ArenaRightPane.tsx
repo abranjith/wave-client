@@ -15,9 +15,8 @@
 
 import React, { useState, useCallback } from 'react';
 import {
-  X,
-  Plus,
-  Trash2,
+  XIcon,
+  Trash2Icon,
   Globe,
   Wrench,
   ChevronDown,
@@ -28,6 +27,7 @@ import {
   Clock,
   Cpu,
   Hash,
+  PlusIcon,
 } from 'lucide-react';
 import { cn } from '../../utils/styling';
 import { PrimaryButton } from '../ui/PrimaryButton';
@@ -197,9 +197,9 @@ function AddReferenceForm({
         size="sm"
         disabled={!name.trim() || !url.trim()}
         className="w-full text-xs"
-      >
-        <Plus size={12} /> Add Reference
-      </PrimaryButton>
+        icon={<PlusIcon/>}
+        text="Add Reference"
+      />
     </form>
   );
 }
@@ -293,7 +293,7 @@ export function ArenaRightPane({
           className="h-6 w-6 p-0 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
           aria-label="Close context pane"
         >
-          <X size={14} />
+          <XIcon size={14} />
         </SecondaryButton>
       </div>
 
@@ -397,7 +397,7 @@ export function ArenaRightPane({
                         className="hidden group-hover:block text-slate-400 hover:text-red-500"
                         aria-label={`Remove ${ref.name}`}
                       >
-                        <Trash2 size={10} />
+                        <Trash2Icon size={10} />
                       </button>
                     )}
 
@@ -422,7 +422,7 @@ export function ArenaRightPane({
                   onClick={() => setShowAddRef(true)}
                   className="w-full text-xs justify-center"
                 >
-                  <Plus size={12} /> Add Custom
+                  <PlusIcon size={12} /> Add Custom
                 </SecondaryButton>
               )}
             </div>
@@ -520,7 +520,7 @@ export function ArenaRightPane({
                       className="hidden group-hover:block text-slate-400 hover:text-red-500 flex-shrink-0"
                       aria-label="Delete session"
                     >
-                      <Trash2 size={12} />
+                      <Trash2Icon size={12} />
                     </button>
                   </div>
                 );

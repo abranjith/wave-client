@@ -151,14 +151,12 @@ const RuleEditorDialog: React.FC<RuleEditorDialogProps> = ({ rule, isOpen, onClo
                 <DialogFooter>
                     <DialogClose asChild>
                         <SecondaryButton
-                            colorTheme="warning"
                             icon={<XIcon />}
                             text="Cancel"
                         />
                     </DialogClose>
                     <PrimaryButton
                         onClick={handleSave}
-                        colorTheme="main"
                         icon={<SaveIcon />}
                         text="Save Rule"
                     />
@@ -559,13 +557,11 @@ const RequestValidation: React.FC = () => {
                     <DialogFooter>
                         <SecondaryButton
                             onClick={() => setConfirmDialog((prev) => ({ ...prev, isOpen: false }))}
-                            colorTheme="warning"
                             icon={<XIcon />}
                             text="Cancel"
                         />
                         <PrimaryButton
                             onClick={confirmDialog.onConfirm}
-                            colorTheme="error"
                             icon={<Trash2Icon />}
                             text="Confirm"
                         />
