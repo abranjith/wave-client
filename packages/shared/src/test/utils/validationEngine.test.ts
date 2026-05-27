@@ -414,6 +414,236 @@ describe('validationEngine', () => {
 
       expect(result.allPassed).toBe(true);
     });
+
+    it('should validate body equals for JSON objects by value', () => {
+      const jsonResponse: ResponseData = {
+        ...mockResponse,
+        body: JSON.stringify({
+          a: 1,
+          b: { c: 2, d: 'x' },
+        }),
+      };
+
+      const rule: BodyValidationRule = {
+        id: 'body-json-equals-1',
+        name: 'JSON equals by value',
+        category: 'body',
+        operator: 'equals',
+        value: JSON.stringify({
+          b: { d: 'x', c: 2 },
+          a: 1,
+        }),
+        enabled: true,
+      };
+
+      const validation: RequestValidation = {
+        enabled: true,
+        rules: [{ rule }],
+      };
+
+      const result = executeValidation(validation, jsonResponse, new Map(), new Map());
+
+      expect(result.allPassed).toBe(true);
+    });
+
+    it('should validate body not_equals as opposite of JSON equals', () => {
+      const jsonResponse: ResponseData = {
+        ...mockResponse,
+        body: JSON.stringify({
+          a: 1,
+          b: 2,
+        }),
+      };
+
+      const rule: BodyValidationRule = {
+        id: 'body-json-not-equals-1',
+        name: 'JSON not equals by value',
+        category: 'body',
+        operator: 'not_equals',
+        value: JSON.stringify({
+          a: 1,
+          b: 3,
+        }),
+        enabled: true,
+      };
+
+      const validation: RequestValidation = {
+        enabled: true,
+        rules: [{ rule }],
+      };
+
+      const result = executeValidation(validation, jsonResponse, new Map(), new Map());
+
+      expect(result.allPassed).toBe(true);
+    });
+
+    it('should validate JSON contains as subset of properties and values', () => {
+      const jsonResponse: ResponseData = {
+        ...mockResponse,
+        body: JSON.stringify({
+          message: 'success',
+          count: 5,
+          meta: {
+            source: 'api',
+            version: 2,
+          },
+        }),
+      };
+
+      const rule: BodyValidationRule = {
+        id: 'body-json-contains-1',
+        name: 'JSON contains subset',
+        category: 'body',
+        operator: 'contains',
+        value: JSON.stringify({
+          meta: {
+            version: 2,
+          },
+        }),
+        enabled: true,
+      };
+
+      const validation: RequestValidation = {
+        enabled: true,
+        rules: [{ rule }],
+      };
+
+      const result = executeValidation(validation, jsonResponse, new Map(), new Map());
+
+      expect(result.allPassed).toBe(true);
+    });
+
+    it('should fail JSON contains when expected values do not match', () => {
+      const jsonResponse: ResponseData = {
+        ...mockResponse,
+        body: JSON.stringify({
+          message: 'success',
+          count: 5,
+          meta: {
+            version: 2,
+          },
+        }),
+      };
+
+      const rule: BodyValidationRule = {
+        id: 'body-json-contains-2',
+        name: 'JSON contains mismatch',
+        category: 'body',
+        operator: 'contains',
+        value: JSON.stringify({
+          meta: {
+            version: 3,
+          },
+        }),
+        enabled: true,
+      };
+
+      const validation: RequestValidation = {
+        enabled: true,
+        rules: [{ rule }],
+      };
+
+      const result = executeValidation(validation, jsonResponse, new Map(), new Map());
+
+      expect(result.allPassed).toBe(false);
+      expect(result.results[0].passed).toBe(false);
+    });
+
+    it('should fail JSON not_contains when expected properties are present', () => {
+      const jsonResponse: ResponseData = {
+        ...mockResponse,
+        body: JSON.stringify({
+          user: {
+            id: 10,
+            role: 'admin',
+          },
+        }),
+      };
+
+      const rule: BodyValidationRule = {
+        id: 'body-json-not-contains-1',
+        name: 'JSON not contains present properties',
+        category: 'body',
+        operator: 'not_contains',
+        value: JSON.stringify({
+          user: {
+            role: 'guest',
+          },
+        }),
+        enabled: true,
+      };
+
+      const validation: RequestValidation = {
+        enabled: true,
+        rules: [{ rule }],
+      };
+
+      const result = executeValidation(validation, jsonResponse, new Map(), new Map());
+
+      expect(result.allPassed).toBe(false);
+      expect(result.results[0].passed).toBe(false);
+    });
+
+    it('should pass JSON not_contains when expected properties are absent', () => {
+      const jsonResponse: ResponseData = {
+        ...mockResponse,
+        body: JSON.stringify({
+          user: {
+            id: 10,
+            role: 'admin',
+          },
+        }),
+      };
+
+      const rule: BodyValidationRule = {
+        id: 'body-json-not-contains-2',
+        name: 'JSON not contains absent properties',
+        category: 'body',
+        operator: 'not_contains',
+        value: JSON.stringify({
+          user: {
+            password: 'secret',
+          },
+        }),
+        enabled: true,
+      };
+
+      const validation: RequestValidation = {
+        enabled: true,
+        rules: [{ rule }],
+      };
+
+      const result = executeValidation(validation, jsonResponse, new Map(), new Map());
+
+      expect(result.allPassed).toBe(true);
+      expect(result.results[0].passed).toBe(true);
+    });
+
+    it('should fallback to string logic when body is not a valid JSON object', () => {
+      const nonJsonResponse: ResponseData = {
+        ...mockResponse,
+        body: 'prefix {"message":"success"} suffix',
+      };
+
+      const rule: BodyValidationRule = {
+        id: 'body-json-fallback-1',
+        name: 'Fallback to string contains',
+        category: 'body',
+        operator: 'contains',
+        value: JSON.stringify({ message: 'success' }),
+        enabled: true,
+      };
+
+      const validation: RequestValidation = {
+        enabled: true,
+        rules: [{ rule }],
+      };
+
+      const result = executeValidation(validation, nonJsonResponse, new Map(), new Map());
+
+      expect(result.allPassed).toBe(true);
+      expect(result.results[0].passed).toBe(true);
+    });
   });
 
   describe('executeValidation - time rules', () => {

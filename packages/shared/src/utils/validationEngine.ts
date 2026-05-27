@@ -433,6 +433,102 @@ function validateJsonSchema(body: string, schema: string): { valid: boolean; err
 }
 
 /**
+ * Returns true only for JSON objects (not arrays or null).
+ */
+function isJsonObject(value: unknown): value is Record<string, unknown> {
+    return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+/**
+ * Parses a JSON string and returns the value only when it is a JSON object.
+ */
+function parseJsonObject(value: string): Record<string, unknown> | undefined {
+    try {
+        const parsed: unknown = JSON.parse(value);
+        return isJsonObject(parsed) ? parsed : undefined;
+    } catch {
+        return undefined;
+    }
+}
+
+/**
+ * Deep equality for JSON values.
+ */
+function areJsonValuesEqual(actual: unknown, expected: unknown): boolean {
+    if (Array.isArray(actual) && Array.isArray(expected)) {
+        return actual.length === expected.length
+            && actual.every((item, index) => areJsonValuesEqual(item, expected[index]));
+    }
+
+    if (isJsonObject(actual) && isJsonObject(expected)) {
+        const actualKeys = Object.keys(actual);
+        const expectedKeys = Object.keys(expected);
+
+        if (actualKeys.length !== expectedKeys.length) {
+            return false;
+        }
+
+        return expectedKeys.every((key) => (
+            key in actual
+            && areJsonValuesEqual(actual[key], expected[key])
+        ));
+    }
+
+    return Object.is(actual, expected);
+}
+
+/**
+ * Deep subset check: every expected property/value must exist in actual.
+ */
+function doesJsonContainExpectedValues(actual: unknown, expected: unknown): boolean {
+    if (isJsonObject(expected)) {
+        if (!isJsonObject(actual)) {
+            return false;
+        }
+
+        return Object.keys(expected).every((key) => (
+            key in actual
+            && doesJsonContainExpectedValues(actual[key], expected[key])
+        ));
+    }
+
+    if (Array.isArray(expected)) {
+        return Array.isArray(actual) && areJsonValuesEqual(actual, expected);
+    }
+
+    return areJsonValuesEqual(actual, expected);
+}
+
+/**
+ * Property-shape check used by JSON not_contains.
+ * Returns true when all expected property paths are present in actual.
+ */
+function doesJsonContainExpectedProperties(actual: unknown, expected: unknown): boolean {
+    if (!isJsonObject(expected) || !isJsonObject(actual)) {
+        return false;
+    }
+
+    return Object.keys(expected).every((key) => {
+        if (!(key in actual)) {
+            return false;
+        }
+
+        const expectedValue = expected[key];
+        const actualValue = actual[key];
+
+        if (isJsonObject(expectedValue)) {
+            return doesJsonContainExpectedProperties(actualValue, expectedValue);
+        }
+
+        if (Array.isArray(expectedValue)) {
+            return Array.isArray(actualValue);
+        }
+
+        return true;
+    });
+}
+
+/**
  * Evaluates a body validation rule
  */
 function evaluateBodyRule(
@@ -454,6 +550,8 @@ function evaluateBodyRule(
     const expectedValue = rule.value ? resolveEnvVariables(rule.value, envVars) : '';
     const jsonPath = rule.jsonPath ? resolveEnvVariables(rule.jsonPath, envVars) : '';
     const caseSensitive = rule.caseSensitive ?? false;
+    const actualJsonObject = parseJsonObject(body);
+    const expectedJsonObject = parseJsonObject(expectedValue);
 
     let passed: boolean;
     let message: string;
@@ -539,6 +637,74 @@ function evaluateBodyRule(
                 ? 'Response body matches JSON schema'
                 : `JSON schema validation failed: ${schemaResult.error}`;
             break;
+
+        case 'equals': {
+            if (actualJsonObject && expectedJsonObject) {
+                passed = areJsonValuesEqual(actualJsonObject, expectedJsonObject);
+                actual = JSON.stringify(actualJsonObject);
+                message = passed
+                    ? 'JSON body equals expected object'
+                    : 'Expected JSON body to equal expected object';
+                break;
+            }
+
+            passed = evaluateStringOperator(body, rule.operator, expectedValue, undefined, caseSensitive);
+            message = passed
+                ? `Body ${rule.operator.replace(/_/g, ' ')} '${expectedValue}'`
+                : `Expected body ${rule.operator.replace(/_/g, ' ')} '${expectedValue}'`;
+            break;
+        }
+
+        case 'not_equals': {
+            if (actualJsonObject && expectedJsonObject) {
+                passed = !areJsonValuesEqual(actualJsonObject, expectedJsonObject);
+                actual = JSON.stringify(actualJsonObject);
+                message = passed
+                    ? 'JSON body is not equal to expected object'
+                    : 'Expected JSON body to not equal expected object';
+                break;
+            }
+
+            passed = evaluateStringOperator(body, rule.operator, expectedValue, undefined, caseSensitive);
+            message = passed
+                ? `Body ${rule.operator.replace(/_/g, ' ')} '${expectedValue}'`
+                : `Expected body ${rule.operator.replace(/_/g, ' ')} '${expectedValue}'`;
+            break;
+        }
+
+        case 'contains': {
+            if (actualJsonObject && expectedJsonObject) {
+                passed = doesJsonContainExpectedValues(actualJsonObject, expectedJsonObject);
+                actual = JSON.stringify(actualJsonObject);
+                message = passed
+                    ? 'JSON body contains expected properties and values'
+                    : 'Expected JSON body to contain expected properties and values';
+                break;
+            }
+
+            passed = evaluateStringOperator(body, rule.operator, expectedValue, undefined, caseSensitive);
+            message = passed
+                ? `Body ${rule.operator.replace(/_/g, ' ')} '${expectedValue}'`
+                : `Expected body ${rule.operator.replace(/_/g, ' ')} '${expectedValue}'`;
+            break;
+        }
+
+        case 'not_contains': {
+            if (actualJsonObject && expectedJsonObject) {
+                passed = !doesJsonContainExpectedProperties(actualJsonObject, expectedJsonObject);
+                actual = JSON.stringify(actualJsonObject);
+                message = passed
+                    ? 'JSON body does not contain expected properties'
+                    : 'Expected JSON body to not contain expected properties';
+                break;
+            }
+
+            passed = evaluateStringOperator(body, rule.operator, expectedValue, undefined, caseSensitive);
+            message = passed
+                ? `Body ${rule.operator.replace(/_/g, ' ')} '${expectedValue}'`
+                : `Expected body ${rule.operator.replace(/_/g, ' ')} '${expectedValue}'`;
+            break;
+        }
 
         default:
             // String operators (equals, contains, etc.)
