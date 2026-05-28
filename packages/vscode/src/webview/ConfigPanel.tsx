@@ -94,6 +94,12 @@ const ConfigPanel: React.FC<ConfigPanelProps> = ({ onRequestSelect, onEnvSelect,
           </TabsList>
           {/* Settings Button at the bottom */}
           <div className="mt-auto pt-2 border-t border-slate-200 dark:border-slate-700 space-y-2">
+            <div
+              className="mx-auto flex h-6 w-12 items-center justify-center rounded-full border border-blue-300 bg-blue-50 text-[10px] font-semibold uppercase tracking-[0.12em] text-blue-700 dark:border-blue-500/40 dark:bg-blue-500/10 dark:text-blue-300"
+              aria-label="Wave Client beta label"
+            >
+              BETA
+            </div>
             <SecondaryButton
               variant="ghost"
               onClick={onSettingsSelect}
