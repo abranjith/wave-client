@@ -504,7 +504,7 @@ export const TestCaseEditor: React.FC<TestCaseEditorProps> = ({
                                     setHeadersError(undefined);
                                 }}
                                 placeholder={`[\n  { "key": "Authorization", "value": "Bearer {{token}}" }\n]`}
-                                helpText="Array of header objects to merge with base request"
+                                helpText="Array of header objects to merge with base request (Test case headers override base request headers with the same key)"
                                 error={headersError}
                             />
 
@@ -517,7 +517,7 @@ export const TestCaseEditor: React.FC<TestCaseEditorProps> = ({
                                     setParamsError(undefined);
                                 }}
                                 placeholder={`[\n  { "key": "page", "value": "1" }\n]`}
-                                helpText="Array of param objects to merge with base request"
+                                helpText="Array of param objects to merge with base request (Test case params override base request params with the same key)"
                                 error={paramsError}
                             />
 

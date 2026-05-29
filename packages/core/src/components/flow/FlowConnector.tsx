@@ -41,25 +41,99 @@ export interface FlowConnectorProps {
 // ============================================================================
 
 /**
- * Get color for connector condition
+ * Tailwind class tokens for connector condition visuals
+ */
+interface ConnectorConditionStyle {
+    strokeClass: string;
+    labelFillClass: string;
+    labelTextClass: string;
+    selectedLabelFillClass: string;
+    selectedLabelTextClass: string;
+    dropdownTextClass: string;
+}
+
+const CONDITION_STYLES: Record<ConnectorCondition, ConnectorConditionStyle> = {
+    success: {
+        strokeClass: 'stroke-emerald-500 dark:stroke-emerald-400',
+        labelFillClass: 'fill-emerald-50 dark:fill-emerald-950/45',
+        labelTextClass: 'fill-emerald-700 dark:fill-emerald-200',
+        selectedLabelFillClass: 'fill-emerald-500 dark:fill-emerald-400',
+        selectedLabelTextClass: 'fill-white dark:fill-slate-950',
+        dropdownTextClass: 'text-emerald-700 dark:text-emerald-300',
+    },
+    failure: {
+        strokeClass: 'stroke-rose-500 dark:stroke-rose-400',
+        labelFillClass: 'fill-rose-50 dark:fill-rose-950/45',
+        labelTextClass: 'fill-rose-700 dark:fill-rose-200',
+        selectedLabelFillClass: 'fill-rose-500 dark:fill-rose-400',
+        selectedLabelTextClass: 'fill-white dark:fill-slate-950',
+        dropdownTextClass: 'text-rose-700 dark:text-rose-300',
+    },
+    validation_pass: {
+        strokeClass: 'stroke-blue-500 dark:stroke-blue-400',
+        labelFillClass: 'fill-blue-50 dark:fill-blue-950/45',
+        labelTextClass: 'fill-blue-700 dark:fill-blue-200',
+        selectedLabelFillClass: 'fill-blue-500 dark:fill-blue-400',
+        selectedLabelTextClass: 'fill-white dark:fill-slate-950',
+        dropdownTextClass: 'text-blue-700 dark:text-blue-300',
+    },
+    validation_fail: {
+        strokeClass: 'stroke-orange-500 dark:stroke-orange-400',
+        labelFillClass: 'fill-orange-50 dark:fill-orange-950/45',
+        labelTextClass: 'fill-orange-700 dark:fill-orange-200',
+        selectedLabelFillClass: 'fill-orange-500 dark:fill-orange-400',
+        selectedLabelTextClass: 'fill-white dark:fill-slate-950',
+        dropdownTextClass: 'text-orange-700 dark:text-orange-300',
+    },
+    any: {
+        strokeClass: 'stroke-slate-500 dark:stroke-slate-400',
+        labelFillClass: 'fill-slate-100 dark:fill-slate-800',
+        labelTextClass: 'fill-slate-700 dark:fill-slate-200',
+        selectedLabelFillClass: 'fill-slate-600 dark:fill-slate-400',
+        selectedLabelTextClass: 'fill-white dark:fill-slate-950',
+        dropdownTextClass: 'text-slate-700 dark:text-slate-300',
+    },
+};
+
+const SKIPPED_CONDITION_STYLE: ConnectorConditionStyle = {
+    strokeClass: 'stroke-slate-400 dark:stroke-slate-500',
+    labelFillClass: 'fill-slate-100 dark:fill-slate-800',
+    labelTextClass: 'fill-slate-600 dark:fill-slate-300',
+    selectedLabelFillClass: 'fill-slate-400 dark:fill-slate-500',
+    selectedLabelTextClass: 'fill-white dark:fill-slate-950',
+    dropdownTextClass: 'text-slate-600 dark:text-slate-300',
+};
+
+const INACTIVE_CONDITION_STYLE: ConnectorConditionStyle = {
+    strokeClass: 'stroke-slate-300 dark:stroke-slate-600',
+    labelFillClass: 'fill-slate-50 dark:fill-slate-800/80',
+    labelTextClass: 'fill-slate-500 dark:fill-slate-400',
+    selectedLabelFillClass: 'fill-slate-300 dark:fill-slate-600',
+    selectedLabelTextClass: 'fill-slate-700 dark:fill-slate-100',
+    dropdownTextClass: 'text-slate-500 dark:text-slate-300',
+};
+
+/**
+ * Returns condition style tokens for stroke/fill/text with state-aware overrides.
+ */
+function getConditionStyle(condition: ConnectorCondition, isActive: boolean, isSkipped: boolean): ConnectorConditionStyle {
+    if (isSkipped) return SKIPPED_CONDITION_STYLE;
+    if (!isActive && condition !== 'any') return INACTIVE_CONDITION_STYLE;
+    return CONDITION_STYLES[condition] ?? CONDITION_STYLES.any;
+}
+
+/**
+ * Get stroke color classes for connector condition
  */
 function getConditionColor(condition: ConnectorCondition, isActive: boolean, isSkipped: boolean): string {
-    if (isSkipped) return '#94a3b8'; // slate-400
-    if (!isActive && condition !== 'any') return '#cbd5e1'; // slate-300
-    
-    switch (condition) {
-        case 'success':
-            return '#22c55e'; // green-500
-        case 'failure':
-            return '#ef4444'; // red-500
-        case 'validation_pass':
-            return '#3b82f6'; // blue-500
-        case 'validation_fail':
-            return '#f97316'; // orange-500
-        case 'any':
-        default:
-            return '#64748b'; // slate-500
-    }
+    return getConditionStyle(condition, isActive, isSkipped).strokeClass;
+}
+
+/**
+ * Get dropdown text color classes for connector condition
+ */
+function getConditionOptionTextColor(condition: ConnectorCondition): string {
+    return CONDITION_STYLES[condition]?.dropdownTextClass ?? CONDITION_STYLES.any.dropdownTextClass;
 }
 
 /**
@@ -89,7 +163,7 @@ function getLabelWidth(condition: ConnectorCondition): number {
     switch (condition) {
         case 'validation_pass':
         case 'validation_fail':
-            return 60;
+            return 86;
         case 'success':
         case 'failure':
         case 'any':
@@ -196,7 +270,8 @@ export const FlowConnector: React.FC<FlowConnectorProps> = ({
     
     const path = useMemo(() => calculatePath(startPos, endPos), [startPos, endPos]);
     const midpoint = useMemo(() => calculateMidpoint(startPos, endPos), [startPos, endPos]);
-    const color = getConditionColor(connector.condition, isActive, isSkipped);
+    const conditionStyle = getConditionStyle(connector.condition, isActive, isSkipped);
+    const strokeClass = getConditionColor(connector.condition, isActive, isSkipped);
     const label = getConditionLabel(connector.condition);
     const labelWidth = getLabelWidth(connector.condition);
     
@@ -272,11 +347,11 @@ export const FlowConnector: React.FC<FlowConnectorProps> = ({
             <path
                 d={path}
                 fill="none"
-                stroke={color}
                 strokeWidth={isSelected ? 3 : 2}
                 strokeDasharray={isSkipped ? '5,5' : 'none'}
                 className={cn(
                     'transition-all duration-200',
+                    strokeClass,
                     isSelected && 'filter drop-shadow-md'
                 )}
                 markerEnd="url(#arrowhead)"
@@ -299,18 +374,27 @@ export const FlowConnector: React.FC<FlowConnectorProps> = ({
                     width={labelWidth}
                     height={20}
                     rx={4}
-                    fill={isSelected || showDropdown ? color : 'white'}
-                    stroke={color}
                     strokeWidth={2}
                     style={{ pointerEvents: 'auto' }}
+                    className={cn(
+                        'transition-colors duration-200',
+                        strokeClass,
+                        isSelected || showDropdown
+                            ? conditionStyle.selectedLabelFillClass
+                            : conditionStyle.labelFillClass
+                    )}
                 />
                 <text
                     x={0}
                     y={4}
                     textAnchor="middle"
                     fontSize={10}
-                    fill={isSelected || showDropdown ? 'white' : color}
-                    className="pointer-events-none font-medium select-none"
+                    className={cn(
+                        'pointer-events-none font-medium select-none transition-colors duration-200',
+                        isSelected || showDropdown
+                            ? conditionStyle.selectedLabelTextClass
+                            : conditionStyle.labelTextClass
+                    )}
                 >
                     {label}
                 </text>
@@ -320,8 +404,7 @@ export const FlowConnector: React.FC<FlowConnectorProps> = ({
                         x={labelWidth / 2 - 8}
                         y={4}
                         fontSize={8}
-                        fill={color}
-                        className="pointer-events-none opacity-60"
+                        className={cn('pointer-events-none opacity-60', conditionStyle.labelTextClass)}
                     >
                         ▼
                     </text>
@@ -352,14 +435,12 @@ export const FlowConnector: React.FC<FlowConnectorProps> = ({
                                     }}
                                     className={cn(
                                         'w-full px-4 py-2 text-left text-xs transition-colors cursor-pointer font-medium hover:bg-slate-100 dark:hover:bg-slate-700',
+                                        getConditionOptionTextColor(opt.value),
                                         connector.condition === opt.value
                                             ? 'bg-slate-50 dark:bg-slate-700'
                                             : ''
                                     )}
-                                    style={{ 
-                                        color: getConditionColor(opt.value, true, false),
-                                        pointerEvents: 'auto',
-                                    }}
+                                    style={{ pointerEvents: 'auto' }}
                                 >
                                     {opt.label}
                                 </button>

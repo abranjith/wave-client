@@ -178,7 +178,7 @@ function getWebviewContent(webview: vscode.Webview, extensionUri: vscode.Uri): s
 			<meta charset="UTF-8">
 			<meta name="viewport" content="width=device-width, initial-scale=1.0">
 			<link id="wave-client-favicon" rel="icon" type="image/png" href="${lightLogoUri}" data-light="${lightLogoUri}" data-dark="${darkLogoUri}">
-			<title>Wave Client Beta</title>
+			<title>Wave Client (Beta)</title>
 			<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline' ${webview.cspSource}; script-src 'unsafe-eval' 'unsafe-inline' ${webview.cspSource}; font-src ${webview.cspSource}; img-src ${webview.cspSource} data:; connect-src ${webview.cspSource} https: http:;">
 			<link rel="stylesheet" href="${cssUri}">
 			<style>

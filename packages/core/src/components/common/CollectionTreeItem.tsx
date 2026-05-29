@@ -78,6 +78,11 @@ const CollectionTreeItem: React.FC<CollectionTreeItemProps> = ({
   /** The current draft text while editing. */
   const [editingDraft, setEditingDraft] = useState('');
 
+  const handleRenameInputFocus = useCallback((event: React.FocusEvent<HTMLInputElement>) => {
+    const end = event.currentTarget.value.length;
+    event.currentTarget.setSelectionRange(end, end);
+  }, []);
+
   /** Initiates inline rename for this item. */
   const handleRenameStart = useCallback(() => {
     setEditingDraft(item.name);
@@ -122,12 +127,13 @@ const CollectionTreeItem: React.FC<CollectionTreeItemProps> = ({
                 value={editingDraft}
                 onChange={(e) => setEditingDraft(e.target.value)}
                 onBlur={handleRenameEnd}
+                onFocus={handleRenameInputFocus}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter') handleRenameEnd();
                   if (e.key === 'Escape') setIsEditing(false);
                 }}
                 onClick={(e) => e.stopPropagation()}
-                className="h-5 text-sm py-0 font-medium flex-1"
+                className="h-6 text-sm py-0 font-medium flex-1 border border-amber-300/80 dark:border-amber-500/70 bg-white dark:bg-slate-900 ring-2 ring-amber-500/20 shadow-sm"
                 autoFocus
               />
             ) : (
@@ -224,12 +230,13 @@ const CollectionTreeItem: React.FC<CollectionTreeItemProps> = ({
                     value={editingDraft}
                     onChange={(e) => setEditingDraft(e.target.value)}
                     onBlur={handleRenameEnd}
+                    onFocus={handleRenameInputFocus}
                     onKeyDown={(e) => {
                       if (e.key === 'Enter') handleRenameEnd();
                       if (e.key === 'Escape') setIsEditing(false);
                     }}
                     onClick={(e) => e.stopPropagation()}
-                    className="h-5 text-sm py-0 flex-1"
+                    className="h-6 text-sm py-0 flex-1 border border-blue-300/80 dark:border-blue-500/70 bg-white dark:bg-slate-900 ring-2 ring-blue-500/20 shadow-sm"
                     autoFocus
                   />
                 ) : (

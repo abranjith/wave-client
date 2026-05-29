@@ -88,6 +88,33 @@ export const TestSuiteToolbar: React.FC<TestSuiteToolbarProps> = ({
     enabledItemCount,
 }) => {
     const isRunning = useAppStateStore((state) => state.isTestSuiteRunning(suiteId));
+    const initialSuiteNameRef = React.useRef(suiteName);
+    const isEditingNameRef = React.useRef(false);
+
+    const handleNameFocus = React.useCallback((event: React.FocusEvent<HTMLInputElement>) => {
+        isEditingNameRef.current = true;
+        initialSuiteNameRef.current = suiteName;
+        const end = event.currentTarget.value.length;
+        event.currentTarget.setSelectionRange(end, end);
+    }, [suiteName]);
+
+    const handleNameBlur = React.useCallback(() => {
+        isEditingNameRef.current = false;
+    }, []);
+
+    const handleNameKeyDown = React.useCallback((event: React.KeyboardEvent<HTMLInputElement>) => {
+        if (event.key === 'Enter') {
+            event.currentTarget.blur();
+            return;
+        }
+
+        if (event.key === 'Escape') {
+            if (isEditingNameRef.current) {
+                onNameChange?.(initialSuiteNameRef.current);
+            }
+            event.currentTarget.blur();
+        }
+    }, [onNameChange]);
     
     return (
         <TooltipProvider>
@@ -109,9 +136,12 @@ export const TestSuiteToolbar: React.FC<TestSuiteToolbarProps> = ({
                         type="text"
                         value={suiteName}
                         onChange={(e) => onNameChange?.(e.target.value)}
+                        onFocus={handleNameFocus}
+                        onBlur={handleNameBlur}
+                        onKeyDown={handleNameKeyDown}
                         disabled={isRunning}
                         className={cn(
-                            'text-lg font-semibold bg-transparent border-none focus:outline-none focus:ring-2 focus:ring-purple-500 rounded px-2 py-1',
+                            'text-lg font-semibold bg-slate-50 dark:bg-slate-900/40 border border-slate-300/70 dark:border-slate-600 focus:bg-white dark:focus:bg-slate-900 focus:outline-none focus:ring-2 focus:ring-purple-500/40 focus:border-purple-400/70 rounded px-2 py-1 transition-colors',
                             'text-slate-800 dark:text-slate-200',
                             'disabled:cursor-not-allowed disabled:text-slate-400 disabled:focus:ring-0'
                         )}

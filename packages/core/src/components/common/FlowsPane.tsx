@@ -77,6 +77,11 @@ const FlowsPane: React.FC<FlowsPaneProps> = ({
     const [editingFlowId, setEditingFlowId] = useState<string | null>(null);
     const [editingName, setEditingName] = useState('');
 
+    const handleRenameInputFocus = useCallback((event: React.FocusEvent<HTMLInputElement>) => {
+        const end = event.currentTarget.value.length;
+        event.currentTarget.setSelectionRange(end, end);
+    }, []);
+
     // Load flows
     const loadFlows = useCallback(async () => {
         setIsLoading(true);
@@ -317,12 +322,13 @@ const FlowsPane: React.FC<FlowsPaneProps> = ({
                                             value={editingName}
                                             onChange={(e) => setEditingName(e.target.value)}
                                             onBlur={handleRenameEnd}
+                                            onFocus={handleRenameInputFocus}
                                             onKeyDown={(e) => {
                                                 if (e.key === 'Enter') handleRenameEnd();
                                                 if (e.key === 'Escape') setEditingFlowId(null);
                                             }}
                                             onClick={(e) => e.stopPropagation()}
-                                            className="h-6 text-sm py-0"
+                                            className="h-7 text-sm py-0 border border-blue-300/80 dark:border-blue-500/70 bg-white dark:bg-slate-900 ring-2 ring-blue-500/20 shadow-sm"
                                             autoFocus
                                         />
                                     ) : (

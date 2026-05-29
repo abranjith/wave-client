@@ -151,6 +151,7 @@ vi.mock('../../../components/ui/input', () => ({
         value,
         onChange,
         onBlur,
+        onFocus,
         onKeyDown,
         autoFocus,
         onClick,
@@ -162,6 +163,7 @@ vi.mock('../../../components/ui/input', () => ({
             value={value ?? ''}
             onChange={onChange}
             onBlur={onBlur}
+            onFocus={onFocus}
             onKeyDown={onKeyDown}
             autoFocus={autoFocus}
             onClick={onClick}
@@ -268,6 +270,11 @@ describe('EnvironmentsPane — FEAT-005 pane actions', () => {
         const input = screen.getByTestId('rename-input') as HTMLInputElement;
         expect(input).toBeInTheDocument();
         expect(input.value).toBe('Staging');
+        expect(input.className).toContain('ring-2');
+
+        fireEvent.focus(input);
+        expect(input.selectionStart).toBe(input.value.length);
+        expect(input.selectionEnd).toBe(input.value.length);
     });
 
     it('pressing Enter commits the rename and calls saveEnvironment', async () => {

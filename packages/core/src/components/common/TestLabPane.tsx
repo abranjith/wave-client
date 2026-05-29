@@ -79,6 +79,11 @@ const TestLabPane: React.FC<TestLabPaneProps> = ({
     const [editingSuiteId, setEditingSuiteId] = useState<string | null>(null);
     const [editingName, setEditingName] = useState('');
 
+    const handleRenameInputFocus = useCallback((event: React.FocusEvent<HTMLInputElement>) => {
+        const end = event.currentTarget.value.length;
+        event.currentTarget.setSelectionRange(end, end);
+    }, []);
+
     // Load test suites
     const loadTestSuites = useCallback(async () => {
         setIsLoading(true);
@@ -321,12 +326,13 @@ const TestLabPane: React.FC<TestLabPaneProps> = ({
                                             value={editingName}
                                             onChange={(e) => setEditingName(e.target.value)}
                                             onBlur={handleRenameEnd}
+                                            onFocus={handleRenameInputFocus}
                                             onKeyDown={(e) => {
                                                 if (e.key === 'Enter') handleRenameEnd();
                                                 if (e.key === 'Escape') setEditingSuiteId(null);
                                             }}
                                             onClick={(e) => e.stopPropagation()}
-                                            className="h-6 text-sm py-0"
+                                            className="h-7 text-sm py-0 border border-purple-300/80 dark:border-purple-500/70 bg-white dark:bg-slate-900 ring-2 ring-purple-500/20 shadow-sm"
                                             autoFocus
                                         />
                                     ) : (

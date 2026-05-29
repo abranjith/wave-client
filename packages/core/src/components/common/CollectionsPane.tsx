@@ -196,6 +196,11 @@ const CollectionsPane: React.FC<CollectionsPaneProps> = ({
   const [editingCollectionNameDraft, setEditingCollectionNameDraft] = useState('');
   const wasSearchingRef = useRef(false);
 
+  const handleRenameInputFocus = useCallback((event: React.FocusEvent<HTMLInputElement>) => {
+    const end = event.currentTarget.value.length;
+    event.currentTarget.setSelectionRange(end, end);
+  }, []);
+
   const toggleCollection = (filename: string) => {
     const newExpanded = new Set(expandedCollections);
     if (newExpanded.has(filename)) {
@@ -610,12 +615,13 @@ const CollectionsPane: React.FC<CollectionsPaneProps> = ({
                             value={editingCollectionNameDraft}
                             onChange={(e) => setEditingCollectionNameDraft(e.target.value)}
                             onBlur={handleRenameCollectionEnd}
+                            onFocus={handleRenameInputFocus}
                             onKeyDown={(e) => {
                               if (e.key === 'Enter') handleRenameCollectionEnd();
                               if (e.key === 'Escape') setEditingCollectionFilename(null);
                             }}
                             onClick={(e) => e.stopPropagation()}
-                            className="h-6 text-sm py-0 font-semibold flex-1"
+                            className="h-7 text-sm py-0 font-semibold flex-1 border border-blue-300/80 dark:border-blue-500/70 bg-white dark:bg-slate-900 ring-2 ring-blue-500/20 shadow-sm"
                             autoFocus
                           />
                         ) : (

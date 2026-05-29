@@ -73,6 +73,7 @@ vi.mock('../../../components/ui/input', () => ({
         value,
         onChange,
         onBlur,
+        onFocus,
         onKeyDown,
         autoFocus,
         onClick,
@@ -83,6 +84,7 @@ vi.mock('../../../components/ui/input', () => ({
             value={value}
             onChange={onChange}
             onBlur={onBlur}
+            onFocus={onFocus}
             onKeyDown={onKeyDown}
             autoFocus={autoFocus}
             onClick={onClick}
@@ -152,8 +154,14 @@ describe('CollectionTreeItem — folder', () => {
         const items = screen.getAllByTestId('menu-item');
         const renameBtn = items.find((el) => el.textContent?.includes('Rename'))!;
         fireEvent.click(renameBtn);
-        expect(screen.getByTestId('rename-input')).toBeInTheDocument();
-        expect((screen.getByTestId('rename-input') as HTMLInputElement).value).toBe('Auth');
+        const input = screen.getByTestId('rename-input') as HTMLInputElement;
+        expect(input).toBeInTheDocument();
+        expect(input.value).toBe('Auth');
+        expect(input.className).toContain('ring-2');
+
+        fireEvent.focus(input);
+        expect(input.selectionStart).toBe(input.value.length);
+        expect(input.selectionEnd).toBe(input.value.length);
     });
 
     it('commits rename on Enter and calls onRenameItem', async () => {
@@ -247,6 +255,7 @@ describe('CollectionTreeItem — request', () => {
 
         const input = screen.getByTestId('rename-input');
         expect((input as HTMLInputElement).value).toBe('Get Users');
+        expect((input as HTMLInputElement).className).toContain('ring-2');
     });
 
     it('commits request rename on Enter', async () => {

@@ -37,7 +37,7 @@ import { createMockAdapter } from '../../mocks/mockAdapter';
 import useAppStateStore from '../../../hooks/store/useAppStateStore';
 import TestLabPane from '../../../components/common/TestLabPane';
 import type { TestSuite } from '../../../types/testSuite';
-import { err } from '../../../utils/result';
+import { err, ok } from '../../../utils/result';
 
 // ── Mocks ────────────────────────────────────────────────────────────────────
 
@@ -142,6 +142,7 @@ vi.mock('../../../components/ui/input', () => ({
         value,
         onChange,
         onBlur,
+        onFocus,
         onKeyDown,
         autoFocus,
         onClick,
@@ -153,6 +154,7 @@ vi.mock('../../../components/ui/input', () => ({
             value={value ?? ''}
             onChange={onChange}
             onBlur={onBlur}
+            onFocus={onFocus}
             onKeyDown={onKeyDown}
             autoFocus={autoFocus}
             onClick={onClick}
@@ -247,6 +249,65 @@ describe('TestLabPane — FEAT-003 pane actions', () => {
         const items = screen.getAllByTestId('menu-item');
         const deleteItem = items.find((el) => el.textContent?.includes('Delete'))!;
         expect(deleteItem.className).toMatch(/red/);
+    });
+
+    // ── Rename keyboard + styling ───────────────────────────────────────────
+
+    it('clicking Rename opens a prominent inline editor and places caret at end', () => {
+        renderPane();
+        const renameBtn = screen
+            .getAllByTestId('menu-item')
+            .find((el) => el.textContent?.includes('Rename'))!;
+        fireEvent.click(renameBtn);
+
+        const input = screen.getByTestId('rename-input') as HTMLInputElement;
+        expect(input).toBeInTheDocument();
+        expect(input.className).toContain('ring-2');
+
+        fireEvent.focus(input);
+        expect(input.selectionStart).toBe(input.value.length);
+        expect(input.selectionEnd).toBe(input.value.length);
+    });
+
+    it('pressing Enter on rename input commits rename and calls saveTestSuite', async () => {
+        const mock = createMockAdapter({ initialData: { testSuites: [TEST_SUITE] } });
+        const saveSpy = vi.spyOn(mock.adapter.storage, 'saveTestSuite').mockResolvedValue(ok(TEST_SUITE));
+        renderPane(mock);
+
+        const renameBtn = screen
+            .getAllByTestId('menu-item')
+            .find((el) => el.textContent?.includes('Rename'))!;
+        fireEvent.click(renameBtn);
+
+        const input = screen.getByTestId('rename-input');
+        fireEvent.change(input, { target: { value: 'Auth Suite Updated' } });
+        fireEvent.keyDown(input, { key: 'Enter' });
+
+        await waitFor(() => {
+            expect(saveSpy).toHaveBeenCalledWith(
+                expect.objectContaining({ id: 'suite-001', name: 'Auth Suite Updated' }),
+            );
+        });
+    });
+
+    it('pressing Escape on rename input cancels rename without calling saveTestSuite', async () => {
+        const mock = createMockAdapter({ initialData: { testSuites: [TEST_SUITE] } });
+        const saveSpy = vi.spyOn(mock.adapter.storage, 'saveTestSuite');
+        renderPane(mock);
+
+        const renameBtn = screen
+            .getAllByTestId('menu-item')
+            .find((el) => el.textContent?.includes('Rename'))!;
+        fireEvent.click(renameBtn);
+
+        const input = screen.getByTestId('rename-input');
+        fireEvent.change(input, { target: { value: 'Should Not Persist' } });
+        fireEvent.keyDown(input, { key: 'Escape' });
+
+        await waitFor(() => {
+            expect(screen.queryByTestId('rename-input')).toBeNull();
+        });
+        expect(saveSpy).not.toHaveBeenCalled();
     });
 
     // ── No run shortcut button ───────────────────────────────────────────────

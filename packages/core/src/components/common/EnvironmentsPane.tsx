@@ -121,6 +121,11 @@ const EnvironmentsPane: React.FC<EnvironmentsPaneProps> = ({ onEnvSelect, onImpo
   // Holds the current text of the inline rename input.
   const [editingName, setEditingName] = useState('');
 
+  const handleRenameInputFocus = useCallback((event: React.FocusEvent<HTMLInputElement>) => {
+    const end = event.currentTarget.value.length;
+    event.currentTarget.setSelectionRange(end, end);
+  }, []);
+
   const handleEnvironmentClick = (environment: Environment) => {
     if (onEnvSelect) {
       onEnvSelect(environment);
@@ -371,6 +376,7 @@ const EnvironmentsPane: React.FC<EnvironmentsPaneProps> = ({ onEnvSelect, onImpo
                         value={editingName}
                         onChange={(e) => setEditingName(e.target.value)}
                         onBlur={handleRenameEnd}
+                        onFocus={handleRenameInputFocus}
                         onKeyDown={(e) => {
                           if (e.key === 'Enter') handleRenameEnd();
                           if (e.key === 'Escape') setEditingEnvironmentId(null);
@@ -378,7 +384,7 @@ const EnvironmentsPane: React.FC<EnvironmentsPaneProps> = ({ onEnvSelect, onImpo
                         // Prevent the row click handler from firing when interacting
                         // with the input.
                         onClick={(e) => e.stopPropagation()}
-                        className="h-6 text-sm py-0 flex-1"
+                        className="h-7 text-sm py-0 flex-1 border border-emerald-300/80 dark:border-emerald-500/70 bg-white dark:bg-slate-900 ring-2 ring-emerald-500/20 shadow-sm"
                         autoFocus
                       />
                     ) : (

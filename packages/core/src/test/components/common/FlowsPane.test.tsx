@@ -148,6 +148,7 @@ vi.mock('../../../components/ui/input', () => ({
         value,
         onChange,
         onBlur,
+        onFocus,
         onKeyDown,
         autoFocus,
         onClick,
@@ -159,6 +160,7 @@ vi.mock('../../../components/ui/input', () => ({
             value={value ?? ''}
             onChange={onChange}
             onBlur={onBlur}
+            onFocus={onFocus}
             onKeyDown={onKeyDown}
             autoFocus={autoFocus}
             onClick={onClick}
@@ -387,7 +389,34 @@ describe('FlowsPane — FEAT-004 pane actions', () => {
             .find((el) => el.textContent?.includes('Rename'))!;
         fireEvent.click(renameBtn);
 
-        expect(screen.getByTestId('rename-input')).toBeInTheDocument();
+        const input = screen.getByTestId('rename-input') as HTMLInputElement;
+        expect(input).toBeInTheDocument();
+        expect(input.className).toContain('ring-2');
+
+        fireEvent.focus(input);
+        expect(input.selectionStart).toBe(input.value.length);
+        expect(input.selectionEnd).toBe(input.value.length);
+    });
+
+    it('pressing Enter on the rename input commits the rename via saveFlow', async () => {
+        const mock = createMockAdapter({ initialData: { flows: [FLOW_WITH_NODES] } });
+        const saveSpy = vi.spyOn(mock.adapter.storage, 'saveFlow');
+        renderPane(mock);
+
+        const renameBtn = screen
+            .getAllByTestId('menu-item')
+            .find((el) => el.textContent?.includes('Rename'))!;
+        fireEvent.click(renameBtn);
+
+        const renameInput = screen.getByTestId('rename-input');
+        fireEvent.change(renameInput, { target: { value: 'Auth Flow Updated' } });
+        fireEvent.keyDown(renameInput, { key: 'Enter' });
+
+        await waitFor(() => {
+            expect(saveSpy).toHaveBeenCalledWith(
+                expect.objectContaining({ id: 'flow-001', name: 'Auth Flow Updated' }),
+            );
+        });
     });
 
     it('pressing Escape on the rename input closes the editor without saving', async () => {
