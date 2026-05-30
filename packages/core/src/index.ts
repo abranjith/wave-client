@@ -421,6 +421,10 @@ export type {
     ExportFormatType,
 } from './utils/transformers';
 
+// JSONPath utilities
+export { evaluateJsonPath } from './utils/jsonPath';
+export type { JsonPathEvaluationResult } from './utils/jsonPath';
+
 // Flow resolver utilities
 export {
     hasUnresolvedVariables,

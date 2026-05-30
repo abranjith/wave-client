@@ -38,6 +38,8 @@ export interface FlowNode {
     name: string;
     /** HTTP method (cached from request for quick display) */
     method: string;
+    /** Request URL (cached for hover-card display) */
+    url?: string;
     /** Position on the canvas */
     position: {
         x: number;

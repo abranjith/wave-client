@@ -6,18 +6,22 @@
  * Supports drag-and-drop for repositioning.
  */
 
-import React, { useCallback, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { 
     GripVertical, 
     Circle, 
     CheckCircle2, 
+    Check,
+    Copy,
     XCircle, 
     Loader2,
     Trash2,
     Lock,
 } from 'lucide-react';
 import type { FlowNode as FlowNodeType, FlowNodeStatus } from '../../types/flow';
+import { useClipboardAdapter, useNotificationAdapter } from '../../hooks/useAdapter';
 import { getHttpMethodColor, cn } from '../../utils/common';
+import { HoverCard, HoverCardContent, HoverCardTrigger } from '../ui/hover-card';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../ui/tooltip';
 
 // ============================================================================
@@ -88,8 +92,25 @@ export const FlowNode: React.FC<FlowNodeProps> = ({
     isReadOnly = false,
 }) => {
     const nodeRef = useRef<HTMLDivElement>(null);
+    const copyResetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const [isDragging, setIsDragging] = useState(false);
+    const [isAliasCopied, setIsAliasCopied] = useState(false);
     const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
+    const clipboard = useClipboardAdapter();
+    const notification = useNotificationAdapter();
+
+    const clearCopyResetTimer = useCallback(() => {
+        if (copyResetTimerRef.current) {
+            clearTimeout(copyResetTimerRef.current);
+            copyResetTimerRef.current = null;
+        }
+    }, []);
+
+    useEffect(() => {
+        return () => {
+            clearCopyResetTimer();
+        };
+    }, [clearCopyResetTimer]);
     
     // Handle drag start
     const handleDragStart = useCallback((e: React.PointerEvent) => {
@@ -112,7 +133,10 @@ export const FlowNode: React.FC<FlowNodeProps> = ({
         }
         
         setIsDragging(true);
-        (e.target as HTMLElement).setPointerCapture(e.pointerId);
+        const target = e.target as HTMLElement;
+        if (typeof target.setPointerCapture === 'function') {
+            target.setPointerCapture(e.pointerId);
+        }
     }, []);
     
     // Handle drag move
@@ -139,7 +163,10 @@ export const FlowNode: React.FC<FlowNodeProps> = ({
         if (!isDragging || isReadOnly) return;
         
         setIsDragging(false);
-        (e.target as HTMLElement).releasePointerCapture(e.pointerId);
+        const target = e.target as HTMLElement;
+        if (typeof target.releasePointerCapture === 'function') {
+            target.releasePointerCapture(e.pointerId);
+        }
         
         if (nodeRef.current && onPositionChange) {
             const x = parseInt(nodeRef.current.style.left) || node.position.x;
@@ -176,6 +203,25 @@ export const FlowNode: React.FC<FlowNodeProps> = ({
         if (isReadOnly) return;
         onDelete?.(node.id);
     }, [node.id, onDelete, isReadOnly]);
+
+    /**
+     * Copies the node alias to the clipboard from the hover card.
+     */
+    const handleCopyAlias = useCallback(async (e: React.MouseEvent<HTMLButtonElement>) => {
+        e.stopPropagation();
+
+        const result = await clipboard.writeText(node.alias);
+        if (!result.isOk) {
+            notification.showNotification('error', result.error);
+            return;
+        }
+
+        setIsAliasCopied(true);
+        clearCopyResetTimer();
+        copyResetTimerRef.current = setTimeout(() => {
+            setIsAliasCopied(false);
+        }, 1500);
+    }, [clipboard, node.alias, notification, clearCopyResetTimer]);
     
     // Status-based border color
     const getBorderColor = () => {
@@ -239,20 +285,37 @@ export const FlowNode: React.FC<FlowNodeProps> = ({
                     {node.method}
                 </span>
                 
-                {/* Node Name */}
-                <Tooltip>
-                    <TooltipTrigger asChild>
+                {/* HoverCard replaces Tooltip here because alias metadata includes an interactive copy button. */}
+                <HoverCard openDelay={120} closeDelay={120}>
+                    <HoverCardTrigger asChild>
                         <span className="text-sm font-medium text-slate-700 dark:text-slate-300 truncate max-w-[80px]">
                             {node.alias || node.name}
                         </span>
-                    </TooltipTrigger>
-                    <TooltipContent side="bottom" className="max-w-xs">
+                    </HoverCardTrigger>
+                    <HoverCardContent side="bottom" align="start" className="w-64 space-y-2">
                         <div className="text-xs">
-                            <div className="font-medium">{node.name}</div>
-                            <div className="text-slate-400">Alias: {node.alias}</div>
+                            <div className="font-medium text-slate-800 dark:text-slate-100 truncate">{node.name}</div>
+                            <div className="mt-1 text-[11px] text-slate-500 dark:text-slate-400">
+                                <span className="font-medium">{node.method}</span>
+                                <span className="mx-1">•</span>
+                                <span className="break-all">{node.url ?? node.requestId}</span>
+                            </div>
                         </div>
-                    </TooltipContent>
-                </Tooltip>
+                        <div className="flex items-center text-[11px] text-slate-600 dark:text-slate-300">
+                            <span>
+                                Alias: <span className="font-medium text-slate-700 dark:text-slate-100">{node.alias}</span>
+                            </span>
+                            <button
+                                aria-label={isAliasCopied ? 'Alias copied' : 'Copy alias'}
+                                className="ml-2 inline-flex items-center justify-center rounded border border-slate-200 dark:border-slate-600 p-1 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
+                                onClick={handleCopyAlias}
+                                type="button"
+                            >
+                                {isAliasCopied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
+                            </button>
+                        </div>
+                    </HoverCardContent>
+                </HoverCard>
                 
                 {/* Status Indicator */}
                 {status !== 'idle' && (

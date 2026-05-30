@@ -80,8 +80,8 @@ describe('buildRequestNodes', () => {
             createNodeId: () => 'node-id',
         });
 
-        expect(nodes[0]?.alias).toBe('Get-Users1');
-        expect(nodes[1]?.alias).toBe('Get-Users2');
+        expect(nodes[0]?.alias).toBe('get-users-2');
+        expect(nodes[1]?.alias).toBe('get-users-3');
     });
 
     it('falls back to request alias when name sanitizes to empty', () => {
@@ -91,6 +91,24 @@ describe('buildRequestNodes', () => {
             createNodeId: () => 'node-1',
         });
 
-        expect(nodes[0]?.alias).toBe('request');
+        expect(nodes[0]?.alias).toBe('alias');
+    });
+
+    it('generates aliases without $, ., or : characters', () => {
+        const nodes = buildRequestNodes({
+            existingNodes: [],
+            requests: [
+                makeRequest('http-1', 'Get Employee.$Details:Now'),
+                makeRequest('http-2', 'Get Employee.$Details:Now'),
+            ],
+            createNodeId: () => 'node-id',
+        });
+
+        expect(nodes[0]?.alias).toBe('get-employee-details');
+        expect(nodes[1]?.alias).toBe('get-employee-details-2');
+
+        for (const node of nodes) {
+            expect(node.alias).not.toMatch(/[$.:]/);
+        }
     });
 });

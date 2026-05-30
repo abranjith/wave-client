@@ -8,13 +8,30 @@ const REQUEST_INSERT_START_Y = 50;
 const REQUEST_INSERT_VERTICAL_SPACING = 72;
 const MAX_ALIAS_BASE_LENGTH = 20;
 
+/**
+ * Builds a deterministic, human-readable alias base from a request name.
+ *
+ * Rules:
+ * - lowercase
+ * - collapse runs of non-alphanumeric characters to a single `-`
+ * - trim leading/trailing `-`
+ * - truncate to `MAX_ALIAS_BASE_LENGTH`
+ * - fallback to `alias` when no alphanumeric content remains
+ *
+ * This gives best-effort cross-flow consistency because identical request
+ * names normalize to the same base alias when there is no collision.
+ */
 function buildAliasBase(name: string): string {
-    const aliasBase = name
-        .replace(/[^a-zA-Z0-9]/g, '-')
-        .replace(/-+$/g, '')
-        .slice(0, MAX_ALIAS_BASE_LENGTH);
+    const normalized = name
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-+|-+$/g, '');
 
-    return aliasBase || 'request';
+    const truncated = normalized
+        .slice(0, MAX_ALIAS_BASE_LENGTH)
+        .replace(/^-+|-+$/g, '');
+
+    return truncated || 'alias';
 }
 
 interface BuildRequestNodesOptions {
@@ -48,10 +65,11 @@ export function buildRequestNodes({
     return requests.map((request, index) => {
         const aliasBase = buildAliasBase(request.name);
         let alias = aliasBase;
-        let suffix = 1;
+        let suffix = 2;
 
         while (usedAliases.has(alias.toLowerCase())) {
-            alias = `${aliasBase}${suffix}`;
+            // Reserve the base alias for the first node, then use -2, -3, ...
+            alias = `${aliasBase}-${suffix}`;
             suffix += 1;
         }
 
@@ -63,6 +81,7 @@ export function buildRequestNodes({
             requestId: request.referenceId,
             name: request.name,
             method: request.method,
+            url: request.url,
             position: {
                 x: basePosition.x,
                 y: basePosition.y + index * REQUEST_INSERT_VERTICAL_SPACING,

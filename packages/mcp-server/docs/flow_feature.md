@@ -111,7 +111,47 @@ export async function runFlowHandler(args: RunFlowArgs) {
 }
 ```
 
-## 5. Future Considerations
+## 5. Variable References
+
+Flow chaining now supports readable node aliases and JSONPath-based references when one request depends on another request's response.
+
+### Reference Grammar
+
+```text
+{{ [alias.]$section[:subpath] }}
+
+$section := $body | $headers | $status | $statusText
+```
+
+- `alias` is optional. If omitted, the resolver searches allowed upstream nodes from most-recent to oldest.
+- `$body` supports JSONPath expressions in `subpath`.
+- `$headers` supports case-insensitive header lookup (`content-type`, `x-request-id`, etc.).
+- `$status` and `$statusText` do not use `subpath`.
+
+### Examples
+
+```text
+{{ get-employee.$body:$.data.id }}
+{{ get-employee.$body:$.users[?(@.active)].id }}
+{{ get-employee.$body:$..id }}
+{{ get-employee.$body:$.items[0:2] }}
+{{ get-employee.$headers:content-type }}
+{{ get-employee.$status }}
+{{ $body:$.data.id }}
+{{ $.data.id }}
+```
+
+### Alias Discovery in UI
+
+Each flow node now exposes an interactive hover card containing:
+
+- Request name
+- Node alias
+- Copy button to copy the alias directly
+
+This avoids guesswork when authoring references and makes alias-based chaining faster.
+
+## 6. Future Considerations
 *   **Cookie Support**: The current adapter does not fully implement cookie jar management.
 *   **Cancellation**: MCP tools are currently blocking requests, so cancellation mid-flow is not yet exposed effectively.
 *   **Security Service**: Ensure the `SimpleSecurityService` in config is adequate for decrypting any sensitive auth data required by flows.

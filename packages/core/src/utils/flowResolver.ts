@@ -1,20 +1,27 @@
 /**
  * Flow Resolver Utility
- * 
+ *
  * Resolves {{variable}} placeholders in flow requests using a multi-pass approach:
  * 1. First pass: Resolve from environment variables (global → active)
  * 2. Second pass: Resolve remaining placeholders from completed node responses
- * 
- * Supports dot-path notation for JSON access:
- * - {{alias.$body.data.id}} - Access nested JSON from response body
- * - {{alias.$body.items[0].name}} - Array access
- * - {{alias.$headers.content-type}} - Access response headers
- * - {{alias.$status}} - Access response status code
+ *
+ * Flow variable references support explicit sections and JSONPath subpaths:
+ * - {{get-employee.$body:$.data.id}}
+ * - {{get-employee.$body:$..id}}
+ * - {{get-employee.$headers:content-type}}
+ * - {{get-employee.$status}}
+ * - {{get-employee.$statusText}}
+ *
+ * Body shorthand (no alias) is also supported:
+ * - {{$body:$.data.id}}
+ * - {{$.data.id}}
+ * - {{data.id}}
  */
 
 import type { HttpResponseResult } from '../types/adapters';
 import type { FlowContext, FlowResolveResult } from '../types/flow';
 import type { CollectionRequest } from '../types/collection';
+import { evaluateJsonPath } from './jsonPath';
 
 // ============================================================================
 // Constants
@@ -23,158 +30,155 @@ import type { CollectionRequest } from '../types/collection';
 /** Regex to match {{variable}} placeholders */
 const PLACEHOLDER_REGEX = /\{\{([^}]+)\}\}/g;
 
-/**
- * Parses a flow path string into parts, handling array notation.
- * 
- * @example
- * parseFlowPath("alias.$body.items[0].name")
- * // Returns: ["alias", "$body", "items", "0", "name"]
- */
-function parseFlowPath(path: string): string[] {
-    const parts: string[] = [];
-    let current = '';
-    let i = 0;
-    
-    while (i < path.length) {
-        const char = path[i];
-        
-        if (char === '.') {
-            if (current) {
-                parts.push(current);
-                current = '';
-            }
-        } else if (char === '[') {
-            if (current) {
-                parts.push(current);
-                current = '';
-            }
-            // Find matching ]
-            i++;
-            while (i < path.length && path[i] !== ']') {
-                current += path[i];
-                i++;
-            }
-            if (current) {
-                parts.push(current);
-                current = '';
-            }
-        } else if (char === ']') {
-            // Skip
-        } else {
-            current += char;
-        }
-        
-        i++;
-    }
-    
-    if (current) {
-        parts.push(current);
-    }
-    
-    return parts;
+const FLOW_REFERENCE_SECTIONS = ['$statusText', '$status', '$headers', '$body'] as const;
+
+type FlowReferenceSection = '$body' | '$headers' | '$status' | '$statusText';
+
+interface ParsedVariableReference {
+    alias: string | null;
+    section: FlowReferenceSection;
+    subpath: string;
+    valid: boolean;
 }
 
 /**
- * Resolves a path within the response body (JSON).
+ * Finds the first section keyword in a variable reference.
  */
-function resolveBodyPath(
-    body: string,
-    pathParts: string[],
-    headers: Record<string, string>
-): string | null {
-    // Check if response is JSON
-    const contentType = Object.entries(headers)
-        .find(([key]) => key.toLowerCase() === 'content-type')?.[1] || '';
-    
-    if (!contentType.toLowerCase().includes('json')) {
-        // Not JSON - can only access raw body
-        if (pathParts.length === 0) {
-            return body;
+function findFirstSectionKeyword(reference: string): { section: FlowReferenceSection; index: number } | null {
+    let bestMatch: { section: FlowReferenceSection; index: number } | null = null;
+
+    for (const section of FLOW_REFERENCE_SECTIONS) {
+        const index = reference.indexOf(section);
+        if (index === -1) {
+            continue;
         }
+
+        if (
+            !bestMatch
+            || index < bestMatch.index
+            || (index === bestMatch.index && section.length > bestMatch.section.length)
+        ) {
+            bestMatch = { section, index };
+        }
+    }
+
+    return bestMatch;
+}
+
+/**
+ * Parses a variable reference into alias + section + subpath components.
+ *
+ * Grammar:
+ * - [alias.]$section[:subpath]
+ * - $section in {$body, $headers, $status, $statusText}
+ * - no section keyword => shorthand body reference
+ */
+function parseVariableReference(variable: string): ParsedVariableReference {
+    const trimmed = variable.trim();
+    if (!trimmed) {
+        return { alias: null, section: '$body', subpath: '', valid: false };
+    }
+
+    const sectionMatch = findFirstSectionKeyword(trimmed);
+    if (!sectionMatch) {
+        return {
+            alias: null,
+            section: '$body',
+            subpath: trimmed,
+            valid: true,
+        };
+    }
+
+    const { section, index } = sectionMatch;
+    const aliasPart = trimmed.slice(0, index).trim();
+
+    // Explicit aliases must use the alias.$section shape.
+    if (aliasPart && !aliasPart.endsWith('.')) {
+        return { alias: null, section: '$body', subpath: '', valid: false };
+    }
+
+    const aliasWithoutDot = aliasPart.endsWith('.')
+        ? aliasPart.slice(0, -1).trim()
+        : aliasPart;
+
+    if (aliasWithoutDot.includes('$') || aliasWithoutDot.includes('.') || aliasWithoutDot.includes(':')) {
+        return { alias: null, section: '$body', subpath: '', valid: false };
+    }
+
+    const alias = aliasWithoutDot.length > 0 ? aliasWithoutDot : null;
+    const afterSection = trimmed.slice(index + section.length).trim();
+
+    if (!afterSection) {
+        return {
+            alias,
+            section,
+            subpath: '',
+            valid: true,
+        };
+    }
+
+    if (!afterSection.startsWith(':')) {
+        // Legacy dot form (alias.$body.data.id) is intentionally unsupported.
+        return { alias: null, section: '$body', subpath: '', valid: false };
+    }
+
+    return {
+        alias,
+        section,
+        subpath: afterSection.slice(1).trim(),
+        valid: true,
+    };
+}
+
+function normalizeBodyJsonPath(subpath: string): string {
+    const trimmed = subpath.trim();
+
+    if (!trimmed) {
+        return '$';
+    }
+
+    if (trimmed.startsWith('$')) {
+        return trimmed;
+    }
+
+    if (trimmed.startsWith('[') || trimmed.startsWith('.')) {
+        return `$${trimmed}`;
+    }
+
+    return `$.${trimmed}`;
+}
+
+/**
+ * Resolves a path within the response body using JSONPath.
+ */
+function resolveBodyPath(body: string, subpath: string): string | null {
+    if (subpath.trim().length === 0) {
+        return body;
+    }
+
+    const jsonPath = normalizeBodyJsonPath(subpath);
+    const jsonPathResult = evaluateJsonPath(body, jsonPath);
+
+    if (!jsonPathResult.found) {
         return null;
     }
-    
-    // Parse JSON and traverse path
-    try {
-        const parsed = JSON.parse(body);
-        return traverseJsonPath(parsed, pathParts);
-    } catch {
-        // Not valid JSON
-        if (pathParts.length === 0) {
-            return body;
-        }
-        return null;
-    }
+
+    return valueToString(jsonPathResult.value);
 }
 
 /**
  * Resolves a path within response headers.
  */
-function resolveHeadersPath(
-    headers: Record<string, string>,
-    pathParts: string[]
-): string | null {
-    if (pathParts.length === 0) {
+function resolveHeadersPath(headers: Record<string, string>, subpath: string): string | null {
+    const headerName = subpath.trim();
+    if (headerName.length === 0) {
         return JSON.stringify(headers);
     }
-    
-    const headerName = pathParts[0];
-    
-    // Case-insensitive header lookup
+
     const headerValue = Object.entries(headers)
         .find(([key]) => key.toLowerCase() === headerName.toLowerCase())?.[1];
-    
-    return headerValue ?? null;
-}
 
-/**
- * Traverses a JSON object using a path array.
- * 
- * @param obj - The object to traverse
- * @param pathParts - Array of keys/indices to follow
- * @returns The value at the path as a string, or null if not found
- */
-function traverseJsonPath(obj: unknown, pathParts: string[]): string | null {
-    if (pathParts.length === 0) {
-        return valueToString(obj);
-    }
-    
-    if (obj === null || obj === undefined) {
-        return null;
-    }
-    
-    const key = pathParts[0];
-    const remaining = pathParts.slice(1);
-    
-    if (Array.isArray(obj)) {
-        const index = parseInt(key, 10);
-        if (isNaN(index) || index < 0 || index >= obj.length) {
-            return null;
-        }
-        return traverseJsonPath(obj[index], remaining);
-    }
-    
-    if (typeof obj === 'object') {
-        const record = obj as Record<string, unknown>;
-        
-        // Try exact match first
-        if (key in record) {
-            return traverseJsonPath(record[key], remaining);
-        }
-        
-        // Try case-insensitive match
-        const matchingKey = Object.keys(record).find(
-            k => k.toLowerCase() === key.toLowerCase()
-        );
-        
-        if (matchingKey) {
-            return traverseJsonPath(record[matchingKey], remaining);
-        }
-        
-        return null;
-    }
-    
-    return null;
+    return headerValue ?? null;
 }
 
 /**
@@ -184,17 +188,42 @@ function valueToString(value: unknown): string | null {
     if (value === null || value === undefined) {
         return null;
     }
-    
+
     if (typeof value === 'string') {
         return value;
     }
-    
+
     if (typeof value === 'number' || typeof value === 'boolean') {
         return String(value);
     }
-    
-    // Objects and arrays get JSON stringified
+
     return JSON.stringify(value);
+}
+
+/**
+ * Resolves a path within a response based on section.
+ */
+function resolvePathInResponse(
+    response: HttpResponseResult,
+    section: FlowReferenceSection,
+    subpath: string
+): string | null {
+    switch (section) {
+        case '$status':
+            return subpath.trim().length === 0 ? String(response.status) : null;
+
+        case '$statusText':
+            return subpath.trim().length === 0 ? response.statusText : null;
+
+        case '$headers':
+            return resolveHeadersPath(response.headers, subpath);
+
+        case '$body':
+            return resolveBodyPath(response.body, subpath);
+
+        default:
+            return null;
+    }
 }
 
 // ============================================================================
@@ -205,6 +234,7 @@ function valueToString(value: unknown): string | null {
  * Checks if a string contains any unresolved {{variable}} placeholders.
  */
 export function hasUnresolvedVariables(text: string): boolean {
+    PLACEHOLDER_REGEX.lastIndex = 0;
     return PLACEHOLDER_REGEX.test(text);
 }
 
@@ -215,11 +245,11 @@ export function extractVariables(text: string): string[] {
     const variables: string[] = [];
     const regex = new RegExp(PLACEHOLDER_REGEX.source, 'g');
     let match;
-    
+
     while ((match = regex.exec(text)) !== null) {
         variables.push(match[1].trim());
     }
-    
+
     return variables;
 }
 
@@ -243,7 +273,7 @@ export function addToFlowContext(
 ): FlowContext {
     const newResponses = new Map(context.responses);
     newResponses.set(alias, response);
-    
+
     return {
         responses: newResponses,
         executionOrder: [...context.executionOrder, alias],
@@ -253,27 +283,27 @@ export function addToFlowContext(
 /**
  * Creates dynamic environment variables from flow context responses.
  * Only includes values that are actually referenced in the collection request.
- * 
+ *
  * This enables dependency-aware parameter resolution where only variables from
  * nodes that the current node depends on are available.
- * 
- * Supports multiple reference formats:
- * - With alias: `{{alias.$body.data.id}}`, `{{alias.$headers.key}}`, `{{alias.$status}}`, `{{alias.$statusText}}`
- * - Without alias: `{{$body.data.id}}`, `{{$headers.key}}`, `{{$status}}`, `{{$statusText}}`
- * - Body shorthand: `{{data.id}}` (assumes $body when no $ prefix)
- * 
+ *
+ * Supported formats:
+ * - With alias: `{{alias.$body:$.data.id}}`, `{{alias.$headers:content-type}}`, `{{alias.$status}}`, `{{alias.$statusText}}`
+ * - Without alias: `{{$body:$.data.id}}`, `{{$headers:content-type}}`, `{{$status}}`, `{{$statusText}}`
+ * - Body shorthand: `{{$.data.id}}` or `{{data.id}}` (assumes `$body`)
+ *
  * @param flowContext - Flow context containing all node responses
  * @param allowedNodeIds - Set of node IDs whose responses can be used (upstream dependencies)
  * @param nodeIdToAliasMap - Map from node ID to node alias for filtering
  * @param collectionRequest - The collection request to extract variable references from
  * @returns Record of environment variable name → value (preserves original placeholder format)
- * 
+ *
  * @example
- * // Request URL: "{{baseUrl}}/users/{{getUser.$body.data.id}}"
- * // Context has: { "getUser": { body: '{"data": {"id": 123}}', status: 200 } }
- * // Allowed nodes: Set(["node-1"]) where node-1 has alias "getUser"
+ * // Request URL: "{{baseUrl}}/users/{{get-user.$body:$.data.id}}"
+ * // Context has: { "get-user": { body: '{"data":{"id":123}}', status: 200 } }
+ * // Allowed nodes: Set(["node-1"]) where node-1 has alias "get-user"
  * flowContextToDynamicEnvVars(context, allowedNodeIds, nodeAliasMap, request)
- * // Returns: { "getUser.$body.data.id": "123" }
+ * // Returns: { "get-user.$body:$.data.id": "123" }
  */
 export function flowContextToDynamicEnvVars(
     flowContext: FlowContext,
@@ -282,7 +312,7 @@ export function flowContextToDynamicEnvVars(
     collectionRequest: CollectionRequest
 ): Record<string, string> {
     const envVars: Record<string, string> = {};
-    
+
     // Get allowed aliases from allowed node IDs
     const allowedAliases = new Set<string>();
     for (const nodeId of allowedNodeIds) {
@@ -291,10 +321,10 @@ export function flowContextToDynamicEnvVars(
             allowedAliases.add(alias);
         }
     }
-    
+
     // Extract all variables from the collection request
     const allVariables = extractVariablesFromRequest(collectionRequest);
-    
+
     // For each variable, try to resolve from allowed responses
     for (const variable of allVariables) {
         const value = resolveVariableFromContext(
@@ -302,12 +332,12 @@ export function flowContextToDynamicEnvVars(
             flowContext,
             allowedAliases
         );
-        
+
         if (value !== null) {
             envVars[variable] = value;
         }
     }
-    
+
     return envVars;
 }
 
@@ -368,25 +398,27 @@ function extractVariablesFromRequest(request: CollectionRequest): Set<string> {
 
 /**
  * Resolves a variable from flow context based on allowed aliases.
- * 
+ *
  * Supports formats:
- * - alias.$body.data.id
- * - alias.$headers.key
+ * - alias.$body:$.data.id
+ * - alias.$headers:content-type
  * - alias.$status
  * - alias.$statusText
- * - $body.data.id (tries all allowed aliases)
- * - $headers.key (tries all allowed aliases)
- * - $status (tries all allowed aliases)
- * - $statusText (tries all allowed aliases)
- * - data.id (assumes $body, tries all allowed aliases)
+ * - $body:$.data.id (tries all allowed aliases)
+ * - $.data.id (body shorthand, tries all allowed aliases)
+ * - data.id (body shorthand, tries all allowed aliases)
  */
 function resolveVariableFromContext(
     variable: string,
     flowContext: FlowContext,
     allowedAliases: Set<string>
 ): string | null {
-    // Parse the variable to extract alias (if present) and path
+    // Parse the variable to extract alias (if present), section, and subpath.
     const parsed = parseVariableReference(variable);
+
+    if (!parsed.valid) {
+        return null;
+    }
     
     if (parsed.alias) {
         // Variable has explicit alias - check if it's allowed
@@ -401,7 +433,7 @@ function resolveVariableFromContext(
         }
         
         // Resolve the path within the response
-        return resolvePathInResponse(response, parsed.section, parsed.path);
+        return resolvePathInResponse(response, parsed.section, parsed.subpath);
     } else {
         // No explicit alias - try all allowed aliases (most recent first)
         const orderedAliases = flowContext.executionOrder
@@ -414,97 +446,12 @@ function resolveVariableFromContext(
                 continue;
             }
             
-            const value = resolvePathInResponse(response, parsed.section, parsed.path);
+            const value = resolvePathInResponse(response, parsed.section, parsed.subpath);
             if (value !== null) {
                 return value;
             }
         }
         
         return null;
-    }
-}
-
-/**
- * Parses a variable reference into components.
- * 
- * @example
- * parseVariableReference("alias.$body.data.id") 
- * // { alias: "alias", section: "$body", path: ["data", "id"] }
- * 
- * parseVariableReference("$body.data.id")
- * // { alias: null, section: "$body", path: ["data", "id"] }
- * 
- * parseVariableReference("data.id")
- * // { alias: null, section: "$body", path: ["data", "id"] }
- */
-function parseVariableReference(variable: string): {
-    alias: string | null;
-    section: '$body' | '$headers' | '$status' | '$statusText';
-    path: string[];
-} {
-    const parts = parseFlowPath(variable);
-    
-    if (parts.length === 0) {
-        return { alias: null, section: '$body', path: [] };
-    }
-    
-    // Check if first part is a known section keyword
-    const firstPart = parts[0];
-    if (firstPart === '$body' || firstPart === '$headers' || firstPart === '$status' || firstPart === '$statusText') {
-        // No alias, starts with section
-        return {
-            alias: null,
-            section: firstPart as '$body' | '$headers' | '$status' | '$statusText',
-            path: parts.slice(1),
-        };
-    }
-    
-    // Check if second part is a known section keyword
-    if (parts.length >= 2) {
-        const secondPart = parts[1];
-        if (secondPart === '$body' || secondPart === '$headers' || secondPart === '$status' || secondPart === '$statusText') {
-            // First part is alias, second is section
-            return {
-                alias: firstPart,
-                section: secondPart as '$body' | '$headers' | '$status' | '$statusText',
-                path: parts.slice(2),
-            };
-        }
-    }
-    
-    // No section keyword found - assume $body
-    return {
-        alias: null,
-        section: '$body',
-        path: parts,
-    };
-}
-
-/**
- * Resolves a path within a response based on section.
- */
-function resolvePathInResponse(
-    response: HttpResponseResult,
-    section: '$body' | '$headers' | '$status' | '$statusText',
-    path: string[]
-): string | null {
-    switch (section) {
-        case '$status':
-            return String(response.status);
-            
-        case '$statusText':
-            return response.statusText;
-            
-        case '$headers':
-            if (path.length === 0) {
-                return JSON.stringify(response.headers);
-            }
-            return resolveHeadersPath(response.headers, path);
-            
-        case '$body':
-            return resolveBodyPath(response.body, path, response.headers);
-            
-        default:
-            return null;
     }
 }

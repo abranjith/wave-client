@@ -53,6 +53,11 @@ export {
   TooltipProvider,
   TooltipTrigger,
 } from './tooltip';
+export {
+  HoverCard,
+  HoverCardContent,
+  HoverCardTrigger,
+} from './hover-card';
 export { default as Banner } from './banner';
 
 // Navigation & Menu components

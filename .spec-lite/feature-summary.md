@@ -88,6 +88,10 @@ The flow canvas empty state now uses the same dashed-panel visual pattern as the
 **Flow Connector Condition Styling — Theme-Aware Path and Label Colors** *(updated: 2026-05-28 by fix)*
 Flow connector path/label color styling now uses Tailwind utility classes with explicit light and dark mode variants instead of hard-coded hex values. Condition chips now use complementary tinted fills with condition-aligned stroke/text colors, while inactive and skipped connectors use dedicated muted slate palettes for consistent readability across themes. Condition options in the connector dropdown now use Tailwind text classes rather than inline color styles. Validation condition chips (`Validation Pass` / `Validation Fail`) are wider so labels render without crowding. Covered by new component regression tests in `FlowConnector.test.tsx`.
 
+**FEAT-FP-001 (Flow): Readable Aliases, Copyable from UI, and Full JSONPath References** *(updated: 2026-05-30 by implement)*
+Source spec: [feature_flow_alias_and_jsonpath.md](.spec-lite/features/feature_flow_alias_and_jsonpath.md)
+Flow variable references now use explicit section grammar with JSONPath subpaths (`{{alias.$body:$.data.id}}`, `{{alias.$body:$..id}}`, `{{alias.$body:$.users[?(@.active)].id}}`, `{{alias.$body:$.items[0:2]}}`, `{{alias.$headers:content-type}}`, `{{alias.$status}}`, `{{alias.$statusText}}`) plus shorthand body forms (`{{$.data.id}}`, `{{data.id}}`). Body resolution now runs through a shared core JSONPath helper built on `jsonpath-plus` so recursive descent, wildcard, filter, and slice behavior is consistent. Request-node aliases are now readable, deterministic kebab-case values with `-N` collision suffixing (`get-employee`, `get-employee-2`, ...), with fallback `alias` when names sanitize to empty. The flow node alias tooltip is now an interactive hover card with a Copy button using the clipboard adapter and transient `Copied!` state. Legacy dot-form references like `{{alias.$body.data.id}}` are intentionally unsupported.
+
 ---
 
 ## Settings UI
