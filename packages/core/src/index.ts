@@ -395,6 +395,9 @@ export {
 // Common utilities
 export * from './utils/common';
 
+// Dynamic function placeholder utilities
+export * from './utils/functions';
+
 // Encoding utilities
 export * from './utils/encoding';
 

@@ -22,6 +22,7 @@ import type { HttpResponseResult } from '../types/adapters';
 import type { FlowContext, FlowResolveResult } from '../types/flow';
 import type { CollectionRequest } from '../types/collection';
 import { evaluateJsonPath } from './jsonPath';
+import { isFunctionPlaceholder } from './functions';
 
 // ============================================================================
 // Constants
@@ -413,6 +414,10 @@ function resolveVariableFromContext(
     flowContext: FlowContext,
     allowedAliases: Set<string>
 ): string | null {
+    if (isFunctionPlaceholder(variable)) {
+        return null;
+    }
+
     // Parse the variable to extract alias (if present), section, and subpath.
     const parsed = parseVariableReference(variable);
 

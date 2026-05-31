@@ -51,6 +51,14 @@ The request editor is now protocol-aware. A new `ProtocolSelector` dropdown (Rad
 
 ---
 
+## Request Variables
+
+**FEAT-FP-DYNVAR-001: Dynamic Function Variables (`_fn_` placeholders)** *(updated: 2026-05-30 by implement)*
+Source spec: [feature_dynamic_function_variables.md](.spec-lite/features/feature_dynamic_function_variables.md)
+Request placeholder resolution now supports dynamic function variables with a reserved `_fn_` prefix, evaluated at request-build time anywhere `{{...}}` is already supported (URL, headers, query params, and body). `resolveParameterizedValue` in `packages/core/src/utils/common.ts` now routes `_fn_` placeholders through a new function engine (`packages/core/src/utils/functions/`) while preserving existing unresolved-placeholder behavior for unknown/malformed functions. The function engine includes a registry-driven architecture with schema-based argument validation and live template validation (`validateFunctionTemplate`) so UI code can pre-validate templates before send. Built-in functions now include UUID, numeric/string randomizers, date/time generators, person/name helpers, address generators, and contact generators (`email`, `phone`, `ssn`), with locale-backed data centralized in `packages/core/src/data/fnData.ts` (en-US default, locale-ready seam via `getLocaleData`). Flow-context resolution (`flowContextToDynamicEnvVars`) now explicitly passes `_fn_` placeholders through untouched so they resolve at build time instead of being treated as flow references. UI token-highlighting now treats valid function placeholders as existing tokens and invalid/unknown function placeholders as missing by parsing and validating `_fn_` placeholders in `renderParameterizedText`. The public API (`resolveFunctionPlaceholder`, `validateFunctionTemplate`, `isFunctionPlaceholder` and related types) is exported from `@wave-client/core`, and the function catalog is documented in `packages/core/src/utils/functions/README.md` with a drift check test ensuring all registered functions remain documented.
+
+---
+
 ## Validation
 
 **FEAT-001: Validation Engine Enhancement** *(updated: 2026-05-26 by fix)*

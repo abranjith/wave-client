@@ -2,6 +2,7 @@ import { BodyMode, CollectionBody } from "../types/collection";
 import { clsx, type ClassValue } from "clsx";
 import { twMerge } from "tailwind-merge";
 import { ResponseContentType } from '../types/collection';
+import { isFunctionPlaceholder, resolveFunctionPlaceholder } from './functions';
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -495,6 +496,16 @@ export function resolveParameterizedValue(
   
   const resolved = value.replace(placeholderRegex, (match, variableName) => {
     const trimmedName = variableName.trim();
+
+    if (isFunctionPlaceholder(trimmedName)) {
+      const functionResult = resolveFunctionPlaceholder(trimmedName);
+      if (functionResult) {
+        return functionResult.resolved;
+      }
+
+      unresolved.push(trimmedName);
+      return match;
+    }
     
     const matchingKey = Array.from(environmentVariables.keys()).find(
       key => key.toLowerCase() === trimmedName.toLowerCase()

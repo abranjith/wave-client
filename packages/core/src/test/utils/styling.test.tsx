@@ -216,5 +216,59 @@ describe('styling', () => {
       expect(paramElements.length).toBe(1);
       expect(paramElements[0].textContent).toBe('{{VALID}}');
     });
+
+    it('should treat valid function placeholders as existing', () => {
+      const existingParams = new Set<string>();
+      const { container } = render(
+        renderParameterizedText('Generated: {{_fn_random_uuid}}', existingParams)
+      );
+
+      const paramElement = container.querySelector('.parameterized-text');
+      expect(paramElement).not.toBeNull();
+      expect(paramElement?.classList.contains('param-exists')).toBe(true);
+      expect(paramElement?.classList.contains('param-missing')).toBe(false);
+    });
+
+    it('should treat unknown function placeholders as missing', () => {
+      const existingParams = new Set<string>();
+      const { container } = render(
+        renderParameterizedText('Bad: {{_fn_not_real}}', existingParams)
+      );
+
+      const paramElement = container.querySelector('.parameterized-text');
+      expect(paramElement).not.toBeNull();
+      expect(paramElement?.classList.contains('param-missing')).toBe(true);
+      expect(paramElement?.classList.contains('param-exists')).toBe(false);
+    });
+
+    it('should treat function placeholders with invalid args as missing', () => {
+      const existingParams = new Set<string>();
+      const { container } = render(
+        renderParameterizedText('Invalid: {{_fn_random_number(min=abc,max=10)}}', existingParams)
+      );
+
+      const paramElement = container.querySelector('.parameterized-text');
+      expect(paramElement).not.toBeNull();
+      expect(paramElement?.classList.contains('param-missing')).toBe(true);
+      expect(paramElement?.classList.contains('param-exists')).toBe(false);
+    });
+
+    it('should still resolve regular env placeholders in mixed content', () => {
+      const existingParams = new Set(['TOKEN']);
+      const { container } = render(
+        renderParameterizedText('{{TOKEN}} {{_fn_random_uuid}} {{_fn_typo}}', existingParams)
+      );
+
+      const paramElements = Array.from(container.querySelectorAll('.parameterized-text'));
+      expect(paramElements).toHaveLength(3);
+
+      const token = paramElements.find((el) => el.textContent === '{{TOKEN}}');
+      const validFn = paramElements.find((el) => el.textContent === '{{_fn_random_uuid}}');
+      const invalidFn = paramElements.find((el) => el.textContent === '{{_fn_typo}}');
+
+      expect(token?.classList.contains('param-exists')).toBe(true);
+      expect(validFn?.classList.contains('param-exists')).toBe(true);
+      expect(invalidFn?.classList.contains('param-missing')).toBe(true);
+    });
   });
 });

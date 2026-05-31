@@ -1,6 +1,10 @@
 import { JSX } from "react";
 import { clsx, type ClassValue } from "clsx";
 import { twMerge } from "tailwind-merge";
+import {
+  isFunctionPlaceholder,
+  validateFunctionTemplate,
+} from "./functions";
 
 /**
  * Utility for merging Tailwind CSS classes
@@ -15,6 +19,11 @@ export function cn(...inputs: ClassValue[]) {
  */
 export function renderParameterizedText(text: string, existingParams: Set<string>) : JSX.Element {
   if (!text) return <></>;
+
+  const normalizedParams = new Set(
+    Array.from(existingParams ?? new Set<string>()).map((param) => param.toLowerCase())
+  );
+
   const parts = text
     .split(/(\{\{[^}]+\}\})/g)
     .filter(Boolean)
@@ -23,7 +32,15 @@ export function renderParameterizedText(text: string, existingParams: Set<string
       if (!match) return <span key={index}>{segment}</span>;
 
       const name = match[1];
-      const exists = existingParams && Array.from(existingParams).some(param => param.toLowerCase() === name.toLowerCase());
+      const trimmedName = name.trim();
+
+      let exists = false;
+      if (isFunctionPlaceholder(trimmedName)) {
+        const validationErrors = validateFunctionTemplate(`{{${trimmedName}}}`);
+        exists = validationErrors.length === 0;
+      } else {
+        exists = normalizedParams.has(trimmedName.toLowerCase());
+      }
 
       return (
         <span

@@ -60,13 +60,11 @@ vi.mock('../../../components/ui/SecondaryButton', () => ({
         text,
         tooltip,
         disabled,
-        colorTheme,
     }: {
         onClick: () => void;
         text?: string;
         tooltip?: string;
         disabled?: boolean;
-        colorTheme?: string;
         icon?: React.ReactNode;
         size?: string;
     }) => (
@@ -75,11 +73,11 @@ vi.mock('../../../components/ui/SecondaryButton', () => ({
             disabled={disabled}
             // Only assign known test IDs to avoid ambiguity:
             //   delete-button → the icon-only row delete action (tooltip="Delete rule")
-            //   cancel-button → the dialog Cancel button (colorTheme="warning")
+            //   cancel-button → the confirm dialog Cancel action
             data-testid={
                 tooltip === 'Delete rule'
                     ? 'delete-button'
-                    : colorTheme === 'warning'
+                    : text === 'Cancel'
                       ? 'cancel-button'
                       : undefined
             }
