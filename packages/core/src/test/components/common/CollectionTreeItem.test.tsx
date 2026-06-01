@@ -3,7 +3,7 @@
  *
  * Tested:
  *  1. Folder row renders Run, Rename, Delete menu actions.
- *  2. Request row renders Rename and Delete menu actions.
+ *  2. Request row renders Rename, Move, Duplicate, and Delete menu actions.
  *  3. Rename opens inline input for folder and commits the new name.
  *  4. Rename cancels on Escape without calling onRenameItem.
  *  5. Delete for a folder calls onDeleteItem with the correct item and path.
@@ -131,6 +131,8 @@ const defaultProps = {
     onRunFolder: vi.fn(),
     onRenameItem: vi.fn().mockResolvedValue(undefined),
     onDeleteItem: vi.fn(),
+    onMoveItem: vi.fn(),
+    onDuplicateItem: vi.fn(),
 };
 
 // ── Tests ─────────────────────────────────────────────────────────────────────
@@ -239,13 +241,29 @@ describe('CollectionTreeItem — request', () => {
         vi.clearAllMocks();
     });
 
-    it('renders Rename and Delete menu actions for a request (no Run)', () => {
+    it('renders Rename, Move, Duplicate, and Delete menu actions for a request (no Run)', () => {
         render(<CollectionTreeItem {...requestProps} />);
         const items = screen.getAllByTestId('menu-item');
         const labels = items.map(el => el.textContent ?? '');
         expect(labels.some(l => l.includes('Rename'))).toBe(true);
+        expect(labels.some(l => l.includes('Move'))).toBe(true);
+        expect(labels.some(l => l.includes('Duplicate'))).toBe(true);
         expect(labels.some(l => l.includes('Delete'))).toBe(true);
         expect(labels.every(l => !l.includes('Run'))).toBe(true);
+    });
+
+    it('calls onMoveItem with request item and parent path when Move is clicked', () => {
+        render(<CollectionTreeItem {...requestProps} />);
+        const moveBtn = screen.getAllByTestId('menu-item').find(el => el.textContent?.includes('Move'))!;
+        fireEvent.click(moveBtn);
+        expect(defaultProps.onMoveItem).toHaveBeenCalledWith(requestItem, []);
+    });
+
+    it('calls onDuplicateItem with request item and parent path when Duplicate is clicked', () => {
+        render(<CollectionTreeItem {...requestProps} />);
+        const duplicateBtn = screen.getAllByTestId('menu-item').find(el => el.textContent?.includes('Duplicate'))!;
+        fireEvent.click(duplicateBtn);
+        expect(defaultProps.onDuplicateItem).toHaveBeenCalledWith(requestItem, []);
     });
 
     it('opens inline rename input with current request name', () => {

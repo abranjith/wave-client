@@ -96,6 +96,19 @@ const mkResponse = (overrides: Partial<ResponseData> = {}): ResponseData => ({
     ...overrides,
 });
 
+const mkSentRequest = () => ({
+    method: 'POST',
+    url: 'https://api.example.com/users?page=1',
+    headers: {
+        authorization: 'Bearer secret-token',
+        'x-trace-id': 'trace-1',
+    },
+    body: {
+        text: '{"name":"alice"}',
+        format: 'json' as const,
+    },
+});
+
 // ── Setup ─────────────────────────────────────────────────────────────────────
 
 beforeEach(() => {
@@ -307,6 +320,39 @@ describe('createRequestTabsSlice — protocol-aware tab drafts (TASK-001)', () =
         expect(tab?.protocol).toBe('ws');
         expect(tab?.responseData).toBeNull();
         expect(tab?.activeResponseSection).toBe('Messages');
+    });
+
+    it('stores sentRequest from handleHttpResponse when provided', () => {
+        const id = 'sent-request-store';
+        const sentRequest = mkSentRequest();
+
+        useAppStateStore.getState().loadRequestIntoTab(mkHttp({ id }));
+        useAppStateStore.getState().handleHttpResponse(id, mkResponse({ sentRequest }));
+
+        const tab = useAppStateStore.getState().getTabById(id);
+        expect(tab?.sentRequest).toEqual(sentRequest);
+    });
+
+    it('clears sentRequest when a new send starts (setTabProcessingState true)', () => {
+        const id = 'sent-request-clear-on-send';
+
+        useAppStateStore.getState().loadRequestIntoTab(mkHttp({ id }));
+        useAppStateStore.getState().handleHttpResponse(id, mkResponse({ sentRequest: mkSentRequest() }));
+        useAppStateStore.getState().setTabProcessingState(id, true);
+
+        const tab = useAppStateStore.getState().getTabById(id);
+        expect(tab?.isRequestProcessing).toBe(true);
+        expect(tab?.sentRequest).toBeNull();
+    });
+
+    it('keeps sentRequest null when response has no sentRequest payload', () => {
+        const id = 'sent-request-null-default';
+
+        useAppStateStore.getState().loadRequestIntoTab(mkHttp({ id }));
+        useAppStateStore.getState().handleHttpResponse(id, mkResponse());
+
+        const tab = useAppStateStore.getState().getTabById(id);
+        expect(tab?.sentRequest).toBeNull();
     });
 });
 

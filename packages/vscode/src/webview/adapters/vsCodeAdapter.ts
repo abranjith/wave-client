@@ -324,13 +324,14 @@ function createVSCodeStorageAdapter(
             return sendAndWait<void>('deleteCollection', { data: { collectionId } });
         },
 
-        async saveRequestToCollection(collectionFilename, itemPath, item): Promise<Result<Collection, string>> {
+        async saveRequestToCollection(collectionFilename, itemPath, item, newCollectionName): Promise<Result<Collection, string>> {
             return sendAndWait<Collection>('saveRequestToCollection', {
                 data: {
                     requestContent: JSON.stringify(item.request, null, 2),
                     requestName: item.name,
                     collectionFileName: collectionFilename,
                     folderPath: itemPath,
+                    ...(newCollectionName ? { newCollectionName } : {}),
                 }
             });
         },

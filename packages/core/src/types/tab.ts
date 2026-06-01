@@ -13,12 +13,13 @@ import {
     CollectionBody,
     BodyMode,
     RequestProtocol,
+    SentRequestData,
 } from './collection';
 import { RequestValidation, ValidationRuleRef } from './validation';
 
 // ==================== Tab UI State ====================
 
-export type RequestSectionTab = 'Params' | 'Headers' | 'Body' | 'Validation';
+export type RequestSectionTab = 'Params' | 'Headers' | 'Body' | 'Validation' | 'Sent';
 export type ResponseSectionTab = 'Error' | 'Body' | 'Headers' | 'Validation' | 'Messages' | 'Events';
 
 // ==================== Tab Data ====================
@@ -77,6 +78,11 @@ export interface TabData {
     
     // Response state
     responseData: ResponseData | null;
+    /**
+     * Ephemeral snapshot of the most recent HTTP request sent from this tab.
+     * Never persisted to disk.
+     */
+    sentRequest: SentRequestData | null;
     
     // Request processing state
     isRequestProcessing: boolean;
@@ -128,14 +134,14 @@ export function getDefaultRequestSection(protocol: RequestProtocol): RequestSect
  * Returns the valid request-side section tabs for the given protocol.
  * Used to render only the applicable tabs in the request editor toolbar.
  *
- * - `'http'` → Params, Headers, Body, Validation
+ * - `'http'` → Params, Headers, Body, Validation, Sent
  * - `'ws'`   → Params, Headers (WS has no body or validation)
  * - `'sse'`  → Params, Headers, Body (SSE supports a request body but not validation)
  */
 export function getRequestTabsForProtocol(protocol: RequestProtocol): RequestSectionTab[] {
     if (protocol === 'ws') {return ['Params', 'Headers'];}
     if (protocol === 'sse') {return ['Params', 'Headers', 'Body'];}
-    return ['Params', 'Headers', 'Body', 'Validation'];
+    return ['Params', 'Headers', 'Body', 'Validation', 'Sent'];
 }
 
 /**
@@ -192,6 +198,7 @@ export function createEmptyTab(): TabData {
         authId: null,
         validation: createEmptyValidation(),
         responseData: null,
+        sentRequest: null,
         isRequestProcessing: false,
         requestError: null,
         isCancelled: false,

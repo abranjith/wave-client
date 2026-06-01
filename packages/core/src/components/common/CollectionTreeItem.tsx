@@ -1,5 +1,5 @@
 import React, { useState, useCallback } from 'react';
-import { ChevronRightIcon, ChevronDownIcon, FolderIcon, MoreVertical, PencilIcon, PlayIcon, Trash2Icon } from 'lucide-react';
+import { ChevronRightIcon, ChevronDownIcon, CopyIcon, FolderIcon, FolderInputIcon, MoreVertical, PencilIcon, PlayIcon, Trash2Icon } from 'lucide-react';
 import { CollectionItem, isFolder, isRequest } from '../../types/collection';
 import { isWsRequest } from '../../utils/requestTypeGuards';
 import {
@@ -44,6 +44,18 @@ interface CollectionTreeItemProps {
    * @param parentItemPath - `itemPath` of this component (path to the item's parent)
    */
   onDeleteItem: (item: CollectionItem, parentItemPath: string[]) => void;
+  /**
+   * Called when the user chooses Move for a request row.
+   * @param item - The request item being moved
+   * @param parentItemPath - Folder path to the item's parent
+   */
+  onMoveItem?: (item: CollectionItem, parentItemPath: string[]) => void;
+  /**
+   * Called when the user chooses Duplicate for a request row.
+   * @param item - The request item to duplicate
+   * @param parentItemPath - Folder path where the duplicate should be created
+   */
+  onDuplicateItem?: (item: CollectionItem, parentItemPath: string[]) => void;
 }
 
 /**
@@ -63,6 +75,8 @@ const CollectionTreeItem: React.FC<CollectionTreeItemProps> = ({
   onRunFolder,
   onRenameItem,
   onDeleteItem,
+  onMoveItem,
+  onDuplicateItem,
 }) => {
   // Generate unique key for this folder
   const folderKey = `${collectionFilename}:${[...itemPath, item.name].join('/')}`;
@@ -193,6 +207,8 @@ const CollectionTreeItem: React.FC<CollectionTreeItemProps> = ({
                 onRunFolder={onRunFolder}
                 onRenameItem={onRenameItem}
                 onDeleteItem={onDeleteItem}
+                onMoveItem={onMoveItem}
+                onDuplicateItem={onDuplicateItem}
               />
             ))}
           </div>
@@ -256,6 +272,14 @@ const CollectionTreeItem: React.FC<CollectionTreeItemProps> = ({
                     <DropdownMenuItem onClick={(e) => { e.stopPropagation(); handleRenameStart(); }}>
                       <PencilIcon className="h-4 w-4 mr-2" />
                       Rename
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onMoveItem?.(item, itemPath); }}>
+                      <FolderInputIcon className="h-4 w-4 mr-2" />
+                      Move
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onDuplicateItem?.(item, itemPath); }}>
+                      <CopyIcon className="h-4 w-4 mr-2" />
+                      Duplicate
                     </DropdownMenuItem>
                     <DropdownMenuItem
                       className="text-red-600 focus:text-red-600 focus:bg-red-50 dark:focus:bg-red-900/20"

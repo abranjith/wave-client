@@ -602,6 +602,42 @@ describe('requestBuilder', () => {
       expect(result.request?.params).toBe('page=1');
     });
 
+    it('should preserve query params embedded in the URL string when no param rows exist', async () => {
+      // Mirrors imported/loaded requests whose query string is not duplicated as
+      // param rows. The params must survive (URL stripped, params carried separately).
+      const input: CollectionRequest = {
+        id: '1',
+        name: 'Test Request',
+        method: 'GET',
+        url: 'https://httpbin.org/anything?test=param',
+        query: [],
+      };
+
+      const result = await buildHttpRequest(input, null, [], [], null);
+
+      expect(result.request?.url).toBe('https://httpbin.org/anything');
+      expect(result.request?.params).toBe('test=param');
+    });
+
+    it('should merge URL-embedded params with param rows without duplicating keys', async () => {
+      const input: CollectionRequest = {
+        id: '1',
+        name: 'Test Request',
+        method: 'GET',
+        // `test` appears in both the URL and the rows (rows authoritative);
+        // `extra` exists only in the URL and must be preserved.
+        url: 'https://api.example.com/users?test=fromUrl&extra=keepme',
+        query: [paramRow('test', 'fromRow')],
+      };
+
+      const result = await buildHttpRequest(input, null, [], [], null);
+      const params = new URLSearchParams(result.request?.params ?? '');
+
+      expect(result.request?.url).toBe('https://api.example.com/users');
+      expect(params.getAll('test')).toEqual(['fromRow']);
+      expect(params.get('extra')).toBe('keepme');
+    });
+
     it('should handle global and environment variable override', async () => {
       const environments: Environment[] = [
         {

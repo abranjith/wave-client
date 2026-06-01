@@ -1123,6 +1123,7 @@ const createRequestTabsSlice: StateCreator<RequestTabsSliceStore, [], [], Reques
             
             updateTab(tabId, {
                 responseData: response,
+                sentRequest: response.sentRequest ?? null,
                 isRequestProcessing: false,
                 isCancelled: false,
                 requestError: null,
@@ -1320,6 +1321,7 @@ const createRequestTabsSlice: StateCreator<RequestTabsSliceStore, [], [], Reques
             updateTab(tabId, { 
                 isRequestProcessing: isProcessing,
                 ...(isProcessing && { 
+                    sentRequest: null,
                     isCancelled: false, 
                     requestError: null, 
                     errorMessage: '' 

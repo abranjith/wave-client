@@ -24,6 +24,7 @@ export { default as RequestValidation } from './RequestValidation';
 export { default as ResponseValidation } from './ResponseValidation';
 export { default as ValidationStoreGrid } from './ValidationStoreGrid';
 export { default as ValidationWizard } from './ValidationWizard';
+export { default as RequestSent } from './RequestSent';
 
 // Collections management
 export { default as CollectionsPane } from './CollectionsPane';

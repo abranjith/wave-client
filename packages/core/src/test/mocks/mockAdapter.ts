@@ -183,11 +183,37 @@ function createMockStorageAdapter(store: MockDataStore): IStorageAdapter {
             );
             return ok(undefined);
         },
-        async saveRequestToCollection(collectionFilename, itemPath, item) {
-            const collection = store.collections.find(c => c.filename === collectionFilename);
+        async saveRequestToCollection(collectionFilename, itemPath, item, newCollectionName) {
+            let collection = store.collections.find(c => c.filename === collectionFilename);
+
+            if (!collection && newCollectionName) {
+                const baseName = (newCollectionName || 'new collection')
+                    .replace(/[^a-z0-9]/gi, '_')
+                    .toLowerCase();
+                const stem = baseName.length > 0 ? baseName : 'new_collection';
+
+                let generatedFilename = `${stem}.json`;
+                let suffix = 1;
+                while (store.collections.some((c) => c.filename === generatedFilename)) {
+                    generatedFilename = `${stem}_${suffix}.json`;
+                    suffix += 1;
+                }
+
+                collection = {
+                    filename: generatedFilename,
+                    info: {
+                        waveId: crypto.randomUUID(),
+                        name: newCollectionName,
+                    },
+                    item: [],
+                };
+                store.collections.push(collection);
+            }
+
             if (!collection) {
                 return err(`Collection not found: ${collectionFilename}`);
             }
+
             // Simple mock - just add to root
             collection.item.push(item);
             return ok(collection);

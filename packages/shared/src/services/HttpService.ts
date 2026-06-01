@@ -5,12 +5,13 @@ import { URL } from 'url';
 import { cookieService } from './CookieService';
 import { storeService } from './StoreService';
 import { getGlobalSettings } from './BaseStorageService';
-import { convertToBase64, HttpResponseResult } from '@wave-client/core';
+import { convertToBase64, HttpResponseResult, type SentRequestBody, type SentRequestData } from '@wave-client/core';
 import type { HttpRequestConfig } from '@wave-client/core';
 import { executeValidation, createGlobalRulesMap, createEnvVarsMap } from '../utils/validationEngine';
 import type { Cookie, ValidationResult } from '../types';
 import type { Auth, AuthType, EnvVarsMap, AuthRequestConfig, InternalAuthResponse } from './auth/types';
 import { AuthServiceFactory } from './auth';
+import { WAVE_CLIENT_USER_AGENT } from './httpConstants';
 
 // Re-export AuthService types that may be needed externally
 export type { AuthRequestConfig, InternalAuthResponse };
@@ -178,6 +179,136 @@ export class HttpService {
         }
         return '';
     }
+
+    /**
+     * Finds a header key in a case-insensitive way.
+     */
+    private findHeaderKey(headers: Record<string, string>, headerName: string): string | undefined {
+        const target = headerName.toLowerCase();
+        return Object.keys(headers).find((key) => key.toLowerCase() === target);
+    }
+
+    /**
+     * Injects the default RFC 7231 User-Agent value when no User-Agent exists.
+     */
+    private ensureDefaultUserAgent(headers: Record<string, string>): void {
+        const existingUserAgentKey = this.findHeaderKey(headers, 'user-agent');
+        if (!existingUserAgentKey) {
+            headers['User-Agent'] = WAVE_CLIENT_USER_AGENT;
+        }
+    }
+
+    /**
+     * Builds a full request URL from base URL and serialized query params.
+     */
+    private buildRequestUrl(baseUrl: string, params?: string): string {
+        if (!params) {
+            return baseUrl;
+        }
+        const separator = baseUrl.includes('?') ? '&' : '?';
+        return `${baseUrl}${separator}${params}`;
+    }
+
+    /**
+     * Type guard for URL-encoded body payload shape.
+     */
+    private isStringRecord(value: unknown): value is Record<string, string> {
+        if (!value || typeof value !== 'object' || Array.isArray(value)) {
+            return false;
+        }
+
+        return Object.values(value).every((entry) => typeof entry === 'string');
+    }
+
+    /**
+     * Derives a Sent-body format hint from a Content-Type header value.
+     * Mirrors the raw-body languages supported in the request editor.
+     */
+    private deriveBodyFormat(contentType?: string): SentRequestBody['format'] {
+        const value = (contentType || '').toLowerCase();
+        if (value.includes('json')) { return 'json'; }
+        if (value.includes('xml')) { return 'xml'; }
+        if (value.includes('html')) { return 'html'; }
+        if (value.includes('csv')) { return 'csv'; }
+        return 'text';
+    }
+
+    /**
+     * Converts the outgoing request body into a display-safe Sent tab payload.
+     *
+     * Reduced to a single `{ text, format }` shape: form-data and url-encoded
+     * bodies are JSON-encoded, file/binary bodies are summarised to metadata text
+     * (never raw payload bytes), and raw bodies keep their text with a format hint
+     * derived from the Content-Type header.
+     */
+    private buildSentRequestBody(
+        body: HttpRequestBody | unknown,
+        headers: Record<string, string>
+    ): SentRequestBody | undefined {
+        if (body === null || body === undefined) {
+            return undefined;
+        }
+
+        // Multipart form-data → JSON array (file fields are metadata-only).
+        if (this.isSerializedFormDataBody(body)) {
+            const fields = body.entries.map((entry) =>
+                entry.fieldType === 'file'
+                    ? { key: entry.key, file: { fileName: entry.fileName, contentType: entry.contentType } }
+                    : { key: entry.key, value: entry.value }
+            );
+            return { text: JSON.stringify(fields, null, 2), format: 'json' };
+        }
+
+        // Binary/file → metadata summary only (never the base64 payload).
+        if (this.isSerializedFileBody(body)) {
+            let size: number | undefined;
+            try {
+                size = Buffer.from(body.data, 'base64').byteLength;
+            } catch {
+                size = undefined;
+            }
+            const summary = [
+                body.fileName,
+                body.contentType,
+                typeof size === 'number' ? `${size} bytes` : undefined,
+            ].filter(Boolean).join(' · ');
+            return { text: summary, format: 'text' };
+        }
+
+        // URL-encoded form → JSON object.
+        if (this.isStringRecord(body)) {
+            return { text: JSON.stringify(body, null, 2), format: 'json' };
+        }
+
+        const contentTypeKey = this.findHeaderKey(headers, 'content-type');
+        const contentType = contentTypeKey ? headers[contentTypeKey] : undefined;
+
+        // Raw text → keep as-is with a format hint from the Content-Type.
+        if (typeof body === 'string') {
+            return { text: body, format: this.deriveBodyFormat(contentType) };
+        }
+
+        // Any other object payload → JSON.
+        return { text: JSON.stringify(body, null, 2), format: 'json' };
+    }
+
+    /**
+     * Captures the final request values immediately before the wire send.
+     */
+    private buildSentRequestSnapshot(
+        method: string,
+        requestUrl: string,
+        headers: Record<string, string>,
+        body: HttpRequestBody | unknown
+    ): SentRequestData {
+        return {
+            method,
+            url: requestUrl,
+            headers: { ...headers },
+            body: this.buildSentRequestBody(body, headers),
+        };
+    }
+
     /**
      * Low-level send method for making HTTP requests without auth processing.
      * Used by auth services (like Digest) that need to make HTTP calls internally.
@@ -210,12 +341,10 @@ export class HttpService {
                 ? settings.requestTimeoutSeconds * 1000
                 : 0;
 
+            this.ensureDefaultUserAgent(config.headers);
+
             // Build URL with params
-            let requestUrl = config.url;
-            if (config.params) {
-                const separator = config.url.includes('?') ? '&' : '?';
-                requestUrl = `${config.url}${separator}${config.params}`;
-            }
+            const requestUrl = this.buildRequestUrl(config.url, config.params);
 
             const response = await axios({
                 method: config.method,
@@ -277,6 +406,7 @@ export class HttpService {
     ): Promise<HttpResponseResult> {
 
         let start = Date.now();
+        let sentRequest: SentRequestData | undefined;
 
         try {
             // Load settings and cookies
@@ -319,10 +449,35 @@ export class HttpService {
 
                     const authData = authResult.value;
 
+                    // Apply auth headers
+                    if (authData?.headers) {
+                        Object.assign(headers, authData.headers);
+                    }
+
+                    // Apply auth query params
+                    if (authData?.queryParams) {
+                        const authParams = new URLSearchParams(authData.queryParams).toString();
+                        if (paramsString) {
+                            paramsString = `${paramsString}&${authParams}`;
+                        } else {
+                            paramsString = authParams;
+                        }
+                    }
+
+                    this.ensureDefaultUserAgent(headers);
+
                     // If auth handled internally (like Digest), process and return its response
                     if (authData?.handledInternally && authData.response) {
                         const elapsedTime = Date.now() - start;
                         const internalResponse = authData.response;
+                        const requestUrl = this.buildRequestUrl(request.url, paramsString);
+
+                        sentRequest = this.buildSentRequestSnapshot(
+                            request.method,
+                            requestUrl,
+                            headers,
+                            request.body
+                        );
 
                         // Process cookies from internal response
                         const newCookies = this.processSetCookieHeadersFromRaw(
@@ -359,25 +514,14 @@ export class HttpService {
                             body: bodyBase64,
                             isEncoded: true,
                             cookies: newCookies,
+                            sentRequest,
                         };
-                    }
-
-                    // Apply auth headers
-                    if (authData?.headers) {
-                        Object.assign(headers, authData.headers);
-                    }
-
-                    // Apply auth query params
-                    if (authData?.queryParams) {
-                        const authParams = new URLSearchParams(authData.queryParams).toString();
-                        if (paramsString) {
-                            paramsString = `${paramsString}&${authParams}`;
-                        } else {
-                            paramsString = authParams;
-                        }
                     }
                 }
             }
+
+            // Respect user-supplied User-Agent values while providing a default when absent.
+            this.ensureDefaultUserAgent(headers);
 
             // Get proxy and HTTPS agent configurations
             const proxy = await storeService.getProxyForUrl(request.url);
@@ -405,11 +549,7 @@ export class HttpService {
             start = Date.now();
 
             // Build final URL with params
-            let requestUrl = request.url;
-            if (paramsString) {
-                const separator = request.url.includes('?') ? '&' : '?';
-                requestUrl = `${request.url}${separator}${paramsString}`;
-            }
+            const requestUrl = this.buildRequestUrl(request.url, paramsString);
 
             // Handle custom formdata serialization for VS Code extension communication
             let requestBody: unknown = request.body;
@@ -434,7 +574,7 @@ export class HttpService {
                     // FormData reconstructed successfully
 
                     // Remove Content-Type header to let axios/browser set it with boundary
-                    const contentTypeKey = Object.keys(headers).find(k => k.toLowerCase() === 'content-type');
+                    const contentTypeKey = this.findHeaderKey(headers, 'content-type');
                     if (contentTypeKey) {
                         delete headers[contentTypeKey];
                     }
@@ -450,7 +590,7 @@ export class HttpService {
                     requestBody = this.base64ToBuffer(request.body.data);
 
                     // Ensure Content-Type is set from the file body's contentType
-                    const contentTypeKey = Object.keys(headers).find(k => k.toLowerCase() === 'content-type');
+                    const contentTypeKey = this.findHeaderKey(headers, 'content-type');
                     if (!contentTypeKey) {
                         headers['Content-Type'] = request.body.contentType;
                     }
@@ -459,6 +599,14 @@ export class HttpService {
                     // Fallback to original body if reconstruction fails
                 }
             }
+
+            // Capture immediately before axios so URL/headers/body reflect final on-wire values.
+            sentRequest = this.buildSentRequestSnapshot(
+                request.method,
+                requestUrl,
+                headers,
+                request.body
+            );
 
             const response = await axios({
                 method: request.method,
@@ -496,6 +644,7 @@ export class HttpService {
                 headers: response.headers as Record<string, string>,
                 body: bodyBase64,
                 isEncoded: true,
+                sentRequest,
             };
 
             // Execute validation if configured
@@ -544,7 +693,8 @@ export class HttpService {
                 headers: errorHeaders,
                 body: errorBodyBase64,
                 isEncoded: true,
-                cookies: []
+                cookies: [],
+                sentRequest,
             };
         }
     }

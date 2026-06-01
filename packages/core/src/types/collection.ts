@@ -402,6 +402,42 @@ export interface MultiPartFormField {
   fieldType: 'text' | 'file';
 }
 
+/**
+ * Formatting hint for a sent request body, mirroring the raw-body languages
+ * supported in the request editor (see `RequestBody.tsx`). The Sent view uses
+ * this to format/highlight the body text. Structured bodies (form-data and
+ * url-encoded) are JSON-encoded and reported as `'json'`; binary/file bodies are
+ * summarised to metadata text and reported as `'text'`.
+ */
+export type SentRequestBodyFormat = 'json' | 'xml' | 'html' | 'text' | 'csv';
+
+/**
+ * Display-safe representation of the request body that was sent.
+ *
+ * A single minimal shape: the body is always reduced to `text` plus a `format`
+ * hint. Form-data and url-encoded bodies are JSON-encoded; file/binary bodies are
+ * summarised to metadata text only (raw payload bytes are never retained).
+ */
+export interface SentRequestBody {
+  /** Body content as text. Structured bodies are JSON-encoded; files are summarised. */
+  text: string;
+  /** Hint that tells the UI how to format/highlight {@link SentRequestBody.text}. */
+  format: SentRequestBodyFormat;
+}
+
+/**
+ * Snapshot of the final request that left the client.
+ *
+ * This snapshot is designed for request debugging and is stored in-memory only.
+ * It must never be persisted to disk or logs.
+ */
+export interface SentRequestData {
+  method: string;
+  url: string;
+  headers: Record<string, string>;
+  body?: SentRequestBody;
+}
+
 export interface ResponseData {
   id: string;
   status: number;
@@ -411,6 +447,11 @@ export interface ResponseData {
   body: string;
   headers: Record<string, string>;
   validationResult?: ValidationResult;
+  /**
+   * Ephemeral request snapshot for the Sent tab.
+   * This is never persisted.
+   */
+  sentRequest?: SentRequestData;
   isEncoded: boolean;
 }
 

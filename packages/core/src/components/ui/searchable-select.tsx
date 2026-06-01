@@ -36,10 +36,8 @@ export default function SearchableSelect({id, name, label, options, selectedValu
   const [value, setValue] = useState<string>(selectedValue || "")
 
   useEffect(() => {
-    if(value && value !== selectedValue) {
-      setSelectedValue(value)
-    }
-  }, [value, setSelectedValue])
+    setValue(selectedValue || "")
+  }, [selectedValue])
 
   return (
     <div className="*:not-first:mt-2">
@@ -79,7 +77,9 @@ export default function SearchableSelect({id, name, label, options, selectedValu
                     key={option.value}
                     value={option.value}
                     onSelect={(currentValue) => {
-                      setValue(currentValue === value ? "" : currentValue)
+                      const nextValue = currentValue === value ? "" : currentValue
+                      setValue(nextValue)
+                      setSelectedValue(nextValue)
                       setOpen(false)
                       onCreateNewOption && onCreateNewOption(false)
                     }}

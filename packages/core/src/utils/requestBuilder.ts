@@ -522,11 +522,25 @@ export async function buildHttpRequest(
         };
     }
 
-    // Remove params from URL (sent separately)
+    // Merge any query params embedded directly in the URL string into the param
+    // set, then strip them from the URL (params are sent separately). Row-derived
+    // params are authoritative; URL-only params — e.g. imported/loaded requests
+    // whose query string is not mirrored as param rows — are preserved so they are
+    // not silently dropped from the outgoing request (and the Sent snapshot).
+    let finalParams = urlParams;
     try {
         const urlObj = new URL(finalUrl);
-        urlObj.search = '';
-        finalUrl = urlObj.toString();
+        if (urlObj.search) {
+            const merged = new URLSearchParams(urlParams);
+            urlObj.searchParams.forEach((value, key) => {
+                if (!merged.has(key)) {
+                    merged.append(key, value);
+                }
+            });
+            finalParams = merged.toString();
+            urlObj.search = '';
+            finalUrl = urlObj.toString();
+        }
     } catch {
         // URL parsing failed, use as-is
     }
@@ -536,7 +550,7 @@ export async function buildHttpRequest(
             id: request.id,
             method: request.method,
             url: finalUrl,
-            params: urlParams || undefined,
+            params: finalParams || undefined,
             headers,
             body: requestBody,
             auth: requestAuth || undefined,

@@ -11,8 +11,8 @@ import {
 } from '../../types/tab';
 
 describe('getRequestTabsForProtocol', () => {
-    it('returns all four HTTP tabs in order for "http"', () => {
-        expect(getRequestTabsForProtocol('http')).toEqual(['Params', 'Headers', 'Body', 'Validation']);
+    it('returns all HTTP tabs including Sent in order for "http"', () => {
+        expect(getRequestTabsForProtocol('http')).toEqual(['Params', 'Headers', 'Body', 'Validation', 'Sent']);
     });
 
     it('returns only Params and Headers for "ws"', () => {

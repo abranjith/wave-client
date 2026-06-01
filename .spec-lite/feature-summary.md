@@ -20,6 +20,20 @@ The Web Expert Agent now uses its full 245-line system prompt at runtime. The pr
 
 ---
 
+## Request Processing
+
+**FEAT-FP-RPE-001: Request Processing Enhancements** *(updated: 2026-05-31 by fix)*
+Source spec: [feature_request_processing_enhancements.md](.spec-lite/features/feature_request_processing_enhancements.md)
+HTTP tabs now expose a request-side `Sent` tab that shows the exact on-wire request snapshot (final URL with query params, final headers, and a display-safe body) for the most recent send. Snapshot data is captured in `packages/shared/src/services/HttpService.ts` immediately before the request is dispatched and is returned on success, handled-internally auth responses, and error responses. The snapshot is stored ephemerally on `TabData.sentRequest` and is reset when a new send starts. The body is reduced to a single `{ text, format }` shape: form-data and url-encoded bodies are JSON-encoded (`format: 'json'`), binary/file bodies are summarised to metadata text (`format: 'text'`, never raw bytes), and raw bodies keep their text with a `format` hint (`json`/`xml`/`html`/`text`/`csv`) derived from the Content-Type. `RequestSent` in `packages/core/src/components/common/RequestSent.tsx` renders the method and full URL on a single line (method styled with the shared `getHttpMethodColor` palette), a headers section, and a body section that shows the format hint and the body text (no Content-Type row). Sections use distinct header/content backgrounds with light- and dark-mode support. The `Sent` tab is hidden until a request has actually been sent (no snapshot ⇒ no tab); both web and VS Code editors fall back to the first visible request tab if `Sent` was active when the snapshot was cleared.
+
+Outgoing HTTP requests now get a default RFC 7231-style Wave Client `User-Agent` (`WAVE_CLIENT_USER_AGENT`) when no user-provided `user-agent` header exists (case-insensitive), while preserving custom user values unchanged.
+
+Collections request operations now include Move and Duplicate actions on request rows. `RequestSaveWizard` supports `mode="move"` (title/description swap, request-name input hidden, path prefill), and selecting `Create New Collection` in move mode now clears any preselected collection and keeps the new-collection input editable (matching save mode behavior). Move now also accepts non-existing destination collection names: when the destination name is new, the move flow creates that collection and stores the request there before removing it from the source. `CollectionsPane` now handles move with same-path blocking, save-then-delete sequencing, cross-collection updates, and failure-safe notifications. Duplicate uses new `collectionParser` helpers to deep-copy request items with fresh IDs and collision-safe names (`Copy`, `Copy 2`, ...), then persists and updates the local store.
+
+Coverage includes new and updated tests across core/shared/web, including: sent-request store behavior, `RequestSent` rendering, move-mode wizard behavior, move/duplicate collection flows, copy-name and deep-clone utilities, HttpService user-agent + sent-snapshot serialization, and web RequestEditor Sent-tab behavior.
+
+---
+
 ## WebSocket & SSE
 
 **FEAT-010: Collection Persistence for WS/SSE** *(updated: 2026-04-15 by implement)*

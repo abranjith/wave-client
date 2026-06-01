@@ -459,7 +459,8 @@ class WebStorageAdapter implements IStorageAdapter {
   async saveRequestToCollection(
     collectionFilename: string,
     itemPath: string[],
-    item: CollectionItem
+    item: CollectionItem,
+    newCollectionName?: string
   ): Promise<Result<Collection, string>> {
     try {
       const response = await api.post(
@@ -468,14 +469,16 @@ class WebStorageAdapter implements IStorageAdapter {
           requestContent: JSON.stringify(item.request),
           requestName: item.name,
           folderPath: itemPath,
+          ...(newCollectionName ? { newCollectionName } : {}),
         }
       );
       if (response.data.isOk) {
+        const savedFilename = response.data.value?.filename || collectionFilename;
         // Reload collection to get updated version
         const collectionsResult = await this.loadCollections();
         if (collectionsResult.isOk) {
           const collection = collectionsResult.value.find(
-            (c) => c.filename === collectionFilename
+            (c) => c.filename === savedFilename
           );
           if (collection) {
             return ok(collection);

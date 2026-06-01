@@ -55,7 +55,7 @@
 		{
 			"label": "tasks: build-vscode-once",
 			"type": "shell",
-			"command": "pnpm --filter wave-client-vscode build",
+			"command": "pnpm run build:vscode",
 			"problemMatcher": [],
 			"presentation": {
 				"reveal": "always",

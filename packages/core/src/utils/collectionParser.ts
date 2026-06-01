@@ -349,6 +349,52 @@ export function getSiblingsAtPath(items: CollectionItem[], folderPath: string[])
   return getSiblingsAtPath(folder.item, remainingPath);
 }
 
+/**
+ * Generates a unique sibling-safe copy name for duplicated requests.
+ *
+ * @param baseName - Original request name to duplicate.
+ * @param siblings - Existing items in the same destination folder.
+ * @returns A unique name such as "My Request Copy", "My Request Copy 2", etc.
+ *
+ * @example
+ * generateUniqueCopyName('Get Users', siblings);
+ */
+export function generateUniqueCopyName(baseName: string, siblings: CollectionItem[]): string {
+  const normalizedSiblingNames = new Set(
+    siblings.map((sibling) => sibling.name.trim().toLowerCase())
+  );
+
+  const baseCopyName = `${baseName} Copy`;
+  if (!normalizedSiblingNames.has(baseCopyName.toLowerCase())) {
+    return baseCopyName;
+  }
+
+  let copyIndex = 2;
+  while (normalizedSiblingNames.has(`${baseCopyName} ${copyIndex}`.toLowerCase())) {
+    copyIndex += 1;
+  }
+
+  return `${baseCopyName} ${copyIndex}`;
+}
+
+/**
+ * Creates a deep duplicate of a request item with fresh runtime IDs.
+ *
+ * @param item - The original request item to duplicate.
+ * @returns A deep copy with a new item id and new nested request id.
+ *
+ * @example
+ * const duplicate = duplicateRequestItem(originalItem);
+ */
+export function duplicateRequestItem(item: CollectionItem): CollectionItem {
+  const cloned = structuredClone(item);
+  cloned.id = crypto.randomUUID();
+  if (cloned.request) {
+    cloned.request.id = crypto.randomUUID();
+  }
+  return cloned;
+}
+
 // ============================================================================
 // Request Conversion Utilities
 // ============================================================================

@@ -1,7 +1,14 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { ChevronRightIcon, ChevronDownIcon, FolderIcon, LayoutGridIcon, ImportIcon, DownloadIcon, MoreVertical, PlayIcon, PencilIcon, Trash2Icon } from 'lucide-react';
-import { Collection, CollectionItem, CollectionRequest, AnyCollectionRequest } from '../../types/collection';
-import { extractRequestFromItem, countRequests, getSiblingsAtPath, renameItemInTree } from '../../utils/collectionParser';
+import { Collection, CollectionItem, AnyCollectionRequest } from '../../types/collection';
+import {
+  countRequests,
+  duplicateRequestItem,
+  extractRequestFromItem,
+  generateUniqueCopyName,
+  getSiblingsAtPath,
+  renameItemInTree,
+} from '../../utils/collectionParser';
 import useAppStateStore from '../../hooks/store/useAppStateStore';
 import { useStorageAdapter, useNotificationAdapter } from '../../hooks/useAdapter';
 import { useConfirmDialog } from '../../hooks/useConfirmDialog';
@@ -17,6 +24,7 @@ import CollectionsImportWizard from './CollectionsImportWizard';
 import CollectionExportWizard from './CollectionExportWizard';
 import CollectionTreeItem from './CollectionTreeItem';
 import RunCollectionModal from './RunCollectionModal';
+import RequestSaveWizard from './RequestSaveWizard';
 import { Input } from '../ui/input';
 import { SecondaryButton } from '../ui';
 
@@ -111,6 +119,25 @@ const setsEqual = (a: Set<string>, b: Set<string>): boolean => {
   return true;
 };
 
+const pathsEqual = (left: string[], right: string[]): boolean => {
+  if (left.length !== right.length) {
+    return false;
+  }
+  return left.every((segment, index) => segment === right[index]);
+};
+
+const toCollectionFilenameStem = (collectionName: string): string => {
+  const stem = collectionName.replace(/[^a-z0-9]/gi, '_').toLowerCase();
+  return stem.length > 0 ? stem : 'new_collection';
+};
+
+interface MoveRequestDraft {
+  sourceCollectionFilename: string;
+  sourceCollectionName: string;
+  sourceParentPath: string[];
+  item: CollectionItem;
+}
+
 interface CollectionsPaneHeaderProps {
   label: string;
   onImportClick: () => void;
@@ -170,6 +197,7 @@ const CollectionsPane: React.FC<CollectionsPaneProps> = ({
   const savedExpandedFolders = useAppStateStore((state) => state.savedExpandedFolders);
   const setSavedExpandedState = useAppStateStore((state) => state.setSavedExpandedState);
   const clearSavedExpandedState = useAppStateStore((state) => state.clearSavedExpandedState);
+  const addCollection = useAppStateStore((state) => state.addCollection);
   const updateCollection = useAppStateStore((state) => state.updateCollection);
   const removeCollection = useAppStateStore((state) => state.removeCollection);
 
@@ -190,6 +218,7 @@ const CollectionsPane: React.FC<CollectionsPaneProps> = ({
     items: CollectionItem[];
     itemPath: string[];
   }>({ isOpen: false, collectionName: '', items: [], itemPath: [] });
+  const [moveRequestDraft, setMoveRequestDraft] = useState<MoveRequestDraft | null>(null);
   /** Filename of the collection currently in inline-rename mode (null = no rename active). */
   const [editingCollectionFilename, setEditingCollectionFilename] = useState<string | null>(null);
   /** Draft text while a collection name is being edited inline. */
@@ -388,6 +417,145 @@ const CollectionsPane: React.FC<CollectionsPaneProps> = ({
       },
     });
   }, [openConfirmDialog, storageAdapter, notification, updateCollection]);
+
+  /**
+   * Opens the move wizard for a request item.
+   */
+  const handleMoveItem = useCallback((
+    collection: Collection,
+    parentItemPath: string[],
+    item: CollectionItem
+  ) => {
+    if (!item.request || !collection.filename) {
+      return;
+    }
+
+    setMoveRequestDraft({
+      sourceCollectionFilename: collection.filename,
+      sourceCollectionName: collection.info.name,
+      sourceParentPath: [...parentItemPath],
+      item,
+    });
+  }, []);
+
+  /**
+   * Executes a move operation after destination confirmation.
+   * Save happens before delete to avoid data loss if source deletion fails.
+   */
+  const handleConfirmMoveRequest = useCallback(async (
+    destinationCollectionName: string,
+    _requestName: string,
+    destinationFolderPath: string[]
+  ) => {
+    if (!moveRequestDraft) {
+      return;
+    }
+
+    const destinationCollectionNameTrimmed = destinationCollectionName.trim();
+    if (!destinationCollectionNameTrimmed) {
+      notification.showNotification('error', 'Please enter a collection name.');
+      return;
+    }
+
+    const destinationCollection = collections.find(
+      (collection) => collection.info.name.toLowerCase() === destinationCollectionNameTrimmed.toLowerCase()
+    );
+    const isCreatingNewCollection = !destinationCollection;
+    const destinationFilename = destinationCollection?.filename
+      || `${toCollectionFilenameStem(destinationCollectionNameTrimmed)}.json`;
+
+    const sourcePath = moveRequestDraft.sourceParentPath;
+    const sourceFilename = moveRequestDraft.sourceCollectionFilename;
+    const isSameCollectionMove = !isCreatingNewCollection && sourceFilename === destinationFilename;
+
+    if (isSameCollectionMove && pathsEqual(sourcePath, destinationFolderPath)) {
+      notification.showNotification('error', 'Cannot move to the same collection and folder path.');
+      return;
+    }
+
+    const saveResult = isCreatingNewCollection
+      ? await storageAdapter.saveRequestToCollection(
+        destinationFilename,
+        destinationFolderPath,
+        moveRequestDraft.item,
+        destinationCollectionNameTrimmed
+      )
+      : await storageAdapter.saveRequestToCollection(
+        destinationFilename,
+        destinationFolderPath,
+        moveRequestDraft.item
+      );
+    if (!saveResult.isOk) {
+      notification.showNotification('error', saveResult.error);
+      return;
+    }
+
+    if (!isSameCollectionMove) {
+      const savedDestinationCollection = saveResult.value;
+      const destinationAlreadyExistsInStore = collections.some(
+        (collection) => collection.info.name === savedDestinationCollection.info.name
+      );
+
+      if (destinationAlreadyExistsInStore) {
+        updateCollection(savedDestinationCollection.info.name, { item: savedDestinationCollection.item });
+      } else {
+        addCollection(savedDestinationCollection);
+      }
+    }
+
+    const deleteResult = await storageAdapter.deleteRequestFromCollection(
+      sourceFilename,
+      sourcePath,
+      moveRequestDraft.item.id
+    );
+    if (!deleteResult.isOk) {
+      if (isSameCollectionMove) {
+        // Keep local state consistent with persisted save when delete fails.
+        updateCollection(moveRequestDraft.sourceCollectionName, { item: saveResult.value.item });
+      }
+      notification.showNotification(
+        'error',
+        `Request moved, but removing it from the source failed: ${deleteResult.error}`
+      );
+      return;
+    }
+
+    updateCollection(moveRequestDraft.sourceCollectionName, { item: deleteResult.value.item });
+    setMoveRequestDraft(null);
+  }, [addCollection, collections, moveRequestDraft, notification, storageAdapter, updateCollection]);
+
+  /**
+   * Duplicates a request in-place with a unique copy name and fresh identifiers.
+   */
+  const handleDuplicateItem = useCallback(async (
+    collection: Collection,
+    parentItemPath: string[],
+    item: CollectionItem
+  ) => {
+    if (!item.request || !collection.filename) {
+      return;
+    }
+
+    const siblings = getSiblingsAtPath(collection.item, parentItemPath);
+    const duplicate = duplicateRequestItem(item);
+    const uniqueCopyName = generateUniqueCopyName(item.name, siblings);
+    duplicate.name = uniqueCopyName;
+    if (duplicate.request) {
+      duplicate.request.name = uniqueCopyName;
+    }
+
+    const saveResult = await storageAdapter.saveRequestToCollection(
+      collection.filename,
+      parentItemPath,
+      duplicate
+    );
+    if (!saveResult.isOk) {
+      notification.showNotification('error', saveResult.error);
+      return;
+    }
+
+    updateCollection(collection.info.name, { item: saveResult.value.item });
+  }, [notification, storageAdapter, updateCollection]);
 
   //TODO this default logic is flaky and needs a better approach
   // Sort collections to show default collection first
@@ -691,6 +859,12 @@ const CollectionsPane: React.FC<CollectionsPaneProps> = ({
                                 onDeleteItem={(deletedItem, parentItemPath) =>
                                   handleDeleteItem(collection, parentItemPath, deletedItem)
                                 }
+                                onMoveItem={(movedItem, parentItemPath) =>
+                                  handleMoveItem(collection, parentItemPath, movedItem)
+                                }
+                                onDuplicateItem={(duplicatedItem, parentItemPath) =>
+                                  handleDuplicateItem(collection, parentItemPath, duplicatedItem)
+                                }
                             />
                         ))}
                     </div>
@@ -716,6 +890,15 @@ const CollectionsPane: React.FC<CollectionsPaneProps> = ({
         collectionName={runModalData.collectionName}
         items={runModalData.items}
         itemPath={runModalData.itemPath}
+      />
+      <RequestSaveWizard
+        isOpen={Boolean(moveRequestDraft)}
+        mode="move"
+        initialCollectionName={moveRequestDraft?.sourceCollectionName}
+        currentPath={moveRequestDraft?.sourceParentPath || []}
+        initialRequestName={moveRequestDraft?.item.name}
+        onClose={() => setMoveRequestDraft(null)}
+        onSave={handleConfirmMoveRequest}
       />
       <ConfirmDialogComponent />
     </div>

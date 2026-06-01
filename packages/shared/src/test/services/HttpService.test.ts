@@ -55,6 +55,7 @@ import * as https from 'https';
 import { cookieService } from '../../services/CookieService.js';
 import { storeService } from '../../services/StoreService.js';
 import { getGlobalSettings } from '../../services/BaseStorageService.js';
+import { WAVE_CLIENT_USER_AGENT } from '../../services/httpConstants.js';
 
 const mockAxios = axios as unknown as ReturnType<typeof vi.fn>;
 const mockHttpsAgent = https.Agent as unknown as ReturnType<typeof vi.fn>;
@@ -124,6 +125,52 @@ describe('HttpService', () => {
             expect(result.response.status).toBe(200);
             expect(result.response.statusText).toBe('OK');
             expect(result.error).toBeUndefined();
+        });
+
+        it('should inject default User-Agent when no User-Agent header is provided', async () => {
+            mockAxios.mockResolvedValue({
+                status: 200,
+                statusText: 'OK',
+                headers: {},
+                data: Buffer.from(''),
+            });
+
+            const config: SendConfig = {
+                method: 'GET',
+                url: 'https://api.example.com/data',
+                headers: {},
+            };
+
+            await service.send(config);
+
+            const axiosConfig = mockAxios.mock.calls[0][0] as { headers: Record<string, string> };
+            expect(axiosConfig.headers['User-Agent']).toBe(WAVE_CLIENT_USER_AGENT);
+        });
+
+        it('should preserve a user-supplied User-Agent value regardless of header casing', async () => {
+            mockAxios.mockResolvedValue({
+                status: 200,
+                statusText: 'OK',
+                headers: {},
+                data: Buffer.from(''),
+            });
+
+            const config: SendConfig = {
+                method: 'GET',
+                url: 'https://api.example.com/data',
+                headers: { 'user-agent': 'CustomAgent/1.0' },
+            };
+
+            await service.send(config);
+
+            const axiosConfig = mockAxios.mock.calls[0][0] as { headers: Record<string, string> };
+            const userAgentKeys = Object.keys(axiosConfig.headers).filter(
+                (key) => key.toLowerCase() === 'user-agent'
+            );
+
+            expect(userAgentKeys).toHaveLength(1);
+            expect(axiosConfig.headers[userAgentKeys[0]]).toBe('CustomAgent/1.0');
+            expect(axiosConfig.headers['User-Agent']).toBeUndefined();
         });
 
         it('should append params to URL', async () => {
@@ -447,6 +494,167 @@ describe('HttpService', () => {
             expect(result.cookies).toHaveLength(1);
             expect(result.cookies[0].name).toBe('session');
             expect(mockCookieService.saveAll).toHaveBeenCalledWith([cookie]);
+            expect(result.sentRequest?.method).toBe('GET');
+            expect(result.sentRequest?.url).toBe('https://api.example.com/data');
+        });
+
+        it('should include default User-Agent in sentRequest when request headers omit it', async () => {
+            mockAxios.mockResolvedValue({
+                status: 200,
+                statusText: 'OK',
+                headers: {},
+                data: Buffer.from(''),
+            });
+
+            const request: HttpRequestConfig = {
+                id: 'req-ua-default',
+                method: 'GET',
+                url: 'https://api.example.com/data',
+                headers: {},
+            };
+
+            const result = await service.execute(request);
+            expect(result.sentRequest?.headers['User-Agent']).toBe(WAVE_CLIENT_USER_AGENT);
+        });
+
+        it('should preserve provided User-Agent in sentRequest and not override it', async () => {
+            mockAxios.mockResolvedValue({
+                status: 200,
+                statusText: 'OK',
+                headers: {},
+                data: Buffer.from(''),
+            });
+
+            const request: HttpRequestConfig = {
+                id: 'req-ua-custom',
+                method: 'GET',
+                url: 'https://api.example.com/data',
+                headers: {
+                    'user-agent': 'TeamClient/2.0',
+                },
+            };
+
+            const result = await service.execute(request);
+            const sentHeaders = result.sentRequest?.headers || {};
+            const userAgentKeys = Object.keys(sentHeaders).filter(
+                (key) => key.toLowerCase() === 'user-agent'
+            );
+
+            expect(userAgentKeys).toHaveLength(1);
+            expect(sentHeaders[userAgentKeys[0]]).toBe('TeamClient/2.0');
+        });
+
+        it('should include final URL (with params) in sentRequest snapshot', async () => {
+            mockAxios.mockResolvedValue({
+                status: 200,
+                statusText: 'OK',
+                headers: {},
+                data: Buffer.from('ok'),
+            });
+
+            const request: HttpRequestConfig = {
+                id: 'req-with-params',
+                method: 'GET',
+                url: 'https://api.example.com/search',
+                headers: {},
+                params: 'q=test&limit=2',
+            };
+
+            const result = await service.execute(request);
+            expect(result.sentRequest?.url).toBe('https://api.example.com/search?q=test&limit=2');
+        });
+
+        it('should serialize sentRequest formdata body without file base64 payloads', async () => {
+            mockAxios.mockResolvedValue({
+                status: 200,
+                statusText: 'OK',
+                headers: {},
+                data: Buffer.from('ok'),
+            });
+
+            const fileContentBase64 = Buffer.from('secret file bytes').toString('base64');
+
+            const request: HttpRequestConfig = {
+                id: 'req-formdata',
+                method: 'POST',
+                url: 'https://api.example.com/upload',
+                headers: {
+                    'Content-Type': 'multipart/form-data',
+                },
+                body: {
+                    type: 'formdata',
+                    entries: [
+                        {
+                            key: 'description',
+                            value: 'avatar',
+                            fieldType: 'text',
+                        },
+                        {
+                            key: 'file',
+                            value: fileContentBase64,
+                            fieldType: 'file',
+                            fileName: 'avatar.png',
+                            contentType: 'image/png',
+                        },
+                    ],
+                },
+            } as HttpRequestConfig;
+
+            const result = await service.execute(request);
+            const sentBody = result.sentRequest?.body;
+
+            // Form-data is reduced to a single { text, format } shape — JSON text.
+            expect(sentBody?.format).toBe('json');
+
+            const fields = JSON.parse(sentBody?.text ?? '[]') as Array<Record<string, unknown>>;
+            const fileField = fields.find((field) => field.key === 'file');
+            const textField = fields.find((field) => field.key === 'description');
+
+            expect(fileField).toEqual({
+                key: 'file',
+                file: { fileName: 'avatar.png', contentType: 'image/png' },
+            });
+            expect(textField).toEqual({ key: 'description', value: 'avatar' });
+
+            // The base64 file payload must never leak into the snapshot.
+            expect(sentBody?.text).not.toContain(fileContentBase64);
+        });
+
+        it('should serialize sentRequest file body with metadata and size only', async () => {
+            mockAxios.mockResolvedValue({
+                status: 200,
+                statusText: 'OK',
+                headers: {},
+                data: Buffer.from('ok'),
+            });
+
+            const fileBytes = Buffer.from('0123456789');
+            const fileBase64 = fileBytes.toString('base64');
+
+            const request: HttpRequestConfig = {
+                id: 'req-file',
+                method: 'POST',
+                url: 'https://api.example.com/upload-binary',
+                headers: {
+                    'Content-Type': 'application/octet-stream',
+                },
+                body: {
+                    type: 'file',
+                    data: fileBase64,
+                    fileName: 'payload.bin',
+                    contentType: 'application/octet-stream',
+                },
+            } as HttpRequestConfig;
+
+            const result = await service.execute(request);
+            const sentBody = result.sentRequest?.body;
+
+            // File bodies are summarised to metadata text only (no base64 payload).
+            expect(sentBody?.format).toBe('text');
+            expect(sentBody?.text).toContain('payload.bin');
+            expect(sentBody?.text).toContain('application/octet-stream');
+            expect(sentBody?.text).toContain(`${fileBytes.byteLength} bytes`);
+            expect(sentBody?.text).not.toContain(fileBase64);
         });
 
         it('should send existing cookies with request', async () => {
@@ -680,6 +888,8 @@ describe('HttpService', () => {
             // Should return the internal response
             expect(result.status).toBe(200);
             expect(result.statusText).toBe('OK');
+            expect(result.sentRequest?.url).toBe('https://api.example.com/secure');
+            expect(result.sentRequest?.headers['User-Agent']).toBe(WAVE_CLIENT_USER_AGENT);
         });
 
         it('should throw error when auth fails', async () => {
@@ -746,6 +956,8 @@ describe('HttpService', () => {
             expect(result.status).toBe(500);
             expect(result.statusText).toBe('Internal Server Error');
             expect(result.cookies).toHaveLength(0);
+            expect(result.sentRequest?.method).toBe('POST');
+            expect(result.sentRequest?.url).toBe('https://api.example.com/create');
         });
 
         it('should calculate elapsed time', async () => {

@@ -9,6 +9,8 @@ import {
   countRequests,
   getFolderPathOptions,
   ensureItemIds,
+  generateUniqueCopyName,
+  duplicateRequestItem,
   extractRequestFromItem,
   requestToCollectionItem,
 } from '../../utils/collectionParser';
@@ -714,6 +716,62 @@ describe('collectionParser', () => {
       // Legacy (no protocol) should still be usable as HTTP
       expect(extracted.protocol).toBeUndefined();
       expect((extracted as CollectionRequest).method).toBe('GET');
+    });
+  });
+
+  describe('generateUniqueCopyName', () => {
+    it('returns "<name> Copy" when no collision exists', () => {
+      const siblings: CollectionItem[] = [
+        {
+          id: 'a',
+          name: 'Other Request',
+          request: { id: 'a', name: 'Other Request', method: 'GET', url: 'https://api.example.com' },
+        },
+      ];
+
+      expect(generateUniqueCopyName('Req', siblings)).toBe('Req Copy');
+    });
+
+    it('returns "<name> Copy 2" when first copy name already exists (case-insensitive)', () => {
+      const siblings: CollectionItem[] = [
+        {
+          id: 'a',
+          name: 'Req copy',
+          request: { id: 'a', name: 'Req copy', method: 'GET', url: 'https://api.example.com' },
+        },
+      ];
+
+      expect(generateUniqueCopyName('Req', siblings)).toBe('Req Copy 2');
+    });
+  });
+
+  describe('duplicateRequestItem', () => {
+    it('creates a deep duplicate with a new item id and request.id', () => {
+      const original: CollectionItem = {
+        id: 'req-1',
+        name: 'Get Users',
+        request: {
+          id: 'req-1',
+          name: 'Get Users',
+          protocol: 'http',
+          method: 'POST',
+          url: 'https://api.example.com/users',
+          header: [{ id: 'h1', key: 'Content-Type', value: 'application/json', disabled: false }],
+          body: { mode: 'raw', raw: '{"name":"alice"}' },
+        },
+      };
+
+      const duplicate = duplicateRequestItem(original);
+
+      expect(duplicate).not.toBe(original);
+      expect(duplicate.id).not.toBe(original.id);
+      expect(duplicate.name).toBe(original.name);
+      expect(duplicate.request).toEqual(expect.objectContaining({
+        name: original.request?.name,
+        method: (original.request as CollectionRequest).method,
+        url: original.request?.url,
+      }));
+      expect(duplicate.request?.id).not.toBe(original.request?.id);
     });
   });
 });

@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { XIcon, SaveIcon } from 'lucide-react';
 import { PrimaryButton } from '../ui/PrimaryButton';
 import { SecondaryButton } from '../ui/SecondaryButton';
@@ -15,19 +15,37 @@ import {
 import useAppStateStore from '../../hooks/store/useAppStateStore';
 import SearchableSelect from '../ui/searchable-select';
 import { getFolderPathOptions } from '../../utils/collectionParser';
-import { Collection, FolderPathOption } from '../../types/collection';
+
+export type RequestSaveWizardMode = 'save' | 'move';
 
 interface RequestSaveWizardProps {
   isOpen: boolean;
   onClose: () => void;
   onSave: (collectionName: string, requestName: string, folderPath: string[]) => void;
+  /**
+   * Dialog mode.
+   * - save: create/save request to a destination
+   * - move: move an existing request to a destination
+   */
+  mode?: RequestSaveWizardMode;
+  /** Destination collection prefill used for move workflows. */
+  initialCollectionName?: string;
+  /** Source/destination folder prefill used for move workflows. */
+  currentPath?: string[];
+  /** Existing request name used when mode is move. */
+  initialRequestName?: string;
 }
 
 const RequestSaveWizard: React.FC<RequestSaveWizardProps> = ({
   isOpen,
   onClose,
   onSave,
+  mode = 'save',
+  initialCollectionName,
+  currentPath,
+  initialRequestName,
 }) => {
+  const isMoveMode = mode === 'move';
   const [searchQuery, setSearchQuery] = useState('');
   const [requestName, setRequestName] = useState('');
   const [selectedFolderPath, setSelectedFolderPath] = useState<string[]>([]);
@@ -53,19 +71,6 @@ const RequestSaveWizard: React.FC<RequestSaveWizardProps> = ({
   }, [collections, searchQuery]);
 
   /**
-   * Filter collections based on search query
-   */
-  const filteredCollectionNames = useMemo(() => {
-    if (!searchQuery.trim()) {
-      return collectionNames;
-    }
-    const query = searchQuery.toLowerCase();
-    return collectionNames.filter((collection) =>
-      collection.toLowerCase().includes(query)
-    );
-  }, [collectionNames, searchQuery]);
-
-  /**
    * Check if the search query matches an existing collection exactly
    */
   const isExistingCollection = useMemo(() => {
@@ -79,7 +84,9 @@ const RequestSaveWizard: React.FC<RequestSaveWizardProps> = ({
    */
   const handleSave = async () => {
     const collectionName = searchQuery.trim();
-    const reqName = requestName.trim();
+    const reqName = isMoveMode
+      ? (initialRequestName || requestName).trim()
+      : requestName.trim();
 
     if (!reqName) {
       setError('Please enter a request name');
@@ -107,6 +114,19 @@ const RequestSaveWizard: React.FC<RequestSaveWizardProps> = ({
     }
   };
 
+  useEffect(() => {
+    if (!isOpen) {
+      return;
+    }
+
+    setSearchQuery(initialCollectionName || '');
+    setSelectedFolderPath(currentPath || []);
+    setRequestName(initialRequestName || '');
+    setError(null);
+    setIsSaving(false);
+    setIsCollectionInput(false);
+  }, [isOpen, initialCollectionName, currentPath, initialRequestName]);
+
   /**
    * Handles dialog close
    */
@@ -117,14 +137,6 @@ const RequestSaveWizard: React.FC<RequestSaveWizardProps> = ({
     setError(null);
     setIsSaving(false);
     onClose();
-  };
-
-  /**
-   * Handles collection selection from the list
-   */
-  const handleCollectionSelect = (collectionName: string) => {
-    setSearchQuery(collectionName);
-    setError(null);
   };
 
   /**
@@ -142,30 +154,39 @@ const RequestSaveWizard: React.FC<RequestSaveWizardProps> = ({
       <DialogContent className="sm:max-w-[500px]">
         <DialogHeader>
           <DialogTitle className="text-lg font-semibold text-slate-800 dark:text-slate-200">
-            Save Request to Collection
+            {isMoveMode ? 'Move Request to Collection' : 'Save Request to Collection'}
           </DialogTitle>
           <DialogDescription className="text-sm text-slate-600 dark:text-slate-400">
-            Enter a request name and select an existing collection or create a new one
+            {isMoveMode
+              ? 'Select a destination collection and folder for this request.'
+              : 'Enter a request name and select an existing collection or create a new one'}
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4 py-4">
-          {/* Request Name Field */}
-          <div className="space-y-2">
-            <Label htmlFor="request-name" className="text-sm font-medium text-slate-700 dark:text-slate-300">
-              Request Name <span className="text-red-500">*</span>
-            </Label>
-            <Input
-              id="request-name"
-              type="text"
-              placeholder="Enter request name..."
-              value={requestName}
-              onChange={(e) => setRequestName(e.target.value)}
-              onKeyDown={handleKeyDown}
-              className="w-full text-sm rounded bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-200 focus:outline-none"
-              autoFocus
-            />
-          </div>
+          {!isMoveMode && (
+            <div className="space-y-2">
+              <Label htmlFor="request-name" className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                Request Name <span className="text-red-500">*</span>
+              </Label>
+              <Input
+                id="request-name"
+                type="text"
+                placeholder="Enter request name..."
+                value={requestName}
+                onChange={(e) => setRequestName(e.target.value)}
+                onKeyDown={handleKeyDown}
+                className="w-full text-sm rounded bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-200 focus:outline-none"
+                autoFocus
+              />
+            </div>
+          )}
+
+          {isMoveMode && currentPath && (
+            <p className="rounded bg-slate-100 px-3 py-2 text-xs text-slate-600 dark:bg-slate-800 dark:text-slate-300">
+              Current path: {currentPath.length > 0 ? currentPath.join(' / ') : '(Root)'}
+            </p>
+          )}
 
           {/* Collection Search/Input Field */}
           <div className="space-y-2">
@@ -209,7 +230,7 @@ const RequestSaveWizard: React.FC<RequestSaveWizardProps> = ({
           {isExistingCollection && folderPathOptions.length > 0 && (
             <div className="space-y-2">
               <Label htmlFor="folder-path" className="text-sm font-medium text-slate-700 dark:text-slate-300">
-                Save to Folder (optional)
+                {isMoveMode ? 'Move to Folder (optional)' : 'Save to Folder (optional)'}
               </Label>
               <SearchableSelect
                 id="folder-path"
@@ -247,9 +268,9 @@ const RequestSaveWizard: React.FC<RequestSaveWizardProps> = ({
           />
           <PrimaryButton
             onClick={handleSave}
-            disabled={!searchQuery.trim() || !requestName.trim() || isSaving}
+            disabled={!searchQuery.trim() || (!isMoveMode && !requestName.trim()) || isSaving}
             icon={<SaveIcon />}
-            text={isSaving ? 'Saving...' : 'Save'}
+            text={isSaving ? (isMoveMode ? 'Moving...' : 'Saving...') : (isMoveMode ? 'Move' : 'Save')}
           />
         </DialogFooter>
       </DialogContent>

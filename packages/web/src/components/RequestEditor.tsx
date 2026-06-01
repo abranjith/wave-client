@@ -19,6 +19,7 @@ import {
   RequestHeaders,
   RequestBody,
   RequestValidation,
+  RequestSent,
   ResponseBody,
   ResponseValidation,
   Banner,
@@ -234,9 +235,17 @@ const RequestEditor: React.FC<RequestEditorProps> = ({
       ? (['Error', ...BASE_RESPONSE_TABS] as const)
       : BASE_RESPONSE_TABS;
 
-  // Protocol-aware request tabs and protocol discriminant
+  // Protocol-aware request tabs and protocol discriminant.
+  // The "Sent" tab is hidden until a snapshot exists (nothing sent yet).
   const protocol = activeTab.protocol ?? 'http';
-  const visibleRequestTabs = getRequestTabsForProtocol(protocol);
+  const visibleRequestTabs = getRequestTabsForProtocol(protocol).filter(
+    (tab) => tab !== 'Sent' || Boolean(activeTab.sentRequest)
+  );
+  // Fall back to the first visible tab if the active section was just hidden
+  // (e.g. "Sent" disappeared after a new send cleared the snapshot).
+  const effectiveRequestSection = visibleRequestTabs.includes(activeRequestSection)
+    ? activeRequestSection
+    : visibleRequestTabs[0];
 
   return (
     <div className="w-full h-full flex flex-col overflow-hidden">
@@ -448,7 +457,7 @@ const RequestEditor: React.FC<RequestEditorProps> = ({
                 <button
                   key={tab}
                   className={`px-6 py-3 text-sm font-medium focus:outline-none transition-all relative ${
-                    activeRequestSection === tab
+                    effectiveRequestSection === tab
                       ? 'border-b-2 border-blue-500 text-blue-600 bg-white dark:bg-slate-800 dark:text-blue-400 dark:border-blue-400'
                       : 'text-slate-600 bg-transparent hover:text-blue-600 hover:bg-white/50 dark:text-slate-400 dark:hover:text-blue-400 dark:hover:bg-slate-800/50'
                   }`}
@@ -461,10 +470,12 @@ const RequestEditor: React.FC<RequestEditorProps> = ({
 
             {/* Request Tab Content */}
             <div className="px-6 py-4 bg-white dark:bg-slate-900 overflow-y-auto flex-1 min-h-0">
-              {activeRequestSection === 'Params' && <RequestParams />}
-              {activeRequestSection === 'Headers' && <RequestHeaders />}
-              {activeRequestSection === 'Body' && <RequestBody />}
-              {activeRequestSection === 'Validation' && <RequestValidation />}
+              {effectiveRequestSection === 'Params' && <RequestParams />}
+              {effectiveRequestSection === 'Headers' && <RequestHeaders />}
+              {effectiveRequestSection === 'Body' && <RequestBody />}
+              {effectiveRequestSection === 'Validation' && <RequestValidation />}
+              {/* Sent is HTTP-only via getRequestTabsForProtocol('http'). */}
+              {effectiveRequestSection === 'Sent' && <RequestSent />}
             </div>
           </div>
 

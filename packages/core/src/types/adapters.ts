@@ -23,6 +23,7 @@ import type {
     HeaderRow,
     ParamRow,
     CollectionBody,
+    SentRequestData,
 } from './collection';
 import type { Flow } from './flow';
 import type { TestSuite } from './testSuite';
@@ -105,6 +106,8 @@ export interface HttpResponseResult {
     cookies?: Cookie[];
     /** Validation results if validation was requested */
     validationResult?: ValidationResult;
+    /** Ephemeral snapshot of the request that was sent on the wire. */
+    sentRequest?: SentRequestData;
 }
 
 /**
@@ -159,7 +162,9 @@ export interface IStorageAdapter {
     saveRequestToCollection(
         collectionFilename: string,
         itemPath: string[],
-        item: CollectionItem
+        item: CollectionItem,
+        /** Optional collection name to create when destination collection does not exist. */
+        newCollectionName?: string
     ): Promise<Result<Collection, string>>;
     deleteRequestFromCollection(
         collectionFilename: string,
