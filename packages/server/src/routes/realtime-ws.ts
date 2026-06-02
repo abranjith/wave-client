@@ -106,14 +106,11 @@ export async function registerRealtimeWsRoutes(fastify: FastifyInstance): Promis
                 }),
                 handle.onMessage((message: WsMessage) => {
                     if (message.direction === 'sent') {
-                        console.log('[Realtime WS] sent message (not broadcasting)', { connectionId: config.id, size: message.size });
                         return;
                     }
-                    console.log('[Realtime WS] received message - broadcasting', { connectionId: config.id, size: message.size, direction: message.direction });
                     broadcast('ws.message', { connectionId: config.id, message });
                 }),
                 handle.onHeaders((headers: Record<string, string>) => {
-                    console.log('[Realtime WS] headers received - broadcasting', { connectionId: config.id, headerCount: Object.keys(headers).length });
                     broadcast('ws.headers', { connectionId: config.id, headers });
                 }),
                 handle.onError((error: string) => {

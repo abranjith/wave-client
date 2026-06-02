@@ -381,6 +381,7 @@ const RequestValidation: React.FC = () => {
                 <Switch
                     checked={validation?.enabled ?? false}
                     onCheckedChange={(checked: boolean) => setValidationEnabled(checked)}
+                    disabled={!resolvedRules || resolvedRules.length === 0} // Disable if there are no rules defined
                 />
             </div>
             

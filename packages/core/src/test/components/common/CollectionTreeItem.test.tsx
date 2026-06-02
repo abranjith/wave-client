@@ -55,7 +55,32 @@ vi.mock('../../../components/ui/tooltip', () => ({
     TooltipTrigger: ({ children }: { children: React.ReactNode; asChild?: boolean }) => (
         <>{children}</>
     ),
-    TooltipContent: () => null,
+    TooltipContent: ({
+        children,
+        side,
+        align,
+        sideOffset,
+        collisionPadding,
+        className,
+    }: {
+        children?: React.ReactNode;
+        side?: string;
+        align?: string;
+        sideOffset?: number;
+        collisionPadding?: number;
+        className?: string;
+    }) => (
+        <div
+            data-testid="tooltip-content"
+            data-side={side}
+            data-align={align}
+            data-side-offset={sideOffset}
+            data-collision-padding={collisionPadding}
+            className={className}
+        >
+            {children}
+        </div>
+    ),
 }));
 
 vi.mock('../../../components/ui/button', () => ({
@@ -250,6 +275,18 @@ describe('CollectionTreeItem — request', () => {
         expect(labels.some(l => l.includes('Duplicate'))).toBe(true);
         expect(labels.some(l => l.includes('Delete'))).toBe(true);
         expect(labels.every(l => !l.includes('Run'))).toBe(true);
+    });
+
+    it('uses a right-side, non-interactive tooltip for request details', () => {
+        render(<CollectionTreeItem {...requestProps} />);
+
+        const tooltip = screen.getByTestId('tooltip-content');
+        expect(tooltip).toHaveAttribute('data-side', 'right');
+        expect(tooltip).toHaveAttribute('data-align', 'center');
+        expect(tooltip).toHaveAttribute('data-side-offset', '10');
+        expect(tooltip).toHaveAttribute('data-collision-padding', '8');
+        expect(tooltip).toHaveClass('pointer-events-none');
+        expect(tooltip).toHaveClass('max-w-[16rem]');
     });
 
     it('calls onMoveItem with request item and parent path when Move is clicked', () => {

@@ -293,7 +293,13 @@ const CollectionTreeItem: React.FC<CollectionTreeItemProps> = ({
               </div>
             </div>
           </TooltipTrigger>
-          <TooltipContent className="px-2 py-1 text-xs max-w-xs">
+          <TooltipContent
+            side="right"
+            align="center"
+            sideOffset={10}
+            collisionPadding={8}
+            className="pointer-events-none px-2 py-1 text-xs max-w-[16rem]"
+          >
             <div className="font-medium">{item.name}</div>
             {requestUrl && <div className="text-slate-400 dark:text-slate-500 truncate">{requestUrl}</div>}
           </TooltipContent>

@@ -1339,9 +1339,7 @@ export function createWebAdapter(): IPlatformAdapter {
   wsConnectionIssueNotified = false;
 
   // Initialize WebSocket connection
-  console.log('[WebAdapter] Initializing adapter, about to call initWebSocket()');
   initWebSocket();
-  console.log('[WebAdapter] initWebSocket() called, connection state:', wsConnection?.readyState);
 
   return {
     storage: new WebStorageAdapter(),
