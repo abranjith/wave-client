@@ -20,7 +20,8 @@
     "build:shared": "pnpm --filter @wave-client/shared build",
     "build:server": "pnpm --filter @wave-client/server build",
     "build:vscode": "pnpm --filter @wave-client/core build && pnpm --filter @wave-client/shared build && pnpm --filter wave-client-vscode build",
-    "build:web": "pnpm --filter @wave-client/web build"
+    "build:web": "pnpm --filter @wave-client/web build",
+    "docs:llms": "node scripts/generate-llms-full.mjs"
   },
   "devDependencies": {
     "@types/mocha": "^10.0.10",

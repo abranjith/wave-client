@@ -407,6 +407,9 @@ export * from './utils/encoding';
 // Collection parser utilities
 export * from './utils/collectionParser';
 
+// Constants
+export * from './constants/docs';
+
 // Collection transformer utilities
 export {
     transformCollection,

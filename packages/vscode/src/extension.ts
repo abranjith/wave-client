@@ -76,7 +76,7 @@ async function createWebviewPanel(context: vscode.ExtensionContext): Promise<vsc
 
 	const panel = vscode.window.createWebviewPanel(
 		'waveClient',
-		'Wave Client Beta',
+		'Wave Client (Beta)',
 		vscode.ViewColumn.One,
 		{
 			enableScripts: true,

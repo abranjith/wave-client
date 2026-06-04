@@ -10,6 +10,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
   SecondaryButton,
+  DocsLinkButton,
   CollectionsPane,
   EnvironmentsPane,
   HistoryPane,
@@ -107,6 +108,7 @@ const ConfigPanel: React.FC<ConfigPanelProps> = ({ onRequestSelect, onEnvSelect,
               tooltip="Settings"
               className="flex items-center justify-center w-full h-12 text-slate-600 hover:bg-slate-100 hover:text-blue-600 rounded-md transition-colors dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-blue-400"
             />
+            <DocsLinkButton />
             <SecondaryButton
               variant="ghost"
               onClick={toggleTheme}

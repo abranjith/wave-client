@@ -357,10 +357,12 @@ const RunRequestCard: React.FC<RunRequestCardProps> = ({
   const hasError = !!data.error;
   const tabs = getTabsForRequest(hasError);
 
-  // Auto-switch to Error tab when error appears
+  // Auto-switch to Error tab when error appears; reset when error clears (e.g. on re-run)
   React.useEffect(() => {
-    if (hasError && activeTab !== 'Error') {
+    if (hasError) {
       setActiveTab('Error');
+    } else {
+      setActiveTab(prev => prev === 'Error' ? 'Response Headers' : prev);
     }
   }, [hasError]);
 

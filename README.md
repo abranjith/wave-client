@@ -1,76 +1,96 @@
 # Wave Client
 
-**Wave Client** is a modern, intuitive, and platform-agnostic REST API client designed to streamline your API development workflow. Built with React and Tailwind CSS, it offers a beautiful, consistent interface whether you're working inside **Visual Studio Code** or in a **web browser**.
+**Wave Client** is a modern, platform‑agnostic REST API client that runs both as a **Visual Studio Code extension** and as a **standalone web app** — the same UI, the same files, everywhere. Build and send requests, organize them into collections, parameterize with environments, validate responses, chain requests into flows and test suites, and even ask a built‑in AI assistant for help.
 
-## 🚀 Key Features
+> **Public beta.** See the [Release Notes](docs/release-notes.md) for what's included.
 
-*   **Modern Interface**: A clean, minimalist UI that feels native to your environment, with automatic Light/Dark theme synchronization.
-*   **Run Everywhere**: 
-    *   **VS Code Extension**: Integrated workflow right next to your code.
-    *   **Web Application**: Standalone browser-based client for flexibility.
-*   **Smart Request Building**: 
-    *   Support for all major HTTP methods (GET, POST, PUT, DELETE, etc.).
-    *   Visual editors for Headers, Query Parameters, and Request Bodies (JSON, Form Data, Text).
-    *   Dynamic URL parsing and validation.
-*   **Collection Management**:
-    *   **Postman Compatibility**: Full support for importing and using Postman Collections (v2.1.0).
-    *   **Organization**: Hierarchical structure with nested folders for complex API suites.
-    *   **One-Click Loading**: Instantly load and execute requests.
-*   **Environment Variables**: Robust management of variables for different deployment stages (Dev, Staging, Production).
-*   **Advanced Networking**: 
-    *   Support for HTTP/HTTPS/SOCKS Proxies.
-    *   Client Certificate (mTLS) support.
-    *   Request cancellation and timeout controls.
-*   **Security & Privacy**: 
-    *   Local encryption for sensitive data.
-    *   Secure storage of secrets and tokens.
+---
 
-## 💻 Two Ways to Use
+## Documentation
 
-### 1. VS Code Extension
-The extension delivers the full Wave Client experience directly in VS Code. It leverages native editor capabilities for file system access, secret storage, and theme integration.
-*   **Command**: `Wave Client: Open Wave Client`
-*   **Shortcut**: `Ctrl+Shift+W` / `Cmd+Shift+W`
+**Full documentation lives in [`docs/`](docs/README.md) — start there.**
 
-### 2. Standalone Web App
-A full-featured web application that runs in your browser. It connects to a local server to provide features usually impossible in a browser, like unrestricted HTTP requests (avoiding CORS), local file system access, and advanced encryption.
+Quick links:
+- [Installation](docs/getting-started/installation.md) · [Quick Start](docs/getting-started/quick-start.md)
+- Features: [Requests](docs/features/requests.md) · [Collections](docs/features/collections.md) · [Environments](docs/features/environments.md) · [Variables](docs/features/variables.md) · [Auth](docs/features/auth.md) · [Validations](docs/features/validations.md) · [Wave Store](docs/features/wave-store.md) · [Flows](docs/features/flows.md) · [Test Lab](docs/features/tests.md) · [Reporting](docs/features/reporting.md) · [Settings](docs/features/settings.md) · [AI & Wave Arena](docs/features/ai-arena.md)
+- Platforms: [VS Code](docs/platforms/vscode.md) · [Web app](docs/platforms/web-app.md)
+- [Design & Architecture](docs/design.md)
 
-## 🏗️ Architecture
+> Inside either app, click the **Documentation** icon in the left sidebar to open these docs.
 
-Wave Client is built as a **monorepo** designed for maximum code reuse. It uses the **Adapter Pattern** to share 100% of the UI logic across platforms while delegating system operations to platform-specific adapters.
+---
 
-*   **[`packages/core`](packages/core/README.md)**: The platform-agnostic heart of the application. Contains all UI components and business logic.
-*   **[`packages/vscode`](packages/vscode/README.md)**: Bridges the core UI with VS Code's Extension API.
-*   **[`packages/web`](packages/web/README.md)**: Bridges the core UI with browser APIs and a local backend server.
-*   **[`packages/server`](packages/server/README.md)**: A lightweight Node.js server that powers the web version with secure I/O capabilities.
+## What you can do
 
-## 🛠️ Development
+- **Requests beyond HTTP** — HTTP, **WebSocket**, and **SSE**, with rich body editors and a "Sent" view of the exact outgoing request.
+- **Organize** — nested [collections](docs/features/collections.md) with import (Postman, OpenAPI/Swagger, HTTP) and export.
+- **Parameterize** — [environments](docs/features/environments.md), `{{variables}}`, and dynamic [`_fn_` functions](docs/features/variables.md).
+- **Authenticate** — API Key, Basic, Digest, and OAuth2, plus a reusable [Wave Store](docs/features/wave-store.md) for cookies, auth, proxies, and certificates.
+- **Validate** — response checks via [JSONPath and JSON Schema](docs/features/validations.md).
+- **Automate** — [flows](docs/features/flows.md), [test suites](docs/features/tests.md), and exportable [run reports](docs/features/reporting.md).
+- **AI built in** — [Wave Arena](docs/features/ai-arena.md) and an MCP server for external AI tools.
 
-### Prerequisites
-*   Node.js (v18+)
-*   pnpm
+---
 
-### Quick Start
+## Two ways to use it
 
-1.  **Install Dependencies**
-    ```bash
-    pnpm install
-    ```
+### VS Code extension
+Run **Wave Client: Open Wave Client** from the Command Palette, or press **`Ctrl+Alt+W`** / **`Cmd+Alt+W`**. → [VS Code guide](docs/platforms/vscode.md)
 
-2.  **Run VS Code Extension**
-    ```bash
-    # Build and watch all packages
-    pnpm watch
-    # Open "Run and Debug" in VS Code and select "Extension"
-    ```
+### Web app
+```bash
+pnpm install
+pnpm dev:web   # starts the local server + web UI → http://localhost:5173
+```
+→ [Web app guide](docs/platforms/web-app.md)
 
-3.  **Run Web Client**
-    ```bash
-    # Starts the web frontend and local server
-    cd packages/web
-    pnpm run dev
-    ```
+---
 
-## 📄 License
+## Architecture, in brief
+
+Wave Client is a **monorepo** built around the **adapter pattern**: a platform‑agnostic core UI is shared across platforms, and platform‑specific I/O is isolated behind adapters.
+
+| Package | Role |
+| --- | --- |
+| [`packages/core`](packages/core/README.md) | Platform‑agnostic UI, state, and logic |
+| [`packages/vscode`](packages/vscode/README.md) | VS Code extension |
+| [`packages/web`](packages/web/README.md) | Browser app |
+| [`packages/server`](packages/server/README.md) | Local backend for the web app |
+| [`packages/shared`](packages/shared/README.md) | Shared Node‑side services |
+| [`packages/arena`](packages/arena/README.md) | AI engine (Wave Arena) |
+| [`packages/mcp-server`](packages/mcp-server/README.md) | MCP server for external AI tools |
+
+Full details in the [Design & Architecture guide](docs/design.md).
+
+---
+
+## Future peek
+
+Wave Client is actively evolving. On the radar (subject to change):
+
+- More protocols (GraphQL, gRPC) and request‑editor refinements.
+- Cloud sync for collections and environments; a credential manager.
+- A deeper Test Lab (schema validation, performance plans, history & insights) and richer reporting.
+- More AI capabilities and broader provider support.
+- Team collaboration and a hosted option.
+
+---
+
+## Credits
+
+Wave Client stands on excellent open‑source work, including:
+
+- **UI**: [React](https://react.dev/), [Tailwind CSS](https://tailwindcss.com/), [Radix UI](https://www.radix-ui.com/), [lucide‑react](https://lucide.dev/), [highlight.js](https://highlightjs.org/), [cmdk](https://cmdk.paco.me/)
+- **State**: [Zustand](https://github.com/pmndrs/zustand)
+- **Tooling/build**: [Vite](https://vitejs.dev/), [Webpack](https://webpack.js.org/), [Turborepo](https://turbo.build/), [TypeScript](https://www.typescriptlang.org/)
+- **HTTP & server**: [axios](https://axios-http.com/), [Fastify](https://fastify.dev/)
+- **Parsing & validation**: [@scalar/openapi-parser](https://github.com/scalar/scalar), [jsonpath‑plus](https://github.com/JSONPath-Plus/JSONPath), [ajv](https://ajv.js.org/)
+- **AI**: [LangChain.js & LangGraph.js](https://www.langchain.com/), [Google Gemini](https://ai.google.dev/) and [Ollama](https://ollama.com/), [Model Context Protocol SDK](https://modelcontextprotocol.io/), [hnswlib‑node](https://github.com/yoshoku/hnswlib-node)
+
+See each package's `package.json` for the complete dependency list.
+
+---
+
+## License
 
 See the [LICENSE](LICENSE) file for details.

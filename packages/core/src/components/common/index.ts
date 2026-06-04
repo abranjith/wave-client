@@ -65,6 +65,10 @@ export { default as CertWizard } from './CertWizard';
 // Settings
 export { default as SettingsWizard } from './SettingsWizard';
 
+// Documentation link (in-app docs entry point)
+export { default as DocsLinkButton } from './DocsLinkButton';
+export type { DocsLinkButtonProps } from './DocsLinkButton';
+
 // Realtime / Protocol UI (FEAT-003, FEAT-006)
 export { default as ProtocolSelector } from './ProtocolSelector';
 export { default as ConnectionControls } from './ConnectionControls';

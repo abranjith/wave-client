@@ -197,11 +197,6 @@ export class FlowExecutor {
                 flowContext.responses.set(node.alias, result.response);
                 flowContext.executionOrder.push(node.alias);
             }
-
-            // Stop on failure (flows always stop on failure)
-            if (nodeResult.status === 'failed') {
-                break;
-            }
         }
 
         return this.buildFlowRunResult(
@@ -355,32 +350,6 @@ export class FlowExecutor {
                     }
                 }
 
-                // Stop on failure
-                if (result.status === 'failed') {
-                    // Mark remaining in-flight nodes as skipped (they're still executing but we're stopping)
-                    for (const nodeId of inFlightNodeIds) {
-                        nodeResults.set(nodeId, {
-                            nodeId,
-                            requestId: nodeMap.get(nodeId)?.requestId || '',
-                            alias: nodeMap.get(nodeId)?.alias || '',
-                            status: 'skipped',
-                        });
-                    }
-                    inFlightNodeIds.clear();
-                    activePromises.clear();
-
-                    // Mark pending nodes as skipped
-                    for (const pendingId of pendingNodes) {
-                        nodeResults.set(pendingId, {
-                            nodeId: pendingId,
-                            requestId: nodeMap.get(pendingId)?.requestId || '',
-                            alias: nodeMap.get(pendingId)?.alias || '',
-                            status: 'skipped',
-                        });
-                    }
-                    pendingNodes.clear();
-                    break;
-                }
             } else if (pendingNodes.size > 0) {
                 // No ready nodes and no active promises - deadlock or all skipped
                 // Mark remaining pending nodes with final status to prevent stuck states
