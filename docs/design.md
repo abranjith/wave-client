@@ -52,9 +52,14 @@ The core UI never performs I/O directly. Instead it calls an **`IPlatformAdapter
 | `secret` | Secure key storage |
 | `security` | Encryption enable/disable, password change, recovery key |
 | `notification` | User notifications and dialogs |
+| `arena` | AI assistant storage and streaming integration |
+| `clipboard` | Read/write the platform clipboard |
 | `events` | Push‑event emitter (see below) |
+| `realtime` | *(optional)* WebSocket/SSE connections |
 
-Plus a `platform` discriminator (`'vscode' | 'web' | …`) and optional `initialize()` / `dispose()`.
+Plus a `platform` discriminator (`'vscode' | 'web' | 'test'`) and optional `initialize()` / `dispose()`.
+
+> Want to implement this for a new platform (a CLI, desktop app, …)? See [Build Your Own Client](build-your-own-client.md).
 
 ### Two communication styles
 1. **Request/response** — a component calls an adapter method and awaits a `Result`.

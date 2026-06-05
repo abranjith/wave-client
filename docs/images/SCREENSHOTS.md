@@ -12,21 +12,21 @@ Legend: `[ ]` to capture · `[x]` captured
 ---
 
 ## Quick Start (`getting-started/quick-start.md`)
-- [ ] `quickstart-new-request.png` — empty request editor with a new HTTP tab
-- [ ] `quickstart-send-request.png` — request with method, URL, and the Send button highlighted
-- [ ] `quickstart-response.png` — response viewer showing a successful 200 response body
-- [ ] `quickstart-save-request.png` — the Save Request dialog choosing a collection
+- [x] `quickstart-new-request.png` — empty request editor with a new HTTP tab
+- [x] `quickstart-send-request.png` — request with method, URL, and the Send button highlighted
+- [x] `quickstart-response.png` — response viewer showing a successful 200 response body
+- [x] `quickstart-save-request.png` — the Save Request dialog choosing a collection
 
 ## Installation (`getting-started/installation.md`)
 - [ ] `install-vscode-command.png` — the Command Palette showing "Wave Client: Open Wave Client"
 - [ ] `install-web-running.png` — terminal output after `pnpm dev:web` with both URLs
 
 ## Requests (`features/requests.md`)
-- [ ] `requests-protocol-selector.png` — the protocol selector dropdown (HTTP / WebSocket / SSE)
-- [ ] `requests-body-types.png` — the request body editor showing body type options
-- [ ] `requests-response-viewer.png` — response viewer with headers/body tabs
-- [ ] `requests-sent-view.png` — the "Sent" tab showing the exact outgoing request
-- [ ] `requests-ws-messages.png` — a WebSocket connection with the Messages panel
+- [x] `requests-protocol-selector.png` — the protocol selector dropdown (HTTP / WebSocket / SSE)
+- [x] `requests-body-types.png` — the request body editor showing body type options
+- [x] `requests-response-viewer.png` — response viewer with headers/body tabs
+- [x] `requests-sent-view.png` — the "Sent" tab showing the exact outgoing request
+- [x] `requests-ws-messages.png` — a WebSocket connection with the Messages panel
 - [ ] `requests-sse-events.png` — an SSE connection with the Events timeline
 
 ## Collections (`features/collections.md`)

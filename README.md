@@ -1,8 +1,23 @@
+<div align="center">
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset=".github/images/logo/png/wave-client-logo-dark-512.png">
+  <img src=".github/images/logo/png/wave-client-logo-light-512.png" alt="Wave Client logo" width="140" height="140">
+</picture>
+
 # Wave Client
 
-**Wave Client** is a modern, platform‑agnostic REST API client that runs both as a **Visual Studio Code extension** and as a **standalone web app** — the same UI, the same files, everywhere. Build and send requests, organize them into collections, parameterize with environments, validate responses, chain requests into flows and test suites, and even ask a built‑in AI assistant for help.
+</div>
 
-> **Public beta.** See the [Release Notes](docs/release-notes.md) for what's included.
+
+### A modern, platform‑agnostic REST API client
+
+Build and send requests, organize them into collections, parameterize with environments, validate responses, chain requests into flows and test suites, and even ask a built‑in AI assistant for help.
+
+Available today as a **VS Code extension** and a **web app** — and architected so new clients (a CLI and beyond) can be built on the same core. See [Build Your Own Client](docs/build-your-own-client.md).
+
+**Public beta** · See the [Release Notes](docs/release-notes.md) for what's included.
+
 
 ---
 
@@ -32,7 +47,9 @@ Quick links:
 
 ---
 
-## Two ways to use it
+## Clients
+
+Wave Client runs as multiple clients over one shared, platform‑agnostic core. Two are available today, and the [adapter architecture](docs/design.md) makes it straightforward to add more.
 
 ### VS Code extension
 Run **Wave Client: Open Wave Client** from the Command Palette, or press **`Ctrl+Alt+W`** / **`Cmd+Alt+W`**. → [VS Code guide](docs/platforms/vscode.md)
@@ -43,6 +60,9 @@ pnpm install
 pnpm dev:web   # starts the local server + web UI → http://localhost:5173
 ```
 → [Web app guide](docs/platforms/web-app.md)
+
+### Build your own
+The core isn't tied to these two — a CLI, desktop, or other client is just a new adapter. → [Build Your Own Client](docs/build-your-own-client.md)
 
 ---
 
@@ -60,7 +80,7 @@ Wave Client is a **monorepo** built around the **adapter pattern**: a platform�
 | [`packages/arena`](packages/arena/README.md) | AI engine (Wave Arena) |
 | [`packages/mcp-server`](packages/mcp-server/README.md) | MCP server for external AI tools |
 
-Full details in the [Design & Architecture guide](docs/design.md).
+Because of this, adding a new client (a CLI, a desktop app, …) means implementing one adapter rather than rebuilding the app. Full details in the [Design & Architecture guide](docs/design.md) and the [Build Your Own Client](docs/build-your-own-client.md) guide.
 
 ---
 
@@ -72,6 +92,7 @@ Wave Client is actively evolving. On the radar (subject to change):
 - Cloud sync for collections and environments; a credential manager.
 - A deeper Test Lab (schema validation, performance plans, history & insights) and richer reporting.
 - More AI capabilities and broader provider support.
+- Additional client types — a CLI and beyond — on the same shared core.
 - Team collaboration and a hosted option.
 
 ---

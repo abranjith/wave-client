@@ -1,4 +1,10 @@
-# @wave-client/vscode
+<h1>
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/abranjith/wave-client/main/packages/vscode/assets/logos/wave-client-logo-dark-32.png">
+    <img src="https://raw.githubusercontent.com/abranjith/wave-client/main/packages/vscode/assets/logos/wave-client-logo-light-32.png" alt="Wave Client logo" width="28" height="28" align="absmiddle">
+  </picture>
+  &nbsp;@wave-client/vscode
+</h1>
 
 The Wave Client **VS Code extension** — runs the shared Wave Client UI inside VS Code.
 

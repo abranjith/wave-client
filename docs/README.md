@@ -47,6 +47,7 @@ New to Wave Client? Follow these in order:
 
 ### Reference
 - [Design & Architecture](design.md) — how Wave Client is built (for the architecture‑curious)
+- [Build Your Own Client](build-your-own-client.md) — use the platform-agnostic core to build a new client (CLI, desktop, …)
 - [Release Notes](release-notes.md) — what's in each release
 
 ---
@@ -63,7 +64,7 @@ New to Wave Client? Follow these in order:
 
 ## What is Wave Client, in one minute?
 
-- **One UI, two platforms.** The same React UI runs in a VS Code webview and in the browser, thanks to an [adapter architecture](design.md).
+- **One core, many clients.** The same platform-agnostic core runs in a VS Code webview and in the browser today, thanks to an [adapter architecture](design.md) — and new clients (a CLI and beyond) can be [built on the same core](build-your-own-client.md).
 - **Requests beyond HTTP.** Send classic HTTP requests, or open long‑lived **WebSocket** and **Server‑Sent Events (SSE)** connections.
 - **Organize and reuse.** Group requests into [collections](features/collections.md), parameterize them with [environments](features/environments.md) and [variables](features/variables.md), and store reusable [credentials](features/wave-store.md).
 - **Automate.** Chain requests into [flows](features/flows.md) and build [test suites](features/tests.md), then export [run reports](features/reporting.md).

@@ -1,4 +1,10 @@
-# @wave-client/web
+<h1>
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="public/logos/wave-client-logo-dark-32.png">
+    <img src="public/logos/wave-client-logo-light-32.png" alt="Wave Client logo" width="28" height="28" align="absmiddle">
+  </picture>
+  &nbsp;@wave-client/web
+</h1>
 
 The Wave Client **web app** — runs the shared Wave Client UI in the browser.
 

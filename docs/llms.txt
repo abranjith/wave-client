@@ -30,6 +30,7 @@
 ## Reference
 
 - [Design & Architecture](design.md): Monorepo and package responsibilities, the adapter pattern, services, the Zustand store, hooks, and the Result pattern.
+- [Build Your Own Client](build-your-own-client.md): How to build a new Wave Client client (CLI, desktop, etc.) on the platform-agnostic core by implementing the IPlatformAdapter interface; covers UI and headless clients.
 - [Release Notes](release-notes.md): Capabilities by area for the public beta.
 
 ## Optional
