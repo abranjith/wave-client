@@ -122,7 +122,6 @@ export {
 export { AutocompleteInput } from './autocomplete-input';
 export { default as StyledAutocompleteInput } from './styled-autocomplete-input';
 export { default as StyledInput } from './styled-input';
-export { default as StyledInput2 } from './styled-input2';
 export { FileInput } from './fileinput';
 
 // Buttons

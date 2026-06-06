@@ -781,7 +781,9 @@ export const TestSuiteEditor: React.FC<TestSuiteEditorProps> = ({
     const updateTestSuiteItems = useAppStateStore((s) => s.updateTestSuiteItems);
     const updateTestSuiteSettings = useAppStateStore((s) => s.updateTestSuiteSettings);
     const markTestSuiteClean = useAppStateStore((s) => s.markTestSuiteClean);
-    const getTestSuiteById = useAppStateStore((s) => s.getTestSuiteById);
+    const currentSuiteFromStore = useAppStateStore((s) =>
+        s.testSuites.find((testSuite) => testSuite.id === suite.id)
+    );
 
     // Test suite runner
     const runner = useTestSuiteRunner({
@@ -798,7 +800,7 @@ export const TestSuiteEditor: React.FC<TestSuiteEditorProps> = ({
     const [isSettingsExpanded, setIsSettingsExpanded] = useState(false);
 
     // Get current suite from store (may be updated)
-    const currentSuite = getTestSuiteById(suite.id) || suite;
+    const currentSuite = currentSuiteFromStore || suite;
 
     // Existing item reference IDs
     const existingItemIds = useMemo(() => {

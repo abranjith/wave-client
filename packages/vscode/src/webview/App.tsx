@@ -38,6 +38,7 @@ import {
   type TestSuite,
   type AnyCollectionRequest,
   type CollectionItem,
+  isHttpRequest,
 } from '@wave-client/core';
 
 const App: React.FC = () => {
@@ -275,7 +276,7 @@ const App: React.FC = () => {
     setIsTestSuitesLoading(false);
   };
 
-  const handleRequestSelect = (request: CollectionRequest) => {
+  const handleRequestSelect = (request: AnyCollectionRequest) => {
     loadRequestIntoTab(request);
     setSelectedEnvironment(null); // Clear environment selection when selecting a request
     setSelectedStore(null); // Clear store selection when selecting a request
@@ -347,8 +348,10 @@ const App: React.FC = () => {
   const handleSendRequest = async (tabId: string) => {
     const tabRequest = getCollectionRequest(tabId);
     
-    // Save to history
-    await storage.saveRequestToHistory(tabRequest);
+    // Save only HTTP/legacy HTTP requests to history for now.
+    if (isHttpRequest(tabRequest)) {
+      await storage.saveRequestToHistory(tabRequest);
+    }
 
     // Build HTTP request using core slice helper
     setTabProcessingState(tabId, true);

@@ -34,6 +34,8 @@ import type { TestSuite } from '../../../types/testSuite';
 import { DEFAULT_TEST_SUITE_SETTINGS } from '../../../types/testSuite';
 import type { Flow } from '../../../types/flow';
 
+const initialStoreState = useAppStateStore.getState();
+
 // ── Mocks ────────────────────────────────────────────────────────────────────
 
 /**
@@ -278,6 +280,19 @@ function makeSuite(id: string, items: TestSuite['items'] = []): TestSuite {
     };
 }
 
+function makeRequestItemSuite(id: string, enabled = true): TestSuite {
+    return makeSuite(id, [
+        {
+            id: `${id}-item-1`,
+            type: 'request',
+            name: 'Get Users',
+            referenceId: 'my-api.json:http-1',
+            order: 0,
+            enabled,
+        },
+    ]);
+}
+
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 function seedStore(options: {
@@ -322,6 +337,33 @@ function openAddDialog() {
     fireEvent.click(button);
 }
 
+function seedStoreForEnabledToggle(options: {
+    suite: TestSuite;
+    dirty: boolean;
+    collections?: Collection[];
+}) {
+    useAppStateStore.setState({
+        collections: options.collections ?? [],
+        flows: [],
+        environments: [],
+        auths: [],
+        testSuites: [options.suite],
+        testSuiteDirtyStates: { [options.suite.id]: options.dirty },
+        testSuiteRunStates: {},
+        updateTestSuiteItems: initialStoreState.updateTestSuiteItems,
+        updateTestSuiteName: initialStoreState.updateTestSuiteName,
+        updateTestSuiteDefaultEnv: initialStoreState.updateTestSuiteDefaultEnv,
+        updateTestSuiteDefaultAuth: initialStoreState.updateTestSuiteDefaultAuth,
+        updateTestSuiteSettings: initialStoreState.updateTestSuiteSettings,
+        markTestSuiteClean: initialStoreState.markTestSuiteClean,
+        addTestCase: initialStoreState.addTestCase,
+        updateTestCase: initialStoreState.updateTestCase,
+        deleteTestCase: initialStoreState.deleteTestCase,
+        isTestSuiteRunning: initialStoreState.isTestSuiteRunning,
+        isTestSuiteDirty: initialStoreState.isTestSuiteDirty,
+    } as Partial<ReturnType<typeof useAppStateStore.getState>>);
+}
+
 // ── Tests ─────────────────────────────────────────────────────────────────────
 
 describe('TestSuiteEditor AddItemDialog — exclusion gate (FEAT-011)', () => {
@@ -333,6 +375,9 @@ describe('TestSuiteEditor AddItemDialog — exclusion gate (FEAT-011)', () => {
         useAppStateStore.setState({
             collections: [],
             flows: [],
+            testSuites: [],
+            testSuiteDirtyStates: {},
+            testSuiteRunStates: {},
         } as Partial<ReturnType<typeof useAppStateStore.getState>>);
     });
 
@@ -523,5 +568,34 @@ describe('TestSuiteEditor AddItemDialog — exclusion gate (FEAT-011)', () => {
         // pre-existing WS items — in real use, the row would show the item name
         // from `item.name` or fallback metadata.
         expect(screen.queryByText(/error/i)).toBeNull();
+    });
+
+    it('updates enabled checkbox immediately when suite is already dirty', () => {
+        const suite = makeRequestItemSuite('suite-dirty-1', true);
+        seedStoreForEnabledToggle({ suite, dirty: true });
+        renderEditor(suite);
+
+        const checkbox = screen.getByRole('checkbox') as HTMLInputElement;
+        expect(checkbox.checked).toBe(true);
+
+        fireEvent.click(checkbox);
+
+        const updatedCheckbox = screen.getByRole('checkbox') as HTMLInputElement;
+        expect(updatedCheckbox.checked).toBe(false);
+        expect(useAppStateStore.getState().testSuites[0].items[0].enabled).toBe(false);
+    });
+
+    it('keeps checkbox state in sync after suite transitions to dirty', () => {
+        const suite = makeRequestItemSuite('suite-dirty-2', true);
+        seedStoreForEnabledToggle({ suite, dirty: false });
+        renderEditor(suite);
+
+        fireEvent.click(screen.getByRole('checkbox'));
+        expect((screen.getByRole('checkbox') as HTMLInputElement).checked).toBe(false);
+        expect(useAppStateStore.getState().testSuites[0].items[0].enabled).toBe(false);
+
+        fireEvent.click(screen.getByRole('checkbox'));
+        expect((screen.getByRole('checkbox') as HTMLInputElement).checked).toBe(true);
+        expect(useAppStateStore.getState().testSuites[0].items[0].enabled).toBe(true);
     });
 });

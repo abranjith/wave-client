@@ -45,6 +45,7 @@ import {
   type CollectionItem,
   type Flow,
   type TestSuite,
+  isHttpRequest,
 } from '@wave-client/core';
 import webAdapter, { checkServerHealth } from './adapters';
 
@@ -163,7 +164,6 @@ function WaveClientUI() {
   const updateFlow = useAppStateStore((state) => state.updateFlow);
 
   // Test Suites state
-  const testSuites = useAppStateStore((state) => state.testSuites);
   const setTestSuites = useAppStateStore((state) => state.setTestSuites);
   const setIsTestSuitesLoading = useAppStateStore((state) => state.setIsTestSuitesLoading);
   const setTestSuitesLoadError = useAppStateStore((state) => state.setTestSuitesLoadError);
@@ -344,7 +344,7 @@ function WaveClientUI() {
     setIsEnvironmentsLoading(false);
   };
 
-  const handleRequestSelect = (request: CollectionRequest) => {
+  const handleRequestSelect = (request: AnyCollectionRequest) => {
     loadRequestIntoTab(request);
     setSelectedEnvironment(null);
     setSelectedStore(null);
@@ -418,8 +418,10 @@ const handleFlowSave = useCallback(async (flow: Flow) => {
   const handleSendRequest = async (tabId: string) => {
     const request = getCollectionRequest(tabId);
 
-    // Save to history
-    await storage.saveRequestToHistory(request);
+    // Save only HTTP/legacy HTTP requests to history for now.
+    if (isHttpRequest(request)) {
+      await storage.saveRequestToHistory(request);
+    }
 
     // Build HTTP request using core slice helper
     setTabProcessingState(tabId, true);
