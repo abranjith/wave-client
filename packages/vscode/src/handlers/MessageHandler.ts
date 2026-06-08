@@ -98,7 +98,7 @@ export class MessageHandler {
     /** Unsubscribe callbacks for SSE event listeners, keyed by connectionId. */
     private sseUnsubscribers = new Map<string, Array<() => void>>();
 
-    constructor(private panel: vscode.WebviewPanel) {}
+    constructor(private panel: vscode.WebviewPanel | vscode.WebviewView) {}
 
     /**
      * Main message handler - routes messages to appropriate handlers.

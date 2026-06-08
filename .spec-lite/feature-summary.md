@@ -20,6 +20,13 @@ The Web Expert Agent now uses its full 245-line system prompt at runtime. The pr
 
 ---
 
+## VS Code Extension
+
+**Activity Bar View Wiring and Icon Compliance** *(updated: 2026-06-07 by fix)*
+The full Wave Client app always opens as an editor-area webview panel (`ViewColumn.One`) — the editor gives the full-fledged app the space it needs, which the narrow Activity Bar sidebar cannot. A single shared panel instance is reused, so both entry points land on the identical view: the `waveclient.open` command (and its `Ctrl+Alt+W` / `Cmd+Alt+W` keybinding) opens the panel or reveals it if already open, and the Activity Bar icon does the same. The Activity Bar `wave-client-view` is now a lightweight launcher rather than the app host: its `WebviewViewProvider` renders a small branded "Open Wave Client" view (theme-aware logo + button) and auto-opens/reveals the full editor panel whenever the sidebar becomes visible (on icon click), with the button as an explicit fallback. The interactive `MessageHandler` (HTML injection, queued webview-message replay, and disposal-on-close) is wired to the editor panel; the panel singleton is cleared on dispose so a later open recreates it. The Activity Bar container uses a dedicated monochrome SVG (`packages/vscode/assets/wave-client-activitybar.svg`) compatible with VS Code Activity Bar theming, avoiding fallback or misrendered visuals from full-color logos.
+
+---
+
 ## Request Processing
 
 **FEAT-FP-RPE-001: Request Processing Enhancements** *(updated: 2026-05-31 by fix)*

@@ -1,0 +1,23 @@
+# Source and build tooling — not needed in the published extension
+src/**
+**/*.ts
+!dist/**/*.d.ts
+**/*.map
+
+# Tests and coverage
+coverage/**
+**/*.test.*
+vitest.config.ts
+
+# Build configs
+webpack.config.js
+tsconfig*.json
+postcss.config.js
+tailwind.config.js
+.eslintrc*
+eslint.config.*
+
+# Monorepo / VCS noise
+node_modules/**
+.gitignore
+.vscode/**

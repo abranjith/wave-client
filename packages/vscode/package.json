@@ -4,17 +4,23 @@
   "description": "A modern, intuitive REST client for VS Code using React and Tailwind CSS",
   "version": "0.0.1",
   "license": "SEE LICENSE IN LICENSE",
-  "publisher": "wave-client",
+  "publisher": "ab-ranjith",
   "engines": {
     "vscode": "^1.103.0"
   },
   "categories": [
     "Other"
   ],
-  "activationEvents": [
-    "onCommand:waveclient.open"
-  ],
+  "icon": "assets/wave-client-logo.png",
   "main": "dist/extension.js",
+  "author": {
+		"name": "ranjith"
+	},
+	"repository": {
+		"type": "git",
+		"url": "https://github.com/abranjith/wave-client.git"
+	},
+	"homepage": "https://github.com/abranjith/wave-client/blob/main/README.md",
   "contributes": {
     "commands": [
       {
@@ -29,7 +35,26 @@
         "key": "ctrl+alt+w",
         "mac": "cmd+alt+w"
       }
-    ]
+    ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "wave-client-vscode-container",
+          "title": "Wave Client",
+          "icon": "assets/wave-client-activitybar.svg"
+        }
+      ]
+    },
+    "views": {
+      "wave-client-vscode-container": [
+        {
+          "icon": "assets/wave-client-logo.png",
+          "id": "wave-client-view",
+          "name": "Wave Client View",
+          "type": "webview"
+        }
+      ]
+    }
   },
   "scripts": {
     "vscode:prepublish": "npm run package",
