@@ -88,12 +88,34 @@ Because of this, adding a new client (a CLI, a desktop app, …) means implement
 
 Wave Client is actively evolving. On the radar (subject to change):
 
-- More protocols (GraphQL, gRPC) and request‑editor refinements.
-- Cloud sync for collections and environments; a credential manager.
-- A deeper Test Lab (schema validation, performance plans, history & insights) and richer reporting.
-- More AI capabilities and broader provider support.
 - Additional client types — a CLI and beyond — on the same shared core.
-- Team collaboration and a hosted option.
+- Allow users to include wave client files in their own repos, and use them with the CLI.
+- More storage support - cloud drives, database etc., beyond local filesystem storage
+- Ability to secure wave client files with encryption and password protection.
+- A deeper Test Lab (schema validation, performance plans, history & insights) and richer reporting.
+- More AI capabilities and broader provider support. Provide ability for agents to create requests, tests, run and analyze results, and more.
+- Team collaboration - workspaces, users and permissions, and more.
+- A better design system / class library to make styling consistent across apps
+- Dockerization and other improvements to make self‑hosting easier.
+- Mock server support
+
+---
+
+## Feedback & Community
+
+Wave Client is in public beta and your input directly shapes what gets built next.
+
+**Found a bug?** [Open a bug report](https://github.com/abranjith/wave-client/issues/new?template=bug_report.md) — the more detail you include (environment, steps to reproduce, a HAR file if relevant), the faster it gets fixed.
+
+**Have an idea?** [Open a feature request](https://github.com/abranjith/wave-client/issues/new?template=feature_request.md) — new platform clients (CLI, desktop, …) are explicitly welcome, not just improvements to the existing ones.
+
+**Browse existing issues** before opening a new one — upvoting an existing issue is the best signal that something matters.
+
+### Contributing
+
+The project isn't accepting pull requests yet — the codebase is still moving fast and we want to get the foundations more stable first. Watch this space; PRs will be welcome soon and contribution guidelines will be published here when that opens.
+
+In the meantime, the highest-value contributions are **bug reports, feature requests, and feedback** through GitHub Issues.
 
 ---
 
@@ -106,9 +128,9 @@ Wave Client stands on excellent open‑source work, including:
 - **Tooling/build**: [Vite](https://vitejs.dev/), [Webpack](https://webpack.js.org/), [Turborepo](https://turbo.build/), [TypeScript](https://www.typescriptlang.org/)
 - **HTTP & server**: [axios](https://axios-http.com/), [Fastify](https://fastify.dev/)
 - **Parsing & validation**: [@scalar/openapi-parser](https://github.com/scalar/scalar), [jsonpath‑plus](https://github.com/JSONPath-Plus/JSONPath), [ajv](https://ajv.js.org/)
-- **AI**: [LangChain.js & LangGraph.js](https://www.langchain.com/), [Google Gemini](https://ai.google.dev/) and [Ollama](https://ollama.com/), [Model Context Protocol SDK](https://modelcontextprotocol.io/), [hnswlib‑node](https://github.com/yoshoku/hnswlib-node)
+- **AI**: [LangChain.js & LangGraph.js](https://www.langchain.com/), [Model Context Protocol SDK](https://modelcontextprotocol.io/), [hnswlib‑node](https://github.com/yoshoku/hnswlib-node)
 
-See each package's `package.json` for the complete dependency list.
+And many more. See each package's `package.json` for the complete dependency list. Grateful to all the maintainers of these projects (and to the open‑source ecosystem as a whole), without whom this project wouldn't be possible.
 
 ---
 

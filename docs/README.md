@@ -52,6 +52,29 @@ New to Wave Client? Follow these in order:
 
 ---
 
+## Feedback & contributing
+
+Wave Client is in public beta — your input directly shapes what gets built next.
+
+### Reporting bugs
+
+[Open a bug report on GitHub](https://github.com/abranjith/wave-client/issues/new?template=bug_report.md). The template asks for:
+- Which **feature area** is affected (Requests, Collections, Flows, etc.)
+- Your **environment** (VS Code extension or web app, OS, Wave Client version)
+- A HAR file attachment if the bug involves a request or flow — this is optional but very helpful
+
+### Requesting features
+
+[Open a feature request on GitHub](https://github.com/abranjith/wave-client/issues/new?template=feature_request.md). Requests for new platform clients (a CLI, a desktop app, …) are as welcome as improvements to the existing ones — Wave Client is designed to grow beyond VS Code and the web app.
+
+Browse [existing issues](https://github.com/abranjith/wave-client/issues) before opening a new one. Upvoting an existing issue is the clearest signal that something matters.
+
+### Pull requests
+
+The project isn't accepting pull requests yet — the codebase is still evolving quickly and we want the foundations to stabilise first. This will open up soon; contribution guidelines will be added here when it does.
+
+---
+
 ## Documentation conventions
 
 - All links between docs are **relative**, so the documentation works on GitHub today and can be moved to a dedicated docs site later without rewrites.
