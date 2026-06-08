@@ -1,8 +1,8 @@
 <div align="center">
 
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset=".github/images/logo/png/wave-client-logo-dark-512.png">
-  <img src=".github/images/logo/png/wave-client-logo-light-512.png" alt="Wave Client logo" width="140" height="140">
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/logo/wave-client-logo-dark.png">
+  <img src="docs/images/logo/wave-client-logo-light.png" alt="Wave Client logo" width="140" height="140">
 </picture>
 
 # Wave Client
