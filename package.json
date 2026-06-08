@@ -1,7 +1,7 @@
 {
   "name": "wave-client",
   "version": "0.0.1",
-  "packageManager": "pnpm@10.26.2",
+  "packageManager": "pnpm@11.5.2",
   "description": "Wave Client monorepo - VS Code REST client extension",
   "license": "SEE LICENSE IN LICENSE",
   "private": true,
@@ -13,7 +13,7 @@
     "lint": "eslint packages",
     "test": "pnpm turbo test",
     "test:coverage": "pnpm turbo test:coverage",
-    "dev:web": "pnpm --filter @wave-client/web dev",
+    "dev:web": "pnpm --filter @wave-client/web start",
     "dev:server": "pnpm --filter @wave-client/server dev",
     "start:server": "pnpm --filter @wave-client/server start",
     "build:core": "pnpm --filter @wave-client/core build",

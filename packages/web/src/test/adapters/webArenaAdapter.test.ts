@@ -73,8 +73,6 @@ function makeMockStreamResponse(...chunks: Uint8Array[]): Response {
 // Test fixture
 // ============================================================================
 
-const PROVIDER_SETTINGS_KEY = 'wave-arena-provider-settings';
-
 const TEST_REQUEST: ArenaChatRequest = {
     sessionId: 'test-session',
     message: 'Hello',

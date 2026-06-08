@@ -33,7 +33,8 @@ import type {
     StreamHandle,
     StreamUnsubscribe,
     DynamicModelInfo,
-} from '@wave-client/core';
+    McpStatus
+} from '@wave-client/core' with { "resolution-mode": "import" };
 
 // ---------------------------------------------------------------------------
 // Inline Result helpers — avoids a value-import of the ESM @wave-client/core
@@ -337,9 +338,9 @@ export function createVSCodeArenaAdapter(
             }
 
             const handle: StreamHandle = {
-                onChunk(cb) { return makeSub(chunkCbs, cb); },
-                onDone(cb) { return makeSub(doneCbs, cb); },
-                onError(cb) { return makeSub(errorCbs, cb); },
+                onChunk(cb: (chunk: ArenaChatStreamChunk) => void) { return makeSub(chunkCbs, cb); },
+                onDone(cb: (response: ArenaChatResponse) => void) { return makeSub(doneCbs, cb); },
+                onError(cb: (error: string) => void) { return makeSub(errorCbs, cb); },
                 cancel() {
                     if (ended) { return; }
                     ended = true;
@@ -398,12 +399,12 @@ export function createVSCodeArenaAdapter(
             return sendAndWait<DynamicModelInfo[]>('arena.getAvailableModels', { provider });
         },
 
-        async checkMcpStatus(): Promise<Result<import('@wave-client/core').McpStatus, string>> {
-            return sendAndWait<import('@wave-client/core').McpStatus>('arena.checkMcpStatus');
+        async checkMcpStatus(): Promise<Result<McpStatus, string>> {
+            return sendAndWait<McpStatus>('arena.checkMcpStatus');
         },
 
-        async startMcpServer(): Promise<Result<import('@wave-client/core').McpStatus, string>> {
-            return sendAndWait<import('@wave-client/core').McpStatus>('arena.startMcpServer');
+        async startMcpServer(): Promise<Result<McpStatus, string>> {
+            return sendAndWait<McpStatus>('arena.startMcpServer');
         },
     };
 

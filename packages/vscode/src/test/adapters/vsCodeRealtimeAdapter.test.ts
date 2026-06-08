@@ -12,13 +12,18 @@
  *     pending resolver via the shared `pendingRequests` map.
  */
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import type { IAdapterEvents } from '@wave-client/core';
+
+type IAdapterEvents = {
+    on(event: string, handler: (data: unknown) => void): void;
+    off(event: string, handler: (data: unknown) => void): void;
+    emit(event: string, data: unknown): void;
+};
 
 // ── Mock @wave-client/core ────────────────────────────────────────────────────
 // We need createAdapterEventEmitter and the Result helpers (ok, err).
 // Everything else is type-only and does not need runtime mocks.
 vi.mock('@wave-client/core', async () => {
-    const actual = await vi.importActual<typeof import('@wave-client/core')>('@wave-client/core');
+    const actual = (await vi.importActual('@wave-client/core')) as Record<string, unknown>;
     return {
         ...actual,
         createAdapterEventEmitter: () => {

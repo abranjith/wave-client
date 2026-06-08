@@ -890,7 +890,8 @@ describe('WebAdapter - exportFile', () => {
   let appendChildSpy: ReturnType<typeof vi.fn>;
   let removeChildSpy: ReturnType<typeof vi.fn>;
   let clickSpy: ReturnType<typeof vi.fn>;
-  let createElementSpy: ReturnType<typeof vi.spyOn>;
+  let createElementSpy: import('vitest').MockInstance<any>;
+  let originalCreateElement: typeof document.createElement;
 
   beforeEach(() => {
     adapter = createWebAdapter();
@@ -904,15 +905,16 @@ describe('WebAdapter - exportFile', () => {
 
     appendChildSpy = vi.fn();
     removeChildSpy = vi.fn();
+    originalCreateElement = document.createElement.bind(document) as typeof document.createElement;
 
     // Spy on document.createElement to capture the anchor element
-    createElementSpy = vi.spyOn(document, 'createElement').mockImplementation((tag: string) => {
-      if (tag === 'a') {
+    createElementSpy = vi.spyOn(document, 'createElement').mockImplementation(((tagName: string, options?: ElementCreationOptions) => {
+      if (tagName === 'a') {
         const el = { href: '', download: '', click: clickSpy } as unknown as HTMLAnchorElement;
         return el;
       }
-      return document.createElement(tag);
-    });
+      return originalCreateElement(tagName, options);
+    }) as any);
 
     vi.spyOn(document.body, 'appendChild').mockImplementation(appendChildSpy);
     vi.spyOn(document.body, 'removeChild').mockImplementation(removeChildSpy);
@@ -960,14 +962,14 @@ describe('WebAdapter - exportFile', () => {
 
   it('sets correct download filename on anchor', async () => {
     let capturedAnchor: HTMLAnchorElement | null = null;
-    createElementSpy.mockImplementation((tag: string) => {
-      if (tag === 'a') {
+    createElementSpy.mockImplementation(((tagName: string, options?: ElementCreationOptions) => {
+      if (tagName === 'a') {
         const el = { href: '', download: '', click: clickSpy } as unknown as HTMLAnchorElement;
         capturedAnchor = el;
         return el;
       }
-      return document.createElement(tag);
-    });
+      return originalCreateElement(tagName, options);
+    }) as any);
 
     await adapter.storage.exportFile('my-report.html', 'content', 'text/html');
 

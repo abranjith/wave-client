@@ -8,7 +8,7 @@
  *  2. Call resolveRequest(...) to simulate the extension host's response.
  *  3. Await the adapter Promise and assert on the Result.
  */
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import type {
     IAdapterEvents,
     ArenaSession,
@@ -20,7 +20,7 @@ import type {
     ArenaChatResponse,
     IArenaAdapter,
     StreamHandle,
-} from '@wave-client/core';
+} from '@wave-client/core' with { "resolution-mode": "import" };
 import { createVSCodeArenaAdapter } from '../../webview/adapters/vsCodeArenaAdapter.js';
 
 // ─── Mock events factory ─────────────────────────────────────────────────────
@@ -365,7 +365,7 @@ describe('createVSCodeArenaAdapter', () => {
             const streamId = (vsCodeApi.postMessage.mock.lastCall![0] as any).streamId;
 
             const receivedChunks: ArenaChatStreamChunk[] = [];
-            handle.onChunk((c) => receivedChunks.push(c));
+            handle.onChunk((c: ArenaChatStreamChunk) => receivedChunks.push(c));
 
             const chunk1: ArenaChatStreamChunk = { messageId: 'resp-1', content: 'Hello', done: false };
             const chunk2: ArenaChatStreamChunk = { messageId: 'resp-1', content: ' back', done: false };
@@ -381,7 +381,7 @@ describe('createVSCodeArenaAdapter', () => {
             const streamId = (vsCodeApi.postMessage.mock.lastCall![0] as any).streamId;
 
             let doneResponse: ArenaChatResponse | undefined;
-            handle.onDone((r) => { doneResponse = r; });
+            handle.onDone((r: ArenaChatResponse) => { doneResponse = r; });
 
             const response: ArenaChatResponse = { messageId: 'resp-1', content: 'Hello back', tokenCount: 20 };
             handleStreamMessage({ type: 'arena.streamComplete', streamId, response });
@@ -401,7 +401,7 @@ describe('createVSCodeArenaAdapter', () => {
             const streamId = (vsCodeApi.postMessage.mock.lastCall![0] as any).streamId;
 
             let errorMsg: string | undefined;
-            handle.onError((e) => { errorMsg = e; });
+            handle.onError((e: string) => { errorMsg = e; });
 
             handleStreamMessage({ type: 'arena.streamError', streamId, error: 'LLM error' });
 
@@ -413,7 +413,7 @@ describe('createVSCodeArenaAdapter', () => {
             const streamId = (vsCodeApi.postMessage.mock.lastCall![0] as any).streamId;
 
             const chunks: ArenaChatStreamChunk[] = [];
-            const unsub = handle.onChunk((c) => chunks.push(c));
+            const unsub = handle.onChunk((c: ArenaChatStreamChunk) => chunks.push(c));
 
             handleStreamMessage({ type: 'arena.streamChunk', streamId, chunk: { messageId: 'r', content: 'a', done: false } });
             expect(chunks).toHaveLength(1);
@@ -430,7 +430,7 @@ describe('createVSCodeArenaAdapter', () => {
             const streamId = (vsCodeApi.postMessage.mock.lastCall![0] as any).streamId;
 
             let errorMsg: string | undefined;
-            handle.onError((e) => { errorMsg = e; });
+            handle.onError((e: string) => { errorMsg = e; });
 
             handle.cancel();
 
@@ -544,7 +544,7 @@ describe('createVSCodeArenaAdapter', () => {
             const handle = adapter.streamMessage(CHAT_REQUEST);
 
             let receivedError: string | undefined;
-            handle.onError((e) => { receivedError = e; });
+            handle.onError((e: string) => { receivedError = e; });
 
             // Do NOT simulate any incoming stream messages — let the safety timer fire
             vi.advanceTimersByTime(120_001);
@@ -557,7 +557,7 @@ describe('createVSCodeArenaAdapter', () => {
             const streamId = (vsCodeApi.postMessage.mock.lastCall![0] as any).streamId;
 
             let receivedError: string | undefined;
-            handle.onError((e) => { receivedError = e; });
+            handle.onError((e: string) => { receivedError = e; });
 
             // Receive a chunk at 119 s (within the 120 s window)
             vi.advanceTimersByTime(119_000);
@@ -578,7 +578,7 @@ describe('createVSCodeArenaAdapter', () => {
             const streamId = (vsCodeApi.postMessage.mock.lastCall![0] as any).streamId;
 
             let receivedError: string | undefined;
-            handle.onError((e) => { receivedError = e; });
+            handle.onError((e: string) => { receivedError = e; });
 
             // Complete the stream
             handleStreamMessage({
@@ -597,7 +597,7 @@ describe('createVSCodeArenaAdapter', () => {
             const streamId = (vsCodeApi.postMessage.mock.lastCall![0] as any).streamId;
 
             const errors: string[] = [];
-            handle.onError((e) => errors.push(e));
+            handle.onError((e: string) => errors.push(e));
 
             // Fire a real stream error
             handleStreamMessage({ type: 'arena.streamError', streamId, error: 'LLM crash' });

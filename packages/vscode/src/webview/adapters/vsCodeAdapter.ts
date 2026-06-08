@@ -16,46 +16,91 @@
  * - Push Events: No requestId, emitted via adapter.events (e.g., bannerSuccess, bannerError)
  */
 
-import {
-    ok,
-    err,
-    createAdapterEventEmitter,
-    type Result,
-    type IPlatformAdapter,
-    type IStorageAdapter,
-    type IHttpAdapter,
-    type IFileAdapter,
-    type ISecretAdapter,
-    type ISecurityAdapter,
-    type INotificationAdapter,
-    type IArenaAdapter,
-    type IClipboardAdapter,
-    type IRealtimeAdapter,
-    type IAdapterEvents,
-    type HttpRequestConfig,
-    type HttpResponseResult,
-    type EncryptionStatus,
-    type AppSettings,
-    type Collection,
-    type Environment,
-    type Cookie,
-    type Proxy,
-    type Cert,
-    type Auth,
-    type ValidationRule,
-    type Flow,
-    type TestSuite,
-    type CollectionRequest,
-    type WsConnectionConfig,
-    type WsConnectionHandle,
-    type SseConnectionConfig,
-    type SseConnectionHandle,
-    type WsMessage,
-    type SseEvent,
-    type ConnectionStatus,
-} from '@wave-client/core';
+import type {
+    Result,
+    IPlatformAdapter,
+    IStorageAdapter,
+    IHttpAdapter,
+    IFileAdapter,
+    ISecretAdapter,
+    ISecurityAdapter,
+    INotificationAdapter,
+    IClipboardAdapter,
+    IRealtimeAdapter,
+    IAdapterEvents,
+    AdapterEventType,
+    AdapterEventMap,
+    AdapterEventHandler,
+    HttpRequestConfig,
+    HttpResponseResult,
+    EncryptionStatus,
+    AppSettings,
+    Collection,
+    CollectionItem,
+    Environment,
+    Cookie,
+    Proxy,
+    Cert,
+    Auth,
+    ValidationRule,
+    Flow,
+    TestSuite,
+    CollectionRequest,
+    SaveDialogOptions,
+    OpenDialogOptions,
+    NotificationType,
+    WsConnectionConfig,
+    WsConnectionHandle,
+    SseConnectionConfig,
+    SseConnectionHandle,
+    WsMessage,
+    SseEvent,
+    ConnectionStatus,
+} from '@wave-client/core' with { "resolution-mode": "import" };
 
 import { createVSCodeArenaAdapter } from './vsCodeArenaAdapter';
+
+// ---------------------------------------------------------------------------
+// Local Result/EventEmitter helpers — avoids runtime imports from the ESM
+// @wave-client/core package in this CommonJS compilation context.
+// ---------------------------------------------------------------------------
+function ok<T>(value: T): Result<T, never> {
+    return { isOk: true, isErr: false, value } as unknown as Result<T, never>;
+}
+
+function err<E>(error: E): Result<never, E> {
+    return { isOk: false, isErr: true, error } as unknown as Result<never, E>;
+}
+
+function createAdapterEventEmitter(): IAdapterEvents {
+    const listeners = new Map<AdapterEventType, Set<AdapterEventHandler<AdapterEventType>>>();
+
+    return {
+        on<T extends AdapterEventType>(event: T, handler: AdapterEventHandler<T>) {
+            if (!listeners.has(event)) {
+                listeners.set(event, new Set<AdapterEventHandler<AdapterEventType>>());
+            }
+            const eventListeners = listeners.get(event) as Set<AdapterEventHandler<T>> | undefined;
+            eventListeners?.add(handler);
+        },
+
+        off<T extends AdapterEventType>(event: T, handler: AdapterEventHandler<T>) {
+            const eventListeners = listeners.get(event) as Set<AdapterEventHandler<T>> | undefined;
+            eventListeners?.delete(handler);
+        },
+
+        emit<T extends AdapterEventType>(event: T, payload: AdapterEventMap[T]) {
+            const eventListeners = listeners.get(event) as Set<AdapterEventHandler<T>> | undefined;
+            eventListeners?.forEach((listener) => {
+                try {
+                    listener(payload);
+                } catch (error) {
+                    console.error(`Error in event handler for '${event}':`, error);
+                }
+            });
+        },
+    };
+}
 
 // ============================================================================
 // Types for message handling
@@ -89,6 +134,11 @@ interface VSCodeAPI {
  * events to registered webview listeners.
  */
 interface WsVSCodeHandle extends WsConnectionHandle {
+    readonly connectionId: string;
+    onMessage(cb: (msg: WsMessage) => void): () => void;
+    onStatusChange(cb: (status: ConnectionStatus) => void): () => void;
+    onError(cb: (error: string) => void): () => void;
+    onHeaders(cb: (headers: Record<string, string>) => void): () => void;
     dispatchMessage(msg: WsMessage): void;
     dispatchStatus(status: ConnectionStatus): void;
     dispatchError(error: string): void;
@@ -100,6 +150,11 @@ interface WsVSCodeHandle extends WsConnectionHandle {
  * used by the push-event router in `handleMessage`.
  */
 interface SseVSCodeHandle extends SseConnectionHandle {
+    readonly connectionId: string;
+    onEvent(cb: (event: SseEvent) => void): () => void;
+    onStatusChange(cb: (status: ConnectionStatus) => void): () => void;
+    onError(cb: (error: string) => void): () => void;
+    onHeaders(cb: (headers: Record<string, string>) => void): () => void;
     dispatchEvent(event: SseEvent): void;
     dispatchStatus(status: ConnectionStatus): void;
     dispatchError(error: string): void;
@@ -121,21 +176,21 @@ function createWsVSCodeHandle(connectionId: string): WsVSCodeHandle {
     const errorListeners = new Set<(error: string) => void>();
     const headerListeners = new Set<(headers: Record<string, string>) => void>();
 
-    return {
+    const handle: WsVSCodeHandle = {
         connectionId,
-        onMessage(cb) {
+        onMessage(cb: (msg: WsMessage) => void) {
             messageListeners.add(cb);
             return () => messageListeners.delete(cb);
         },
-        onStatusChange(cb) {
+        onStatusChange(cb: (status: ConnectionStatus) => void) {
             statusListeners.add(cb);
             return () => statusListeners.delete(cb);
         },
-        onError(cb) {
+        onError(cb: (error: string) => void) {
             errorListeners.add(cb);
             return () => errorListeners.delete(cb);
         },
-        onHeaders(cb) {
+        onHeaders(cb: (headers: Record<string, string>) => void) {
             headerListeners.add(cb);
             return () => headerListeners.delete(cb);
         },
@@ -152,6 +207,8 @@ function createWsVSCodeHandle(connectionId: string): WsVSCodeHandle {
             headerListeners.forEach((cb) => cb(headers));
         },
     };
+
+    return handle;
 }
 
 /**
@@ -167,21 +224,21 @@ function createSseVSCodeHandle(connectionId: string): SseVSCodeHandle {
     const errorListeners = new Set<(error: string) => void>();
     const headerListeners = new Set<(headers: Record<string, string>) => void>();
 
-    return {
+    const handle: SseVSCodeHandle = {
         connectionId,
-        onEvent(cb) {
+        onEvent(cb: (event: SseEvent) => void) {
             eventListeners.add(cb);
             return () => eventListeners.delete(cb);
         },
-        onStatusChange(cb) {
+        onStatusChange(cb: (status: ConnectionStatus) => void) {
             statusListeners.add(cb);
             return () => statusListeners.delete(cb);
         },
-        onError(cb) {
+        onError(cb: (error: string) => void) {
             errorListeners.add(cb);
             return () => errorListeners.delete(cb);
         },
-        onHeaders(cb) {
+        onHeaders(cb: (headers: Record<string, string>) => void) {
             headerListeners.add(cb);
             return () => headerListeners.delete(cb);
         },
@@ -198,6 +255,8 @@ function createSseVSCodeHandle(connectionId: string): SseVSCodeHandle {
             headerListeners.forEach((cb) => cb(headers));
         },
     };
+
+    return handle;
 }
 
 // ============================================================================
@@ -306,13 +365,13 @@ function createVSCodeStorageAdapter(
         });
     }
 
-    return {
+    const storageAdapter: IStorageAdapter = {
         // Collections
         async loadCollections(): Promise<Result<Collection[], string>> {
             return sendAndWait<Collection[]>('loadCollections');
         },
 
-        async saveCollection(collection): Promise<Result<Collection, string>> {
+        async saveCollection(collection: Collection): Promise<Result<Collection, string>> {
             vsCodeApi.postMessage({
                 type: 'saveCollection',
                 data: { collection: JSON.stringify(collection, null, 2) }
@@ -320,11 +379,16 @@ function createVSCodeStorageAdapter(
             return ok(collection);
         },
 
-        async deleteCollection(collectionId): Promise<Result<void, string>> {
+        async deleteCollection(collectionId: string): Promise<Result<void, string>> {
             return sendAndWait<void>('deleteCollection', { data: { collectionId } });
         },
 
-        async saveRequestToCollection(collectionFilename, itemPath, item, newCollectionName): Promise<Result<Collection, string>> {
+        async saveRequestToCollection(
+            collectionFilename: string,
+            itemPath: string[],
+            item: CollectionItem,
+            newCollectionName?: string
+        ): Promise<Result<Collection, string>> {
             return sendAndWait<Collection>('saveRequestToCollection', {
                 data: {
                     requestContent: JSON.stringify(item.request, null, 2),
@@ -336,7 +400,7 @@ function createVSCodeStorageAdapter(
             });
         },
 
-        async deleteRequestFromCollection(collectionFilename, itemPath, itemId): Promise<Result<Collection, string>> {
+        async deleteRequestFromCollection(collectionFilename: string, itemPath: string[], itemId: string): Promise<Result<Collection, string>> {
             return sendAndWait<Collection>('deleteRequestFromCollection', {
                 data: { collectionFilename, itemPath, itemId }
             });
@@ -407,13 +471,13 @@ function createVSCodeStorageAdapter(
             return sendAndWait<Environment[]>('loadEnvironments');
         },
 
-        async saveEnvironment(environment): Promise<Result<void, string>> {
+        async saveEnvironment(environment: Environment): Promise<Result<void, string>> {
             return sendAndWait<void>('saveEnvironment', {
                 data: { environment: JSON.stringify(environment, null, 2) }
             });
         },
 
-        async saveEnvironments(environments): Promise<Result<void, string>> {
+        async saveEnvironments(environments: Environment[]): Promise<Result<void, string>> {
             vsCodeApi.postMessage({
                 type: 'saveEnvironments',
                 data: { environments: JSON.stringify(environments, null, 2) }
@@ -421,7 +485,7 @@ function createVSCodeStorageAdapter(
             return ok(undefined);
         },
 
-        async deleteEnvironment(environmentId): Promise<Result<void, string>> {
+        async deleteEnvironment(environmentId: string): Promise<Result<void, string>> {
             vsCodeApi.postMessage({
                 type: 'deleteEnvironment',
                 data: { environmentId }
@@ -493,7 +557,7 @@ function createVSCodeStorageAdapter(
             return sendAndWait<CollectionRequest[]>('loadHistory');
         },
 
-        async saveRequestToHistory(request): Promise<Result<void, string>> {
+        async saveRequestToHistory(request: CollectionRequest): Promise<Result<void, string>> {
             vsCodeApi.postMessage({
                 type: 'saveRequestToHistory',
                 data: { requestContent: JSON.stringify(request) }
@@ -515,7 +579,7 @@ function createVSCodeStorageAdapter(
             return sendAndWait<Cookie[]>('loadCookies');
         },
 
-        async saveCookies(cookies): Promise<Result<void, string>> {
+        async saveCookies(cookies: Cookie[]): Promise<Result<void, string>> {
             return sendAndWait<void>('saveCookies', {
                 data: { cookies: JSON.stringify(cookies, null, 2) }
             });
@@ -526,7 +590,7 @@ function createVSCodeStorageAdapter(
             return sendAndWait<Auth[]>('loadAuths');
         },
 
-        async saveAuths(auths): Promise<Result<void, string>> {
+        async saveAuths(auths: Auth[]): Promise<Result<void, string>> {
             return sendAndWait<void>('saveAuths', {
                 data: { auths: JSON.stringify(auths, null, 2) }
             });
@@ -537,7 +601,7 @@ function createVSCodeStorageAdapter(
             return sendAndWait<Proxy[]>('loadProxies');
         },
 
-        async saveProxies(proxies): Promise<Result<void, string>> {
+        async saveProxies(proxies: Proxy[]): Promise<Result<void, string>> {
             return sendAndWait<void>('saveProxies', {
                 data: { proxies: JSON.stringify(proxies, null, 2) }
             });
@@ -548,7 +612,7 @@ function createVSCodeStorageAdapter(
             return sendAndWait<Cert[]>('loadCerts');
         },
 
-        async saveCerts(certs): Promise<Result<void, string>> {
+        async saveCerts(certs: Cert[]): Promise<Result<void, string>> {
             return sendAndWait<void>('saveCerts', {
                 data: { certs: JSON.stringify(certs, null, 2) }
             });
@@ -559,7 +623,7 @@ function createVSCodeStorageAdapter(
             return sendAndWait<ValidationRule[]>('loadValidationRules');
         },
 
-        async saveValidationRules(rules): Promise<Result<void, string>> {
+        async saveValidationRules(rules: ValidationRule[]): Promise<Result<void, string>> {
             vsCodeApi.postMessage({
                 type: 'saveValidationRules',
                 data: { rules }
@@ -572,7 +636,7 @@ function createVSCodeStorageAdapter(
             return sendAndWait<AppSettings>('loadSettings');
         },
 
-        async saveSettings(settings): Promise<Result<void, string>> {
+        async saveSettings(settings: AppSettings): Promise<Result<void, string>> {
             return sendAndWait<void>('saveSettings', {
                 data: { settings: JSON.stringify(settings, null, 2) }
             });
@@ -583,13 +647,13 @@ function createVSCodeStorageAdapter(
             return sendAndWait<Flow[]>('loadFlows');
         },
 
-        async saveFlow(flow): Promise<Result<Flow, string>> {
+        async saveFlow(flow: Flow): Promise<Result<Flow, string>> {
             return sendAndWait<Flow>('saveFlow', {
                 data: { flow: JSON.stringify(flow, null, 2) }
             });
         },
 
-        async deleteFlow(flowId): Promise<Result<void, string>> {
+        async deleteFlow(flowId: string): Promise<Result<void, string>> {
             vsCodeApi.postMessage({
                 type: 'deleteFlow',
                 data: { flowId }
@@ -602,13 +666,13 @@ function createVSCodeStorageAdapter(
             return sendAndWait<TestSuite[]>('loadTestSuites');
         },
 
-        async saveTestSuite(testSuite): Promise<Result<TestSuite, string>> {
+        async saveTestSuite(testSuite: TestSuite): Promise<Result<TestSuite, string>> {
             return sendAndWait<TestSuite>('saveTestSuite', {
                 data: { testSuite: JSON.stringify(testSuite, null, 2) }
             });
         },
 
-        async deleteTestSuite(testSuiteId): Promise<Result<void, string>> {
+        async deleteTestSuite(testSuiteId: string): Promise<Result<void, string>> {
             vsCodeApi.postMessage({
                 type: 'deleteTestSuite',
                 data: { testSuiteId }
@@ -646,6 +710,8 @@ function createVSCodeStorageAdapter(
             });
         },
     };
+
+    return storageAdapter;
 }
 
 // ============================================================================
@@ -691,18 +757,20 @@ function createVSCodeHttpAdapter(
         });
     }
 
-    return {
-        async executeRequest(config): Promise<Result<HttpResponseResult, string>> {
+    const httpAdapter: IHttpAdapter = {
+        async executeRequest(config: HttpRequestConfig): Promise<Result<HttpResponseResult, string>> {
             return executeAndWait(config);
         },
 
-        cancelRequest(requestId) {
+        cancelRequest(requestId: string) {
             vsCodeApi.postMessage({
                 type: 'cancelRequest',
                 id: requestId,
             });
         },
     };
+
+    return httpAdapter;
 }
 
 // ============================================================================
@@ -759,22 +827,22 @@ function createVSCodeFileAdapter(
         });
     }
 
-    return {
-        async showSaveDialog(options): Promise<string | null> {
+    const fileAdapter: IFileAdapter = {
+        async showSaveDialog(options: SaveDialogOptions): Promise<string | null> {
             const result = await sendAndWait<string | null>('showSaveDialog', { options });
             return result.isOk ? result.value : null;
         },
 
-        async showOpenDialog(options): Promise<string[] | null> {
+        async showOpenDialog(options: OpenDialogOptions): Promise<string[] | null> {
             const result = await sendAndWait<string[] | null>('showOpenDialog', { options });
             return result.isOk ? result.value : null;
         },
 
-        async readFile(path): Promise<Result<string, string>> {
+        async readFile(path: string): Promise<Result<string, string>> {
             return sendAndWait<string>('readFile', { path });
         },
 
-        async readFileAsBinary(path): Promise<Result<Uint8Array, string>> {
+        async readFileAsBinary(path: string): Promise<Result<Uint8Array, string>> {
             const result = await sendAndWait<{ data: string; encoding: string }>('readFileAsBinary', { path });
             if (result.isOk && result.value) {
                 // Decode base64 to Uint8Array
@@ -788,17 +856,17 @@ function createVSCodeFileAdapter(
             return err(result.isOk ? 'No data received' : result.error);
         },
 
-        async writeFile(path, content): Promise<Result<void, string>> {
+        async writeFile(path: string, content: string): Promise<Result<void, string>> {
             return sendAndWait<void>('writeFile', { path, content });
         },
 
-        async writeBinaryFile(path, data): Promise<Result<void, string>> {
+        async writeBinaryFile(path: string, data: Uint8Array): Promise<Result<void, string>> {
             // Convert Uint8Array to base64 for transport
             const base64 = btoa(String.fromCharCode(...data));
             return sendAndWait<void>('writeBinaryFile', { path, data: base64, encoding: 'base64' });
         },
 
-        async downloadResponse(data, filename, contentType): Promise<Result<void, string>> {
+        async downloadResponse(data: Uint8Array, filename: string, contentType: string): Promise<Result<void, string>> {
             // Convert Uint8Array to base64 for transport
             const base64 = btoa(String.fromCharCode(...data));
             vsCodeApi.postMessage({
@@ -810,10 +878,12 @@ function createVSCodeFileAdapter(
             return ok(undefined);
         },
 
-        async importFile(options): Promise<Result<{ content: string; filename: string } | null, string>> {
+        async importFile(options: OpenDialogOptions): Promise<Result<{ content: string; filename: string } | null, string>> {
             return sendAndWait<{ content: string; filename: string } | null>('importFile', { options });
         },
     };
+
+    return fileAdapter;
 }
 
 // ============================================================================
@@ -823,23 +893,25 @@ function createVSCodeFileAdapter(
 function createVSCodeSecretAdapter(vsCodeApi: VSCodeAPI): ISecretAdapter {
     // Secrets are handled by the extension via SecurityService
     // These are placeholder implementations
-    return {
-        async storeSecret(key, value): Promise<Result<void, string>> {
+    const secretAdapter: ISecretAdapter = {
+        async storeSecret(key: string, value: string): Promise<Result<void, string>> {
             return err('Secret storage handled by extension');
         },
 
-        async getSecret(key): Promise<Result<string | undefined, string>> {
+        async getSecret(key: string): Promise<Result<string | undefined, string>> {
             return err('Secret retrieval handled by extension');
         },
 
-        async deleteSecret(key): Promise<Result<void, string>> {
+        async deleteSecret(key: string): Promise<Result<void, string>> {
             return err('Secret deletion handled by extension');
         },
 
-        async hasSecret(key): Promise<boolean> {
+        async hasSecret(key: string): Promise<boolean> {
             return false;
         },
     };
+
+    return secretAdapter;
 }
 
 // ============================================================================
@@ -847,14 +919,14 @@ function createVSCodeSecretAdapter(vsCodeApi: VSCodeAPI): ISecretAdapter {
 // ============================================================================
 
 function createVSCodeSecurityAdapter(vsCodeApi: VSCodeAPI): ISecurityAdapter {
-    return {
+    const securityAdapter: ISecurityAdapter = {
         async getEncryptionStatus(): Promise<EncryptionStatus> {
             vsCodeApi.postMessage({ type: 'getEncryptionStatus' });
             // Response comes via encryptionStatus message
             return { enabled: false, hasKey: false, recoveryAvailable: false };
         },
 
-        async enableEncryption(password): Promise<Result<void, string>> {
+        async enableEncryption(password: string): Promise<Result<void, string>> {
             vsCodeApi.postMessage({
                 type: 'enableEncryption',
                 data: { password }
@@ -862,7 +934,7 @@ function createVSCodeSecurityAdapter(vsCodeApi: VSCodeAPI): ISecurityAdapter {
             return ok(undefined);
         },
 
-        async disableEncryption(password): Promise<Result<void, string>> {
+        async disableEncryption(password: string): Promise<Result<void, string>> {
             vsCodeApi.postMessage({
                 type: 'disableEncryption',
                 data: { password }
@@ -870,7 +942,7 @@ function createVSCodeSecurityAdapter(vsCodeApi: VSCodeAPI): ISecurityAdapter {
             return ok(undefined);
         },
 
-        async changePassword(oldPassword, newPassword): Promise<Result<void, string>> {
+        async changePassword(oldPassword: string, newPassword: string): Promise<Result<void, string>> {
             vsCodeApi.postMessage({
                 type: 'changePassword',
                 data: { oldPassword, newPassword }
@@ -883,7 +955,7 @@ function createVSCodeSecurityAdapter(vsCodeApi: VSCodeAPI): ISecurityAdapter {
             return ok(undefined);
         },
 
-        async recoverWithKey(recoveryKeyPath): Promise<Result<void, string>> {
+        async recoverWithKey(recoveryKeyPath: string): Promise<Result<void, string>> {
             vsCodeApi.postMessage({
                 type: 'recoverWithKey',
                 data: { recoveryKeyPath }
@@ -891,6 +963,8 @@ function createVSCodeSecurityAdapter(vsCodeApi: VSCodeAPI): ISecurityAdapter {
             return ok(undefined);
         },
     };
+
+    return securityAdapter;
 }
 
 // ============================================================================
@@ -898,8 +972,8 @@ function createVSCodeSecurityAdapter(vsCodeApi: VSCodeAPI): ISecurityAdapter {
 // ============================================================================
 
 function createVSCodeNotificationAdapter(events: IAdapterEvents): INotificationAdapter {
-    return {
-        showNotification(type, message, _duration) {
+    const notificationAdapter: INotificationAdapter = {
+        showNotification(type: NotificationType, message: string, _duration?: number) {
             // Route notifications through the banner event system so they surface
             // as visible banners in the webview UI.
             const bannerType = type === 'success' ? 'success'
@@ -909,16 +983,18 @@ function createVSCodeNotificationAdapter(events: IAdapterEvents): INotificationA
             events.emit('banner', { type: bannerType, message });
         },
 
-        async showConfirmation(message, confirmLabel, cancelLabel): Promise<boolean> {
+        async showConfirmation(message: string, confirmLabel?: string, cancelLabel?: string): Promise<boolean> {
             // Could be implemented via extension's vscode.window.showInformationMessage
             return window.confirm(message);
         },
 
-        async showInput(message, defaultValue, placeholder): Promise<string | null> {
+        async showInput(message: string, defaultValue?: string, placeholder?: string): Promise<string | null> {
             // Could be implemented via extension's vscode.window.showInputBox
             return window.prompt(message, defaultValue) ?? null;
         },
     };
+
+    return notificationAdapter;
 }
 
 // ============================================================================
@@ -961,14 +1037,16 @@ function createVSCodeClipboardAdapter(
         });
     }
 
-    return {
+    const clipboardAdapter: IClipboardAdapter = {
         async readText() {
             return sendAndWait<string>('clipboard.readText');
         },
-        async writeText(value) {
+        async writeText(value: string) {
             return sendAndWait<void>('clipboard.writeText', { data: { value } });
         },
     };
+
+    return clipboardAdapter;
 }
 
 // ============================================================================
@@ -1044,7 +1122,7 @@ function createVSCodeRealtimeAdapter(
         });
     }
 
-    return {
+    const realtimeAdapter: IRealtimeAdapter = {
         /**
          * Opens a WebSocket connection.
          *
@@ -1107,6 +1185,8 @@ function createVSCodeRealtimeAdapter(
             return result;
         },
     };
+
+    return realtimeAdapter;
 }
 
 // ============================================================================

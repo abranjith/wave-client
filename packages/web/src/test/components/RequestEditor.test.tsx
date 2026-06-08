@@ -26,7 +26,6 @@ const mockCoreState = vi.hoisted(() => ({
 }));
 
 vi.mock('@wave-client/core', async () => {
-  const React = await import('react');
 
   const passthrough = ({ children }: { children: React.ReactNode }) => <>{children}</>;
 
