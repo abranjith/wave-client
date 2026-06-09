@@ -39,6 +39,9 @@ Collections request operations now include Move and Duplicate actions on request
 
 Coverage includes new and updated tests across core/shared/web, including: sent-request store behavior, `RequestSent` rendering, move-mode wizard behavior, move/duplicate collection flows, copy-name and deep-clone utilities, HttpService user-agent + sent-snapshot serialization, and web RequestEditor Sent-tab behavior.
 
+**Request Editor Layout Compaction and Collapsible Side Panel Tabs** *(updated: 2026-06-08 by fix)*
+The request editor in both web (`packages/web/src/components/RequestEditor.tsx`) and VS Code (`packages/vscode/src/webview/RequestEditor.tsx`) now uses tighter, consistent spacing across request and response toolbars, tab rows, metadata rows, and tab content containers so margins are less intrusive and visually balanced. The request section also has a left-side chevron control in the request tab row: users can collapse the entire request content area (Params/Headers/Body/Validation/Sent body) to reclaim vertical space for response/output inspection, then expand it back without losing the active request tab. The config side panel tabs (Collections/Flows/Test Lab/Wave Arena/History/Environments/Wave Store) now support toggle-close behavior in both platform wrappers (`packages/web/src/components/ConfigPanel.tsx`, `packages/vscode/src/webview/ConfigPanel.tsx`): clicking an already active tab closes its content panel, and the app shell collapses to the icon rail width (`64px`) while keeping the main editor/environment pane visible for more working real estate on smaller screens.
+
 ---
 
 ## WebSocket & SSE

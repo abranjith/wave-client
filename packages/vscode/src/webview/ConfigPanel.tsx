@@ -57,10 +57,28 @@ const TABS = [
 const ConfigPanel: React.FC<ConfigPanelProps> = ({ onRequestSelect, onEnvSelect, onStoreSelect, onFlowSelect, onFlowRun, onTestSuiteSelect, onSettingsSelect, onImportCollection, onExportCollection, onImportEnvironments, onExportEnvironments, onRetryCollections, onRetryHistory, onRetryEnvironments, onRetryFlows, onRetryTestSuites, onActiveTabChange}) => {
   const { theme, toggleTheme } = useTheme();
   const [activeTab, setActiveTab] = React.useState('collections');
+  const [isPanelOpen, setIsPanelOpen] = React.useState(true);
 
   const handleTabChange = (value: string) => {
     setActiveTab(value);
+    setIsPanelOpen(true);
     onActiveTabChange?.(value);
+  };
+
+  const handleTriggerMouseDown = (
+    value: string,
+    event: React.MouseEvent<HTMLButtonElement>
+  ) => {
+    if (activeTab === value) {
+      event.preventDefault();
+      if (isPanelOpen) {
+        setIsPanelOpen(false);
+        onActiveTabChange?.('');
+      } else {
+        setIsPanelOpen(true);
+        onActiveTabChange?.(value);
+      }
+    }
   };
 
   return (
@@ -80,6 +98,8 @@ const ConfigPanel: React.FC<ConfigPanelProps> = ({ onRequestSelect, onEnvSelect,
                 <div className="w-full">
                   <TabsTrigger
                     value={tab.key}
+                    aria-label={tab.label}
+                    onMouseDown={(event) => handleTriggerMouseDown(tab.key, event)}
                     className="flex items-center justify-center w-full h-12 text-slate-600 hover:bg-slate-100 hover:text-slate-900 data-[state=active]:bg-blue-50 data-[state=active]:text-blue-600 data-[state=active]:border-l-2 data-[state=active]:border-blue-500 rounded-md transition-colors dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-100 dark:data-[state=active]:bg-blue-900/20 dark:data-[state=active]:text-blue-400"
                   >
                     {tab.icon}
@@ -118,57 +138,59 @@ const ConfigPanel: React.FC<ConfigPanelProps> = ({ onRequestSelect, onEnvSelect,
             />
           </div>
         </div>
-        <div className="flex-1 overflow-hidden">
-          <TabsContent value="collections" className="h-full overflow-hidden">
-            <CollectionsPane 
-                onRequestSelect={onRequestSelect}
-                onImportCollection={onImportCollection}
-                onExportCollection={onExportCollection}
-                onRetry={onRetryCollections}
+        {isPanelOpen && (
+          <div className="flex-1 overflow-hidden">
+            <TabsContent value="collections" className="h-full overflow-hidden">
+              <CollectionsPane 
+                  onRequestSelect={onRequestSelect}
+                  onImportCollection={onImportCollection}
+                  onExportCollection={onExportCollection}
+                  onRetry={onRetryCollections}
+                />
+            </TabsContent>
+            <TabsContent value="flows" className="h-full overflow-hidden">
+              <FlowsPane
+                  onFlowSelect={onFlowSelect}
+                  onFlowRun={onFlowRun}
+                  onRetry={onRetryFlows}
               />
-          </TabsContent>
-          <TabsContent value="flows" className="h-full overflow-hidden">
-            <FlowsPane
-                onFlowSelect={onFlowSelect}
-                onFlowRun={onFlowRun}
-                onRetry={onRetryFlows}
-            />
-          </TabsContent>
-          <TabsContent value="testlab" className="h-full overflow-hidden">
-            {onTestSuiteSelect && (
-              <TestLabPane
-                  onTestSuiteSelect={onTestSuiteSelect}
-                  onRetry={onRetryTestSuites}
-              />
-            )}
-          </TabsContent>
-          <TabsContent value="arena" className="h-full overflow-hidden">
-            {/* Arena renders in the main right panel for full-width layout */}
-            <div className="flex flex-col items-center justify-center h-full p-6 text-center">
-              <Sparkles size={32} className="text-blue-500 mb-3" />
-              <p className="text-sm text-slate-500 dark:text-slate-400">
-                Wave Arena is open in the main panel
-              </p>
-            </div>
-          </TabsContent>
-          <TabsContent value="history" className="h-full overflow-hidden">
-            <HistoryPane 
-                onRequestSelect={onRequestSelect}
-                onRetry={onRetryHistory}
-              />
-          </TabsContent>
-          <TabsContent value="environments" className="h-full overflow-hidden">
-            <EnvironmentsPane 
-                onEnvSelect={onEnvSelect}
-                onImportEnvironments={onImportEnvironments}
-                onExportEnvironments={onExportEnvironments}
-                onRetry={onRetryEnvironments}
-              />
-          </TabsContent>
-          <TabsContent value="store" className="h-full overflow-hidden">
-            <StorePane onStoreSelect={onStoreSelect} />
-          </TabsContent>
-        </div>
+            </TabsContent>
+            <TabsContent value="testlab" className="h-full overflow-hidden">
+              {onTestSuiteSelect && (
+                <TestLabPane
+                    onTestSuiteSelect={onTestSuiteSelect}
+                    onRetry={onRetryTestSuites}
+                />
+              )}
+            </TabsContent>
+            <TabsContent value="arena" className="h-full overflow-hidden">
+              {/* Arena renders in the main right panel for full-width layout */}
+              <div className="flex flex-col items-center justify-center h-full p-6 text-center">
+                <Sparkles size={32} className="text-blue-500 mb-3" />
+                <p className="text-sm text-slate-500 dark:text-slate-400">
+                  Wave Arena is open in the main panel
+                </p>
+              </div>
+            </TabsContent>
+            <TabsContent value="history" className="h-full overflow-hidden">
+              <HistoryPane 
+                  onRequestSelect={onRequestSelect}
+                  onRetry={onRetryHistory}
+                />
+            </TabsContent>
+            <TabsContent value="environments" className="h-full overflow-hidden">
+              <EnvironmentsPane 
+                  onEnvSelect={onEnvSelect}
+                  onImportEnvironments={onImportEnvironments}
+                  onExportEnvironments={onExportEnvironments}
+                  onRetry={onRetryEnvironments}
+                />
+            </TabsContent>
+            <TabsContent value="store" className="h-full overflow-hidden">
+              <StorePane onStoreSelect={onStoreSelect} />
+            </TabsContent>
+          </div>
+        )}
     </Tabs>
     </div>
   )

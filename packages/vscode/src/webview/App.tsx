@@ -48,6 +48,7 @@ const App: React.FC = () => {
   const [selectedTestSuite, setSelectedTestSuite] = useState<TestSuite | null>(null);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isArenaActive, setIsArenaActive] = useState(false);
+  const [isConfigPanelCollapsed, setIsConfigPanelCollapsed] = useState(false);
 
   // Adapter hooks
   const storage = useStorageAdapter();
@@ -665,7 +666,7 @@ const App: React.FC = () => {
       className="min-h-screen h-screen w-screen bg-background text-foreground grid relative transition-colors"
       style={{
         display: 'grid',
-        gridTemplateColumns: isArenaActive ? '64px 1fr' : '400px 1fr',
+        gridTemplateColumns: isArenaActive || isConfigPanelCollapsed ? '64px 1fr' : '400px 1fr',
         gridTemplateRows: '1fr',
         gridTemplateAreas: isArenaActive
           ? `"config arena"`
@@ -708,7 +709,9 @@ const App: React.FC = () => {
           onRetryTestSuites={handleRetryTestSuites}
           onActiveTabChange={(tab) => {
             const arenaActive = tab === 'arena';
+            const panelCollapsed = tab === '';
             setIsArenaActive(arenaActive);
+            setIsConfigPanelCollapsed(panelCollapsed);
             if (arenaActive) {
               setSelectedEnvironment(null);
               setSelectedStore(null);

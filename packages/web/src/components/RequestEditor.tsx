@@ -11,6 +11,8 @@ import {
   CheckCircleIcon,
   XCircleIcon,
   CircleSlashIcon,
+  ChevronDownIcon,
+  ChevronRightIcon,
 } from 'lucide-react';
 import {
   PrimaryButton,
@@ -123,6 +125,7 @@ const RequestEditor: React.FC<RequestEditorProps> = ({
   const [collectionInfoToSave, setCollectionInfoToSave] = useState<
     CollectionToSaveInfo | undefined
   >(undefined);
+  const [isRequestSectionCollapsed, setIsRequestSectionCollapsed] = useState(false);
 
   const urlInputId = useId();
   const httpMethodSelectId = useId();
@@ -255,7 +258,7 @@ const RequestEditor: React.FC<RequestEditorProps> = ({
       {/* Request Panel */}
       <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
         {/* Breadcrumb and Environment Bar */}
-        <div className="px-6 py-2 flex items-center justify-between border-b border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-900 flex-shrink-0">
+        <div className="px-2 py-2 flex items-center justify-between border-b border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-900 flex-shrink-0">
           {/* Breadcrumb on the left */}
           <Breadcrumb>
             <BreadcrumbList>
@@ -372,7 +375,7 @@ const RequestEditor: React.FC<RequestEditorProps> = ({
 
         {/* Error Message Banner (per-tab) */}
         {errorMessage && (
-          <div className="px-6 pb-2 flex-shrink-0">
+          <div className="px-2 pb-2 flex-shrink-0">
             <Banner
               message={errorMessage}
               messageType="error"
@@ -382,7 +385,7 @@ const RequestEditor: React.FC<RequestEditorProps> = ({
         )}
 
         {/* Top Bar - Protocol Selector, Method (HTTP/SSE only), URL, Send / Connection Controls */}
-        <div className="px-6 py-4 flex items-center gap-3 flex-shrink-0 border-b border-slate-200 dark:border-slate-700">
+        <div className="px-2 py-2.5 flex items-center gap-2.5 flex-shrink-0 border-b border-slate-200 dark:border-slate-700">
           {/* Protocol selector — leftmost in the toolbar */}
           <ProtocolSelector />
 
@@ -450,13 +453,34 @@ const RequestEditor: React.FC<RequestEditorProps> = ({
         {/* Split View: Request (top half) and Response (bottom half) */}
         <div className="flex-1 min-h-0 flex flex-col">
           {/* Request Section */}
-          <div className="flex-1 min-h-0 flex flex-col border-b border-slate-300 dark:border-slate-600">
+          <div
+            className={`${
+              isRequestSectionCollapsed ? 'flex-shrink-0' : 'flex-1 min-h-0'
+            } flex flex-col border-b border-slate-300 dark:border-slate-600`}
+          >
             {/* Request Tabs — filtered by protocol via getRequestTabsForProtocol */}
-            <div className="border-b border-slate-200 flex gap-0 bg-slate-50 px-6 dark:border-slate-700 dark:bg-slate-900 flex-shrink-0">
+            <div className="border-b border-slate-200 flex items-center gap-0 bg-slate-50 px-2 dark:border-slate-700 dark:bg-slate-900 flex-shrink-0">
+              <button
+                type="button"
+                className="mr-1 inline-flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-md text-slate-500 hover:bg-slate-200/70 hover:text-slate-700 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-200"
+                onClick={() => setIsRequestSectionCollapsed((prev) => !prev)}
+                aria-label={
+                  isRequestSectionCollapsed ? 'Expand request section' : 'Collapse request section'
+                }
+                title={
+                  isRequestSectionCollapsed ? 'Expand request section' : 'Collapse request section'
+                }
+              >
+                {isRequestSectionCollapsed ? (
+                  <ChevronRightIcon className="h-4 w-4" />
+                ) : (
+                  <ChevronDownIcon className="h-4 w-4" />
+                )}
+              </button>
               {visibleRequestTabs.map((tab) => (
                 <button
                   key={tab}
-                  className={`px-6 py-3 text-sm font-medium focus:outline-none transition-all relative ${
+                  className={`px-3 py-2.5 text-sm font-medium focus:outline-none transition-all relative ${
                     effectiveRequestSection === tab
                       ? 'border-b-2 border-blue-500 text-blue-600 bg-white dark:bg-slate-800 dark:text-blue-400 dark:border-blue-400'
                       : 'text-slate-600 bg-transparent hover:text-blue-600 hover:bg-white/50 dark:text-slate-400 dark:hover:text-blue-400 dark:hover:bg-slate-800/50'
@@ -469,14 +493,16 @@ const RequestEditor: React.FC<RequestEditorProps> = ({
             </div>
 
             {/* Request Tab Content */}
-            <div className="px-6 py-4 bg-white dark:bg-slate-900 overflow-y-auto flex-1 min-h-0">
-              {effectiveRequestSection === 'Params' && <RequestParams />}
-              {effectiveRequestSection === 'Headers' && <RequestHeaders />}
-              {effectiveRequestSection === 'Body' && <RequestBody />}
-              {effectiveRequestSection === 'Validation' && <RequestValidation />}
-              {/* Sent is HTTP-only via getRequestTabsForProtocol('http'). */}
-              {effectiveRequestSection === 'Sent' && <RequestSent />}
-            </div>
+            {!isRequestSectionCollapsed && (
+              <div className="px-2 py-3 bg-white dark:bg-slate-900 overflow-y-auto flex-1 min-h-0">
+                {effectiveRequestSection === 'Params' && <RequestParams />}
+                {effectiveRequestSection === 'Headers' && <RequestHeaders />}
+                {effectiveRequestSection === 'Body' && <RequestBody />}
+                {effectiveRequestSection === 'Validation' && <RequestValidation />}
+                {/* Sent is HTTP-only via getRequestTabsForProtocol('http'). */}
+                {effectiveRequestSection === 'Sent' && <RequestSent />}
+              </div>
+            )}
           </div>
 
           {/* Response / Output Section — branches on protocol */}
@@ -497,7 +523,7 @@ const RequestEditor: React.FC<RequestEditorProps> = ({
             ) : (
               <>
                 {/* Response Metadata */}
-                <div className="flex gap-4 px-6 py-2 border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs font-mono flex-shrink-0">
+                <div className="flex gap-4 px-2 py-1.5 border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs font-mono flex-shrink-0">
                   {!isError && (
                     <div
                       className={`flex items-center gap-1 ${getStatusColor(responseData.status)}`}
@@ -533,7 +559,7 @@ const RequestEditor: React.FC<RequestEditorProps> = ({
                   {RESPONSE_TABS.map((tab) => (
                     <button
                       key={tab}
-                      className={`px-6 py-3 text-sm font-medium focus:outline-none transition-all relative flex items-center gap-2 ${
+                      className={`px-3 py-2.5 text-sm font-medium focus:outline-none transition-all relative flex items-center gap-2 ${
                         activeResponseSection === tab
                           ? 'border-b-2 border-blue-500 text-blue-600 bg-white dark:bg-slate-800 dark:text-blue-400 dark:border-blue-400'
                           : 'text-slate-600 bg-transparent hover:text-blue-600 hover:bg-white/50 dark:text-slate-400 dark:hover:text-blue-400 dark:hover:bg-slate-800/50'
@@ -559,7 +585,7 @@ const RequestEditor: React.FC<RequestEditorProps> = ({
                 </div>
 
                 {/* Response Tab Content */}
-                <div className="px-6 py-4 bg-white dark:bg-slate-900 overflow-auto min-h-0 flex-1">
+                <div className="px-2 py-3 bg-white dark:bg-slate-900 overflow-auto min-h-0 flex-1">
                   {activeResponseSection === 'Error' && (
                     <div className="space-y-4">
                       <div className="p-4 bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-800 rounded-lg">

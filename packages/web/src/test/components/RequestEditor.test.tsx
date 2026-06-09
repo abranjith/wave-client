@@ -1,6 +1,6 @@
 import React from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import RequestEditor from '../../components/RequestEditor';
 
 const mockCoreState = vi.hoisted(() => ({
@@ -186,5 +186,17 @@ describe('web RequestEditor Sent tab rendering', () => {
     expect(screen.queryByRole('button', { name: 'Sent' })).not.toBeInTheDocument();
     // The other request tabs remain visible.
     expect(screen.getByRole('button', { name: 'Params' })).toBeInTheDocument();
+  });
+
+  it('collapses and expands the request section using the chevron toggle', () => {
+    render(<RequestEditor {...defaultProps} />);
+
+    expect(screen.getByText('params-content')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Collapse request section' }));
+    expect(screen.queryByText('params-content')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Expand request section' }));
+    expect(screen.getByText('params-content')).toBeInTheDocument();
   });
 });
