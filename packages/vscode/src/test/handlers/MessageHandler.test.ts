@@ -21,9 +21,13 @@ vi.mock('@wave-client/shared', () => ({
   httpService: {
     execute: vi.fn(),
     send: vi.fn(),
+    cancel: vi.fn(),
   },
   collectionService: {
     loadAll: vi.fn(),
+    loadOne: vi.fn(),
+    save: vi.fn(),
+    saveRequest: vi.fn(),
     saveRequestToCollection: vi.fn(),
     importCollections: vi.fn(),
     exportCollection: vi.fn(),
@@ -168,6 +172,52 @@ describe('MessageHandler', () => {
       expect.objectContaining({
         type: 'httpResponse',
         requestId: 'req-123',
+      })
+    );
+  });
+
+  it('should handle cancelHttpRequest message — routes to httpService.cancel and replies cancelled', async () => {
+    const { httpService } = await import('../../services/index.js');
+
+    (httpService.cancel as any).mockReturnValue(true);
+
+    const message = {
+      type: 'cancelHttpRequest',
+      requestId: 'corr-1',
+      data: { requestId: 'tab-1' },
+    };
+
+    await handler.handleMessage(message);
+
+    expect(httpService.cancel).toHaveBeenCalledWith('tab-1');
+    expect(mockPanel.webview.postMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: 'cancelHttpRequestResponse',
+        requestId: 'corr-1',
+        data: { cancelled: true },
+      })
+    );
+  });
+
+  it('should reply ok with cancelled:false when cancelling an unknown request id', async () => {
+    const { httpService } = await import('../../services/index.js');
+
+    (httpService.cancel as any).mockReturnValue(false);
+
+    const message = {
+      type: 'cancelHttpRequest',
+      requestId: 'corr-2',
+      data: { requestId: 'unknown-tab' },
+    };
+
+    await handler.handleMessage(message);
+
+    expect(httpService.cancel).toHaveBeenCalledWith('unknown-tab');
+    expect(mockPanel.webview.postMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: 'cancelHttpRequestResponse',
+        requestId: 'corr-2',
+        data: { cancelled: false },
       })
     );
   });
@@ -836,6 +886,177 @@ describe('MessageHandler', () => {
           filters: expect.objectContaining({
             [filterLabel]: [filterExt],
           }),
+        })
+      );
+    });
+  });
+
+  describe('downloadResponse handler', () => {
+    it('decodes base64 payload, writes file, and posts correlated success response', async () => {
+      const { mockWindow, mockWorkspace } = await import('../mocks/vscode.js');
+
+      const savedUri = { fsPath: '/home/user/Downloads/response_2026-01-02T03-04-05.json' };
+      (mockWindow.showSaveDialog as any).mockResolvedValue(savedUri);
+      (mockWorkspace.fs.writeFile as any).mockResolvedValue(undefined);
+
+      await handler.handleMessage({
+        type: 'downloadResponse',
+        requestId: 'req-dr-1',
+        data: {
+          body: btoa('{"ok":true}'),
+          fileName: 'response_2026-01-02T03-04-05.json',
+          contentType: 'application/json',
+        },
+      });
+
+      expect(mockWindow.showSaveDialog).toHaveBeenCalledWith(
+        expect.objectContaining({
+          filters: expect.objectContaining({ JSON: ['json'] }),
+        })
+      );
+      expect(mockWorkspace.fs.writeFile).toHaveBeenCalledWith(savedUri, expect.any(Uint8Array));
+
+      const writtenBytes = (mockWorkspace.fs.writeFile as any).mock.calls[0][1] as Uint8Array;
+      expect(new TextDecoder().decode(writtenBytes)).toBe('{"ok":true}');
+
+      expect(mockPanel.webview.postMessage).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: 'downloadResponseResult',
+          requestId: 'req-dr-1',
+        })
+      );
+    });
+
+    it('posts correlated error when user cancels response download', async () => {
+      const { mockWindow, mockWorkspace } = await import('../mocks/vscode.js');
+
+      (mockWindow.showSaveDialog as any).mockResolvedValue(undefined);
+
+      await handler.handleMessage({
+        type: 'downloadResponse',
+        requestId: 'req-dr-2',
+        data: {
+          body: btoa('binary'),
+          fileName: 'response.bin',
+          contentType: 'application/octet-stream',
+        },
+      });
+
+      expect(mockWorkspace.fs.writeFile).not.toHaveBeenCalled();
+      expect(mockPanel.webview.postMessage).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: 'downloadResponseResult',
+          requestId: 'req-dr-2',
+          error: 'Download cancelled by user',
+        })
+      );
+    });
+  });
+
+  // ==========================================================================
+  // saveRequestToCollection (FEAT-003: payload carries the whole CollectionItem)
+  // ==========================================================================
+  describe('saveRequestToCollection', () => {
+    it('passes the serialized item through to collectionService.saveRequest', async () => {
+      const { collectionService } = await import('../../services/index.js');
+      const item = JSON.stringify({
+        id: 'item-1',
+        name: 'My Request',
+        request: { id: 'req-1', name: 'My Request', method: 'GET', url: 'https://x' },
+      });
+      (collectionService.saveRequest as any).mockResolvedValue('col.json');
+      (collectionService.loadOne as any).mockResolvedValue({
+        info: { waveId: 'w', name: 'Col', version: '0.0.1' },
+        item: [],
+      });
+
+      await handler.handleMessage({
+        type: 'saveRequestToCollection',
+        requestId: 'req-srtc-1',
+        data: { item, collectionFileName: 'col.json', folderPath: ['Folder'] },
+      });
+
+      expect(collectionService.saveRequest).toHaveBeenCalledWith(item, 'col.json', ['Folder'], undefined);
+      expect(mockPanel.webview.postMessage).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: 'collectionUpdated',
+          requestId: 'req-srtc-1',
+          collection: expect.objectContaining({ filename: 'col.json' }),
+        })
+      );
+    });
+  });
+
+  // ==========================================================================
+  // saveCollection (FEAT-003 regression: this message used to be silently
+  // dropped — no handler case existed, so renames never persisted)
+  // ==========================================================================
+  describe('saveCollection', () => {
+    const makeCollection = () => ({
+      info: { waveId: 'w-1', name: 'Renamed Collection', version: '0.0.1' },
+      item: [],
+      filename: 'col.json',
+    });
+
+    it('persists the collection via collectionService.save and replies with it', async () => {
+      const { collectionService } = await import('../../services/index.js');
+      const collection = makeCollection();
+      (collectionService.save as any).mockResolvedValue(collection);
+
+      await handler.handleMessage({
+        type: 'saveCollection',
+        requestId: 'req-save-1',
+        data: { collection: JSON.stringify(collection) },
+      });
+
+      expect(collectionService.save).toHaveBeenCalledWith(
+        expect.objectContaining({ filename: 'col.json' }),
+        'col.json'
+      );
+      expect(mockPanel.webview.postMessage).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: 'collectionSaved',
+          requestId: 'req-save-1',
+          collection: expect.objectContaining({ filename: 'col.json' }),
+        })
+      );
+    });
+
+    it('replies with a descriptive error when filename is missing', async () => {
+      const { collectionService } = await import('../../services/index.js');
+      const collection = { ...makeCollection(), filename: undefined };
+
+      await handler.handleMessage({
+        type: 'saveCollection',
+        requestId: 'req-save-2',
+        data: { collection: JSON.stringify(collection) },
+      });
+
+      expect(collectionService.save).not.toHaveBeenCalled();
+      expect(mockPanel.webview.postMessage).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: 'collectionSaved',
+          requestId: 'req-save-2',
+          error: expect.stringContaining('filename'),
+        })
+      );
+    });
+
+    it('replies with an error when the service throws', async () => {
+      const { collectionService } = await import('../../services/index.js');
+      (collectionService.save as any).mockRejectedValue(new Error('disk full'));
+
+      await handler.handleMessage({
+        type: 'saveCollection',
+        requestId: 'req-save-3',
+        data: { collection: JSON.stringify(makeCollection()) },
+      });
+
+      expect(mockPanel.webview.postMessage).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: 'collectionSaved',
+          requestId: 'req-save-3',
+          error: 'disk full',
         })
       );
     });

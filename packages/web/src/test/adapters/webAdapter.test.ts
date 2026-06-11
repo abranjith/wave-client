@@ -157,6 +157,41 @@ describe('WebAdapter - Storage', () => {
         expect(result.value).toEqual(mockCollections);
       }
     });
+
+    it('sends the whole CollectionItem when saving a request (FEAT-003)', async () => {
+      const savedCollection: Collection = {
+        filename: 'col.json',
+        info: { waveId: 'w', name: 'Col', version: '0.0.1' },
+        item: [],
+      };
+      mockAxios.setResponse(
+        '/api/collections/col.json/requests',
+        { isOk: true, value: { filename: 'col.json' } },
+        'POST'
+      );
+      mockAxios.setResponse('/api/collections', {
+        isOk: true,
+        value: [savedCollection],
+      });
+
+      const item = {
+        id: 'item-keep',
+        name: 'My Request',
+        description: 'desc',
+        request: { id: 'req-keep', name: 'My Request', method: 'GET', url: 'https://x' },
+      };
+      const result = await adapter.storage.saveRequestToCollection('col.json', ['Folder'], item);
+
+      expect(result.isOk).toBe(true);
+      // The wire payload carries the serialized item (id + metadata), not just the request.
+      expect(mockAxios.post).toHaveBeenCalledWith(
+        '/api/collections/col.json/requests',
+        expect.objectContaining({
+          item: expect.stringContaining('"id":"item-keep"') as unknown,
+          folderPath: ['Folder'],
+        })
+      );
+    });
   });
 
   describe('Environments', () => {
@@ -503,6 +538,42 @@ describe('WebAdapter - HTTP', () => {
       expect(result.error).toContain('Request failed');
     }
   });
+
+  it('cancels a request via the per-id cancel route', async () => {
+    mockAxios.setResponse(
+      '/api/http/req1/cancel',
+      { isOk: true, value: { cancelled: true } },
+      'POST'
+    );
+
+    const result = await adapter.http.cancelRequest('req1');
+
+    expect(result.isOk).toBe(true);
+    expect(mockAxios.post).toHaveBeenCalledWith('/api/http/req1/cancel');
+  });
+
+  it('resolves ok when cancelling an already-finished request (cancelled:false)', async () => {
+    mockAxios.setResponse(
+      '/api/http/req-done/cancel',
+      { isOk: true, value: { cancelled: false } },
+      'POST'
+    );
+
+    const result = await adapter.http.cancelRequest('req-done');
+
+    expect(result.isOk).toBe(true);
+  });
+
+  it('maps a network error during cancel to an error result', async () => {
+    mockAxios.setError('/api/http/req1/cancel', new Error('Network down'), 'POST');
+
+    const result = await adapter.http.cancelRequest('req1');
+
+    expect(result.isOk).toBe(false);
+    if (!result.isOk) {
+      expect(result.error).toContain('Network down');
+    }
+  });
 });
 
 describe('WebAdapter - File', () => {
@@ -562,6 +633,54 @@ describe('WebAdapter - File', () => {
 
     createElementSpy.mockRestore();
   }, 1000);
+
+  it('downloads response using Blob URL with provided filename and content type', async () => {
+    const previousCreateObjectURL = global.URL.createObjectURL;
+    const previousRevokeObjectURL = global.URL.revokeObjectURL;
+    const originalCreateElement = document.createElement.bind(document);
+    const createObjectUrlSpy = vi.fn().mockReturnValue('blob:response-file');
+    const revokeObjectUrlSpy = vi.fn();
+    global.URL.createObjectURL = createObjectUrlSpy as any;
+    global.URL.revokeObjectURL = revokeObjectUrlSpy as any;
+
+    let createdAnchor: HTMLAnchorElement | null = null;
+    const clickSpy = vi.fn();
+    const createElementSpy = vi
+      .spyOn(document, 'createElement')
+      .mockImplementation(((tagName: string) => {
+        const element = originalCreateElement(tagName);
+        if (tagName.toLowerCase() === 'a') {
+          createdAnchor = element as HTMLAnchorElement;
+          createdAnchor.click = clickSpy as any;
+        }
+        return element;
+      }) as typeof document.createElement);
+
+    const result = await adapter.file.downloadResponse(
+      new Uint8Array([1, 2, 3]),
+      'response.png',
+      'image/png'
+    );
+
+    expect(result.isOk).toBe(true);
+    expect(createObjectUrlSpy).toHaveBeenCalledTimes(1);
+    const blobArg = createObjectUrlSpy.mock.calls[0][0] as Blob;
+    expect(blobArg.type).toBe('image/png');
+
+    expect(createdAnchor).not.toBeNull();
+    if (!createdAnchor) {
+      throw new Error('Expected an anchor element to be created');
+    }
+    const anchor = createdAnchor as any;
+    expect(anchor.href).toBe('blob:response-file');
+    expect(anchor.download).toBe('response.png');
+    expect(clickSpy).toHaveBeenCalledTimes(1);
+    expect(revokeObjectUrlSpy).toHaveBeenCalledWith('blob:response-file');
+
+    createElementSpy.mockRestore();
+    global.URL.createObjectURL = previousCreateObjectURL;
+    global.URL.revokeObjectURL = previousRevokeObjectURL;
+  });
 });
 
 describe('WebAdapter - Notification', () => {

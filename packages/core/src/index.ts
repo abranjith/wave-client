@@ -174,6 +174,7 @@ export type {
     FormField,
     MultiPartFormField,
     ResponseData,
+    ResponseDownloadPayload,
     Cookie,
     Proxy,
     Cert,
@@ -410,10 +411,21 @@ export * from './utils/collectionParser';
 // Constants
 export * from './constants/docs';
 
+// Wave schemas (versioned Zod schemas for persisted collection/environment shapes)
+export {
+    CURRENT_COLLECTION_SCHEMA_VERSION,
+    WaveCollectionSchema,
+    validateWaveCollection,
+    CURRENT_ENVIRONMENT_SCHEMA_VERSION,
+    WaveEnvironmentSchema,
+    validateWaveEnvironment,
+} from './schemas';
+
 // Collection transformer utilities
 export {
     transformCollection,
     exportCollection,
+    detectFormatFromContent,
     detectFormatFromFilename,
     detectTransformer,
     getTransformer,
@@ -429,6 +441,15 @@ export type {
     ImportFormatType,
     ExportFormatType,
 } from './utils/transformers';
+
+// Environment transformer utilities
+export {
+    ENVIRONMENT_IMPORT_FORMAT_OPTIONS,
+    detectEnvironmentFormat,
+    transformEnvironments,
+} from './utils/transformers';
+
+export type { EnvironmentImportFormatType } from './utils/transformers';
 
 // JSONPath utilities
 export { evaluateJsonPath } from './utils/jsonPath';
@@ -497,11 +518,13 @@ export { createArenaMessage } from './hooks/store/createArenaSlice';
 export { useCollectionRunner } from './hooks/useCollectionRunner';
 export { useFlowRunner } from './hooks/useFlowRunner';
 export { useTestSuiteRunner } from './hooks/useTestSuiteRunner';
+export { useHistoryRefresh } from './hooks/useHistoryRefresh';
 export { useFileUpload } from './hooks/useFileUpload';
 export { useArenaStreamManager } from './hooks/useArenaStreamManager';
 export { useConfirmDialog } from './hooks/useConfirmDialog';
 export { useWsConnection } from './hooks/useWsConnection';
 export { useSseConnection } from './hooks/useSseConnection';
+export { useSaveShortcut } from './hooks/useSaveShortcut';
 
 export type {
     ConfirmDialogOptions,

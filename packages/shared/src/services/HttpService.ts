@@ -140,6 +140,78 @@ export function setAuthServiceFactory(factory: IAuthServiceFactory): void {
  */
 export class HttpService {
     /**
+     * Registry of in-flight requests keyed by `HttpRequestConfig.id` (the tab id,
+     * which is unique per in-flight request). Each entry holds the `AbortController`
+     * whose signal is threaded into the outbound axios call so {@link cancel} can
+     * abort the **server-side** request. Entries are always removed in the `finally`
+     * of {@link execute} — success, error, or abort — so there are no leaks.
+     */
+    private readonly activeRequests = new Map<string, AbortController>();
+
+    /**
+     * Aborts an in-flight request and removes it from the registry.
+     *
+     * Cancellation is idempotent and race-safe: once a request finishes (success,
+     * error, or a prior cancel) its registry entry is gone, so a later/duplicate
+     * cancel for the same id is a no-op that returns `false`.
+     *
+     * The aborted axios call rejects with a cancellation error which {@link execute}
+     * maps to a UI-friendly Cancelled `HttpResponseResult` (`status: 0`,
+     * `statusText: 'Cancelled'`) — not an unhandled error.
+     *
+     * @param requestId The request/tab id used when the request was issued.
+     * @returns `true` if a matching in-flight request was found and aborted;
+     *   `false` when no in-flight request matches the id.
+     */
+    cancel(requestId: string): boolean {
+        const controller = this.activeRequests.get(requestId);
+        if (!controller) {
+            return false;
+        }
+        // Remove before aborting so the execute() finally cannot race a new
+        // controller registered under the same id.
+        this.activeRequests.delete(requestId);
+        controller.abort();
+        return true;
+    }
+
+    /**
+     * Detects whether an error is the result of an aborted request (cancellation)
+     * rather than a genuine network/HTTP failure.
+     */
+    private isAbortError(error: unknown): boolean {
+        if (axios.isCancel(error)) {
+            return true;
+        }
+        const candidate = error as { code?: string; name?: string } | undefined;
+        return candidate?.code === 'ERR_CANCELED' || candidate?.name === 'CanceledError';
+    }
+
+    /**
+     * Builds the UI-friendly response returned when a request is cancelled.
+     * A cancellation is deliberately surfaced as a well-formed response (not an
+     * error) so the normal response path can render it.
+     */
+    private buildCancelledResponse(
+        requestId: string,
+        elapsedTime: number,
+        sentRequest: SentRequestData | undefined
+    ): HttpResponseResult {
+        return {
+            id: requestId,
+            status: 0,
+            statusText: 'Cancelled',
+            elapsedTime,
+            size: 0,
+            headers: {},
+            body: '',
+            isEncoded: false,
+            cookies: [],
+            sentRequest,
+        };
+    }
+
+    /**
      * Normalize headers from flexible type (HeaderRow[] or Record) to Record<string, string>
      */
     private normalizeHeaders(headers: HttpRequestConfig['headers']): Record<string, string> {
@@ -408,6 +480,10 @@ export class HttpService {
         let start = Date.now();
         let sentRequest: SentRequestData | undefined;
 
+        // Register an AbortController so cancel() can abort the outbound call.
+        const controller = new AbortController();
+        this.activeRequests.set(request.id, controller);
+
         try {
             // Load settings and cookies
             const settings = await getGlobalSettings();
@@ -618,6 +694,7 @@ export class HttpService {
                 httpsAgent: httpsAgent,
                 maxRedirects: settings.maxRedirects,
                 timeout: timeout,
+                signal: controller.signal,
             });
 
             const elapsedTime = Date.now() - start;
@@ -663,6 +740,15 @@ export class HttpService {
             };
         } catch (error: unknown) {
             const elapsedTime = Date.now() - start;
+
+            // A cancelled request is not an error: map it to a well-formed,
+            // UI-friendly Cancelled response so the normal response path handles it.
+            // Never log request bodies/headers (may contain secrets).
+            if (this.isAbortError(error)) {
+                console.info(`[HttpService] request cancelled id=${request.id} elapsedMs=${elapsedTime}`);
+                return this.buildCancelledResponse(request.id, elapsedTime, sentRequest);
+            }
+
             const axiosError = error as { response?: AxiosResponse; message?: string };
 
             // Convert error response to base64
@@ -696,6 +782,9 @@ export class HttpService {
                 cookies: [],
                 sentRequest,
             };
+        } finally {
+            // Always release the registry entry — success, error, or abort — no leaks.
+            this.activeRequests.delete(request.id);
         }
     }
 

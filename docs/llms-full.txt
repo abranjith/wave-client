@@ -35,7 +35,7 @@ New to Wave Client? Follow these in order:
 
 | Area | Guide | What it covers |
 | --- | --- | --- |
-| **Requests & Protocols** | [Requests](features/requests.md) | HTTP, WebSocket, and SSE requests; URL, params, headers, body, response, and the "Sent" view |
+| **Requests & Protocols** | [Requests](features/requests.md) | HTTP, WebSocket, and SSE requests; URL, params, headers, body, response, "Sent" view, and keyboard shortcuts |
 | **Collections** | [Collections](features/collections.md) | Organizing requests into folders, import/export, running collections, move & duplicate |
 | **Environments** | [Environments](features/environments.md) | Environment variables, global vs. environment scope, selection |
 | **Variables** | [Variables](features/variables.md) | `{{variable}}` resolution and dynamic `_fn_` functions |
@@ -54,8 +54,33 @@ New to Wave Client? Follow these in order:
 
 ### Reference
 - [Design & Architecture](design.md) — how Wave Client is built (for the architecture‑curious)
+- [Wave Schemas](schemas.md) — the persisted collection & environment file formats, field by field
+- [Versioning](versioning.md) — the four version tracks, semver semantics, and the release bump checklists
 - [Build Your Own Client](build-your-own-client.md) — use the platform-agnostic core to build a new client (CLI, desktop, …)
 - [Release Notes](release-notes.md) — what's in each release
+
+---
+
+## Feedback & contributing
+
+Wave Client is in public beta — your input directly shapes what gets built next.
+
+### Reporting bugs
+
+[Open a bug report on GitHub](https://github.com/abranjith/wave-client/issues/new?template=bug_report.md). The template asks for:
+- Which **feature area** is affected (Requests, Collections, Flows, etc.)
+- Your **environment** (VS Code extension or web app, OS, Wave Client version)
+- A HAR file attachment if the bug involves a request or flow — this is optional but very helpful
+
+### Requesting features
+
+[Open a feature request on GitHub](https://github.com/abranjith/wave-client/issues/new?template=feature_request.md). Requests for new platform clients (a CLI, a desktop app, …) are as welcome as improvements to the existing ones — Wave Client is designed to grow beyond VS Code and the web app.
+
+Browse [existing issues](https://github.com/abranjith/wave-client/issues) before opening a new one. Upvoting an existing issue is the clearest signal that something matters.
+
+### Pull requests
+
+The project isn't accepting pull requests yet — the codebase is still evolving quickly and we want the foundations to stabilise first. This will open up soon; contribution guidelines will be added here when it does.
 
 ---
 
@@ -305,7 +330,14 @@ Attach auth per request, or reference a saved credential. The supported types ar
 ### Sending and the response viewer
 Click **Send** to execute. The **response viewer** shows the status code, timing, response headers, and a formatted body (JSON, HTML, images, and more). Responses can be validated automatically — see [Validations](validations.md).
 
+Use the **Download** action in the response body viewer to save the exact response bytes. Wave Client suggests a filename from `Content-Disposition` when present; otherwise it generates `response_<timestamp>.<ext>` using the response `Content-Type`.
+
 ![The response viewer with headers and body tabs](../images/requests-response-viewer.png)
+
+### Cancelling a request
+While a request is in flight, the **Send** button becomes a **Cancel** (stop) button — click it to abort instead of waiting for the request to time out. Cancellation aborts the actual outbound request (the server‑side call), not just the UI, so the connection is released immediately on both the desktop and web apps.
+
+A cancelled request settles in the response viewer with a distinct **"Request cancelled"** state rather than an error. The request still appears in **History** (it is recorded when you press Send), and the editor is immediately ready for the next send.
 
 ### The "Sent" view
 After a send, a request‑side **Sent** tab shows the exact on‑wire request for the most recent send:
@@ -347,6 +379,16 @@ Select **SSE**, set the URL, optional **Params**/**Headers**, and (for POST‑ba
 ![An SSE connection with the Events timeline](../images/requests-sse-events.png)
 
 SSE connections support custom headers, auth, and POST bodies (Wave Client uses a streaming HTTP client rather than the browser `EventSource`, so these all work).
+
+---
+
+## Keyboard shortcuts
+
+| Shortcut | Action |
+| --- | --- |
+| `Ctrl+S` / `Cmd+S` | Save the active request — directly if it is already linked to a collection, or open the Save dialog if it is unsaved |
+
+Shortcuts are scoped to the request editor. Pressing `Ctrl+S` / `Cmd+S` while the Save dialog is already open has no effect.
 
 ---
 
@@ -395,7 +437,8 @@ Each collection, folder, and request row has an action menu with consistent oper
 
 Requests additionally support:
 
-- **Move** — relocate a request to another collection or folder. If you name a destination collection that doesn't exist yet, Wave Client creates it as part of the move.
+- **Move** — relocate a request to another collection or folder. The dialog offers a single searchable destination picker listing every collection and folder (any depth); you can also create a new collection on the spot.
+- **Move conflict protection** — move is blocked when the destination folder already contains an item with the same name (case-insensitive), preventing silent overwrite.
 - **Duplicate** — deep‑copy a request with a fresh ID and a collision‑safe name (`Copy`, `Copy 2`, …).
 
 ---
@@ -406,11 +449,23 @@ Wave Client imports several formats and converts them into Wave collections auto
 
 - **Postman Collection** (v2.1.0)
 - **OpenAPI / Swagger** — OpenAPI 3.x and Swagger 2.0, in **JSON or YAML** (inline `$ref`s are resolved during import)
-- **HTTP** files
+- **HTTP** files (`.http` / `.rest`) — the [ASP.NET Core / VS Code REST Client format](https://learn.microsoft.com/en-us/aspnet/core/test/http-files), with full syntax support:
+  - Requests separated by `###` lines (text after `###` becomes the request name)
+  - `#` and `//` comments anywhere outside the body; `# @name requestName` (or `// @name`) directives name a request explicitly
+  - Optional method (defaults to `GET`), all standard methods plus `TRACE`/`CONNECT`, trailing `HTTP/x.y` ignored
+  - Multi-line URLs — continuation lines starting with `?` or `&` are appended to the URL
+  - File variables (`@var=value`) are recognized and skipped; `{{var}}` references pass through **unresolved** (resolve them with Wave [environments](environments.md) after import)
+  - Request names are made unique automatically (` 2`, ` 3`, … suffixes); unnamed requests get a name derived from the URL
 
 ![The import dialog with format options](../images/collections-import.png)
 
 Native **Wave** collection files import directly. Other formats are transformed on import so requests, grouping, bodies, headers, and query parameters carry over.
+
+**Format auto-detection**: when you select a file the wizard reads its content and detects the format automatically — a Postman export renamed to `collection.json`, an OpenAPI YAML file named `spec.txt`, or an `.http` file with any name all resolve to the right format. The detection priority is: file content first (JSON registry order: OpenAPI → Postman → Wave; YAML `openapi:`/`swagger:` key; HTTP file syntax), then filename as a fallback. The **Collection Type** dropdown shows the detected choice; select a different value to override it before importing.
+
+Imported files are validated against the [Wave Collection Schema](../schemas.md) before anything is written — malformed files are rejected with a descriptive error. The schema reference documents every field of the persisted format.
+
+**Naming rules** (enforced on every save and rename): names must be non-empty, folder and request names must be unique among their siblings (case-insensitive), and collection names must be unique across collections. Renaming a request updates the request itself atomically, and item identity (`id`) is stable across rename, move, and duplicate.
 
 ---
 
@@ -475,7 +530,34 @@ Choose the active environment for a request from the request editor. When a requ
 
 ## Importing & exporting
 
-Environments can be **imported** (including from Postman) and **exported** to a file, so you can share configurations or move them between machines.
+Environments can be **imported** from Wave or Postman JSON files and **exported** to a file, so you can share configurations or move them between machines.
+
+### Supported import formats
+
+| Format | Description |
+|--------|-------------|
+| **Wave JSON** | A Wave environment export (single environment object or an array of environments). |
+| **Postman** | A Postman environment export (`.json`). Variables mapped as described below. |
+
+When you select a file in the import wizard, Wave Client auto-detects the format from the file content and pre-selects the **Environment Type** dropdown. You can override the detection manually before clicking Import.
+
+#### Postman → Wave mapping
+
+| Postman field | Wave field | Notes |
+|--------------|------------|-------|
+| `name` | `name` | Preserved as-is. |
+| `values[].key` | `values[].key` | Preserved as-is. |
+| `values[].value` | `values[].value` | Coerced to string. |
+| `values[].enabled` | `values[].enabled` | Defaults to `true` when absent. |
+| `values[].type === 'secret'` | `values[].type = 'secret'` | All other types map to `'default'`. |
+| `id` (Postman) | `id` ← fresh UUID | Postman's id is never trusted. |
+| — | `version` ← `'0.0.1'` | Wave schema version stamped on import. |
+
+Secret variables (`type: 'secret'` in Postman) are imported as Wave secret variables and follow the existing secret-variable handling in the editor and storage layer.
+
+### Validation
+
+Imported environments are validated against the [Wave Environment Schema](../schemas.md) before anything is written — if any entry in the file is invalid, the error is shown inline and nothing is imported. The schema reference documents every field of the persisted format, including the `version` field stamped into each environment file.
 
 ---
 
@@ -1195,6 +1277,273 @@ The same shape applies to WebSocket and SSE, with the backend services streaming
 - **Shared behavior** — backend logic lives once, in services.
 - **Predictable state** — a single sliced Zustand store, with ephemeral vs. persisted state clearly separated.
 
+===== FILE: docs/schemas.md =====
+
+# Wave Schemas
+
+Wave Client persists your data as plain JSON files — one file per collection and one per environment, stored under your configured app directory. This page is the **canonical reference** for those persisted shapes: the *Wave Collection Schema* and the *Wave Environment Schema*.
+
+Both schemas are formally defined as [Zod](https://zod.dev) schemas in `packages/core/src/schemas/` and validated at two boundaries:
+
+- **Import** — when you import a collection or environment file, the content is validated before anything is written. Invalid files are rejected with a descriptive error and nothing is persisted.
+- **Load** — when files are read from disk, each is normalized (missing ids and versions are stamped) and validated. A structurally invalid file is skipped with a logged error so the rest of your data still loads.
+
+> **Schema version ≠ app version.** Each schema carries its own version (currently `0.0.1` for both), independent of any package or app release. A schema version bumps **only** when the persisted shape changes, and every bump gets a migration note in the [Version history](#version-history) below. See [versioning.md](versioning.md) for how all version tracks relate.
+
+---
+
+## Wave Collection Schema (v0.0.1)
+
+A collection file is a single JSON object:
+
+| Field | Type | Required | Notes |
+| --- | --- | --- | --- |
+| `info` | object | yes | Collection metadata (below) |
+| `item` | `CollectionItem[]` | yes | Tree of folders and requests; may be empty |
+| `filename` | string | no | **Runtime-only** — added in memory at load time; tolerated in files but never required |
+
+### `info` (collection metadata)
+
+| Field | Type | Required | Notes |
+| --- | --- | --- | --- |
+| `info.waveId` | string | yes¹ | Stable logical identity of the collection |
+| `info.name` | string | yes | Display name; must be non-empty |
+| `info.description` | string | no | Free-form description |
+| `info.schema` | string | no | Legacy/reserved field |
+| `info.version` | string | yes¹ | **Schema version** of the file (`0.0.1`) |
+
+¹ Loaders stamp missing `waveId` (fresh id) and `version` (current schema version) on legacy files before validation, so older files load fine and are upgraded on next save.
+
+### `CollectionItem` (folder or request)
+
+Items nest arbitrarily deep via `item`:
+
+| Field | Type | Required | Notes |
+| --- | --- | --- | --- |
+| `id` | string | yes¹ | Unique id, stable across rename/move |
+| `name` | string | yes | Display name |
+| `description` | string | no | |
+| `request` | request object | no | Present when the item is a request (below) |
+| `response` | array | no | Saved responses — **opaque in v0.0.1** (not structurally validated) |
+| `item` | `CollectionItem[]` | no | Present when the item is a folder |
+
+### Request object
+
+Three request shapes, discriminated by `protocol`:
+
+| Field | Type | HTTP | WS | SSE | Notes |
+| --- | --- | --- | --- | --- | --- |
+| `id` | string | yes¹ | yes¹ | yes¹ | Stamped on load when missing |
+| `name` | string | yes¹ | yes¹ | yes¹ | Stamped from the wrapping item's name when missing |
+| `protocol` | `'http' \| 'ws' \| 'sse'` | optional² | `'ws'` | `'sse'` | ² Absent means HTTP (backward compatibility) |
+| `method` | string | yes | — | yes | HTTP verb |
+| `url` | string \| URL object | yes | yes | yes | URL object: `{ raw, protocol?, host?, path?, query? }` |
+| `query` | `ParamRow[]` | no | no | no | |
+| `header` | `HeaderRow[]` | no | no | no | |
+| `body` | body object | no | — | no | Discriminated union (below) |
+| `description` | string | no | no | no | |
+| `validation` | object | no | — | — | Response validation rules — **opaque in v0.0.1** |
+| `authId` | string | no | no | no | Reference to a stored auth config |
+| `sourceRef` | object | no | no | no | Runtime-only; stripped on save |
+
+**Rows** (`ParamRow`, `HeaderRow`): `{ id?, key, value, disabled? }`. The `id` and `disabled` fields are auto-populated at runtime and tolerated as absent in files.
+
+**Body** is a discriminated union on `mode`:
+
+| `mode` | Payload |
+| --- | --- |
+| `none` | — |
+| `raw` | `raw: string`, optional `options.raw.language` (`json`/`xml`/`html`/`text`/`csv`) |
+| `urlencoded` | `urlencoded: FormField[]` (`{ id?, key, value \| null, disabled? }`) |
+| `formdata` | `formdata: MultiPartFormField[]` (adds `fieldType: 'text' \| 'file'`, value may be a file reference) |
+| `file` | optional `file` reference: `{ path, fileName, contentType, size, pathType, storageType, fileData? }` |
+
+### Opaque fields in v0.0.1
+
+`request.validation` and `item.response` are accepted without structural validation in this schema version. Tightening them is a future schema version bump.
+
+---
+
+## Wave Environment Schema (v0.0.1)
+
+An environment file is a single JSON object (imports also accept an **array** of these):
+
+| Field | Type | Required | Notes |
+| --- | --- | --- | --- |
+| `id` | string | yes | Logical identity (`'global'` is reserved for the Global environment) |
+| `name` | string | yes | Display name; must be non-empty; also drives the filename |
+| `version` | string | yes¹ | **Schema version** of the file (`0.0.1`) |
+| `values` | `EnvironmentVariable[]` | yes | May be empty |
+| `filename` | string | no | Runtime-only |
+
+¹ Loaders stamp a missing `version` before validation; every save writes it.
+
+### `EnvironmentVariable`
+
+| Field | Type | Required | Notes |
+| --- | --- | --- | --- |
+| `key` | string | yes | Variable name used in `{{key}}` references |
+| `value` | string | yes | |
+| `type` | `'default' \| 'secret'` | yes¹ | ¹ Defaulted to `'default'` on load when missing/invalid |
+| `notes` | string | no | |
+| `enabled` | boolean | yes¹ | ¹ Defaulted to `true` on load when missing |
+
+---
+
+## Where validation happens
+
+| Boundary | Collections | Environments |
+| --- | --- | --- |
+| Import | `CollectionService.import` / `saveFromContent` — invalid input rejected, nothing written | `EnvironmentService.import` — **all-or-nothing**: if any entry is invalid, none are persisted |
+| Load | `CollectionService.loadOne` — invalid file logged & skipped; others still load | `EnvironmentService.loadAll` — invalid file logged & skipped; others still load |
+
+Validation failures surface in the UI as error notifications with the failing field paths (up to the first five issues).
+
+---
+
+## Version history
+
+| Version | Date | Changes |
+| --- | --- | --- |
+| `0.0.1` | 2026-06 | Initial formalized schemas for collections and environments. Captures the previously implicit persisted shapes; adds the required `version` field to environments. No migration needed — legacy files are normalized on load. |
+
+**Rule going forward:** any change to a persisted shape bumps the relevant schema version and adds a row here describing the change and its migration path.
+
+===== FILE: docs/versioning.md =====
+
+# Versioning
+
+Wave Client is a monorepo that ships more than one thing: two apps, a reusable platform core, and persisted file formats. A single version number can't describe all of them honestly, so Wave Client uses **four independent version tracks**, each following [semantic versioning](https://semver.org).
+
+This page defines the tracks, what a major/minor/patch bump means on each, and the exact manual checklist for bumping each one. It is the single procedure for releases — if a step isn't written here, it isn't part of the process.
+
+> **Manual for now.** Version bumps and releases are deliberate, hand-executed checklists. Release automation (changesets, CI publishing) is future work, tracked in the project backlog — see [Automation status](#automation-status).
+
+---
+
+## The four tracks
+
+| # | Track | What it versions | Where the version lives |
+| --- | --- | --- | --- |
+| 1 | **VS Code app** | The `wave-client-vscode` extension — the marketplace‑facing version users see | `packages/vscode/package.json` |
+| 2 | **Web app** | The `@wave-client/web` browser app | `packages/web/package.json` |
+| 3 | **Core platform** | The shared libraries and backends, versioned **in lockstep** as one platform version | `package.json` of each platform package (list below) |
+| 4 | **Wave schemas** | The persisted **collection** and **environment** file formats | `CURRENT_COLLECTION_SCHEMA_VERSION` / `CURRENT_ENVIRONMENT_SCHEMA_VERSION` in `packages/core/src/schemas/` |
+
+Tracks move independently: an app can release without a platform bump, the platform can bump without either app releasing, and **schema versions never move just because a package released** (and vice versa).
+
+### Package‑to‑track assignment
+
+Every package in the repo belongs to exactly one track:
+
+| Package | npm name | Track |
+| --- | --- | --- |
+| `packages/vscode` | `wave-client-vscode` | 1 — VS Code app |
+| `packages/web` | `@wave-client/web` | 2 — Web app |
+| `packages/core` | `@wave-client/core` | 3 — Core platform |
+| `packages/shared` | `@wave-client/shared` | 3 — Core platform |
+| `packages/arena` | `@wave-client/arena` | 3 — Core platform |
+| `packages/server` | `@wave-client/server` | 3 — Core platform¹ |
+| `packages/mcp-server` | `@wave-client/mcp-server` | 3 — Core platform¹ |
+
+¹ `server` and `mcp-server` follow the core platform track **unless/until they ship independently** (e.g., a standalone hosted server release). If that happens, they graduate to their own tracks and this page gets updated.
+
+The repo‑root `package.json` (`wave-client`, `private: true`) is the workspace root — it is never published and its version is not part of any track.
+
+The Wave schemas (track 4) are **not** a package: they are two exported constants and Zod schemas in `packages/core/src/schemas/`, documented field‑by‑field in [Wave Schemas](schemas.md). A change to `@wave-client/core`'s code bumps track 3; a change to the persisted file *shape* bumps track 4 — these are different events even though both live in the same package.
+
+---
+
+## Semver semantics per track
+
+All tracks use `MAJOR.MINOR.PATCH`. What counts as "breaking" differs by audience:
+
+### Tracks 1 & 2 — apps (audience: end users)
+
+| Bump | When |
+| --- | --- |
+| **Major** | A change that breaks an existing user workflow — removed features, an incompatible change to settings/keybindings/CLI invocation, dropped platform support |
+| **Minor** | New user‑visible features or capabilities |
+| **Patch** | Bug fixes, performance work, visual polish — no new features |
+
+### Track 3 — core platform (audience: the apps and [Build Your Own Client](build-your-own-client.md) authors)
+
+| Bump | When |
+| --- | --- |
+| **Major** | A breaking change to any platform package's public surface: `@wave-client/core` exports (components, hooks, types, `IPlatformAdapter`), `@wave-client/shared` service contracts, server REST routes, or MCP tool contracts |
+| **Minor** | Backward‑compatible additions — new exports, new optional adapter methods, new routes/tools |
+| **Patch** | Bug fixes and internal refactors with no public‑surface change |
+
+### Track 4 — Wave schemas (audience: every persisted collection/environment file on users' disks)
+
+| Bump | When |
+| --- | --- |
+| **Major** | An incompatible change to the persisted shape — existing valid files would no longer validate without migration |
+| **Minor** | Backward‑compatible shape additions (new optional fields) |
+| **Patch** | Documentation‑level clarifications or validation tightening that every existing valid file already satisfies |
+
+Schema versions bump **only** on persisted‑shape changes — never for code refactors, new app features, or package releases. Every schema bump requires a row in the [version history in Wave Schemas](schemas.md#version-history) describing the change and its migration path. The collection and environment schemas are versioned separately and may bump independently.
+
+### Pre‑1.0 convention (applies to all tracks)
+
+While a track is at `0.x`, the major slot stays `0`: **breaking changes bump the minor** (`0.3.x` → `0.4.0`) and everything else bumps the patch. A track moves to `1.0.0` when its surface is declared stable.
+
+---
+
+## The lockstep rule (track 3)
+
+The five platform packages — `core`, `shared`, `arena`, `server`, `mcp-server` — always carry the **same version number** and are bumped **together**, even when only one of them changed. One platform version describes one coherent, tested combination; per‑package drift would force a compatibility matrix nobody wants to maintain.
+
+Internal dependencies use the pnpm `workspace:*` protocol, so lockstep bumps never require editing dependency ranges — only each package's own `version` field.
+
+---
+
+## How to bump — checklists
+
+> **Before any bump**: work is merged to `main`, and `pnpm build` and `pnpm test` pass from the repo root.
+
+### Track 1 — VS Code app
+
+1. Decide the bump type using the [app semantics](#tracks-1--2--apps-audience-end-users) above.
+2. Edit `version` in `packages/vscode/package.json`.
+3. Add a release section at the **top** of [Release Notes](release-notes.md) (`## <version> — <short title>`), summarizing user‑facing changes by area.
+4. Build the extension: `pnpm build:vscode` from the repo root.
+5. Package and publish to the marketplace with [vsce](https://code.visualstudio.com/api/working-with-extensions/publishing-extension) (`vsce package`, then `vsce publish`) from `packages/vscode`.
+6. Commit with message `release(vscode): v<version>` and tag `vscode-v<version>`.
+
+### Track 2 — Web app
+
+1. Decide the bump type using the [app semantics](#tracks-1--2--apps-audience-end-users) above.
+2. Edit `version` in `packages/web/package.json`.
+3. Add or extend the release section at the top of [Release Notes](release-notes.md) (shared with track 1 when both apps release together).
+4. Build: `pnpm build:web` from the repo root.
+5. Commit with message `release(web): v<version>` and tag `web-v<version>`.
+
+### Track 3 — Core platform (lockstep)
+
+1. Decide the bump type using the [platform semantics](#track-3--core-platform-audience-the-apps-and-build-your-own-client-authors) above — judge by the most severe change across **all five** packages.
+2. Edit `version` to the **same new value** in all five `package.json` files: `packages/core`, `packages/shared`, `packages/arena`, `packages/server`, `packages/mcp-server` — including packages with no changes.
+3. Do **not** touch internal dependency ranges (`workspace:*` — see [the lockstep rule](#the-lockstep-rule-track-3)).
+4. If the changes are user‑visible through an app, note them in the next app release's [Release Notes](release-notes.md) entry; platform‑internal changes need no release‑notes entry.
+5. Build and test everything: `pnpm build` and `pnpm test` from the repo root.
+6. Commit with message `release(platform): v<version>` and tag `platform-v<version>`.
+
+### Track 4 — Wave schemas
+
+1. Confirm the change really alters a **persisted shape** (a field added/removed/retyped in collection or environment files). If not, stop — no schema bump.
+2. Decide the bump type using the [schema semantics](#track-4--wave-schemas-audience-every-persisted-collectionenvironment-file-on-users-disks) above.
+3. Update the affected constant in `packages/core/src/schemas/` — `CURRENT_COLLECTION_SCHEMA_VERSION` (`collectionSchema.ts`) and/or `CURRENT_ENVIRONMENT_SCHEMA_VERSION` (`environmentSchema.ts`) — alongside the Zod schema change itself.
+4. For anything beyond a backward‑compatible addition, implement load‑time normalization/migration so existing files keep loading (the loaders already stamp missing `version`/ids — extend that path).
+5. Update [Wave Schemas](schemas.md): the field tables **and** a new row in the [version history](schemas.md#version-history) with the change description and migration path. This row is mandatory for every bump.
+6. Update/add schema tests, then run `pnpm test` from the repo root.
+7. Commit with message `release(schema): collection v<version>` / `release(schema): environment v<version>` as applicable. A schema bump ships with whatever package release carries the code — it never requires one.
+
+---
+
+## Automation status
+
+Releases are **manual** today by design — the process above is young, and automating it before it stabilizes would bake in the wrong shape. Adopting release tooling (changesets or similar CI publishing) once the manual process settles is tracked in the project backlog (`.spec-lite/TODO.md`).
+
 ===== FILE: docs/build-your-own-client.md =====
 
 # Build Your Own Client
@@ -1380,6 +1729,32 @@ For your real adapter, test each sub-adapter in isolation — they're plain asyn
 # Release Notes
 
 > Wave Client is in **public beta**. This page highlights what each release brings. For exact change history, see source control.
+
+---
+
+## Beta update — import fidelity, cancellation & collection integrity
+
+A stabilization pass across collections, environments, requests, and history, plus formalized file schemas and versioning docs.
+
+### Requests
+- **Cancel in-flight requests** — while a request is processing, **Send** becomes **Cancel**; aborting stops the actual outbound call on both apps and settles the viewer in a distinct "Request cancelled" state.
+- **Ctrl+S / Cmd+S** saves the active request from the request editor (direct save, or the Save dialog for unsaved requests) — see [keyboard shortcuts](features/requests.md#keyboard-shortcuts).
+- **Response download fixed** on both apps — downloads now honor the real response bytes, a sensible filename, and the response content type.
+- **History refreshes in real time** — the History pane updates immediately after each send, no reload needed.
+- Tighter request-editor spacing, with Params/Headers **Copy/Paste** buttons relocated into the table header.
+
+### Collections
+- **Full `.http` / `.rest` import syntax** — `###` separators, `#` and `//` comments, `# @name` directives, file-variable lines, optional methods, multi-line URLs, and automatic unique request naming. See [Collections](features/collections.md).
+- **Content-based format auto-detection** on import — Postman, OpenAPI/Swagger, `.http`, and Wave files are recognized from their content, with the dropdown as a manual override.
+- **Reliable collection operations** — rename, delete, and move now persist dependably; item identity is stable across rename/move/duplicate; naming rules (non-empty, sibling-unique) are enforced everywhere.
+- **Clearer Move & Save dialog** — shows the request's current location, offers a single searchable destination picker listing every collection and folder (any depth), and blocks moves that would overwrite an existing item.
+
+### Environments
+- **Postman environment import** with an auto-detected, overridable **Environment Type** dropdown; secret-typed Postman variables import as Wave secrets. See [Environments](features/environments.md).
+
+### Schemas & versioning
+- The persisted collection and environment formats are now formal, versioned schemas (both `0.0.1`), validated at import and load — documented field by field in [Wave Schemas](schemas.md).
+- How Wave Client versions evolve is now documented in [Versioning](versioning.md): four independent tracks with per-track semver semantics and bump checklists.
 
 ---
 

@@ -28,7 +28,7 @@ New to Wave Client? Follow these in order:
 
 | Area | Guide | What it covers |
 | --- | --- | --- |
-| **Requests & Protocols** | [Requests](features/requests.md) | HTTP, WebSocket, and SSE requests; URL, params, headers, body, response, and the "Sent" view |
+| **Requests & Protocols** | [Requests](features/requests.md) | HTTP, WebSocket, and SSE requests; URL, params, headers, body, response, "Sent" view, and keyboard shortcuts |
 | **Collections** | [Collections](features/collections.md) | Organizing requests into folders, import/export, running collections, move & duplicate |
 | **Environments** | [Environments](features/environments.md) | Environment variables, global vs. environment scope, selection |
 | **Variables** | [Variables](features/variables.md) | `{{variable}}` resolution and dynamic `_fn_` functions |
@@ -47,6 +47,8 @@ New to Wave Client? Follow these in order:
 
 ### Reference
 - [Design & Architecture](design.md) — how Wave Client is built (for the architecture‑curious)
+- [Wave Schemas](schemas.md) — the persisted collection & environment file formats, field by field
+- [Versioning](versioning.md) — the four version tracks, semver semantics, and the release bump checklists
 - [Build Your Own Client](build-your-own-client.md) — use the platform-agnostic core to build a new client (CLI, desktop, …)
 - [Release Notes](release-notes.md) — what's in each release
 

@@ -1,4 +1,6 @@
-import * as path from 'path';
+﻿import * as path from 'path';
+
+import { CURRENT_ENVIRONMENT_SCHEMA_VERSION, validateWaveEnvironment } from '@wave-client/core';
 
 import { BaseStorageService } from './BaseStorageService';
 import type { Environment } from '../types';
@@ -24,8 +26,32 @@ export class EnvironmentService extends BaseStorageService {
         return {
             id: 'global',
             name: 'Global',
+            version: CURRENT_ENVIRONMENT_SCHEMA_VERSION,
             values: []
         };
+    }
+
+    /**
+     * Normalizes a legacy environment in place so it satisfies the Wave
+     * environment schema: stamps the current schema version when absent and
+     * defaults missing variable fields (`type` to 'default', `enabled` to true).
+     * Loaders and writers call this before validating/persisting.
+     */
+    private normalizeEnvironment(env: Environment): Environment {
+        if (!env.version) {
+            env.version = CURRENT_ENVIRONMENT_SCHEMA_VERSION;
+        }
+        if (Array.isArray(env.values)) {
+            for (const variable of env.values) {
+                if (variable.type !== 'default' && variable.type !== 'secret') {
+                    variable.type = 'default';
+                }
+                if (typeof variable.enabled !== 'boolean') {
+                    variable.enabled = true;
+                }
+            }
+        }
+        return env;
     }
 
     /**
@@ -45,13 +71,28 @@ export class EnvironmentService extends BaseStorageService {
                 const filePath = path.join(envDir, file);
                 const environmentData = await this.readJsonFileSecure<Environment | null>(filePath, null);
 
-                if (environmentData && !seenNames.has(environmentData.name)) {
+                if (!environmentData) {
+                    continue;
+                }
+
+                // Normalize before validating so legacy (versionless) files pass.
+                this.normalizeEnvironment(environmentData);
+
+                const validation = validateWaveEnvironment(environmentData);
+                if (!validation.isOk) {
+                    console.error(
+                        `[EnvironmentService] loadAll: skipping invalid environment file "${file}" (id: ${environmentData.id ?? 'unknown'}): ${validation.error}`
+                    );
+                    continue;
+                }
+
+                if (!seenNames.has(environmentData.name)) {
                     seenNames.add(environmentData.name);
                     environments.push({
                         ...environmentData,
                         filename: file
                     });
-                } else if (environmentData) {
+                } else {
                     console.warn(`Skipping duplicate environment name "${environmentData.name}" from file ${file}`);
                 }
             } catch (error: unknown) {
@@ -75,11 +116,15 @@ export class EnvironmentService extends BaseStorageService {
 
     /**
      * Saves an environment to the environments directory.
+     * Stamps the current schema version when absent so every persisted
+     * environment carries a version going forward.
      * @param env The environment to save
      */
     async save(env: Environment): Promise<void> {
         const envDir = await this.getEnvironmentsDir();
         this.ensureDirectoryExists(envDir);
+
+        this.normalizeEnvironment(env);
 
         const fileName = this.sanitizeFileName(env.name);
         const filePath = path.join(envDir, `${fileName}.json`);
@@ -112,8 +157,15 @@ export class EnvironmentService extends BaseStorageService {
 
     /**
      * Imports environments from a JSON string (single object or array).
+     *
+     * Import boundary: every environment is validated against the Wave
+     * environment schema (after version stamping) **before** any file is
+     * written (all-or-nothing). Invalid input throws a descriptive error
+     * identifying the offending entry.
+     *
      * @param fileContent The JSON content to import
      * @returns The imported environments
+     * @throws Error when the content is not valid JSON or any entry fails validation
      */
     async import(fileContent: string): Promise<Environment[]> {
         const envDir = await this.getEnvironmentsDir();
@@ -121,12 +173,28 @@ export class EnvironmentService extends BaseStorageService {
 
         // Allow just a single environment object or an array of environments
         let environments: Environment[];
-        if (fileContent.trim().startsWith('[')) {
-            environments = JSON.parse(fileContent) as Environment[];
-        } else {
-            const env = JSON.parse(fileContent) as Environment;
-            environments = [env];
+        try {
+            if (fileContent.trim().startsWith('[')) {
+                environments = JSON.parse(fileContent) as Environment[];
+            } else {
+                const env = JSON.parse(fileContent) as Environment;
+                environments = [env];
+            }
+        } catch (error: unknown) {
+            const message = error instanceof Error ? error.message : 'Unknown parse error';
+            throw new Error(`Invalid JSON: ${message}`);
         }
+
+        // Validate all entries before persisting any (all-or-nothing).
+        environments.forEach((env, index) => {
+            this.normalizeEnvironment(env);
+            const validation = validateWaveEnvironment(env);
+            if (!validation.isOk) {
+                const label = env?.name ? `"${env.name}"` : `at index ${index}`;
+                console.error(`[EnvironmentService] import: rejected invalid environment ${label}: ${validation.error}`);
+                throw new Error(`Invalid environment ${label}: ${validation.error}`);
+            }
+        });
 
         // Save each environment as a separate file
         // If an environment with the same name exists, it will be overwritten

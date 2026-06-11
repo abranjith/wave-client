@@ -31,6 +31,8 @@ import {
   useFileAdapter,
   useNotificationAdapter,
   useAdapterEvent,
+  useHistoryRefresh,
+  base64ToArrayBuffer,
   transformCollection,
   type ImportFormatType,
   type Environment,
@@ -45,6 +47,7 @@ import {
   type CollectionItem,
   type Flow,
   type TestSuite,
+  type ResponseDownloadPayload,
   isHttpRequest,
 } from '@wave-client/core';
 import webAdapter, { checkServerHealth } from './adapters';
@@ -119,6 +122,7 @@ function WaveClientUI() {
   const http = useHttpAdapter();
   const file = useFileAdapter();
   const notification = useNotificationAdapter();
+  const { refreshHistory, saveRequestToHistoryAndRefresh } = useHistoryRefresh();
 
   // Store selectors
   const setIsCollectionsLoading = useAppStateStore((state) => state.setIsCollectionsLoading);
@@ -303,11 +307,9 @@ function WaveClientUI() {
 
   const handleRetryHistory = async () => {
     setIsHistoryLoading(true);
-    const historyResult = await storage.loadHistory();
-    if (historyResult.isOk) {
-      setHistory(historyResult.value);
-    } else {
-      setHistoryLoadError(historyResult.error);
+    const historyRefreshResult = await refreshHistory();
+    if (!historyRefreshResult.isOk) {
+      setHistoryLoadError(historyRefreshResult.error);
     }
     setIsHistoryLoading(false);
   };
@@ -421,7 +423,11 @@ const handleFlowSave = useCallback(async (flow: Flow) => {
 
     // Save only HTTP/legacy HTTP requests to history for now.
     if (isHttpRequest(request)) {
-      await storage.saveRequestToHistory(request);
+      // Pull-based refresh: persist first, then reload history into the store.
+      const historySaveResult = await saveRequestToHistoryAndRefresh(request);
+      if (!historySaveResult.isOk) {
+        console.warn('[WaveClient][History] Failed to refresh history after send:', historySaveResult.error);
+      }
     }
 
     // Build HTTP request using core slice helper
@@ -531,9 +537,9 @@ const handleFlowSave = useCallback(async (flow: Flow) => {
 
     if (result.isOk) {
       const collection = result.value;
-      const existingColl = currentCollections.find((c) => c.info.name === collection.info.name);
+      const existingColl = currentCollections.find((c) => c.filename === collection.filename);
       if (existingColl) {
-        updateCollection(collection.info.name, collection);
+        updateCollection(collection.filename || '', collection);
       } else {
         addCollection(collection);
       }
@@ -558,9 +564,20 @@ const handleFlowSave = useCallback(async (flow: Flow) => {
     }
   };
 
-  const handleDownloadResponse = async (data: string) => {
-    // Use file adapter to download
-    await file.writeFile('response.json', data);
+  const handleDownloadResponse = async (payload: ResponseDownloadPayload) => {
+    try {
+      const responseBytes = new Uint8Array(base64ToArrayBuffer(payload.body));
+      const result = await file.downloadResponse(responseBytes, payload.fileName, payload.contentType);
+
+      if (result.isErr) {
+        notification.showNotification('error', result.error);
+      }
+    } catch (error) {
+      notification.showNotification(
+        'error',
+        error instanceof Error ? error.message : 'Failed to decode response body for download'
+      );
+    }
   };
 
   const handleSaveEnvironment = async (environment: Environment) => {

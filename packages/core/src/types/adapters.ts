@@ -179,6 +179,7 @@ export interface IStorageAdapter {
     saveEnvironment(environment: Environment): Promise<Result<void, string>>;
     saveEnvironments(environments: Environment[]): Promise<Result<void, string>>;
     deleteEnvironment(environmentId: string): Promise<Result<void, string>>;
+    /** Imports environments and resolves with the full environment list after import (not just the imported entries). */
     importEnvironments(fileContent: string): Promise<Result<Environment[], string>>;
     exportEnvironments(): Promise<Result<{ filePath: string; fileName: string }, string>>;
 
@@ -270,9 +271,21 @@ export interface IHttpAdapter {
     executeRequest(config: HttpRequestConfig): Promise<Result<HttpResponseResult, string>>;
 
     /**
-     * Cancel an in-flight request
+     * Cancel an in-flight request by its id (the request/tab id used to issue it).
+     *
+     * The cancellation is routed to the platform's `HttpService`, which aborts the
+     * **server-side** request. The aborted request resolves through the normal
+     * response path as a UI-friendly Cancelled `HttpResponseResult`
+     * (`status: 0`, `statusText: 'Cancelled'`) rather than rejecting.
+     *
+     * This method resolves with `ok(undefined)` whether or not a matching in-flight
+     * request was found (cancelling an already-finished request is a no-op).
+     * It resolves with `err(message)` only when the cancellation request itself
+     * fails to reach the platform (e.g. a network/channel error).
+     *
+     * @param requestId The request/tab id to cancel.
      */
-    cancelRequest?(requestId: string): void;
+    cancelRequest(requestId: string): Promise<Result<void, string>>;
 }
 
 // ============================================================================

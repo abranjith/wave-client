@@ -29,7 +29,11 @@ function MoveModeCollectionHarness() {
         setSelectedValue={setCollectionName}
         includeOptionToCreateNew
         onCreateNewOption={(isSelected) => {
-          setCollectionName('');
+          // Only reset on entering create mode; regular selections also fire
+          // onCreateNewOption(false) and must keep the selected value.
+          if (isSelected) {
+            setCollectionName('');
+          }
           setIsCollectionInput(isSelected);
         }}
       />
@@ -56,6 +60,45 @@ describe('SearchableSelect', () => {
 
   afterAll(() => {
     vi.unstubAllGlobals();
+  });
+
+  it('changes the selected value with a single click', async () => {
+    const user = userEvent.setup();
+
+    render(<MoveModeCollectionHarness />);
+
+    expect(screen.getByRole('combobox')).toHaveTextContent('Sample Collection');
+
+    await user.click(screen.getByRole('combobox'));
+    await user.click(await screen.findByRole('option', { name: /Archive/i }));
+
+    expect(screen.getByRole('combobox')).toHaveTextContent('Archive');
+  });
+
+  it('selects the highlighted option with Tab', async () => {
+    const user = userEvent.setup();
+
+    render(<MoveModeCollectionHarness />);
+
+    await user.click(screen.getByRole('combobox'));
+    await screen.findByRole('option', { name: /Archive/i });
+
+    // Narrow the list so Archive is the highlighted option, then accept with Tab.
+    await user.keyboard('Arch');
+    await user.keyboard('{Tab}');
+
+    expect(screen.getByRole('combobox')).toHaveTextContent('Archive');
+  });
+
+  it('keeps the value selected when the same option is clicked again', async () => {
+    const user = userEvent.setup();
+
+    render(<MoveModeCollectionHarness />);
+
+    await user.click(screen.getByRole('combobox'));
+    await user.click(await screen.findByRole('option', { name: /Sample Collection/i }));
+
+    expect(screen.getByRole('combobox')).toHaveTextContent('Sample Collection');
   });
 
   it('clears move preselected value when switching to create mode and keeps input editable', async () => {

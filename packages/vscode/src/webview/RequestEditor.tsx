@@ -8,10 +8,10 @@ import React, { useState, useId, useEffect, useMemo, useCallback } from 'react';
 import {
     SendHorizonalIcon,
     SaveIcon,
-    LoaderCircleIcon,
     CheckCircleIcon,
     XCircleIcon,
     CircleSlashIcon,
+    SquareIcon,
     ChevronDownIcon,
     ChevronRightIcon,
 } from 'lucide-react';
@@ -44,6 +44,7 @@ import {
   renderParameterizedText,
   getResponseLanguage,
   AnyCollectionRequest,
+    type ResponseDownloadPayload,
   ProtocolSelector,
   ConnectionControls,
   WsOutputArea,
@@ -51,6 +52,9 @@ import {
   getRequestTabsForProtocol,
   useWsConnection,
   useSseConnection,
+  useHttpAdapter,
+  useNotificationAdapter,
+  useSaveShortcut,
 } from '@wave-client/core';
 
 // ==================== Helper Functions ====================
@@ -77,7 +81,7 @@ interface RequestEditorProps {
      * produced by `getCollectionRequest()`.
      */
     onSaveRequest: (request: AnyCollectionRequest, newCollectionName: string | undefined, folderPath?: string[], tabId?: string) => void;
-    onDownloadResponse: (data: string) => void;
+    onDownloadResponse: (payload: ResponseDownloadPayload) => void;
 }
 
 interface CollectionToSaveInfo {
@@ -131,6 +135,21 @@ const RequestEditor: React.FC<RequestEditorProps> = ({
     const { connect: wsConnect, disconnect: wsDisconnect, sendMessage } = useWsConnection();
     const { connect: sseConnect, disconnect: sseDisconnect } = useSseConnection();
 
+    // ==================== HTTP cancellation ====================
+
+    const http = useHttpAdapter();
+    const notification = useNotificationAdapter();
+
+    // Aborts the in-flight request for the active tab. The aborted request
+    // resolves through the normal response path as a Cancelled result, so this
+    // only needs to surface a failure of the cancel call itself.
+    const handleCancelRequest = useCallback(async () => {
+        const result = await http.cancelRequest(activeTabId);
+        if (!result.isOk) {
+            notification.showNotification('error', `Failed to cancel request: ${result.error}`);
+        }
+    }, [http, notification, activeTabId]);
+
     // ==================== Derived State ====================
     
     // Memoize the styled URL text
@@ -154,6 +173,20 @@ const RequestEditor: React.FC<RequestEditorProps> = ({
             onSaveRequest(currentRequest, undefined, undefined, activeTabId);
         }
     }, [activeTab?.folderPath, activeTabId, getCollectionRequest, onSaveRequest, setActiveTab]);
+
+    // ==================== Save shortcut ====================
+    // Declared after handleSaveRequest so its dependency array can reference it
+    // without hitting the temporal dead zone.
+
+    // Stable wrapper so useSaveShortcut receives a () => void callback.
+    const handleSaveShortcut = useCallback(() => {
+        handleSaveRequest(activeTabId);
+    }, [handleSaveRequest, activeTabId]);
+
+    // Disabled while the wizard is open to avoid double-opening.
+    const { onKeyDown: onSaveShortcutKeyDown } = useSaveShortcut(handleSaveShortcut, {
+        enabled: !isRequestSaveWizardOpen,
+    });
 
     const handleEnvironmentChange = useCallback((value: string) => {
         if (value === 'none') {
@@ -212,6 +245,10 @@ const RequestEditor: React.FC<RequestEditorProps> = ({
     
     // Determine if response is an error (status 0 and statusText 'Error')
     const isError = responseData?.status === 0 && responseData?.statusText === 'Error';
+
+    // A cancelled request is surfaced as a well-formed response (status 0 /
+    // 'Cancelled'), rendered distinctly rather than as a network error.
+    const isCancelledResponse = responseData?.status === 0 && responseData?.statusText === 'Cancelled';
     
     // Conditionally add Error tab when there's an error
     const RESPONSE_TABS = isError 
@@ -231,7 +268,7 @@ const RequestEditor: React.FC<RequestEditorProps> = ({
         : visibleRequestTabs[0];
 
     return (
-        <div className="w-full h-full flex flex-col overflow-hidden">
+        <div className="w-full h-full flex flex-col overflow-hidden" onKeyDown={onSaveShortcutKeyDown}>
             {/* Tabs Bar */}
             <TabsBar onSave={handleSaveRequest} />
             
@@ -350,7 +387,7 @@ const RequestEditor: React.FC<RequestEditorProps> = ({
                 )}
 
                 {/* Top Bar - Protocol Selector, Method (HTTP/SSE only), URL, Send / Connection Controls */}
-                <div className="px-2 py-2.5 flex items-center gap-2.5 flex-shrink-0 border-b border-slate-200 dark:border-slate-700">
+                <div className="px-2 py-2 flex items-center gap-2.5 flex-shrink-0 border-b border-slate-200 dark:border-slate-700">
                     {/* Protocol selector — leftmost in the toolbar */}
                     <ProtocolSelector />
 
@@ -386,18 +423,26 @@ const RequestEditor: React.FC<RequestEditorProps> = ({
                         placeholder="Enter request URL..."
                     />
 
-                    {/* Send button (HTTP only) or Connection Controls (WS / SSE) */}
+                    {/* Send button (HTTP only) toggles to Cancel while in-flight, or
+                        Connection Controls (WS / SSE) */}
                     {protocol === 'http' ? (
-                        <PrimaryButton
-                            onClick={() => onSendRequest(activeTabId)}
-                            icon={isRequestProcessing
-                                ? <LoaderCircleIcon className="animate-spin" />
-                                : <SendHorizonalIcon />
-                            }
-                            tooltip="Send"
-                            disabled={isRequestProcessing || !Boolean(url?.trim())}
-                            className="px-6 py-2"
-                        />
+                        isRequestProcessing ? (
+                            <PrimaryButton
+                                onClick={() => { void handleCancelRequest(); }}
+                                icon={<SquareIcon className="fill-current" />}
+                                colorTheme="warning"
+                                tooltip="Cancel"
+                                className="px-6 py-2"
+                            />
+                        ) : (
+                            <PrimaryButton
+                                onClick={() => onSendRequest(activeTabId)}
+                                icon={<SendHorizonalIcon />}
+                                tooltip="Send"
+                                disabled={!Boolean(url?.trim())}
+                                className="px-6 py-2"
+                            />
+                        )
                     ) : (
                         <ConnectionControls
                             tabId={activeTabId}
@@ -444,7 +489,7 @@ const RequestEditor: React.FC<RequestEditorProps> = ({
 
                         {/* Request Tab Content */}
                         {!isRequestSectionCollapsed && (
-                            <div className="px-2 py-3 bg-white dark:bg-slate-900 overflow-y-auto flex-1 min-h-0">
+                            <div className="px-2 py-2 bg-white dark:bg-slate-900 overflow-y-auto flex-1 min-h-0">
                                 {effectiveRequestSection === 'Params' && <RequestParams />}
                                 {effectiveRequestSection === 'Headers' && <RequestHeaders />}
                                 {effectiveRequestSection === 'Body' && <RequestBody />}
@@ -468,6 +513,14 @@ const RequestEditor: React.FC<RequestEditorProps> = ({
                                 <div className="text-slate-500 dark:text-slate-400 text-center">
                                     <div className="text-lg font-medium mb-2">No response yet</div>
                                     <div className="text-sm">Send a request to see the response here</div>
+                                </div>
+                            </div>
+                        ) : isCancelledResponse ? (
+                            <div className="flex-1 flex items-center justify-center">
+                                <div className="text-slate-500 dark:text-slate-400 text-center">
+                                    <CircleSlashIcon className="w-8 h-8 mx-auto mb-2 text-amber-500" />
+                                    <div className="text-lg font-medium mb-2">Request cancelled</div>
+                                    <div className="text-sm">The request was cancelled before a response was received</div>
                                 </div>
                             </div>
                         ) : (
@@ -523,7 +576,7 @@ const RequestEditor: React.FC<RequestEditorProps> = ({
                                 </div>
 
                                 {/* Response Tab Content */}
-                                <div className="px-2 py-3 bg-white dark:bg-slate-900 overflow-auto min-h-0 flex-1">
+                                <div className="px-2 py-2 bg-white dark:bg-slate-900 overflow-auto min-h-0 flex-1">
                                     {activeResponseSection === 'Error' && (
                                         <div className="space-y-4">
                                             <div className="p-4 bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-800 rounded-lg">
@@ -560,6 +613,7 @@ const RequestEditor: React.FC<RequestEditorProps> = ({
                                             body={responseData.body}
                                             headers={responseData.headers}
                                             statusCode={responseData.status}
+                                            isEncoded={responseData.isEncoded}
                                             onDownloadResponse={onDownloadResponse}
                                         />
                                     )}

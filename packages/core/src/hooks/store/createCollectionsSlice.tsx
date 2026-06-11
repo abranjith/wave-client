@@ -10,8 +10,17 @@ interface CollectionsSlice {
     savedExpandedFolders: string[] | null;
     setCollections: (collections: Collection[]) => void;
     addCollection: (collection: Collection) => void;
-    removeCollection: (name: string) => void;
-    updateCollection: (name: string, updates: Partial<Collection>) => void;
+    /**
+     * Removes a collection by its `filename` — the persistence key, always
+     * present after load. Display `name` is never a lookup key (it is exactly
+     * what changes during rename).
+     */
+    removeCollection: (filename: string) => void;
+    /**
+     * Updates a collection by its `filename` (persistence key). See
+     * {@link removeCollection} for why display name is never used here.
+     */
+    updateCollection: (filename: string, updates: Partial<Collection>) => void;
     setIsCollectionsLoading: (isLoading: boolean) => void;
     setCollectionLoadError: (error: string | null) => void;
     setCollectionSearchText: (text: string) => void;
@@ -30,11 +39,11 @@ const createCollectionsSlice: StateCreator<CollectionsSlice> = (set) => ({
     addCollection: (collection) => set((state) => ({
         collections: [...state.collections, collection]
     })),
-    removeCollection: (name) => set((state) => ({
-        collections: state.collections.filter((c) => c.info.name !== name)
+    removeCollection: (filename) => set((state) => ({
+        collections: state.collections.filter((c) => c.filename !== filename)
     })),
-    updateCollection: (name, updates) => set((state) => ({
-        collections: state.collections.map((c) => c.info.name === name ? { ...c, ...updates } : c)
+    updateCollection: (filename, updates) => set((state) => ({
+        collections: state.collections.map((c) => c.filename === filename ? { ...c, ...updates } : c)
     })),
     setIsCollectionsLoading: (isLoading) => set({
         isCollectionsLoading: isLoading,

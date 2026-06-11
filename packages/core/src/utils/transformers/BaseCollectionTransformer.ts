@@ -33,8 +33,6 @@ export type CollectionFormatType = ImportFormatType;
  */
 export abstract class BaseCollectionTransformer<TExternal> {
 
-    protected readonly waveVersion = '0.0.1';
-
     /**
      * The format type this transformer handles
      */

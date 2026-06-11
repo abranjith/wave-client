@@ -37,7 +37,34 @@ Choose the active environment for a request from the request editor. When a requ
 
 ## Importing & exporting
 
-Environments can be **imported** (including from Postman) and **exported** to a file, so you can share configurations or move them between machines.
+Environments can be **imported** from Wave or Postman JSON files and **exported** to a file, so you can share configurations or move them between machines.
+
+### Supported import formats
+
+| Format | Description |
+|--------|-------------|
+| **Wave JSON** | A Wave environment export (single environment object or an array of environments). |
+| **Postman** | A Postman environment export (`.json`). Variables mapped as described below. |
+
+When you select a file in the import wizard, Wave Client auto-detects the format from the file content and pre-selects the **Environment Type** dropdown. You can override the detection manually before clicking Import.
+
+#### Postman → Wave mapping
+
+| Postman field | Wave field | Notes |
+|--------------|------------|-------|
+| `name` | `name` | Preserved as-is. |
+| `values[].key` | `values[].key` | Preserved as-is. |
+| `values[].value` | `values[].value` | Coerced to string. |
+| `values[].enabled` | `values[].enabled` | Defaults to `true` when absent. |
+| `values[].type === 'secret'` | `values[].type = 'secret'` | All other types map to `'default'`. |
+| `id` (Postman) | `id` ← fresh UUID | Postman's id is never trusted. |
+| — | `version` ← `'0.0.1'` | Wave schema version stamped on import. |
+
+Secret variables (`type: 'secret'` in Postman) are imported as Wave secret variables and follow the existing secret-variable handling in the editor and storage layer.
+
+### Validation
+
+Imported environments are validated against the [Wave Environment Schema](../schemas.md) before anything is written — if any entry in the file is invalid, the error is shown inline and nothing is imported. The schema reference documents every field of the persisted format, including the `version` field stamped into each environment file.
 
 ---
 

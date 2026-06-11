@@ -4,6 +4,32 @@
 
 ---
 
+## Beta update — import fidelity, cancellation & collection integrity
+
+A stabilization pass across collections, environments, requests, and history, plus formalized file schemas and versioning docs.
+
+### Requests
+- **Cancel in-flight requests** — while a request is processing, **Send** becomes **Cancel**; aborting stops the actual outbound call on both apps and settles the viewer in a distinct "Request cancelled" state.
+- **Ctrl+S / Cmd+S** saves the active request from the request editor (direct save, or the Save dialog for unsaved requests) — see [keyboard shortcuts](features/requests.md#keyboard-shortcuts).
+- **Response download fixed** on both apps — downloads now honor the real response bytes, a sensible filename, and the response content type.
+- **History refreshes in real time** — the History pane updates immediately after each send, no reload needed.
+- Tighter request-editor spacing, with Params/Headers **Copy/Paste** buttons relocated into the table header.
+
+### Collections
+- **Full `.http` / `.rest` import syntax** — `###` separators, `#` and `//` comments, `# @name` directives, file-variable lines, optional methods, multi-line URLs, and automatic unique request naming. See [Collections](features/collections.md).
+- **Content-based format auto-detection** on import — Postman, OpenAPI/Swagger, `.http`, and Wave files are recognized from their content, with the dropdown as a manual override.
+- **Reliable collection operations** — rename, delete, and move now persist dependably; item identity is stable across rename/move/duplicate; naming rules (non-empty, sibling-unique) are enforced everywhere.
+- **Clearer Move & Save dialog** — shows the request's current location, offers a single searchable destination picker listing every collection and folder (any depth), and blocks moves that would overwrite an existing item.
+
+### Environments
+- **Postman environment import** with an auto-detected, overridable **Environment Type** dropdown; secret-typed Postman variables import as Wave secrets. See [Environments](features/environments.md).
+
+### Schemas & versioning
+- The persisted collection and environment formats are now formal, versioned schemas (both `0.0.1`), validated at import and load — documented field by field in [Wave Schemas](schemas.md).
+- How Wave Client versions evolve is now documented in [Versioning](versioning.md): four independent tracks with per-track semver semantics and bump checklists.
+
+---
+
 ## Beta — Initial public release
 
 The first public beta of Wave Client, available as both a **VS Code extension** and a **standalone web app** with feature parity between them.

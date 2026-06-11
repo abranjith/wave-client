@@ -141,6 +141,55 @@ function buildCollections(): { source: Collection; other: Collection; requestId:
   return { source, other, requestId };
 }
 
+function buildCollectionsWithConflict(): { source: Collection; other: Collection; requestId: string } {
+  const requestId = 'req-1';
+  const conflictRequestId = 'req-2';
+
+  const source: Collection = {
+    filename: 'source.json',
+    info: {
+      waveId: 'wave-source',
+      name: 'Source API',
+    },
+    item: [
+      {
+        id: requestId,
+        name: 'Get Users',
+        request: {
+          id: requestId,
+          name: 'Get Users',
+          method: 'GET',
+          url: 'https://api.example.com/users',
+          header: [],
+        },
+      },
+    ],
+  };
+
+  const other: Collection = {
+    filename: 'other.json',
+    info: {
+      waveId: 'wave-other',
+      name: 'Other API',
+    },
+    item: [
+      {
+        id: conflictRequestId,
+        name: 'Get Users',
+        request: {
+          id: conflictRequestId,
+          name: 'Get Users',
+          method: 'GET',
+          url: 'https://api.example.com/other-users',
+          header: [],
+        },
+      },
+    ],
+  };
+
+  return { source, other, requestId };
+}
+
 const defaultProps = {
   onRequestSelect: vi.fn(),
   onImportCollection: vi.fn(),
@@ -198,6 +247,29 @@ describe('CollectionsPane move/duplicate actions', () => {
 
     await waitFor(() => {
       expect(notificationLog.some((entry) => entry.type === 'error')).toBe(true);
+    });
+
+    expect(saveSpy).not.toHaveBeenCalled();
+    expect(deleteSpy).not.toHaveBeenCalled();
+  });
+
+  it('blocks move when destination already has an item with the same name', async () => {
+    const { source, other, requestId } = buildCollectionsWithConflict();
+    const { adapter, notificationLog } = renderPane([source, other]);
+
+    const saveSpy = vi.spyOn(adapter.storage, 'saveRequestToCollection');
+    const deleteSpy = vi.spyOn(adapter.storage, 'deleteRequestFromCollection');
+
+    fireEvent.click(screen.getByText('Source API'));
+    fireEvent.click(screen.getByTestId(`move-${requestId}`));
+    fireEvent.click(screen.getByTestId('confirm-other-collection'));
+
+    await waitFor(() => {
+      expect(
+        notificationLog.some(
+          (entry) => entry.type === 'error' && entry.message.toLowerCase().includes('destination already contains')
+        )
+      ).toBe(true);
     });
 
     expect(saveSpy).not.toHaveBeenCalled();

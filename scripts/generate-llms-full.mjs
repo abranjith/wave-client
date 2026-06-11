@@ -41,6 +41,8 @@ const ORDER = [
   'platforms/vscode.md',
   'platforms/web-app.md',
   'design.md',
+  'schemas.md',
+  'versioning.md',
   'build-your-own-client.md',
   'release-notes.md',
 ];

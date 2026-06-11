@@ -1,6 +1,6 @@
 /**
- * Collection Transformers Index
- * Re-exports all collection transformers and provides factory functions
+ * Transformers Index
+ * Re-exports all collection and environment transformers and provides factory functions
  */
 
 import { BaseCollectionTransformer, ok, err } from './BaseCollectionTransformer';
@@ -142,6 +142,70 @@ export function getSupportedExportFormats(): ExportFormatType[] {
 export function getSupportedFormatNames(): { type: CollectionFormatType; name: string }[] {
     return transformerRegistry.map(t => ({ type: t.formatType, name: t.formatName }));
 }
+
+/**
+ * Detects collection format from file text content.
+ *
+ * Detection chain (in order):
+ * 1. Empty / whitespace → `undefined`
+ * 2. Valid JSON → run through transformer registry (swagger → postman → wave priority);
+ *    `undefined` if no transformer claims it.
+ * 3. Not JSON + YAML heuristic (`openapi:` / `swagger:` top-level key) → `'swagger'`
+ * 4. `httpFileTransformer.canHandle(text)` → `'http'`
+ * 5. Otherwise → `undefined` (inconclusive; caller should fall back to filename detection)
+ *
+ * This function never throws — the JSON parse is guarded and all transformer checks are
+ * synchronous boolean predicates.
+ *
+ * Registry order defines priority: a document matching both swagger and postman markers
+ * resolves to `'swagger'` because swaggerTransformer is first in the registry.
+ *
+ * @param text - The raw file text to analyse.
+ * @returns The detected `ImportFormatType`, or `undefined` when inconclusive.
+ * @example
+ * detectFormatFromContent('{"openapi":"3.0.0","info":{"title":"API","version":"1"}}') // 'swagger'
+ * detectFormatFromContent('openapi: 3.0.0\ninfo:\n  title: My API\n  version: "1"') // 'swagger'
+ * detectFormatFromContent('### Get users\nGET https://example.com/users') // 'http'
+ * detectFormatFromContent('') // undefined
+ * detectFormatFromContent('{"a":1}') // undefined (no transformer claims it)
+ */
+export function detectFormatFromContent(text: string): ImportFormatType | undefined {
+    if (!text || !text.trim()) {
+        return undefined;
+    }
+
+    // JSON path: parse and run through transformer registry
+    try {
+        const parsed: unknown = JSON.parse(text);
+        const transformer = detectTransformer(parsed);
+        return transformer ? (transformer.formatType as ImportFormatType) : undefined;
+    } catch {
+        // Not valid JSON — fall through to text heuristics
+    }
+
+    // YAML OpenAPI heuristic: top-level 'openapi:' or 'swagger:' key
+    if (/^\s*(openapi|swagger)\s*:/m.test(text)) {
+        return 'swagger';
+    }
+
+    // HTTP file heuristic
+    if (httpFileTransformer.canHandle(text)) {
+        return 'http';
+    }
+
+    return undefined;
+}
+
+// ============================================================================
+// Environment Transformers
+// ============================================================================
+
+export type { EnvironmentImportFormatType } from './environmentTransformers';
+export {
+    ENVIRONMENT_IMPORT_FORMAT_OPTIONS,
+    detectEnvironmentFormat,
+    transformEnvironments,
+} from './environmentTransformers';
 
 /**
  * Detects format type from filename extension

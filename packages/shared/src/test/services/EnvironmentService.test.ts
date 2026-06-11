@@ -321,5 +321,86 @@ describe('EnvironmentService', () => {
       });
     });
   });
+
+  // ==========================================================================
+  // Schema validation & version stamping (FEAT-001)
+  // ==========================================================================
+  describe('schema validation & version stamping', () => {
+    it('should stamp version on a legacy versionless file in loadAll', async () => {
+      mockFs.setFile(
+        path.join(testEnvDir, 'legacy.json'),
+        JSON.stringify({ id: 'legacy-1', name: 'Legacy', values: [{ key: 'K', value: 'V' }] })
+      );
+
+      const result = await service.loadAll();
+      const legacy = result.find(e => e.id === 'legacy-1');
+
+      expect(legacy).toBeDefined();
+      expect(legacy!.version).toBe('0.0.1');
+      // Missing variable fields are defaulted during normalization
+      expect(legacy!.values[0].type).toBe('default');
+      expect(legacy!.values[0].enabled).toBe(true);
+    });
+
+    it('should skip an invalid file in loadAll but return valid ones plus Global', async () => {
+      const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      mockFs.setFile(
+        path.join(testEnvDir, 'good.json'),
+        JSON.stringify({ id: 'good-1', name: 'Good', version: '0.0.1', values: [] })
+      );
+      mockFs.setFile(
+        path.join(testEnvDir, 'bad.json'),
+        JSON.stringify({ id: 'bad-1', name: 'Bad', values: 'not-an-array' })
+      );
+
+      const result = await service.loadAll();
+
+      expect(result.find(e => e.id === 'good-1')).toBeDefined();
+      expect(result.find(e => e.id === 'bad-1')).toBeUndefined();
+      expect(result.find(e => e.name === 'Global')).toBeDefined();
+      expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining('bad.json'));
+      errorSpy.mockRestore();
+    });
+
+    it('should write version into the persisted JSON on save', async () => {
+      const env: Environment = { id: 'save-1', name: 'SaveMe', values: [] };
+
+      await service.save(env);
+
+      const raw = mockFs.getFile(path.join(testEnvDir, 'SaveMe.json'));
+      expect(raw).toBeDefined();
+      expect(JSON.parse(raw!).version).toBe('0.0.1');
+    });
+
+    it('should import a valid array and persist all with versions', async () => {
+      const envs = [
+        { id: 'i1', name: 'ImpOne', values: [{ key: 'A', value: '1', type: 'default', enabled: true }] },
+        { id: 'i2', name: 'ImpTwo', values: [] },
+      ];
+
+      const imported = await service.import(JSON.stringify(envs));
+
+      expect(imported).toHaveLength(2);
+      imported.forEach(env => expect(env.version).toBe('0.0.1'));
+      expect(mockFs.getFile(path.join(testEnvDir, 'ImpOne.json'))).toBeDefined();
+      expect(mockFs.getFile(path.join(testEnvDir, 'ImpTwo.json'))).toBeDefined();
+    });
+
+    it('should persist nothing and name the offender when one import entry is invalid', async () => {
+      const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      const envs = [
+        { id: 'ok-1', name: 'OkEnv', values: [] },
+        { id: 'broken-1', name: 'BrokenEnv', values: 'nope' },
+      ];
+
+      await expect(service.import(JSON.stringify(envs))).rejects.toThrow(/BrokenEnv/);
+      expect(mockFs.getFile(path.join(testEnvDir, 'OkEnv.json'))).toBeUndefined();
+      errorSpy.mockRestore();
+    });
+
+    it('should throw a descriptive error for invalid JSON on import', async () => {
+      await expect(service.import('[ not json')).rejects.toThrow(/Invalid JSON/);
+    });
+  });
 });
 

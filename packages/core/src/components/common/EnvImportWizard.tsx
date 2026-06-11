@@ -2,6 +2,8 @@ import React, { useState } from 'react';
 import { XIcon, ImportIcon } from 'lucide-react';
 import { PrimaryButton } from '../ui/PrimaryButton';
 import { SecondaryButton } from '../ui/SecondaryButton';
+import { Label } from '../ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import {
   Dialog,
   DialogContent,
@@ -13,6 +15,12 @@ import {
 import Banner from '../ui/banner';
 import { FileInput } from '../ui/fileinput';
 import { FileWithPreview } from '../../hooks/useFileUpload';
+import {
+  ENVIRONMENT_IMPORT_FORMAT_OPTIONS,
+  EnvironmentImportFormatType,
+  detectEnvironmentFormat,
+  transformEnvironments,
+} from '../../utils/transformers';
 
 interface EnvImportWizardProps {
   isOpen: boolean;
@@ -26,6 +34,8 @@ const EnvImportWizard: React.FC<EnvImportWizardProps> = ({
   onImportEnvironments,
 }) => {
   const [selectedFile, setSelectedFile] = useState<FileWithPreview | null>(null);
+  const [fileContent, setFileContent] = useState<string | null>(null);
+  const [environmentType, setEnvironmentType] = useState<EnvironmentImportFormatType>('wave');
   const [error, setError] = useState<string | null>(null);
   const [isImporting, setIsImporting] = useState(false);
 
@@ -38,31 +48,46 @@ const EnvImportWizard: React.FC<EnvImportWizardProps> = ({
   };
 
   /**
-   * Handles file selection from FileInput
+   * Handles file selection — reads content immediately for content-based detection.
+   * Detection chain: content → fallback 'wave'.
    */
-  const handleFilesAdded = (addedFiles: FileWithPreview[]) => {
-    if (addedFiles.length > 0) {
-      const file = addedFiles[0];
-      // Validate JSON file
-      if (file.file instanceof File && !isJsonFile(file.file)) {
-        setError('Please select a JSON file');
-        return;
-      }
-      setSelectedFile(file);
-      setError(null);
+  const handleFilesAdded = async (addedFiles: FileWithPreview[]) => {
+    if (addedFiles.length === 0) return;
+
+    const file = addedFiles[0];
+
+    if (file.file instanceof File && !isJsonFile(file.file)) {
+      setError('Please select a JSON file');
+      return;
+    }
+
+    setSelectedFile(file);
+    setError(null);
+
+    if (!(file.file instanceof File)) return;
+
+    try {
+      const text = await file.file.text();
+      setFileContent(text);
+      const detected = detectEnvironmentFormat(text) ?? 'wave';
+      setEnvironmentType(detected);
+    } catch {
+      setFileContent(null);
+      setEnvironmentType('wave');
     }
   };
 
   /**
-   * Handles file removal from FileInput
+   * Handles file removal.
    */
   const handleFileRemoved = () => {
     setSelectedFile(null);
+    setFileContent(null);
     setError(null);
   };
 
   /**
-   * Handles import action
+   * Handles import action — transforms to Wave format before calling onImportEnvironments.
    */
   const handleImport = async () => {
     if (!selectedFile) {
@@ -74,44 +99,42 @@ const EnvImportWizard: React.FC<EnvImportWizardProps> = ({
     setError(null);
 
     try {
-      // Read file content
-      let fileContent: string;
+      let content: string;
       let fileName: string;
 
       if (selectedFile.file instanceof File) {
-        fileContent = await selectedFile.file.text();
+        content = fileContent ?? (await selectedFile.file.text());
         fileName = selectedFile.file.name;
       } else {
-        // Handle FileMetadata case (shouldn't happen in this flow, but for type safety)
         setError('Invalid file type');
         setIsImporting(false);
         return;
       }
 
-      // Validate JSON format
-      try {
-        JSON.parse(fileContent);
-      } catch (e) {
-        throw new Error('Invalid JSON file');
+      const result = transformEnvironments(content, environmentType);
+      if (!result.isOk) {
+        setError(result.error);
+        setIsImporting(false);
+        return;
       }
 
-      // Send import request to extension host
-      onImportEnvironments(fileName, fileContent);
-
-      // Close the dialog
+      onImportEnvironments(fileName, JSON.stringify(result.value));
       handleClose();
-    } catch (err: any) {
-      setError(`Failed to import environments: ${err.message}`);
+    } catch (e: unknown) {
+      const message = e instanceof Error ? e.message : String(e);
+      setError(`Failed to import environments: ${message}`);
     } finally {
       setIsImporting(false);
     }
   };
 
   /**
-   * Handles dialog close
+   * Handles dialog close — resets all wizard state.
    */
   const handleClose = () => {
     setSelectedFile(null);
+    setFileContent(null);
+    setEnvironmentType('wave');
     setError(null);
     setIsImporting(false);
     onClose();
@@ -138,10 +161,36 @@ const EnvImportWizard: React.FC<EnvImportWizardProps> = ({
             useFileIcon={true}
           />
 
+          {/* Environment Type Selection */}
+          {selectedFile && (
+            <div className="space-y-2">
+              <Label htmlFor="environment-type" className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                Environment Type
+              </Label>
+              <Select value={environmentType} onValueChange={(value) => setEnvironmentType(value as EnvironmentImportFormatType)}>
+                <SelectTrigger id="environment-type" className="w-full">
+                  <SelectValue placeholder="Select environment type" />
+                </SelectTrigger>
+                <SelectContent>
+                  {ENVIRONMENT_IMPORT_FORMAT_OPTIONS.map((option) => (
+                    <SelectItem key={option.value} value={option.value}>
+                      {option.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-slate-500 dark:text-slate-400">
+                {fileContent !== null
+                  ? 'Detected from file content. Select manually to override.'
+                  : 'Select the environment type manually.'}
+              </p>
+            </div>
+          )}
+
           {/* Helper Text */}
           {!selectedFile && (
             <p className="text-xs text-slate-500 dark:text-slate-400 text-center">
-              Only JSON files are supported
+              Supported formats: Wave JSON (single env or array), Postman environment export
             </p>
           )}
 

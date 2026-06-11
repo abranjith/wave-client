@@ -1,8 +1,8 @@
 {
   "name": "wave-client-vscode",
-  "displayName": "Wave Client",
+  "displayName": "Wave Client(Ctrl+Alt+W)",
   "description": "A modern, intuitive REST client for VS Code using React and Tailwind CSS",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "license": "SEE LICENSE IN LICENSE",
   "publisher": "ab-ranjith",
   "engines": {
@@ -11,6 +11,20 @@
   "categories": [
     "Other"
   ],
+  "keywords": [
+		"REST",
+		"REST Client",
+    "API Testing",
+    "HTTP Client",
+    "API",
+    "HTTP Requests",
+    "HTTP",
+    "Postman",
+    "WebSocket Client",
+    "WebSocket",
+    "SSE Client",
+    "SSE"
+	],
   "icon": "assets/wave-client-logo.png",
   "main": "dist/extension.js",
   "author": {

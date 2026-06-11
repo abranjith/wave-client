@@ -141,50 +141,50 @@ const RequestHeaders: React.FC = () => {
   const copyEnabled = headers.some((h) => !h.disabled && h.key.trim() !== '');
 
   return (
-    <div className="space-y-0">
-      {/* Header with action buttons */}
-      <div className="flex items-center justify-end mb-4">
-        <div className="flex items-center gap-2">
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={copyHeaders}
-                disabled={!copyEnabled}
-                className="h-9 w-9 p-0 flex items-center justify-center"
-              >
-                <CopyIcon size={16} />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent className="px-2 py-1 text-xs">Copy headers</TooltipContent>
-          </Tooltip>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={pasteHeaders}
-                className="h-9 w-9 p-0 flex items-center justify-center"
-              >
-                <ClipboardPasteIcon size={16} />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent className="px-2 py-1 text-xs">Paste headers</TooltipContent>
-          </Tooltip>
-        </div>
-      </div>
-
-      <div className="overflow-x-auto border border-slate-200 dark:border-slate-700 rounded-lg">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead className="w-[8%]">Enabled</TableHead>
-              <TableHead className="w-[38%]">Header Name</TableHead>
-              <TableHead className="w-[38%]">Header Value</TableHead>
-              <TableHead className="w-[16%]">Actions</TableHead>
-            </TableRow>
-          </TableHeader>
+    <div className="overflow-x-auto border border-slate-200 dark:border-slate-700 rounded-lg">
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead className="w-[8%]">Enabled</TableHead>
+            <TableHead className="w-[38%]">Header Name</TableHead>
+            <TableHead className="w-[38%]">Header Value</TableHead>
+            <TableHead className="w-[16%]">
+              {/* Actions label with right-aligned Copy/Paste controls, sized to the header row */}
+              <div className="flex items-center justify-between gap-2">
+                <span>Actions</span>
+                <div className="flex items-center gap-1">
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={copyHeaders}
+                        disabled={!copyEnabled}
+                        className="h-6 w-6 p-0 flex items-center justify-center"
+                      >
+                        <CopyIcon size={14} />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent className="px-2 py-1 text-xs">Copy headers</TooltipContent>
+                  </Tooltip>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={pasteHeaders}
+                        className="h-6 w-6 p-0 flex items-center justify-center"
+                      >
+                        <ClipboardPasteIcon size={14} />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent className="px-2 py-1 text-xs">Paste headers</TooltipContent>
+                  </Tooltip>
+                </div>
+              </div>
+            </TableHead>
+          </TableRow>
+        </TableHeader>
           <TableBody>
             {headers.map((header, index) => {
               const isDisabled = header.disabled;
@@ -252,8 +252,6 @@ const RequestHeaders: React.FC = () => {
             })}
           </TableBody>
         </Table>
-      </div>
-      
     </div>
   );
 };

@@ -9,9 +9,9 @@
 
 ## Features
 
-- [Requests](features/requests.md): HTTP, WebSocket, and SSE requests; URL, params, headers, body types, the response viewer, and the "Sent" view.
-- [Collections](features/collections.md): Organizing requests into nested folders; import (Postman, OpenAPI/Swagger, HTTP) and export; running collections; move and duplicate.
-- [Environments](features/environments.md): Environment variables, global vs. environment scope, and selection.
+- [Requests](features/requests.md): HTTP, WebSocket, and SSE requests; URL, params, headers, body types, the response viewer, the "Sent" view, request cancellation, response download, and keyboard shortcuts (Ctrl/Cmd+S save).
+- [Collections](features/collections.md): Organizing requests into nested folders; import (Postman, OpenAPI/Swagger, full `.http` syntax) with content-based format auto-detection; export; running collections; move and duplicate.
+- [Environments](features/environments.md): Environment variables, global vs. environment scope, selection, and import (Wave or Postman environment JSON) with format auto-detection.
 - [Variables](features/variables.md): `{{variable}}` resolution and dynamic `_fn_` functions (UUIDs, random data, dates).
 - [Auth](features/auth.md): Authentication types (API Key, Basic, Digest, OAuth2) and where they apply.
 - [Validations](features/validations.md): Response validation rules, operators, JSONPath, and JSON Schema.
@@ -30,6 +30,8 @@
 ## Reference
 
 - [Design & Architecture](design.md): Monorepo and package responsibilities, the adapter pattern, services, the Zustand store, hooks, and the Result pattern.
+- [Wave Schemas](schemas.md): The persisted collection and environment file formats (versioned Zod schemas), field by field, with validation boundaries and version history.
+- [Versioning](versioning.md): The four independent version tracks (VS Code app, web app, core platform, Wave schemas), semver semantics per track, and the manual bump checklists.
 - [Build Your Own Client](build-your-own-client.md): How to build a new Wave Client client (CLI, desktop, etc.) on the platform-agnostic core by implementing the IPlatformAdapter interface; covers UI and headless clients.
 - [Release Notes](release-notes.md): Capabilities by area for the public beta.
 

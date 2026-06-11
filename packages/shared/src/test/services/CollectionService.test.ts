@@ -379,15 +379,17 @@ describe('CollectionService', () => {
         JSON.stringify(existingCollection)
       );
 
-      const requestContent = JSON.stringify({
-        method: 'GET',
-        url: { raw: 'https://api.example.com/users' },
+      const itemContent = JSON.stringify({
+        name: 'Get Users',
+        request: {
+          method: 'GET',
+          url: { raw: 'https://api.example.com/users' },
+        },
       });
 
       // Act
       const result = await service.saveRequest(
-        requestContent,
-        'Get Users',
+        itemContent,
         'existing.json',
         []
       );
@@ -404,15 +406,17 @@ describe('CollectionService', () => {
 
     it('should create a new collection if newCollectionName is provided', async () => {
       // Arrange
-      const requestContent = JSON.stringify({
-        method: 'POST',
-        url: { raw: 'https://api.example.com/users' },
+      const itemContent = JSON.stringify({
+        name: 'Create User',
+        request: {
+          method: 'POST',
+          url: { raw: 'https://api.example.com/users' },
+        },
       });
 
       // Act
       const result = await service.saveRequest(
-        requestContent,
-        'Create User',
+        itemContent,
         '',
         [],
         'New API Collection'
@@ -444,15 +448,17 @@ describe('CollectionService', () => {
         JSON.stringify(existingCollection)
       );
 
-      const requestContent = JSON.stringify({
-        method: 'GET',
-        url: { raw: 'https://api.example.com/users/1' },
+      const itemContent = JSON.stringify({
+        name: 'Get User by ID',
+        request: {
+          method: 'GET',
+          url: { raw: 'https://api.example.com/users/1' },
+        },
       });
 
       // Act
       await service.saveRequest(
-        requestContent,
-        'Get User by ID',
+        itemContent,
         'api.json',
         ['Users', 'Read']
       );
@@ -497,15 +503,18 @@ describe('CollectionService', () => {
         JSON.stringify(existingCollection)
       );
 
-      const newRequestContent = JSON.stringify({
-        method: 'GET',
-        url: { raw: 'https://new-api.example.com/users' },
+      // Legacy id-less payload: matched by name (fallback path)
+      const newItemContent = JSON.stringify({
+        name: 'Get Users',
+        request: {
+          method: 'GET',
+          url: { raw: 'https://new-api.example.com/users' },
+        },
       });
 
       // Act
       await service.saveRequest(
-        newRequestContent,
-        'Get Users',
+        newItemContent,
         'api.json',
         []
       );
@@ -521,16 +530,18 @@ describe('CollectionService', () => {
 
     it('should throw error if collection does not exist and no new name provided', async () => {
       // Arrange
-      const requestContent = JSON.stringify({
-        method: 'GET',
-        url: { raw: 'https://api.example.com/users' },
+      const itemContent = JSON.stringify({
+        name: 'Get Users',
+        request: {
+          method: 'GET',
+          url: { raw: 'https://api.example.com/users' },
+        },
       });
 
       // Act & Assert
       await expect(
         service.saveRequest(
-          requestContent,
-          'Get Users',
+          itemContent,
           'nonexistent.json',
           []
         )
@@ -890,14 +901,17 @@ describe('CollectionService', () => {
       };
       mockFs.setFile(path.join(testCollectionsDir, 'ws_col.json'), JSON.stringify(collection));
 
-      const wsRequest = JSON.stringify({
-        protocol: 'ws',
-        url: 'wss://echo.example.com',
-        header: [{ key: 'Authorization', value: 'Bearer tok' }],
+      const wsItem = JSON.stringify({
+        name: 'Echo WS',
+        request: {
+          protocol: 'ws',
+          url: 'wss://echo.example.com',
+          header: [{ key: 'Authorization', value: 'Bearer tok' }],
+        },
       });
 
       // Act
-      await service.saveRequest(wsRequest, 'Echo WS', 'ws_col.json', []);
+      await service.saveRequest(wsItem, 'ws_col.json', []);
       const loaded = await service.loadOne('ws_col.json');
 
       // Assert
@@ -918,14 +932,17 @@ describe('CollectionService', () => {
       };
       mockFs.setFile(path.join(testCollectionsDir, 'sse_col.json'), JSON.stringify(collection));
 
-      const sseRequest = JSON.stringify({
-        protocol: 'sse',
-        url: 'https://stream.example.com/events',
-        method: 'POST',
-        body: { mode: 'raw', raw: '{"channel":"updates"}' },
+      const sseItem = JSON.stringify({
+        name: 'Stream Events',
+        request: {
+          protocol: 'sse',
+          url: 'https://stream.example.com/events',
+          method: 'POST',
+          body: { mode: 'raw', raw: '{"channel":"updates"}' },
+        },
       });
 
-      await service.saveRequest(sseRequest, 'Stream Events', 'sse_col.json', []);
+      await service.saveRequest(sseItem, 'sse_col.json', []);
       const loaded = await service.loadOne('sse_col.json');
 
       const req = loaded!.item[0].request as any;
@@ -983,19 +1000,222 @@ describe('CollectionService', () => {
       };
       mockFs.setFile(path.join(testCollectionsDir, 'sr.json'), JSON.stringify(collection));
 
-      const requestWithSourceRef = JSON.stringify({
-        protocol: 'http',
-        method: 'GET',
-        url: 'https://api.example.com',
-        sourceRef: { collectionFilename: 'sr.json', collectionName: 'SourceRef Test', itemPath: [] },
+      const itemWithSourceRef = JSON.stringify({
+        name: 'SR Test',
+        request: {
+          protocol: 'http',
+          method: 'GET',
+          url: 'https://api.example.com',
+          sourceRef: { collectionFilename: 'sr.json', collectionName: 'SourceRef Test', itemPath: [] },
+        },
       });
 
-      await service.saveRequest(requestWithSourceRef, 'SR Test', 'sr.json', []);
+      await service.saveRequest(itemWithSourceRef, 'sr.json', []);
 
       // Read raw file to confirm sourceRef is not persisted
       const rawContent = mockFs.getFile(path.join(testCollectionsDir, 'sr.json'));
       const parsed = JSON.parse(rawContent!);
       expect(parsed.item[0].request.sourceRef).toBeUndefined();
+    });
+  });
+
+  // ==========================================================================
+  // ID retention through saveRequest (FEAT-003)
+  // ==========================================================================
+  describe('saveRequest — id retention', () => {
+    const seedCollection = (filename: string, items: unknown[]) => {
+      mockFs.setFile(
+        path.join(testCollectionsDir, filename),
+        JSON.stringify({
+          info: { waveId: 'col-idr', version: '0.0.1', name: 'IDR Collection' },
+          item: items,
+        })
+      );
+    };
+
+    it('keeps item.id and request.id when saving an item with an existing id into a new folder', async () => {
+      seedCollection('idr.json', []);
+      const item = JSON.stringify({
+        id: 'item-keep',
+        name: 'Moved Request',
+        description: 'carried along',
+        request: { id: 'req-keep', method: 'GET', url: 'https://api.example.com/moved' },
+      });
+
+      await service.saveRequest(item, 'idr.json', ['Target Folder']);
+
+      const loaded = await service.loadOne('idr.json');
+      const folder = loaded!.item.find(i => i.name === 'Target Folder');
+      const saved = folder!.item![0];
+      expect(saved.id).toBe('item-keep');
+      expect(saved.request!.id).toBe('req-keep');
+      expect(saved.description).toBe('carried along');
+    });
+
+    it('updates in place when re-saving the same id (no duplicate)', async () => {
+      seedCollection('idr.json', [
+        { id: 'item-1', name: 'Original', request: { id: 'req-1', method: 'GET', url: 'https://old.example.com' } },
+      ]);
+      const item = JSON.stringify({
+        id: 'item-1',
+        name: 'Renamed',
+        request: { id: 'req-1', method: 'POST', url: 'https://new.example.com' },
+      });
+
+      await service.saveRequest(item, 'idr.json', []);
+
+      const loaded = await service.loadOne('idr.json');
+      expect(loaded!.item).toHaveLength(1);
+      expect(loaded!.item[0].id).toBe('item-1');
+      expect(loaded!.item[0].name).toBe('Renamed');
+      expect(loaded!.item[0].request!.name).toBe('Renamed');
+    });
+
+    it('does not overwrite a same-named item with a different id', async () => {
+      seedCollection('idr.json', [
+        { id: 'item-existing', name: 'Shared Name', request: { id: 'req-existing', method: 'GET', url: 'https://a.example.com' } },
+      ]);
+      const incoming = JSON.stringify({
+        id: 'item-incoming',
+        name: 'Shared Name 2',
+        request: { id: 'req-incoming', method: 'GET', url: 'https://b.example.com' },
+      });
+
+      await service.saveRequest(incoming, 'idr.json', []);
+
+      const loaded = await service.loadOne('idr.json');
+      expect(loaded!.item).toHaveLength(2);
+      expect(loaded!.item.map(i => i.id).sort()).toEqual(['item-existing', 'item-incoming']);
+    });
+
+    it('assigns a fresh id to a new item without one', async () => {
+      seedCollection('idr.json', []);
+      const item = JSON.stringify({
+        name: 'Fresh',
+        request: { method: 'GET', url: 'https://fresh.example.com' },
+      });
+
+      await service.saveRequest(item, 'idr.json', []);
+
+      const loaded = await service.loadOne('idr.json');
+      expect(loaded!.item[0].id).toBeTruthy();
+      expect(loaded!.item[0].request!.id).toBeTruthy();
+    });
+
+    it('keeps the existing slot id when a legacy id-less payload matches by name', async () => {
+      seedCollection('idr.json', [
+        { id: 'item-slot', name: 'Legacy Match', request: { id: 'req-slot', method: 'GET', url: 'https://old.example.com' } },
+      ]);
+      const legacy = JSON.stringify({
+        name: 'Legacy Match',
+        request: { method: 'PUT', url: 'https://updated.example.com' },
+      });
+
+      await service.saveRequest(legacy, 'idr.json', []);
+
+      const loaded = await service.loadOne('idr.json');
+      expect(loaded!.item).toHaveLength(1);
+      expect(loaded!.item[0].id).toBe('item-slot');
+      const url = loaded!.item[0].request!.url;
+      expect(typeof url === 'string' ? url : url.raw).toBe('https://updated.example.com');
+    });
+
+    it('rejects a payload without a request or name', async () => {
+      seedCollection('idr.json', []);
+      await expect(service.saveRequest(JSON.stringify({ name: 'No Request' }), 'idr.json', []))
+        .rejects.toThrow(/Invalid item payload/);
+      await expect(service.saveRequest(JSON.stringify({ request: { method: 'GET', url: 'x' } }), 'idr.json', []))
+        .rejects.toThrow(/Invalid item payload/);
+    });
+  });
+
+  // ==========================================================================
+  // Tree validation on save (FEAT-003)
+  // ==========================================================================
+  describe('save — tree validation', () => {
+    it('rejects a collection with duplicate sibling names and does not write', async () => {
+      const collection: Collection = {
+        info: { waveId: 'col-dup', version: '0.0.1', name: 'Dup Collection' },
+        item: [
+          { id: 'a', name: 'Same', request: { id: 'ra', name: 'Same', method: 'GET', url: 'https://a' } },
+          { id: 'b', name: 'same', request: { id: 'rb', name: 'same', method: 'GET', url: 'https://b' } },
+        ],
+      };
+
+      await expect(service.save(collection, 'dup.json')).rejects.toThrow(/Duplicate item name "same"/i);
+      expect(mockFs.getFile(path.join(testCollectionsDir, 'dup.json'))).toBeUndefined();
+    });
+
+    it('rejects a collection with an empty item name, naming the level', async () => {
+      const collection: Collection = {
+        info: { waveId: 'col-empty', version: '0.0.1', name: 'Empty Name Collection' },
+        item: [{ id: 'a', name: '   ', request: { id: 'ra', name: '', method: 'GET', url: 'https://a' } }],
+      };
+
+      await expect(service.save(collection, 'empty.json')).rejects.toThrow(/empty name/i);
+    });
+  });
+
+  // ==========================================================================
+  // Schema validation at load & import boundaries (FEAT-001)
+  // ==========================================================================
+  describe('schema validation boundaries', () => {
+    it('should return null and log for a structurally invalid collection file on loadOne', async () => {
+      const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      // `item` must be an array — an object is structurally invalid
+      mockFs.setFile(
+        path.join(testCollectionsDir, 'broken.json'),
+        JSON.stringify({ info: { waveId: 'w', name: 'Broken', version: '0.0.1' }, item: { not: 'an array' } })
+      );
+
+      const result = await service.loadOne('broken.json');
+
+      expect(result).toBeNull();
+      expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining('broken.json'));
+      errorSpy.mockRestore();
+    });
+
+    it('should stamp version and waveId on a legacy file and pass validation on loadOne', async () => {
+      // Legacy file: no waveId, no version
+      mockFs.setFile(
+        path.join(testCollectionsDir, 'legacy_stamp.json'),
+        JSON.stringify({ info: { name: 'Legacy' }, item: [] })
+      );
+
+      const result = await service.loadOne('legacy_stamp.json');
+
+      expect(result).not.toBeNull();
+      expect(result!.info.waveId).toBeTruthy();
+      expect(result!.info.version).toBe('0.0.1');
+    });
+
+    it('should reject invalid JSON in saveFromContent with a descriptive message', async () => {
+      await expect(service.saveFromContent('{ not json', 'x.json')).rejects.toThrow(/Invalid JSON/);
+    });
+
+    it('should reject a shape-invalid collection in saveFromContent and not write the file', async () => {
+      const invalid = JSON.stringify({ info: { name: 'X' }, item: [{ name: 'no id', request: 'not-an-object' }] });
+
+      await expect(service.saveFromContent(invalid, 'invalid_save.json')).rejects.toThrow(/Invalid collection/);
+      expect(mockFs.getFile(path.join(testCollectionsDir, 'invalid_save.json'))).toBeUndefined();
+    });
+
+    it('should accept and stamp a valid collection missing version in saveFromContent', async () => {
+      const content = JSON.stringify({ info: { name: 'NoVersion' }, item: [] });
+
+      const saved = await service.saveFromContent(content, 'no_version.json');
+
+      expect(saved.info.version).toBe('0.0.1');
+      expect(saved.info.waveId).toBeTruthy();
+      const raw = mockFs.getFile(path.join(testCollectionsDir, 'no_version.json'));
+      expect(JSON.parse(raw!).info.version).toBe('0.0.1');
+    });
+
+    it('should reject a structurally invalid collection on import and persist nothing', async () => {
+      const invalid = JSON.stringify({ info: { name: 'Bad' }, item: [{ id: 1, name: 2 }] });
+
+      await expect(service.import('bad_import.json', invalid)).rejects.toThrow(/Invalid collection/);
+      expect(mockFs.getFile(path.join(testCollectionsDir, 'bad_import.json'))).toBeUndefined();
     });
   });
 });

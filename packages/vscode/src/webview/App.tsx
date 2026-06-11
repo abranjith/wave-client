@@ -20,10 +20,12 @@ import {
   useFileAdapter,
   useNotificationAdapter,
   useAdapterEvent,
+  useHistoryRefresh,
   FlowCanvas,
   TestSuiteEditor,
   ArenaPane,
   generateUniqueId,
+  base64ToArrayBuffer,
   transformCollection,
   type Environment,
   type ImportFormatType,
@@ -38,6 +40,7 @@ import {
   type TestSuite,
   type AnyCollectionRequest,
   type CollectionItem,
+  type ResponseDownloadPayload,
   isHttpRequest,
 } from '@wave-client/core';
 
@@ -55,6 +58,7 @@ const App: React.FC = () => {
   const http = useHttpAdapter();
   const file = useFileAdapter();
   const notification = useNotificationAdapter();
+  const { refreshHistory, saveRequestToHistoryAndRefresh } = useHistoryRefresh();
 
   // Store selectors
   const setIsCollectionsLoading = useAppStateStore((state) => state.setIsCollectionsLoading);
@@ -235,11 +239,9 @@ const App: React.FC = () => {
 
   const handleRetryHistory = async () => {
     setIsHistoryLoading(true);
-    const historyResult = await storage.loadHistory();
-    if (historyResult.isOk) {
-      setHistory(historyResult.value);
-    } else {
-      setHistoryLoadError(historyResult.error);
+    const historyRefreshResult = await refreshHistory();
+    if (!historyRefreshResult.isOk) {
+      setHistoryLoadError(historyRefreshResult.error);
     }
     setIsHistoryLoading(false);
   };
@@ -351,7 +353,11 @@ const App: React.FC = () => {
     
     // Save only HTTP/legacy HTTP requests to history for now.
     if (isHttpRequest(tabRequest)) {
-      await storage.saveRequestToHistory(tabRequest);
+      // Pull-based refresh: persist first, then reload history into the store.
+      const historySaveResult = await saveRequestToHistoryAndRefresh(tabRequest);
+      if (!historySaveResult.isOk) {
+        console.warn('[WaveClient][History] Failed to refresh history after send:', historySaveResult.error);
+      }
     }
 
     // Build HTTP request using core slice helper
@@ -447,8 +453,8 @@ const App: React.FC = () => {
     
     if (result.isOk) {
       const collection = result.value;
-      const existingColl = currentCollections.find((c) => c.info.name === collection.info.name);
-      
+      const existingColl = currentCollections.find((c) => c.filename === collection.filename);
+
       if (tabId) {
         updateTabMetadata(tabId, {
           name: request.name,
@@ -465,7 +471,7 @@ const App: React.FC = () => {
       if (!existingColl) {
         addCollection(collection);
       } else {
-        updateCollection(collection.info.name, collection);
+        updateCollection(collection.filename || '', collection);
       }
       notification.showNotification('success', 'Request saved successfully');
     } else {
@@ -539,13 +545,19 @@ const App: React.FC = () => {
     }
   };
 
-  const handleDownloadResponse = async (data: string) => {
-    // Convert base64 or string data to Uint8Array
-    const uint8Array = new TextEncoder().encode(data);
-    const result = await file.downloadResponse(uint8Array, 'response.json', 'application/json');
-    
-    if (result.isErr) {
-      notification.showNotification('error', result.error);
+  const handleDownloadResponse = async (payload: ResponseDownloadPayload) => {
+    try {
+      const responseBytes = new Uint8Array(base64ToArrayBuffer(payload.body));
+      const result = await file.downloadResponse(responseBytes, payload.fileName, payload.contentType);
+
+      if (result.isErr) {
+        notification.showNotification('error', result.error);
+      }
+    } catch (error) {
+      notification.showNotification(
+        'error',
+        error instanceof Error ? error.message : 'Failed to decode response body for download'
+      );
     }
   };
 

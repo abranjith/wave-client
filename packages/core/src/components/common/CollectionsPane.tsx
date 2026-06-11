@@ -6,8 +6,10 @@ import {
   duplicateRequestItem,
   extractRequestFromItem,
   generateUniqueCopyName,
+  getItemsAtPath,
   getSiblingsAtPath,
   renameItemInTree,
+  validateItemName,
 } from '../../utils/collectionParser';
 import useAppStateStore from '../../hooks/store/useAppStateStore';
 import { useStorageAdapter, useNotificationAdapter } from '../../hooks/useAdapter';
@@ -316,7 +318,8 @@ const CollectionsPane: React.FC<CollectionsPaneProps> = ({
     };
     const result = await storageAdapter.saveCollection(updatedCollection);
     if (result.isOk) {
-      updateCollection(collection.info.name, { info: { ...collection.info, name: trimmedName } });
+      // Keyed by filename (persistence key) — name is what just changed.
+      updateCollection(collection.filename!, { info: { ...collection.info, name: trimmedName } });
     } else {
       notification.showNotification('error', result.error);
     }
@@ -336,7 +339,7 @@ const CollectionsPane: React.FC<CollectionsPaneProps> = ({
           notification.showNotification('error', result.error);
           throw new Error(result.error);
         }
-        removeCollection(collection.info.name);
+        removeCollection(collection.filename || '');
       },
     });
   }, [openConfirmDialog, storageAdapter, notification, removeCollection]);
@@ -358,27 +361,61 @@ const CollectionsPane: React.FC<CollectionsPaneProps> = ({
     parentItemPath: string[],
     newName: string
   ) => {
-    const trimmedName = newName.trim();
-    if (!trimmedName) return;
-
     const collection = collections.find(c => c.filename === collectionFilename);
     if (!collection) return;
 
-    // Sibling-level uniqueness check (case-insensitive)
+    // Shared validation: non-empty + sibling-level uniqueness (case-insensitive)
     const siblings = getSiblingsAtPath(collection.item, parentItemPath);
-    const isDuplicate = siblings.some(
-      s => s.id !== itemId && s.name.toLowerCase() === trimmedName.toLowerCase()
-    );
-    if (isDuplicate) {
-      notification.showNotification('error', `An item named "${trimmedName}" already exists at this level.`);
+    const nameValidation = validateItemName(newName, siblings, itemId);
+    if (!nameValidation.isOk) {
+      notification.showNotification('error', nameValidation.error);
       return;
     }
+    const trimmedName = nameValidation.value;
+    const renamedItem = siblings.find(s => s.id === itemId);
+    const oldName = renamedItem?.name;
 
     const updatedItems = renameItemInTree(collection.item, itemId, trimmedName);
     const updatedCollection: Collection = { ...collection, item: updatedItems };
     const result = await storageAdapter.saveCollection(updatedCollection);
     if (result.isOk) {
-      updateCollection(collectionName, { item: updatedItems });
+      updateCollection(collectionFilename, { item: updatedItems });
+
+      // Folder rename follow-through: name-based consumers must track the
+      // new path or stale references would recreate the old folder on save.
+      const isFolderRename = Boolean(renamedItem && Array.isArray(renamedItem.item)) && oldName && oldName !== trimmedName;
+      if (isFolderRename) {
+        // 1. Remap expanded-state keys (`filename:path/segments`) so the
+        //    renamed folder and its expanded descendants stay open.
+        const oldPrefix = `${collectionFilename}:${[...parentItemPath, oldName].join('/')}`;
+        const newPrefix = `${collectionFilename}:${[...parentItemPath, trimmedName].join('/')}`;
+        setExpandedFolders(prev => new Set(
+          Array.from(prev).map(key =>
+            key === oldPrefix || key.startsWith(`${oldPrefix}/`)
+              ? `${newPrefix}${key.slice(oldPrefix.length)}`
+              : key
+          )
+        ));
+
+        // 2. Update open tabs whose collectionRef path runs through the
+        //    renamed folder, so save-back targets the renamed folder.
+        const { tabs, updateTabMetadata } = useAppStateStore.getState();
+        const depth = parentItemPath.length;
+        for (const tab of tabs) {
+          const ref = tab.collectionRef;
+          if (
+            ref &&
+            ref.collectionFilename === collectionFilename &&
+            ref.itemPath.length > depth &&
+            ref.itemPath[depth] === oldName &&
+            parentItemPath.every((segment, i) => ref.itemPath[i] === segment)
+          ) {
+            const newItemPath = [...ref.itemPath];
+            newItemPath[depth] = trimmedName;
+            updateTabMetadata(tab.id, { collectionRef: { ...ref, itemPath: newItemPath } });
+          }
+        }
+      }
     } else {
       notification.showNotification('error', result.error);
     }
@@ -413,7 +450,7 @@ const CollectionsPane: React.FC<CollectionsPaneProps> = ({
           notification.showNotification('error', result.error);
           throw new Error(result.error);
         }
-        updateCollection(collection.info.name, { item: result.value.item });
+        updateCollection(collection.filename || '', { item: result.value.item });
       },
     });
   }, [openConfirmDialog, storageAdapter, notification, updateCollection]);
@@ -473,6 +510,23 @@ const CollectionsPane: React.FC<CollectionsPaneProps> = ({
       return;
     }
 
+    if (destinationCollection) {
+      const destinationItems = getItemsAtPath(destinationCollection, destinationFolderPath);
+      const conflict = destinationItems.find(
+        (item) =>
+          item.id !== moveRequestDraft.item.id
+          && item.name.trim().toLowerCase() === moveRequestDraft.item.name.trim().toLowerCase()
+      );
+
+      if (conflict) {
+        notification.showNotification(
+          'error',
+          `Cannot move "${moveRequestDraft.item.name}": destination already contains an item named "${conflict.name}".`
+        );
+        return;
+      }
+    }
+
     const saveResult = isCreatingNewCollection
       ? await storageAdapter.saveRequestToCollection(
         destinationFilename,
@@ -493,11 +547,11 @@ const CollectionsPane: React.FC<CollectionsPaneProps> = ({
     if (!isSameCollectionMove) {
       const savedDestinationCollection = saveResult.value;
       const destinationAlreadyExistsInStore = collections.some(
-        (collection) => collection.info.name === savedDestinationCollection.info.name
+        (collection) => collection.filename === savedDestinationCollection.filename
       );
 
       if (destinationAlreadyExistsInStore) {
-        updateCollection(savedDestinationCollection.info.name, { item: savedDestinationCollection.item });
+        updateCollection(savedDestinationCollection.filename!, { item: savedDestinationCollection.item });
       } else {
         addCollection(savedDestinationCollection);
       }
@@ -511,7 +565,7 @@ const CollectionsPane: React.FC<CollectionsPaneProps> = ({
     if (!deleteResult.isOk) {
       if (isSameCollectionMove) {
         // Keep local state consistent with persisted save when delete fails.
-        updateCollection(moveRequestDraft.sourceCollectionName, { item: saveResult.value.item });
+        updateCollection(moveRequestDraft.sourceCollectionFilename, { item: saveResult.value.item });
       }
       notification.showNotification(
         'error',
@@ -520,7 +574,7 @@ const CollectionsPane: React.FC<CollectionsPaneProps> = ({
       return;
     }
 
-    updateCollection(moveRequestDraft.sourceCollectionName, { item: deleteResult.value.item });
+    updateCollection(moveRequestDraft.sourceCollectionFilename, { item: deleteResult.value.item });
     setMoveRequestDraft(null);
   }, [addCollection, collections, moveRequestDraft, notification, storageAdapter, updateCollection]);
 
@@ -554,7 +608,7 @@ const CollectionsPane: React.FC<CollectionsPaneProps> = ({
       return;
     }
 
-    updateCollection(collection.info.name, { item: saveResult.value.item });
+    updateCollection(collection.filename, { item: saveResult.value.item });
   }, [notification, storageAdapter, updateCollection]);
 
   //TODO this default logic is flaky and needs a better approach
@@ -894,6 +948,7 @@ const CollectionsPane: React.FC<CollectionsPaneProps> = ({
       <RequestSaveWizard
         isOpen={Boolean(moveRequestDraft)}
         mode="move"
+        sourceCollectionName={moveRequestDraft?.sourceCollectionName}
         initialCollectionName={moveRequestDraft?.sourceCollectionName}
         currentPath={moveRequestDraft?.sourceParentPath || []}
         initialRequestName={moveRequestDraft?.item.name}

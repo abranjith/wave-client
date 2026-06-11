@@ -504,13 +504,16 @@ function createMockHttpAdapter(options: MockHttpOptions = {}): IHttpAdapter {
             }
         },
 
-        cancelRequest(requestId) {
+        cancelRequest: vi.fn(async (requestId: string): Promise<Result<void, string>> => {
             const controller = pendingRequests.get(requestId);
             if (controller) {
                 controller.abort();
                 pendingRequests.delete(requestId);
             }
-        },
+            // Resolves ok whether or not a matching request was found — mirrors the
+            // platform adapters (cancelling a finished request is a no-op).
+            return ok(undefined);
+        }),
     };
 }
 

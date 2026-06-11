@@ -84,6 +84,12 @@ Because of this, adding a new client (a CLI, a desktop app, …) means implement
 
 ---
 
+## Versioning
+
+Wave Client versions four things independently, each with its own semver: the **VS Code extension**, the **web app**, the **core platform** (the five shared packages, bumped in lockstep), and the **Wave schemas** (the persisted collection/environment file formats, which only move when the on‑disk shape changes). Releases are manual checklists for now — the tracks, semantics, and step‑by‑step bump procedures are documented in [docs/versioning.md](docs/versioning.md).
+
+---
+
 ## Future peek
 
 Wave Client is actively evolving. On the radar (subject to change):

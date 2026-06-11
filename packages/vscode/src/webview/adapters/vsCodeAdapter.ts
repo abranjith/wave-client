@@ -309,6 +309,7 @@ function createVSCodeStorageAdapter(
             // Empty string means the response doesn't have a data field (void operations).
             const responseDataMap: Record<string, string> = {
                 'loadCollections': 'collections',
+                'saveCollection': 'collection',
                 'saveRequestToCollection': 'collection',
                 'importCollection': 'collections',
                 'exportCollection': 'filePath',
@@ -372,11 +373,12 @@ function createVSCodeStorageAdapter(
         },
 
         async saveCollection(collection: Collection): Promise<Result<Collection, string>> {
-            vsCodeApi.postMessage({
-                type: 'saveCollection',
+            // Request/response (not fire-and-forget): the UI must see real
+            // success/failure — see plan rule "request/response over
+            // fire-and-forget for mutations".
+            return sendAndWait<Collection>('saveCollection', {
                 data: { collection: JSON.stringify(collection, null, 2) }
             });
-            return ok(collection);
         },
 
         async deleteCollection(collectionId: string): Promise<Result<void, string>> {
@@ -389,10 +391,11 @@ function createVSCodeStorageAdapter(
             item: CollectionItem,
             newCollectionName?: string
         ): Promise<Result<Collection, string>> {
+            // Send the whole CollectionItem (id, name, description, request)
+            // so item identity survives moves/duplicates — see FEAT-003.
             return sendAndWait<Collection>('saveRequestToCollection', {
                 data: {
-                    requestContent: JSON.stringify(item.request, null, 2),
-                    requestName: item.name,
+                    item: JSON.stringify(item, null, 2),
                     collectionFileName: collectionFilename,
                     folderPath: itemPath,
                     ...(newCollectionName ? { newCollectionName } : {}),
@@ -762,10 +765,39 @@ function createVSCodeHttpAdapter(
             return executeAndWait(config);
         },
 
-        cancelRequest(requestId: string) {
-            vsCodeApi.postMessage({
-                type: 'cancelRequest',
-                id: requestId,
+        /**
+         * Asks the extension host to abort the in-flight request with `requestId`.
+         * Uses the standard request/response correlation so the UI sees real
+         * success/failure instead of an optimistic fire-and-forget. Resolves `ok`
+         * even when the request had already finished (the cancel is a no-op).
+         */
+        cancelRequest(requestId: string): Promise<Result<void, string>> {
+            return new Promise((resolve) => {
+                const correlationId = generateRequestId();
+
+                const timeout = setTimeout(() => {
+                    pendingRequests.delete(correlationId);
+                    resolve(err(`Cancel request timed out for ${requestId}`));
+                }, defaultTimeout);
+
+                pendingRequests.set(correlationId, {
+                    resolve: (value) => {
+                        const message = value as { error?: string } | undefined;
+                        if (message && message.error) {
+                            resolve(err(message.error));
+                        } else {
+                            resolve(ok(undefined));
+                        }
+                    },
+                    reject: (error) => resolve(err(error.message)),
+                    timeout,
+                });
+
+                vsCodeApi.postMessage({
+                    type: 'cancelHttpRequest',
+                    requestId: correlationId,
+                    data: { requestId },
+                });
             });
         },
     };
@@ -866,16 +898,20 @@ function createVSCodeFileAdapter(
             return sendAndWait<void>('writeBinaryFile', { path, data: base64, encoding: 'base64' });
         },
 
+        /**
+         * Request extension-host file download using correlated request/response.
+         * Wire shape: { type: 'downloadResponse', requestId, data: { body, fileName, contentType } }.
+         */
         async downloadResponse(data: Uint8Array, filename: string, contentType: string): Promise<Result<void, string>> {
             // Convert Uint8Array to base64 for transport
             const base64 = btoa(String.fromCharCode(...data));
-            vsCodeApi.postMessage({
-                type: 'downloadResponse',
-                data: base64,
-                filename,
-                contentType,
+            return sendAndWait<void>('downloadResponse', {
+                data: {
+                    body: base64,
+                    fileName: filename,
+                    contentType,
+                },
             });
-            return ok(undefined);
         },
 
         async importFile(options: OpenDialogOptions): Promise<Result<{ content: string; filename: string } | null, string>> {

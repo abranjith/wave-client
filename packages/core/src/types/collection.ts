@@ -364,6 +364,12 @@ export interface EnvironmentVariable {
 export interface Environment {
   id: string;
   name: string;
+  /**
+   * Wave environment schema version (e.g., `'0.0.1'`).
+   * Tracks the persisted file shape — independent of any package version.
+   * Loaders stamp `CURRENT_ENVIRONMENT_SCHEMA_VERSION` when absent.
+   */
+  version?: string;
   values: EnvironmentVariable[];
 }
 
@@ -436,6 +442,18 @@ export interface SentRequestData {
   url: string;
   headers: Record<string, string>;
   body?: SentRequestBody;
+}
+
+/**
+ * Payload emitted by the response viewer when the user downloads a response.
+ *
+ * `body` is always base64-encoded to preserve byte-exact content for both text
+ * and binary responses across platform adapters.
+ */
+export interface ResponseDownloadPayload {
+  body: string;
+  fileName: string;
+  contentType: string;
 }
 
 export interface ResponseData {

@@ -19,4 +19,20 @@ export async function registerHttpRoutes(fastify: FastifyInstance): Promise<void
             return reply.status(500).send({ isOk: false, error: message });
         }
     });
+
+    // Cancel an in-flight HTTP request. Aborting here stops the server-side axios
+    // call (the outbound request), which is what a client-side fetch abort alone
+    // could not do. Responds with `cancelled: false` when the request had already
+    // finished (nothing to abort) — this is still a success.
+    fastify.post('/api/http/:id/cancel', async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
+        try {
+            const { id } = request.params;
+            const cancelled = httpService.cancel(id);
+            return reply.send({ isOk: true, value: { cancelled } });
+        } catch (error) {
+            const message = error instanceof Error ? error.message : 'Unknown error';
+            console.error('[Server HTTP Route] Cancel error:', message);
+            return reply.status(500).send({ isOk: false, error: message });
+        }
+    });
 }

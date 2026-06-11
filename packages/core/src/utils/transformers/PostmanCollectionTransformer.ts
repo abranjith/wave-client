@@ -35,6 +35,8 @@ import {
     err,
 } from './BaseCollectionTransformer';
 
+import { CURRENT_COLLECTION_SCHEMA_VERSION } from '../../schemas/collectionSchema';
+
 /**
  * Transformer for Postman Collection v2.1.0 format
  */
@@ -74,10 +76,31 @@ export class PostmanCollectionTransformer extends BaseCollectionTransformer<Post
     }
 
     /**
-     * Detects if the given JSON data is a Postman collection
+     * Detects if the given JSON data is a Postman collection.
+     * Requires at least one Postman-specific marker (_postman_id or a Postman
+     * schema URL) so that generic Wave/unknown collections are not claimed.
+     * validate() remains permissive for explicit format verification — only
+     * canHandle() (auto-detection) is strict.
      */
     canHandle(data: unknown): boolean {
-        return this.validate(data);
+        if (!data || typeof data !== 'object') {
+            return false;
+        }
+        const obj = data as Record<string, unknown>;
+        const info = obj.info as Record<string, unknown> | undefined;
+        if (!info) {
+            return false;
+        }
+        if (info._postman_id) {
+            return true;
+        }
+        if (typeof info.schema === 'string') {
+            return (
+                info.schema.includes('schema.getpostman.com') ||
+                info.schema.includes('schema.postman.com')
+            );
+        }
+        return false;
     }
 
     /**
@@ -90,7 +113,7 @@ export class PostmanCollectionTransformer extends BaseCollectionTransformer<Post
                     waveId: this.generateId(),
                     name: external.info.name,
                     description: this.extractString(external.info.description),
-                    version: this.waveVersion,
+                    version: CURRENT_COLLECTION_SCHEMA_VERSION,
                 },
                 item: this.transformItems(external.item),
                 filename,

@@ -65,9 +65,12 @@ export async function registerEnvironmentRoutes(fastify: FastifyInstance): Promi
     fastify.post('/api/environments/import', async (request: FastifyRequest<{ Body: { fileContent: string } }>, reply: FastifyReply) => {
         try {
             const { fileContent } = request.body;
-            const environments = await environmentService.import(fileContent);
+            const imported = await environmentService.import(fileContent);
+            // Return the full refreshed list (not just the imported entries) so the
+            // client can replace its state without dropping existing environments.
+            const environments = await environmentService.loadAll();
             emitStateChange('environments');
-            emitBanner('success', `${environments.length} environment(s) imported`);
+            emitBanner('success', `${imported.length} environment(s) imported`);
             return reply.send({ isOk: true, value: environments });
         } catch (error) {
             const message = error instanceof Error ? error.message : 'Unknown error';

@@ -13,6 +13,9 @@ import {
   duplicateRequestItem,
   extractRequestFromItem,
   requestToCollectionItem,
+  renameItemInTree,
+  validateItemName,
+  validateCollectionTree,
 } from '../../utils/collectionParser';
 import type {
   Collection,
@@ -772,6 +775,119 @@ describe('collectionParser', () => {
         url: original.request?.url,
       }));
       expect(duplicate.request?.id).not.toBe(original.request?.id);
+    });
+  });
+
+  // ==========================================================================
+  // renameItemInTree — atomic name integrity (FEAT-003)
+  // ==========================================================================
+  describe('renameItemInTree — name integrity', () => {
+    const tree = (): CollectionItem[] => ([
+      {
+        id: 'folder-1',
+        name: 'Folder',
+        item: [
+          {
+            id: 'item-1',
+            name: 'Old Name',
+            request: { id: 'req-1', name: 'Old Name', method: 'GET', url: 'https://x' },
+          },
+        ],
+      },
+    ]);
+
+    it('updates both item.name and request.name atomically', () => {
+      const result = renameItemInTree(tree(), 'item-1', 'New Name');
+      const renamed = result[0].item![0];
+      expect(renamed.name).toBe('New Name');
+      expect(renamed.request!.name).toBe('New Name');
+    });
+
+    it('renaming a folder leaves child request names untouched', () => {
+      const result = renameItemInTree(tree(), 'folder-1', 'Renamed Folder');
+      expect(result[0].name).toBe('Renamed Folder');
+      expect(result[0].item![0].name).toBe('Old Name');
+      expect(result[0].item![0].request!.name).toBe('Old Name');
+    });
+
+    it('works at depth and is immutable', () => {
+      const original = tree();
+      const result = renameItemInTree(original, 'item-1', 'Deep Rename');
+      expect(result[0].item![0].name).toBe('Deep Rename');
+      expect(original[0].item![0].name).toBe('Old Name');
+    });
+  });
+
+  // ==========================================================================
+  // Validation utilities (FEAT-003)
+  // ==========================================================================
+  describe('validateItemName', () => {
+    const siblings: CollectionItem[] = [
+      { id: 'a', name: 'Alpha' },
+      { id: 'b', name: 'Beta' },
+    ];
+
+    it('returns the trimmed name when valid', () => {
+      const result = validateItemName('  Gamma  ', siblings);
+      expect(result.isOk).toBe(true);
+      expect(result.value).toBe('Gamma');
+    });
+
+    it('rejects empty and whitespace-only names', () => {
+      expect(validateItemName('', siblings).isOk).toBe(false);
+      expect(validateItemName('   ', siblings).isOk).toBe(false);
+    });
+
+    it('rejects case-insensitive duplicates among siblings', () => {
+      const result = validateItemName('alpha', siblings);
+      expect(result.isOk).toBe(false);
+      expect(result.error).toContain('alpha');
+    });
+
+    it('excludes the item itself by id', () => {
+      expect(validateItemName('Alpha', siblings, 'a').isOk).toBe(true);
+    });
+  });
+
+  describe('validateCollectionTree', () => {
+    const validCollection = (): Collection => ({
+      info: { waveId: 'w', name: 'Col', version: '0.0.1' },
+      item: [
+        { id: 'f1', name: 'Folder', item: [{ id: 'r1', name: 'Req', request: { id: 'rr1', name: 'Req', method: 'GET', url: 'https://x' } }] },
+        { id: 'r2', name: 'Top Req', request: { id: 'rr2', name: 'Top Req', method: 'GET', url: 'https://y' } },
+      ],
+    });
+
+    it('passes a valid tree', () => {
+      expect(validateCollectionTree(validCollection()).isOk).toBe(true);
+    });
+
+    it('rejects an empty collection name', () => {
+      const col = validCollection();
+      col.info.name = '  ';
+      expect(validateCollectionTree(col).isOk).toBe(false);
+    });
+
+    it('rejects case-insensitive duplicate sibling names, naming the level', () => {
+      const col = validCollection();
+      col.item.push({ id: 'dup', name: 'top req' });
+      const result = validateCollectionTree(col);
+      expect(result.isOk).toBe(false);
+      expect(result.error).toContain('top req');
+    });
+
+    it('rejects a missing id, naming the item', () => {
+      const col = validCollection();
+      (col.item[0].item![0] as { id?: string }).id = undefined;
+      const result = validateCollectionTree(col);
+      expect(result.isOk).toBe(false);
+      expect(result.error).toContain('missing an id');
+    });
+
+    it('allows the same name at different levels', () => {
+      const col = validCollection();
+      col.item[0].item!.push({ id: 'r3', name: 'Top Req', request: { id: 'rr3', name: 'Top Req', method: 'GET', url: 'https://z' } });
+      expect(validateCollectionTree(col).isOk).toBe(true);
     });
   });
 });

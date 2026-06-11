@@ -60,7 +60,14 @@ Attach auth per request, or reference a saved credential. The supported types ar
 ### Sending and the response viewer
 Click **Send** to execute. The **response viewer** shows the status code, timing, response headers, and a formatted body (JSON, HTML, images, and more). Responses can be validated automatically — see [Validations](validations.md).
 
+Use the **Download** action in the response body viewer to save the exact response bytes. Wave Client suggests a filename from `Content-Disposition` when present; otherwise it generates `response_<timestamp>.<ext>` using the response `Content-Type`.
+
 ![The response viewer with headers and body tabs](../images/requests-response-viewer.png)
+
+### Cancelling a request
+While a request is in flight, the **Send** button becomes a **Cancel** (stop) button — click it to abort instead of waiting for the request to time out. Cancellation aborts the actual outbound request (the server‑side call), not just the UI, so the connection is released immediately on both the desktop and web apps.
+
+A cancelled request settles in the response viewer with a distinct **"Request cancelled"** state rather than an error. The request still appears in **History** (it is recorded when you press Send), and the editor is immediately ready for the next send.
 
 ### The "Sent" view
 After a send, a request‑side **Sent** tab shows the exact on‑wire request for the most recent send:
@@ -102,6 +109,16 @@ Select **SSE**, set the URL, optional **Params**/**Headers**, and (for POST‑ba
 ![An SSE connection with the Events timeline](../images/requests-sse-events.png)
 
 SSE connections support custom headers, auth, and POST bodies (Wave Client uses a streaming HTTP client rather than the browser `EventSource`, so these all work).
+
+---
+
+## Keyboard shortcuts
+
+| Shortcut | Action |
+| --- | --- |
+| `Ctrl+S` / `Cmd+S` | Save the active request — directly if it is already linked to a collection, or open the Save dialog if it is unsaved |
+
+Shortcuts are scoped to the request editor. Pressing `Ctrl+S` / `Cmd+S` while the Save dialog is already open has no effect.
 
 ---
 

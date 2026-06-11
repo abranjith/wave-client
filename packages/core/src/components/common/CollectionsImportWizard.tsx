@@ -15,7 +15,12 @@ import {
 import Banner from '../ui/banner';
 import { FileInput } from '../ui/fileinput';
 import { FileWithPreview } from '../../hooks/useFileUpload';
-import { IMPORT_FORMAT_OPTIONS, ImportFormatType, detectFormatFromFilename } from '../../utils/transformers';
+import {
+  IMPORT_FORMAT_OPTIONS,
+  ImportFormatType,
+  detectFormatFromContent,
+  detectFormatFromFilename,
+} from '../../utils/transformers';
 
 interface CollectionsImportWizardProps {
   isOpen: boolean;
@@ -29,43 +34,51 @@ const CollectionsImportWizard: React.FC<CollectionsImportWizardProps> = ({
   onImportCollection,
 }) => {
   const [selectedFile, setSelectedFile] = useState<FileWithPreview | null>(null);
+  const [fileContent, setFileContent] = useState<string | null>(null);
   const [collectionType, setCollectionType] = useState<ImportFormatType>('wave');
   const [error, setError] = useState<string | null>(null);
   const [isImporting, setIsImporting] = useState(false);
 
   /**
-   * Determines collection type from file extension
+   * Handles file selection — reads content immediately for content-based detection.
+   * Detection chain: content → filename → fallback 'wave'.
    */
-  const getCollectionTypeFromFile = (file: File): ImportFormatType => {
-    const detectedType = detectFormatFromFilename(file.name);
-    return detectedType || 'wave'; // Default to wave for .json files
-  };
+  const handleFilesAdded = async (addedFiles: FileWithPreview[]) => {
+    if (addedFiles.length === 0) return;
 
-  /**
-   * Handles file selection from FileInput
-   */
-  const handleFilesAdded = (addedFiles: FileWithPreview[]) => {
-    if (addedFiles.length > 0) {
-      const file = addedFiles[0];
-      setSelectedFile(file);
-      // Get the actual File object to determine type
-      if (file.file instanceof File) {
-        setCollectionType(getCollectionTypeFromFile(file.file));
-      }
-      setError(null);
+    const file = addedFiles[0];
+    setSelectedFile(file);
+    setError(null);
+
+    if (!(file.file instanceof File)) return;
+
+    try {
+      const text = await file.file.text();
+      setFileContent(text);
+      const detected =
+        detectFormatFromContent(text) ??
+        detectFormatFromFilename(file.file.name) ??
+        'wave';
+      setCollectionType(detected);
+    } catch {
+      // Read failed — fall back to filename-only detection
+      setFileContent(null);
+      const detected = detectFormatFromFilename(file.file.name) ?? 'wave';
+      setCollectionType(detected);
     }
   };
 
   /**
-   * Handles file removal from FileInput
+   * Handles file removal.
    */
   const handleFileRemoved = () => {
     setSelectedFile(null);
+    setFileContent(null);
     setError(null);
   };
 
   /**
-   * Handles import action
+   * Handles import action — uses the content cached at selection time.
    */
   const handleImport = async () => {
     if (!selectedFile) {
@@ -77,24 +90,20 @@ const CollectionsImportWizard: React.FC<CollectionsImportWizardProps> = ({
     setError(null);
 
     try {
-      // Read file content
-      let fileContent: string;
+      let content: string;
       let fileName: string;
 
       if (selectedFile.file instanceof File) {
-        fileContent = await selectedFile.file.text();
+        // Reuse cached content; fall back to a fresh read only if the cache is missing.
+        content = fileContent ?? (await selectedFile.file.text());
         fileName = selectedFile.file.name;
       } else {
-        // Handle FileMetadata case (shouldn't happen in this flow, but for type safety)
         setError('Invalid file type');
         setIsImporting(false);
         return;
       }
 
-      // Send import request to extension host
-      onImportCollection(fileName, fileContent, collectionType);
-
-      // Close the dialog
+      onImportCollection(fileName, content, collectionType);
       handleClose();
     } catch (err: any) {
       setError(`Failed to import collection: ${err.message}`);
@@ -104,10 +113,11 @@ const CollectionsImportWizard: React.FC<CollectionsImportWizardProps> = ({
   };
 
   /**
-   * Handles dialog close
+   * Handles dialog close — resets all wizard state.
    */
   const handleClose = () => {
     setSelectedFile(null);
+    setFileContent(null);
     setCollectionType('wave');
     setError(null);
     setIsImporting(false);
@@ -154,7 +164,9 @@ const CollectionsImportWizard: React.FC<CollectionsImportWizardProps> = ({
                 </SelectContent>
               </Select>
               <p className="text-xs text-slate-500 dark:text-slate-400">
-                Type is automatically detected based on the file. Select manually if detection is incorrect.
+                {fileContent !== null
+                  ? 'Detected from file content. Select manually to override.'
+                  : 'Select the collection type manually.'}
               </p>
             </div>
           )}

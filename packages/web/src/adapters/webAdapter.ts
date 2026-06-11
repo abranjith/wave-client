@@ -463,11 +463,12 @@ class WebStorageAdapter implements IStorageAdapter {
     newCollectionName?: string
   ): Promise<Result<Collection, string>> {
     try {
+      // Send the whole CollectionItem (id, name, description, request)
+      // so item identity survives moves/duplicates — see FEAT-003.
       const response = await api.post(
         `/api/collections/${encodeURIComponent(collectionFilename)}/requests`,
         {
-          requestContent: JSON.stringify(item.request),
-          requestName: item.name,
+          item: JSON.stringify(item),
           folderPath: itemPath,
           ...(newCollectionName ? { newCollectionName } : {}),
         }
@@ -988,6 +989,26 @@ class WebHttpAdapter implements IHttpAdapter {
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unknown error';
       console.error('[WebHttpAdapter] Server error:', message);
+      return err(`Server error: ${message}`);
+    }
+  }
+
+  /**
+   * Cancels an in-flight request by hitting `POST /api/http/:id/cancel`, which
+   * aborts the server-side outbound axios call. Resolves `ok` whether or not a
+   * matching request was in flight (cancelling a finished request is a no-op);
+   * resolves `err` only when the cancel call itself fails (e.g. network error).
+   */
+  async cancelRequest(requestId: string): Promise<Result<void, string>> {
+    try {
+      const response = await api.post(`/api/http/${encodeURIComponent(requestId)}/cancel`);
+      if (response.data.isOk) {
+        return ok(undefined);
+      }
+      return err(response.data.error || 'Cancel failed');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      console.error('[WebHttpAdapter] Cancel error:', message);
       return err(`Server error: ${message}`);
     }
   }

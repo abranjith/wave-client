@@ -16,6 +16,8 @@ import {
   isRequest,
 } from '../types/collection';
 import { generateUniqueId } from './common';
+import { ok, err } from './result';
+import type { Result } from './result';
 
 // ============================================================================
 // URL Utilities
@@ -287,12 +289,94 @@ export function prepareCollection(collection: Collection, filename: string): Col
 }
 
 // ============================================================================
+// Validation Utilities (FEAT-003)
+// ============================================================================
+
+/**
+ * Validates an item (folder or request) name against its siblings.
+ *
+ * Rules: non-empty after trim; unique among siblings (case-insensitive),
+ * excluding the item itself via `excludeId`.
+ *
+ * @param name - The proposed name (untrimmed).
+ * @param siblings - The items at the same tree level.
+ * @param excludeId - The id of the item being renamed (excluded from the check).
+ * @returns `ok(trimmedName)` when valid; `err(message)` otherwise.
+ */
+export function validateItemName(
+  name: string,
+  siblings: CollectionItem[],
+  excludeId?: string
+): Result<string, string> {
+  const trimmed = name.trim();
+  if (!trimmed) {
+    return err('Name must not be empty.');
+  }
+  const isDuplicate = siblings.some(
+    s => s.id !== excludeId && s.name.trim().toLowerCase() === trimmed.toLowerCase()
+  );
+  if (isDuplicate) {
+    return err(`An item named "${trimmed}" already exists at this level.`);
+  }
+  return ok(trimmed);
+}
+
+/**
+ * Validates structural integrity of a collection tree before persistence:
+ * non-empty collection name, every item has an id and a non-empty trimmed
+ * name, and sibling-level names are unique (case-insensitive) for folders
+ * and requests alike. The error message names the offending item's path.
+ *
+ * @param collection - The collection to validate.
+ * @returns `ok(undefined)` when valid; `err(message)` naming the violation.
+ */
+export function validateCollectionTree(collection: Collection): Result<void, string> {
+  if (!collection.info?.name?.trim()) {
+    return err('Collection name must not be empty.');
+  }
+
+  const walk = (items: CollectionItem[], path: string[]): string | undefined => {
+    const seenNames = new Set<string>();
+    const level = path.length > 0 ? `"${path.join(' / ')}"` : 'the collection root';
+
+    for (const item of items) {
+      if (!item.id) {
+        return `Item "${item.name ?? '(unnamed)'}" under ${level} is missing an id.`;
+      }
+      const trimmed = (item.name ?? '').trim();
+      if (!trimmed) {
+        return `An item under ${level} has an empty name.`;
+      }
+      const key = trimmed.toLowerCase();
+      if (seenNames.has(key)) {
+        return `Duplicate item name "${trimmed}" under ${level}.`;
+      }
+      seenNames.add(key);
+
+      if (item.item) {
+        const childError = walk(item.item, [...path, trimmed]);
+        if (childError) {
+          return childError;
+        }
+      }
+    }
+    return undefined;
+  };
+
+  const error = walk(collection.item ?? [], []);
+  return error ? err(error) : ok(undefined);
+}
+
+// ============================================================================
 // Immutable Tree Modification Utilities
 // ============================================================================
 
 /**
  * Returns an immutably updated items array where the item matching `itemId`
  * has its `name` replaced with `newName`. Searches recursively through folders.
+ *
+ * Invariant: when the item wraps a request, `item.name === request.name` —
+ * both names are updated atomically in the same immutable update.
  *
  * @param items - The current-level items to search
  * @param itemId - The ID of the item to rename
@@ -302,7 +386,11 @@ export function prepareCollection(collection: Collection, filename: string): Col
 export function renameItemInTree(items: CollectionItem[], itemId: string, newName: string): CollectionItem[] {
   return items.map(item => {
     if (item.id === itemId) {
-      return { ...item, name: newName };
+      return {
+        ...item,
+        name: newName,
+        ...(item.request ? { request: { ...item.request, name: newName } } : {}),
+      };
     }
     if (item.item) {
       return { ...item, item: renameItemInTree(item.item, itemId, newName) };

@@ -5,13 +5,21 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/tooltip';
 import { base64ToText, base64ToJson } from '../../utils/encoding';
 import {getExtensionFromContentType, getResponseLanguage} from '../../utils/common';
 import SyntaxHighlighter from '../ui/syntax-highlighter';
-import { ResponseContentType } from '../../types/collection';
+import type { ResponseContentType, ResponseDownloadPayload } from '../../types/collection';
 
 interface ResponseBodyProps {
   body: string;
   headers: Record<string, string>;
   statusCode: number;
-  onDownloadResponse: (data: any) => void;
+  /**
+   * Indicates whether `body` is already base64-encoded.
+   * Legacy/plain-text responses are normalized before download payload emission.
+   */
+  isEncoded?: boolean;
+  /**
+   * Called when the user requests a file download from the response view.
+   */
+  onDownloadResponse: (payload: ResponseDownloadPayload) => void;
 }
 
 /**
@@ -76,7 +84,23 @@ function getFileName(headers: Record<string, string>, contentType: ResponseConte
   return `response_${timestamp}.${extension}`;
 }
 
-const ResponseBody: React.FC<ResponseBodyProps> = ({ body, headers, statusCode, onDownloadResponse }) => {
+function uint8ArrayToBase64(bytes: Uint8Array): string {
+  let binary = '';
+  bytes.forEach((byte) => {
+    binary += String.fromCharCode(byte);
+  });
+  return btoa(binary);
+}
+
+function textToBase64(text: string): string {
+  return uint8ArrayToBase64(new TextEncoder().encode(text));
+}
+
+function normalizeDownloadBody(body: string, isEncoded: boolean): string {
+  return isEncoded ? body : textToBase64(body);
+}
+
+const ResponseBody: React.FC<ResponseBodyProps> = ({ body, headers, statusCode, isEncoded = true, onDownloadResponse }) => {
   const [copySuccess, setCopySuccess] = useState(false);
   const [downloadSuccess, setDownloadSuccess] = useState(false);
 
@@ -87,6 +111,7 @@ const ResponseBody: React.FC<ResponseBodyProps> = ({ body, headers, statusCode, 
     [body, contentType, isTextBased]
   );
   const fileName = useMemo(() => getFileName(headers, contentType), [headers, contentType]);
+  const normalizedDownloadBody = useMemo(() => normalizeDownloadBody(body, isEncoded), [body, isEncoded]);
 
   /**
    * Copies the response body to clipboard
@@ -106,8 +131,12 @@ const ResponseBody: React.FC<ResponseBodyProps> = ({ body, headers, statusCode, 
    */
   const handleDownload = () => {
     try {
-        // Send download request to extension host
-        onDownloadResponse({ body, fileName, contentType: headers['content-type'] || 'application/octet-stream' });
+        // Always emit base64 payload to keep byte-exact downloads cross-platform.
+        onDownloadResponse({
+          body: normalizedDownloadBody,
+          fileName,
+          contentType: headers['content-type'] || 'application/octet-stream',
+        });
         
         // TODO: Show success feedback
         setDownloadSuccess(true);

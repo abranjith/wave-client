@@ -47,4 +47,14 @@ export class McpHttpAdapter implements IHttpAdapter {
             return err(message);
         }
     }
+
+    /**
+     * Cancels an in-flight request by aborting the underlying HttpService call.
+     * Resolves `ok` whether or not a matching request was found (cancelling a
+     * finished request is a no-op).
+     */
+    async cancelRequest(requestId: string): Promise<Result<void, string>> {
+        httpService.cancel(requestId);
+        return ok(undefined);
+    }
 }

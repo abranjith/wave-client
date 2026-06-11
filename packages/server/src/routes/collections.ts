@@ -63,30 +63,33 @@ export async function registerCollectionRoutes(fastify: FastifyInstance): Promis
         }
     });
 
-    // Save request to collection
+    // Save request to collection.
+    // The body carries the whole serialized CollectionItem (id, name,
+    // description, request) so item identity survives moves — see FEAT-003.
     fastify.post('/api/collections/:filename/requests', async (
         request: FastifyRequest<{
             Params: { filename: string };
-            Body: { requestContent: string; requestName: string; folderPath: string[]; newCollectionName?: string };
+            Body: { item: string; folderPath: string[]; newCollectionName?: string };
         }>,
         reply: FastifyReply
     ) => {
+        let itemName = 'Request';
         try {
             const { filename } = request.params;
-            const { requestContent, requestName, folderPath, newCollectionName } = request.body;
+            const { item, folderPath, newCollectionName } = request.body;
+            itemName = JSON.parse(item)?.name ?? itemName;
             const resultFilename = await collectionService.saveRequest(
-                requestContent,
-                requestName,
+                item,
                 filename,
                 folderPath,
                 newCollectionName
             );
             emitStateChange('collections');
-            emitBanner('success', `Request "${requestName}" saved`);
+            emitBanner('success', `Request "${itemName}" saved`);
             return reply.send({ isOk: true, value: { filename: resultFilename } });
         } catch (error) {
             const message = error instanceof Error ? error.message : 'Unknown error';
-            emitBanner('error', `Failed to save request: ${message}`);
+            emitBanner('error', `Failed to save request "${itemName}": ${message}`);
             return reply.status(500).send({ isOk: false, error: message });
         }
     });

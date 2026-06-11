@@ -415,6 +415,51 @@ describe('createVSCodeAdapter — realtime adapter', () => {
         });
     });
 
+    // ── File adapter (downloadResponse contract) ───────────────────────────
+
+    describe('file.downloadResponse', () => {
+        it('posts nested payload shape and resolves after correlated response', async () => {
+            const resultPromise = adapter.file.downloadResponse(
+                new Uint8Array([65, 66, 67]),
+                'response.json',
+                'application/json'
+            );
+
+            const message = vsCodeApi.postMessage.mock.calls.at(-1)?.[0] as any;
+            expect(message).toMatchObject({
+                type: 'downloadResponse',
+                data: {
+                    body: btoa('ABC'),
+                    fileName: 'response.json',
+                    contentType: 'application/json',
+                },
+            });
+            expect(typeof message.requestId).toBe('string');
+
+            handleMessage(fakeEvent({ type: 'downloadResponseResult', requestId: message.requestId }));
+
+            const result = await resultPromise;
+            expect(result.isOk).toBe(true);
+        });
+
+        it('returns err when host responds with an error', async () => {
+            const resultPromise = adapter.file.downloadResponse(
+                new Uint8Array([1, 2, 3]),
+                'response.bin',
+                'application/octet-stream'
+            );
+
+            const reqId = lastRequestId(vsCodeApi);
+            handleMessage(
+                fakeEvent({ type: 'downloadResponseResult', requestId: reqId, error: 'Disk is full' })
+            );
+
+            const result = await resultPromise;
+            expect(result.isOk).toBe(false);
+            expect((result as any).error).toBe('Disk is full');
+        });
+    });
+
     // ── Cleanup ───────────────────────────────────────────────────────────────
 
     describe('adapter.dispose() / cleanup', () => {

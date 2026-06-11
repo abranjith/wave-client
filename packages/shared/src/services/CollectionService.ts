@@ -1,7 +1,12 @@
 import * as path from 'path';
 
 import { BaseStorageService } from './BaseStorageService';
-import { generateUniqueId } from '@wave-client/core';
+import {
+    generateUniqueId,
+    CURRENT_COLLECTION_SCHEMA_VERSION,
+    validateWaveCollection,
+    validateCollectionTree,
+} from '@wave-client/core';
 import {
     isSseRequest,
     isWsRequest,
@@ -123,10 +128,21 @@ export function sanitizeRequestForSave(request: AnyCollectionRequest): AnyCollec
 /**
  * Recursively normalizes all request payloads in a `CollectionItem` tree.
  * Applied after loading from disk.
+ *
+ * Besides protocol normalization, legacy requests missing `id`/`name` are
+ * stamped here (fresh id; name inherited from the wrapping item) so that
+ * normalized collections always satisfy the Wave collection schema.
  */
 function normalizeItemRequests(item: CollectionItem): CollectionItem {
     if (item.request) {
-        item.request = normalizeRequestOnLoad(item.request as unknown as Record<string, unknown>);
+        const normalized = normalizeRequestOnLoad(item.request as unknown as Record<string, unknown>);
+        if (!normalized.id) {
+            normalized.id = generateUniqueId();
+        }
+        if (!normalized.name) {
+            normalized.name = item.name;
+        }
+        item.request = normalized;
     }
     if (item.item) {
         item.item = item.item.map(normalizeItemRequests);
@@ -186,7 +202,6 @@ function removeItemFromTree(items: CollectionItem[], itemPath: string[], itemId:
  */
 export class CollectionService extends BaseStorageService {
     private readonly subDir = 'collections';
-    private readonly waveVersion = '0.0.1';
 
     /**
      * Gets the collections directory path using current settings.
@@ -222,8 +237,15 @@ export class CollectionService extends BaseStorageService {
 
     /**
      * Loads a single collection by filename.
+     *
+     * The raw file is normalized first (item ids ensured, `waveId`/`version`
+     * stamped when absent) and then validated against the Wave collection
+     * schema. Structurally invalid files are skipped: the failure is logged
+     * with context and `null` is returned so `loadAll` can continue with the
+     * remaining collections.
+     *
      * @param fileName The collection filename
-     * @returns The collection or null if not found
+     * @returns The collection, or null if not found or invalid
      */
     async loadOne(fileName: string): Promise<Collection | null> {
         const collectionsDir = await this.getCollectionsDir();
@@ -234,28 +256,53 @@ export class CollectionService extends BaseStorageService {
         }
 
         const collection = await this.readJsonFileSecure<Collection | null>(filePath, null);
-        
+
         if (collection) {
-            // Ensure all items have IDs
-            collection.item = ensureCollectionItemIds(collection.item);
-            if (!collection.info.waveId) {
-                collection.info.waveId = generateUniqueId();
+            // Normalize before validating so legacy files pass the schema.
+            // Guard the array: structurally broken files fall through to validation.
+            if (Array.isArray(collection.item)) {
+                collection.item = ensureCollectionItemIds(collection.item);
+            }
+            if (!collection.info?.waveId) {
+                collection.info = { ...(collection.info ?? { name: '' }), waveId: generateUniqueId() };
             }
             if (!collection.info.version) {
-                collection.info.version = this.waveVersion;
+                collection.info.version = CURRENT_COLLECTION_SCHEMA_VERSION;
+            }
+
+            const validation = validateWaveCollection(collection);
+            if (!validation.isOk) {
+                console.error(
+                    `[CollectionService] loadOne: invalid collection file "${fileName}" (waveId: ${collection.info.waveId}): ${validation.error}`
+                );
+                return null;
             }
         }
-        
+
         return collection;
     }
 
     /**
      * Saves a collection to the collections directory.
+     *
+     * Tree integrity is validated before writing (non-empty names, ids on
+     * every item, case-insensitive sibling-level name uniqueness); violations
+     * throw a descriptive error and nothing is persisted.
+     *
      * @param collection The collection to save
      * @param fileName The filename to save as
      * @returns The saved collection
+     * @throws Error when the collection tree fails integrity validation
      */
     async save(collection: Collection, fileName: string): Promise<Collection> {
+        const treeValidation = validateCollectionTree(collection);
+        if (!treeValidation.isOk) {
+            console.error(
+                `[CollectionService] save: rejected collection "${fileName}" (waveId: ${collection.info?.waveId ?? 'unknown'}): ${treeValidation.error}`
+            );
+            throw new Error(treeValidation.error);
+        }
+
         const collectionsDir = await this.getCollectionsDir();
         this.ensureDirectoryExists(collectionsDir);
 
@@ -266,27 +313,70 @@ export class CollectionService extends BaseStorageService {
 
     /**
      * Saves a collection from JSON string content.
+     *
+     * Import boundary: the content is parsed, normalized (ids/waveId/version
+     * stamped), and validated against the Wave collection schema **before**
+     * anything is written. Invalid input throws a descriptive error and
+     * persists nothing.
+     *
      * @param fileContent The JSON content of the collection
      * @param fileName The filename to save as
      * @returns The saved collection
+     * @throws Error when the content is not valid JSON or fails schema validation
      */
     async saveFromContent(fileContent: string, fileName: string): Promise<Collection> {
-        const collection = JSON.parse(fileContent) as Collection;
+        let collection: Collection;
+        try {
+            collection = JSON.parse(fileContent) as Collection;
+        } catch (error: unknown) {
+            const message = error instanceof Error ? error.message : 'Unknown parse error';
+            throw new Error(`Invalid JSON: ${message}`);
+        }
+
+        // Normalize before validating so legacy payloads pass the schema.
+        if (collection && typeof collection === 'object') {
+            collection.item = Array.isArray(collection.item)
+                ? ensureCollectionItemIds(collection.item)
+                : collection.item ?? [];
+            if (!collection.info?.waveId) {
+                collection.info = { ...(collection.info ?? { name: '' }), waveId: generateUniqueId() };
+            }
+            if (!collection.info.version) {
+                collection.info.version = CURRENT_COLLECTION_SCHEMA_VERSION;
+            }
+        }
+
+        const validation = validateWaveCollection(collection);
+        if (!validation.isOk) {
+            console.error(
+                `[CollectionService] saveFromContent: rejected invalid collection for "${fileName}": ${validation.error}`
+            );
+            throw new Error(`Invalid collection: ${validation.error}`);
+        }
+
         return this.save(collection, fileName);
     }
 
     /**
-     * Saves or updates a request in a collection file under the specified folder path.
-     * @param requestContent The JSON content of the request to save
-     * @param requestName The name of the request
+     * Saves or updates a request item in a collection file under the
+     * specified folder path.
+     *
+     * The payload is the **whole `CollectionItem`** (id, name, description,
+     * request, response) so item identity survives moves and duplicates:
+     * - Items are matched by `id` first (update in place).
+     * - Name matching is a fallback **only** for legacy payloads without an
+     *   id — an existing item's id is never regenerated, and a same-named
+     *   item with a different id is never silently overwritten.
+     * - The `item.name === request.name` invariant is enforced on save.
+     *
+     * @param itemContent JSON content of the `CollectionItem` to save
      * @param collectionFileName The collection file to save to
-     * @param folderPath The folder path within the collection to save the request under
+     * @param folderPath The folder path within the collection to save under
      * @param newCollectionName Optional name for a new collection if creating new
      * @returns The filename of the collection that was saved to
      */
     async saveRequest(
-        requestContent: string,
-        requestName: string,
+        itemContent: string,
         collectionFileName: string,
         folderPath: string[],
         newCollectionName?: string
@@ -307,9 +397,23 @@ export class CollectionService extends BaseStorageService {
             throw new Error(`Collection file ${collectionFileName} does not exist and no new collection name provided.`);
         }
 
-        // Parse the request JSON — accepts any protocol (HTTP, WS, SSE)
-        const rawRequest = JSON.parse(requestContent) as AnyCollectionRequest;
-        const request = sanitizeRequestForSave(rawRequest);
+        // Parse the whole CollectionItem — request accepts any protocol (HTTP, WS, SSE)
+        const rawItem = JSON.parse(itemContent) as CollectionItem;
+        if (!rawItem || typeof rawItem !== 'object' || !rawItem.request || !rawItem.name) {
+            throw new Error('Invalid item payload: expected a CollectionItem with a name and a request.');
+        }
+
+        const hadId = Boolean(rawItem.id);
+        const incoming: CollectionItem = {
+            ...rawItem,
+            id: rawItem.id || generateUniqueId(),
+            request: sanitizeRequestForSave(rawItem.request as AnyCollectionRequest),
+        };
+        // Enforce the invariant: item.name === request.name; request keeps a stable id.
+        incoming.request!.name = incoming.name;
+        if (!incoming.request!.id) {
+            incoming.request = { ...incoming.request!, id: generateUniqueId() };
+        }
 
         // Navigate to the correct folder, creating it if necessary
         let items = collection.item;
@@ -327,18 +431,23 @@ export class CollectionService extends BaseStorageService {
             items = folder.item!;
         }
 
-        // Check if a request with the same name exists in the target folder
-        const existingRequestIndex = items.findIndex((i: CollectionItem) => i.name === requestName && i.request);
-        if (existingRequestIndex !== -1) {
-            // Overwrite existing request
-            items[existingRequestIndex].request = request;
+        // Match by id first — moves/duplicates keep their identity end-to-end.
+        const byIdIndex = items.findIndex((i: CollectionItem) => i.id === incoming.id);
+        if (byIdIndex !== -1) {
+            items[byIdIndex] = { ...items[byIdIndex], ...incoming };
+        } else if (!hadId) {
+            // Legacy payload without an id: fall back to name match, keeping
+            // the existing slot's id (never regenerate an existing id).
+            const byNameIndex = items.findIndex((i: CollectionItem) => i.name === incoming.name && i.request);
+            if (byNameIndex !== -1) {
+                items[byNameIndex] = { ...items[byNameIndex], ...incoming, id: items[byNameIndex].id };
+            } else {
+                items.push(incoming);
+            }
         } else {
-            // Add new request
-            items.push({
-                id: generateUniqueId(),
-                name: requestName,
-                request: request
-            });
+            // Incoming item carries its own id and nothing matches — add it.
+            // A same-named different-id item at the destination is left intact.
+            items.push(incoming);
         }
 
         // Save the updated collection
@@ -408,14 +517,23 @@ export class CollectionService extends BaseStorageService {
             collection.info.waveId = generateUniqueId();
         }
         if (!collection.info.version) {
-            collection.info.version = this.waveVersion;
+            collection.info.version = CURRENT_COLLECTION_SCHEMA_VERSION;
         }
         if (!collection.item) {
             collection.item = [];
         }
-        
+
         // Ensure all items have IDs and normalize request payloads
         collection.item = collection.item.map((item: CollectionItem) => normalizeItemRequests(ensureItemIds(item)));
+
+        // Import boundary: reject structurally invalid collections before writing.
+        const validation = validateWaveCollection(collection);
+        if (!validation.isOk) {
+            console.error(
+                `[CollectionService] import: rejected invalid collection "${fileName}" (waveId: ${collection.info.waveId}): ${validation.error}`
+            );
+            throw new Error(`Invalid collection: ${validation.error}`);
+        }
 
         // Generate a JSON filename for saving
         const jsonFileName = fileName.replace(/\.[^.]*$/, '.json');
@@ -451,7 +569,7 @@ export class CollectionService extends BaseStorageService {
         return {
             info: {
                 waveId: generateUniqueId(),
-                version: this.waveVersion,
+                version: CURRENT_COLLECTION_SCHEMA_VERSION,
                 name: name || 'New Collection'
             },
             item: []

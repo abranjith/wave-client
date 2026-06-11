@@ -109,8 +109,14 @@ export class MessageHandler {
             case 'httpRequest':
                 await this.handleHttpRequest(message);
                 break;
+            case 'cancelHttpRequest':
+                await this.handleCancelHttpRequest(message);
+                break;
             case 'loadCollections':
                 await this.handleLoadCollections(message);
+                break;
+            case 'saveCollection':
+                await this.handleSaveCollection(message);
                 break;
             case 'saveRequestToCollection':
                 await this.handleSaveRequestToCollection(message);
@@ -383,6 +389,32 @@ export class MessageHandler {
         }
     }
 
+    /**
+     * Aborts an in-flight HTTP request by id. Replies with success even when no
+     * matching request is found — the request had already finished, so there is
+     * nothing to cancel. The `cancelled` flag reflects whether an in-flight
+     * request was actually aborted. The aborted request itself resolves through
+     * the normal `httpResponse` path as a Cancelled result.
+     */
+    private async handleCancelHttpRequest(message: any): Promise<void> {
+        const correlationId = message.requestId;
+        try {
+            const targetId = message.data?.requestId;
+            const cancelled = httpService.cancel(targetId);
+            this.postMessage({
+                type: 'cancelHttpRequestResponse',
+                requestId: correlationId,
+                data: { cancelled },
+            });
+        } catch (error: any) {
+            this.postMessage({
+                type: 'cancelHttpRequestResponse',
+                requestId: correlationId,
+                error: error.message,
+            });
+        }
+    }
+
     // ==================== Collection Handlers ====================
 
     private async handleLoadCollections(message: any): Promise<void> {
@@ -398,6 +430,37 @@ export class MessageHandler {
         } catch (error: any) {
             this.postMessage({
                 type: 'collectionsLoaded',
+                requestId,
+                error: error.message
+            });
+        }
+    }
+
+    /**
+     * Persists a whole collection (rename, item mutations, reordering).
+     * The collection must carry its `filename` — it is the persistence key.
+     * Replies with the saved collection or a descriptive error so the UI
+     * sees real success/failure (no optimistic fire-and-forget).
+     */
+    private async handleSaveCollection(message: any): Promise<void> {
+        const requestId = message.requestId;
+        let filename: string | undefined;
+        try {
+            const collection = JSON.parse(message.data.collection);
+            filename = collection?.filename;
+            if (!filename) {
+                throw new Error('Cannot save collection: missing filename (the persistence key).');
+            }
+            const saved = await collectionService.save(collection, filename);
+            this.postMessage({
+                type: 'collectionSaved',
+                requestId,
+                collection: { ...saved, filename }
+            });
+        } catch (error: any) {
+            console.error(`[MessageHandler] saveCollection failed (filename: ${filename ?? 'unknown'}):`, error);
+            this.postMessage({
+                type: 'collectionSaved',
                 requestId,
                 error: error.message
             });
@@ -457,10 +520,12 @@ export class MessageHandler {
     private async handleSaveRequestToCollection(message: any): Promise<void> {
         const requestId = message.requestId;
         try {
-            const { requestContent, requestName, collectionFileName, folderPath, newCollectionName } = message.data;
+            // Payload carries the whole CollectionItem (id, name, description,
+            // request) so item identity survives moves — see FEAT-003.
+            const { item, collectionFileName, folderPath, newCollectionName } = message.data;
+            const itemName = JSON.parse(item)?.name ?? 'Request';
             const savedCollectionFileName = await collectionService.saveRequest(
-                requestContent,
-                requestName,
+                item,
                 collectionFileName,
                 folderPath,
                 newCollectionName
@@ -476,10 +541,10 @@ export class MessageHandler {
                         filename: savedCollectionFileName
                     }
                 });
-                
+
                 this.postMessage({
                     type: 'bannerSuccess',
-                    message: `Request "${requestName}" saved successfully`
+                    message: `Request "${itemName}" saved successfully`
                 });
             } else {
                 this.postMessage({
@@ -840,23 +905,54 @@ export class MessageHandler {
     // ==================== Download Handler ====================
 
     private async handleDownloadResponse(message: any): Promise<void> {
+        const requestId = message.requestId;
         try {
-            const { body, fileName } = message.data;
+            const { body, fileName, contentType } = message.data ?? {};
+            if (!body || !fileName) {
+                throw new Error('body and fileName are required for downloadResponse');
+            }
+
             const bodyBuffer = base64ToUint8Array(body);
+
+            const extension = path.extname(fileName).replace('.', '').toLowerCase();
+            const contentTypeLabel = typeof contentType === 'string' && contentType.includes('/')
+                ? contentType.split('/').pop()?.split(';')[0]?.toUpperCase()
+                : undefined;
+            const filterLabel = extension ? extension.toUpperCase() : (contentTypeLabel || 'All Files');
+            const filters = extension
+                ? { [filterLabel]: [extension], 'All Files': ['*'] }
+                : contentTypeLabel
+                    ? { [contentTypeLabel]: ['*'], 'All Files': ['*'] }
+                    : { 'All Files': ['*'] };
 
             const uri = await vscode.window.showSaveDialog({
                 defaultUri: vscode.Uri.file(path.join(os.homedir(), 'Downloads', fileName)),
-                filters: { 'All Files': ['*'] }
+                filters
             });
 
             if (uri) {
                 await vscode.workspace.fs.writeFile(uri, bodyBuffer);
                 this.postMessage({
+                    type: 'downloadResponseResult',
+                    requestId
+                });
+                this.postMessage({
                     type: 'bannerSuccess',
                     message: `Response file saved: ${path.basename(uri.fsPath)}`
                 });
+            } else {
+                this.postMessage({
+                    type: 'downloadResponseResult',
+                    requestId,
+                    error: 'Download cancelled by user'
+                });
             }
         } catch (error: any) {
+            this.postMessage({
+                type: 'downloadResponseResult',
+                requestId,
+                error: error.message
+            });
             this.postMessage({
                 type: 'bannerError',
                 message: `Failed to save response file: ${error.message}`

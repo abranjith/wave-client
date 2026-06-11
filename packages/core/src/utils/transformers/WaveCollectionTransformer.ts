@@ -6,6 +6,7 @@
 
 import { BaseCollectionTransformer, CollectionFormatType, Result, ok, err } from './BaseCollectionTransformer';
 import { Collection, CollectionItem, CollectionInfo } from '../../types/collection';
+import { CURRENT_COLLECTION_SCHEMA_VERSION } from '../../schemas/collectionSchema';
 
 /**
  * Transformer for Wave's native collection format.
@@ -82,7 +83,7 @@ export class WaveCollectionTransformer extends BaseCollectionTransformer<Collect
                 collection.info = {
                     waveId: this.generateId(),
                     name: filename?.replace(/\.json$/i, '') || 'Imported Collection',
-                    version: this.waveVersion,
+                    version: CURRENT_COLLECTION_SCHEMA_VERSION,
                 };
             }
 

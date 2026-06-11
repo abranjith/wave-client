@@ -10,6 +10,7 @@ import { BaseCollectionTransformer, CollectionFormatType, Result, ok, err } from
 import { dereference, validate as scalarValidate } from '@scalar/openapi-parser';
 import type { OpenAPI } from '@scalar/openapi-types';
 import { Collection, CollectionItem, CollectionRequest, CollectionUrl, CollectionBody, HeaderRow, ParamRow } from '../../types/collection';
+import { CURRENT_COLLECTION_SCHEMA_VERSION } from '../../schemas/collectionSchema';
 
 type OpenApiObject = Record<string, unknown>;
 
@@ -100,7 +101,7 @@ export class SwaggerTransformer extends BaseCollectionTransformer<unknown> {
                     waveId: this.generateId(),
                     name: collectionName,
                     description: this.getDocumentDescription(spec),
-                    version: this.waveVersion,
+                    version: CURRENT_COLLECTION_SCHEMA_VERSION,
                 },
                 item: items
             };

@@ -5,9 +5,15 @@ import type { HttpRequestConfig } from '@wave-client/core';
 import type { AppSettings, Cookie } from '../../types.js';
 
 // Mock axios
-vi.mock('axios', () => ({
-    default: vi.fn(),
-}));
+vi.mock('axios', () => {
+    const mockFn = vi.fn() as ReturnType<typeof vi.fn> & {
+        isCancel: (error: unknown) => boolean;
+    };
+    // Mirror axios.isCancel so HttpService can detect aborted requests in tests.
+    mockFn.isCancel = (error: unknown): boolean =>
+        (error as { __CANCEL__?: boolean })?.__CANCEL__ === true;
+    return { default: mockFn };
+});
 
 // Mock https module
 vi.mock('https', () => ({
@@ -1043,6 +1049,124 @@ describe('HttpService', () => {
                     }),
                 })
             );
+        });
+    });
+
+    describe('cancel', () => {
+        /**
+         * Builds an axios mock that never resolves on its own and only rejects
+         * (with an abort-shaped error) once its `signal` fires. Mirrors how a real
+         * in-flight request behaves when `AbortController.abort()` is called.
+         */
+        function mockNeverResolvingAxios(): void {
+            mockAxios.mockImplementation((config: { signal?: AbortSignal }) => {
+                return new Promise((_resolve, reject) => {
+                    const signal = config.signal;
+                    if (!signal) {
+                        return; // never settles
+                    }
+                    const onAbort = () => {
+                        const abortError = Object.assign(new Error('canceled'), {
+                            __CANCEL__: true,
+                            code: 'ERR_CANCELED',
+                            name: 'CanceledError',
+                        });
+                        reject(abortError);
+                    };
+                    if (signal.aborted) {
+                        onAbort();
+                    } else {
+                        signal.addEventListener('abort', onAbort, { once: true });
+                    }
+                });
+            });
+        }
+
+        it('resolves with a Cancelled response when a request is aborted mid-flight', async () => {
+            mockNeverResolvingAxios();
+
+            const request: HttpRequestConfig = {
+                id: 'cancel-1',
+                method: 'GET',
+                url: 'https://api.example.com/slow',
+                headers: {},
+            };
+
+            const execPromise = service.execute(request);
+
+            // Allow execute() to register the controller and reach the axios await.
+            await new Promise((resolve) => setImmediate(resolve));
+
+            expect(service.cancel('cancel-1')).toBe(true);
+
+            const result = await execPromise;
+
+            expect(result.status).toBe(0);
+            expect(result.statusText).toBe('Cancelled');
+            expect(result.size).toBe(0);
+            expect(result.body).toBe('');
+            expect(result.isEncoded).toBe(false);
+            expect(result.id).toBe('cancel-1');
+            // Registry entry must be cleaned up on the abort path.
+            expect(service.cancel('cancel-1')).toBe(false);
+        });
+
+        it('returns false when cancelling an unknown request id', () => {
+            expect(service.cancel('does-not-exist')).toBe(false);
+        });
+
+        it('cleans up the registry entry after a successful request', async () => {
+            mockAxios.mockResolvedValue({
+                status: 200,
+                statusText: 'OK',
+                headers: {},
+                data: Buffer.from('ok'),
+            });
+
+            const request: HttpRequestConfig = {
+                id: 'success-1',
+                method: 'GET',
+                url: 'https://api.example.com/data',
+                headers: {},
+            };
+
+            await service.execute(request);
+
+            // No in-flight entry remains, so cancel finds nothing.
+            expect(service.cancel('success-1')).toBe(false);
+        });
+
+        it('cancelling one request leaves a concurrent request unaffected', async () => {
+            mockNeverResolvingAxios();
+
+            const requestA: HttpRequestConfig = {
+                id: 'concurrent-a',
+                method: 'GET',
+                url: 'https://api.example.com/a',
+                headers: {},
+            };
+            const requestB: HttpRequestConfig = {
+                id: 'concurrent-b',
+                method: 'GET',
+                url: 'https://api.example.com/b',
+                headers: {},
+            };
+
+            const promiseA = service.execute(requestA);
+            const promiseB = service.execute(requestB);
+
+            await new Promise((resolve) => setImmediate(resolve));
+
+            // Cancel only A.
+            expect(service.cancel('concurrent-a')).toBe(true);
+
+            const resultA = await promiseA;
+            expect(resultA.statusText).toBe('Cancelled');
+
+            // B is still in-flight and cancellable.
+            expect(service.cancel('concurrent-b')).toBe(true);
+            const resultB = await promiseB;
+            expect(resultB.statusText).toBe('Cancelled');
         });
     });
 });
