@@ -16,6 +16,9 @@ import {
   renameItemInTree,
   validateItemName,
   validateCollectionTree,
+  addItemAtPath,
+  cloneItemWithFreshIds,
+  mergeCollectionItems,
 } from '../../utils/collectionParser';
 import type {
   Collection,
@@ -889,5 +892,168 @@ describe('collectionParser', () => {
       col.item[0].item!.push({ id: 'r3', name: 'Top Req', request: { id: 'rr3', name: 'Top Req', method: 'GET', url: 'https://z' } });
       expect(validateCollectionTree(col).isOk).toBe(true);
     });
+  });
+});
+
+// =============================================================================
+// addItemAtPath (FEAT-FP-COL-001 TASK-006)
+// =============================================================================
+describe('addItemAtPath', () => {
+  const folder = (id: string, name: string, children: CollectionItem[] = []): CollectionItem => ({
+    id,
+    name,
+    item: children,
+  });
+  const leaf = (id: string, name: string): CollectionItem => ({
+    id,
+    name,
+    request: { id: `r-${id}`, name, method: 'GET', url: 'https://x' } as any,
+  });
+
+  it('appends to root when folderPath is empty', () => {
+    const items = [leaf('a', 'Alpha')];
+    const result = addItemAtPath(items, [], leaf('b', 'Beta'));
+    expect(result).toHaveLength(2);
+    expect(result[1].name).toBe('Beta');
+  });
+
+  it('does not mutate the original array', () => {
+    const items = [leaf('a', 'Alpha')];
+    const original = [...items];
+    addItemAtPath(items, [], leaf('b', 'Beta'));
+    expect(items).toEqual(original);
+  });
+
+  it('inserts inside a named folder at depth 1', () => {
+    const items = [folder('f1', 'Auth', [leaf('r1', 'Login')])];
+    const result = addItemAtPath(items, ['Auth'], leaf('r2', 'Register'));
+    const auth = result.find(i => i.name === 'Auth');
+    expect(auth!.item).toHaveLength(2);
+    expect(auth!.item![1].name).toBe('Register');
+  });
+
+  it('inserts inside a deeply nested folder', () => {
+    const inner = folder('f2', 'v2', []);
+    const outer = folder('f1', 'Users', [inner]);
+    const result = addItemAtPath([outer], ['Users', 'v2'], leaf('r1', 'List'));
+    const users = result.find(i => i.name === 'Users');
+    const v2 = users!.item!.find(i => i.name === 'v2');
+    expect(v2!.item).toHaveLength(1);
+    expect(v2!.item![0].name).toBe('List');
+  });
+
+  it('is a no-op (returns unchanged tree) when path does not match', () => {
+    const items = [folder('f1', 'Auth', [])];
+    const result = addItemAtPath(items, ['NonExistent'], leaf('r1', 'New'));
+    const auth = result.find(i => i.name === 'Auth');
+    expect(auth!.item).toHaveLength(0);
+  });
+});
+
+// =============================================================================
+// cloneItemWithFreshIds (FEAT-FP-COL-001 TASK-005)
+// =============================================================================
+describe('cloneItemWithFreshIds', () => {
+  const makeRequest = (id: string, name: string): CollectionItem => ({
+    id,
+    name,
+    request: { id: `req-${id}`, name, method: 'GET', url: 'https://x' } as any,
+  });
+
+  it('produces a deep copy with a new item id', () => {
+    const original = makeRequest('item-1', 'Get User');
+    const clone = cloneItemWithFreshIds(original);
+    expect(clone.id).not.toBe(original.id);
+    expect(clone.name).toBe(original.name);
+  });
+
+  it('assigns a new request id when request is present', () => {
+    const original = makeRequest('item-1', 'Get User');
+    const clone = cloneItemWithFreshIds(original);
+    expect(clone.request!.id).not.toBe(original.request!.id);
+  });
+
+  it('does not mutate the original', () => {
+    const original = makeRequest('item-1', 'Get User');
+    const origId = original.id;
+    cloneItemWithFreshIds(original);
+    expect(original.id).toBe(origId);
+  });
+
+  it('recursively clones nested folder items with fresh ids', () => {
+    const folder: CollectionItem = {
+      id: 'folder-1',
+      name: 'Auth',
+      item: [makeRequest('child-1', 'Login'), makeRequest('child-2', 'Logout')],
+    };
+    const clone = cloneItemWithFreshIds(folder);
+    expect(clone.id).not.toBe(folder.id);
+    expect(clone.item![0].id).not.toBe(folder.item![0].id);
+    expect(clone.item![1].id).not.toBe(folder.item![1].id);
+    // Names preserved
+    expect(clone.item![0].name).toBe('Login');
+    expect(clone.item![1].name).toBe('Logout');
+  });
+});
+
+// =============================================================================
+// mergeCollectionItems (FEAT-FP-COL-001 TASK-005)
+// =============================================================================
+describe('mergeCollectionItems', () => {
+  const req = (id: string, name: string): CollectionItem => ({
+    id,
+    name,
+    request: { id: `r-${id}`, name, method: 'GET', url: 'https://x' } as any,
+  });
+
+  it('merges top-level items into an empty root', () => {
+    const result = mergeCollectionItems([], [], [req('a', 'Alpha'), req('b', 'Beta')]);
+    expect(result.isOk).toBe(true);
+    if (!result.isOk) return;
+    expect(result.value).toHaveLength(2);
+    expect(result.value[0].name).toBe('Alpha');
+  });
+
+  it('appends to existing root items without conflict', () => {
+    const existing = [req('x', 'Existing')];
+    const result = mergeCollectionItems(existing, [], [req('a', 'Alpha')]);
+    expect(result.isOk).toBe(true);
+    expect(result.value).toHaveLength(2);
+  });
+
+  it('rejects when incoming names conflict with destination siblings at root', () => {
+    const existing = [req('x', 'Duplicate')];
+    const result = mergeCollectionItems(existing, [], [req('a', 'Duplicate')]);
+    expect(result.isOk).toBe(false);
+    expect(result.error).toContain('Duplicate');
+  });
+
+  it('rejects when incoming items conflict among themselves', () => {
+    const result = mergeCollectionItems([], [], [req('a', 'Same'), req('b', 'Same')]);
+    expect(result.isOk).toBe(false);
+    expect(result.error).toContain('Same');
+  });
+
+  it('merges items into a nested folder', () => {
+    const folder: CollectionItem = { id: 'f1', name: 'Auth', item: [] };
+    const result = mergeCollectionItems([folder], ['Auth'], [req('a', 'Login')]);
+    expect(result.isOk).toBe(true);
+    if (!result.isOk) return;
+    const updatedFolder = result.value.find((i) => i.name === 'Auth');
+    expect(updatedFolder!.item).toHaveLength(1);
+    expect(updatedFolder!.item![0].name).toBe('Login');
+  });
+
+  it('returns err when the folder path does not exist', () => {
+    const result = mergeCollectionItems([], ['NonExistent'], [req('a', 'Alpha')]);
+    expect(result.isOk).toBe(false);
+    expect(result.error).toContain('NonExistent');
+  });
+
+  it('does not mutate the original target items array', () => {
+    const existing = [req('x', 'Original')];
+    const copy = JSON.parse(JSON.stringify(existing));
+    mergeCollectionItems(existing, [], [req('a', 'New')]);
+    expect(existing).toEqual(copy);
   });
 });

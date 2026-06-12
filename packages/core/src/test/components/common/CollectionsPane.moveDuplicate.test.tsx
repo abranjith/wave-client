@@ -24,24 +24,28 @@ vi.mock('../../../components/common/RequestSaveWizard', () => ({
   default: ({
     isOpen,
     mode,
+    itemKind,
     initialCollectionName,
     currentPath,
     onSave,
     onClose,
+    filterDestination,
   }: {
     isOpen: boolean;
     mode?: 'save' | 'move';
+    itemKind?: 'request' | 'folder';
     initialCollectionName?: string;
     currentPath?: string[];
     onSave: (collectionName: string, requestName: string, folderPath: string[]) => void;
     onClose: () => void;
+    filterDestination?: (collectionFilename: string, collectionName: string, folderPath: string[]) => boolean;
   }) => {
     if (!isOpen) {
       return null;
     }
 
     return (
-      <div data-testid="move-wizard" data-mode={mode}>
+      <div data-testid="move-wizard" data-mode={mode} data-item-kind={itemKind}>
         <button
           data-testid="confirm-same-path"
           onClick={() => onSave(initialCollectionName || '', 'Get Users', currentPath || [])}
@@ -69,6 +73,11 @@ vi.mock('../../../components/common/RequestSaveWizard', () => ({
         <button data-testid="close-move" onClick={onClose}>
           close
         </button>
+        {filterDestination && (
+          <div data-testid="filter-present">
+            filter-destination-present
+          </div>
+        )}
       </div>
     );
   },
@@ -85,24 +94,32 @@ vi.mock('../../../components/common/CollectionTreeItem', () => ({
     itemPath: string[];
     onMoveItem?: (item: CollectionItem, parentItemPath: string[]) => void;
     onDuplicateItem?: (item: CollectionItem, parentItemPath: string[]) => void;
-  }) => (
-    <div>
-      <div>{item.name}</div>
-      {item.request && (
-        <>
-          <button data-testid={`move-${item.id}`} onClick={() => onMoveItem?.(item, itemPath)}>
-            move
+  }) => {
+    const isFolder = Array.isArray(item.item);
+    return (
+      <div>
+        <div>{item.name}</div>
+        {item.request && (
+          <>
+            <button data-testid={`move-${item.id}`} onClick={() => onMoveItem?.(item, itemPath)}>
+              move-request
+            </button>
+            <button
+              data-testid={`duplicate-${item.id}`}
+              onClick={() => onDuplicateItem?.(item, itemPath)}
+            >
+              duplicate
+            </button>
+          </>
+        )}
+        {isFolder && (
+          <button data-testid={`move-folder-${item.id}`} onClick={() => onMoveItem?.(item, itemPath)}>
+            move-folder
           </button>
-          <button
-            data-testid={`duplicate-${item.id}`}
-            onClick={() => onDuplicateItem?.(item, itemPath)}
-          >
-            duplicate
-          </button>
-        </>
-      )}
-    </div>
-  ),
+        )}
+      </div>
+    );
+  },
 }));
 
 function buildCollections(): { source: Collection; other: Collection; requestId: string } {
@@ -190,6 +207,40 @@ function buildCollectionsWithConflict(): { source: Collection; other: Collection
   return { source, other, requestId };
 }
 
+function buildCollectionsWithFolders(): { source: Collection; folderId: string; nestedRequestId: string } {
+  const folderId = 'folder-1';
+  const nestedRequestId = 'req-nested';
+
+  const source: Collection = {
+    filename: 'source.json',
+    info: {
+      waveId: 'wave-source',
+      name: 'Source API',
+    },
+    item: [
+      {
+        id: folderId,
+        name: 'Auth',
+        item: [
+          {
+            id: nestedRequestId,
+            name: 'Login',
+            request: {
+              id: nestedRequestId,
+              name: 'Login',
+              method: 'POST',
+              url: 'https://api.example.com/login',
+              header: [],
+            },
+          },
+        ],
+      },
+    ],
+  };
+
+  return { source, folderId, nestedRequestId };
+}
+
 const defaultProps = {
   onRequestSelect: vi.fn(),
   onImportCollection: vi.fn(),
@@ -236,8 +287,7 @@ describe('CollectionsPane move/duplicate actions', () => {
     const { source, requestId } = buildCollections();
     const { adapter, notificationLog } = renderPane([source]);
 
-    const saveSpy = vi.spyOn(adapter.storage, 'saveRequestToCollection');
-    const deleteSpy = vi.spyOn(adapter.storage, 'deleteRequestFromCollection');
+    const moveSpy = vi.spyOn(adapter.storage, 'moveCollectionItem');
 
     fireEvent.click(screen.getByText('Source API'));
     fireEvent.click(screen.getByTestId(`move-${requestId}`));
@@ -249,16 +299,14 @@ describe('CollectionsPane move/duplicate actions', () => {
       expect(notificationLog.some((entry) => entry.type === 'error')).toBe(true);
     });
 
-    expect(saveSpy).not.toHaveBeenCalled();
-    expect(deleteSpy).not.toHaveBeenCalled();
+    expect(moveSpy).not.toHaveBeenCalled();
   });
 
   it('blocks move when destination already has an item with the same name', async () => {
     const { source, other, requestId } = buildCollectionsWithConflict();
     const { adapter, notificationLog } = renderPane([source, other]);
 
-    const saveSpy = vi.spyOn(adapter.storage, 'saveRequestToCollection');
-    const deleteSpy = vi.spyOn(adapter.storage, 'deleteRequestFromCollection');
+    const moveSpy = vi.spyOn(adapter.storage, 'moveCollectionItem');
 
     fireEvent.click(screen.getByText('Source API'));
     fireEvent.click(screen.getByTestId(`move-${requestId}`));
@@ -272,53 +320,53 @@ describe('CollectionsPane move/duplicate actions', () => {
       ).toBe(true);
     });
 
-    expect(saveSpy).not.toHaveBeenCalled();
-    expect(deleteSpy).not.toHaveBeenCalled();
+    expect(moveSpy).not.toHaveBeenCalled();
   });
 
-  it('allows move to a child path and calls save before delete', async () => {
+  it('request move now uses single atomic moveCollectionItem call (not save+delete)', async () => {
     const { source, requestId } = buildCollections();
     const { adapter } = renderPane([source]);
 
-    const saveSpy = vi.spyOn(adapter.storage, 'saveRequestToCollection');
-    const deleteSpy = vi.spyOn(adapter.storage, 'deleteRequestFromCollection');
+    const moveSpy = vi.spyOn(adapter.storage, 'moveCollectionItem');
 
     fireEvent.click(screen.getByText('Source API'));
     fireEvent.click(screen.getByTestId(`move-${requestId}`));
     fireEvent.click(screen.getByTestId('confirm-child-path'));
 
     await waitFor(() => {
-      expect(saveSpy).toHaveBeenCalledWith(
+      expect(moveSpy).toHaveBeenCalledWith(
+        'source.json',
+        [],
+        requestId,
         'source.json',
         ['child'],
-        expect.objectContaining({ id: requestId })
+        undefined
       );
     });
 
-    expect(deleteSpy).toHaveBeenCalledWith('source.json', [], requestId);
-    expect(saveSpy.mock.invocationCallOrder[0]).toBeLessThan(deleteSpy.mock.invocationCallOrder[0]);
+    expect(moveSpy).toHaveBeenCalledTimes(1);
   });
 
   it('moves across collections and updates both source and destination in store', async () => {
     const { source, other, requestId } = buildCollections();
     const { adapter } = renderPane([source, other]);
 
-    const saveSpy = vi.spyOn(adapter.storage, 'saveRequestToCollection');
-    const deleteSpy = vi.spyOn(adapter.storage, 'deleteRequestFromCollection');
+    const moveSpy = vi.spyOn(adapter.storage, 'moveCollectionItem');
 
     fireEvent.click(screen.getByText('Source API'));
     fireEvent.click(screen.getByTestId(`move-${requestId}`));
     fireEvent.click(screen.getByTestId('confirm-other-collection'));
 
     await waitFor(() => {
-      expect(saveSpy).toHaveBeenCalledWith(
+      expect(moveSpy).toHaveBeenCalledWith(
+        'source.json',
+        [],
+        requestId,
         'other.json',
         [],
-        expect.objectContaining({ id: requestId })
+        undefined
       );
     });
-
-    expect(deleteSpy).toHaveBeenCalledWith('source.json', [], requestId);
 
     const sourceState = useAppStateStore
       .getState()
@@ -335,23 +383,22 @@ describe('CollectionsPane move/duplicate actions', () => {
     const { source, requestId } = buildCollections();
     const { adapter } = renderPane([source]);
 
-    const saveSpy = vi.spyOn(adapter.storage, 'saveRequestToCollection');
-    const deleteSpy = vi.spyOn(adapter.storage, 'deleteRequestFromCollection');
+    const moveSpy = vi.spyOn(adapter.storage, 'moveCollectionItem');
 
     fireEvent.click(screen.getByText('Source API'));
     fireEvent.click(screen.getByTestId(`move-${requestId}`));
     fireEvent.click(screen.getByTestId('confirm-new-collection'));
 
     await waitFor(() => {
-      expect(saveSpy).toHaveBeenCalledWith(
+      expect(moveSpy).toHaveBeenCalledWith(
+        'source.json',
+        [],
+        requestId,
         'brand_new_api.json',
         [],
-        expect.objectContaining({ id: requestId }),
         'Brand New API'
       );
     });
-
-    expect(deleteSpy).toHaveBeenCalledWith('source.json', [], requestId);
 
     const sourceState = useAppStateStore
       .getState()
@@ -364,50 +411,29 @@ describe('CollectionsPane move/duplicate actions', () => {
     expect(destinationState?.item.some((item) => item.id === requestId)).toBe(true);
   });
 
-  it('aborts move when save fails and does not call delete', async () => {
+  it('aborts move when moveCollectionItem fails and leaves store untouched', async () => {
     const { source, other, requestId } = buildCollections();
     const { adapter, notificationLog } = renderPane([source, other]);
 
-    const saveSpy = vi
-      .spyOn(adapter.storage, 'saveRequestToCollection')
-      .mockResolvedValueOnce(err('save failed'));
-    const deleteSpy = vi.spyOn(adapter.storage, 'deleteRequestFromCollection');
+    const moveSpy = vi
+      .spyOn(adapter.storage, 'moveCollectionItem')
+      .mockResolvedValueOnce(err('move failed'));
 
     fireEvent.click(screen.getByText('Source API'));
     fireEvent.click(screen.getByTestId(`move-${requestId}`));
     fireEvent.click(screen.getByTestId('confirm-other-collection'));
 
     await waitFor(() => {
-      expect(saveSpy).toHaveBeenCalled();
+      expect(moveSpy).toHaveBeenCalled();
     });
 
-    expect(deleteSpy).not.toHaveBeenCalled();
     expect(notificationLog.some((entry) => entry.type === 'error')).toBe(true);
-  });
 
-  it('reports delete failure after save and keeps source item to avoid silent loss', async () => {
-    const { source, other, requestId } = buildCollections();
-    const { adapter, notificationLog } = renderPane([source, other]);
-
-    vi.spyOn(adapter.storage, 'deleteRequestFromCollection').mockResolvedValueOnce(err('delete failed'));
-
-    fireEvent.click(screen.getByText('Source API'));
-    fireEvent.click(screen.getByTestId(`move-${requestId}`));
-    fireEvent.click(screen.getByTestId('confirm-other-collection'));
-
-    await waitFor(() => {
-      expect(notificationLog.some((entry) => entry.type === 'error')).toBe(true);
-    });
-
+    // Store should be untouched - item still in source
     const sourceState = useAppStateStore
       .getState()
       .collections.find((collection) => collection.info.name === 'Source API');
-    const destinationState = useAppStateStore
-      .getState()
-      .collections.find((collection) => collection.info.name === 'Other API');
-
     expect(sourceState?.item.some((item) => item.id === requestId)).toBe(true);
-    expect(destinationState?.item.some((item) => item.id === requestId)).toBe(true);
   });
 
   it('duplicates request in place with fresh ids and unique "Copy" names', async () => {
@@ -436,5 +462,69 @@ describe('CollectionsPane move/duplicate actions', () => {
 
     const secondDuplicate = saveSpy.mock.calls[1][2] as CollectionItem;
     expect(secondDuplicate.name).toBe('Get Users Copy 2');
+  });
+
+  it('renders folder move button and opens wizard with folder itemKind', async () => {
+    const { source, folderId } = buildCollectionsWithFolders();
+    renderPane([source]);
+
+    fireEvent.click(screen.getByText('Source API'));
+    const folderMoveButton = screen.getByTestId(`move-folder-${folderId}`);
+    expect(folderMoveButton).toBeInTheDocument();
+
+    fireEvent.click(folderMoveButton);
+
+    await waitFor(() => {
+      const wizard = screen.getByTestId('move-wizard');
+      expect(wizard).toBeInTheDocument();
+      expect(wizard.getAttribute('data-item-kind')).toBe('folder');
+    });
+  });
+
+  it('folder move wizard includes filterDestination for cycle prevention', async () => {
+    const { source, folderId } = buildCollectionsWithFolders();
+    renderPane([source]);
+
+    fireEvent.click(screen.getByText('Source API'));
+    fireEvent.click(screen.getByTestId(`move-folder-${folderId}`));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('filter-present')).toBeInTheDocument();
+    });
+  });
+
+  it('moves folder with all nested content preserved', async () => {
+    const { source, folderId, nestedRequestId } = buildCollectionsWithFolders();
+    const { adapter } = renderPane([source]);
+
+    const moveSpy = vi.spyOn(adapter.storage, 'moveCollectionItem');
+
+    fireEvent.click(screen.getByText('Source API'));
+    fireEvent.click(screen.getByTestId(`move-folder-${folderId}`));
+    fireEvent.click(screen.getByTestId('confirm-child-path'));
+
+    await waitFor(() => {
+      expect(moveSpy).toHaveBeenCalledWith(
+        'source.json',
+        [],
+        folderId,
+        'source.json',
+        ['child'],
+        undefined
+      );
+    });
+
+    // Verify nested structure is preserved in store
+    const collection = useAppStateStore
+      .getState()
+      .collections.find((c) => c.filename === 'source.json');
+
+    const childFolder = collection?.item.find((item) => item.name === 'child');
+    expect(childFolder).toBeDefined();
+
+    const movedFolder = (childFolder?.item as CollectionItem[])?.find((item) => item.name === 'Auth');
+    expect(movedFolder).toBeDefined();
+    expect(Array.isArray(movedFolder?.item)).toBe(true);
+    expect((movedFolder?.item as CollectionItem[]).some((item) => item.id === nestedRequestId)).toBe(true);
   });
 });

@@ -112,6 +112,36 @@ describe('RequestHeaders — copy/paste in table header', () => {
         expect(copyBtn).toBeEnabled();
     });
 
+    it('does not mark the tab dirty when a header input blurs without changes', async () => {
+        seedTab([makeHeader('Content-Type', 'application/json')]);
+        renderHeaders();
+
+        const keyInput = screen.getByDisplayValue('Content-Type');
+        fireEvent.focus(keyInput);
+        fireEvent.blur(keyInput);
+
+        await waitFor(() => {
+            const activeTab = useAppStateStore.getState().tabs[0];
+            expect(activeTab.isDirty).toBe(false);
+            expect(activeTab.headers).toHaveLength(1);
+        });
+    });
+
+    it('marks the tab dirty when a header value actually changes before blur', async () => {
+        seedTab([makeHeader('Content-Type', 'application/json')]);
+        renderHeaders();
+
+        const valueInput = screen.getByDisplayValue('application/json');
+        fireEvent.change(valueInput, { target: { value: 'text/plain' } });
+        fireEvent.blur(valueInput);
+
+        await waitFor(() => {
+            const activeTab = useAppStateStore.getState().tabs[0];
+            expect(activeTab.isDirty).toBe(true);
+            expect(activeTab.headers.some((h) => h.value === 'text/plain')).toBe(true);
+        });
+    });
+
     it('appends parsed rows when Paste is clicked (behavioral pin)', async () => {
         seedTab([createEmptyHeaderRow()]);
         renderHeaders('X-One: 1\nX-Two: 2');

@@ -69,6 +69,7 @@ import { getDefaultProviderSettings } from '../../config/arenaConfig';
 import type {
     Collection,
     CollectionItem,
+    MoveCollectionItemResult,
     Environment,
     CollectionRequest,
     Cookie,
@@ -100,6 +101,20 @@ function removeFromTree(items: CollectionItem[], itemPath: string[], itemId: str
         }
         return item;
     });
+}
+
+/**
+ * Recursively finds an item by its id in the collection tree.
+ */
+function findItemById(items: CollectionItem[], itemId: string): CollectionItem | null {
+    for (const item of items) {
+        if (item.id === itemId) return item;
+        if (item.item) {
+            const found = findItemById(item.item, itemId);
+            if (found) return found;
+        }
+    }
+    return null;
 }
 
 // ============================================================================
@@ -226,6 +241,53 @@ function createMockStorageAdapter(store: MockDataStore): IStorageAdapter {
             // Immutably remove the item at the given path using recursive helper
             collection.item = removeFromTree(collection.item, itemPath, itemId);
             return ok(collection);
+        },
+        async moveCollectionItem(sourceFileName, sourceItemPath, itemId, destinationFileName, destinationItemPath, newCollectionName) {
+            const source = store.collections.find(c => c.filename === sourceFileName);
+            if (!source) {
+                return err(`Source collection not found: ${sourceFileName}`);
+            }
+
+            // Find item before removal
+            const itemToMove = findItemById(source.item, itemId);
+            if (!itemToMove) {
+                return err(`Item ${itemId} not found`);
+            }
+
+            // Remove from source
+            const newSourceItems = removeFromTree(source.item, sourceItemPath, itemId);
+
+            let dest = store.collections.find(c => c.filename === destinationFileName);
+            if (!dest && newCollectionName) {
+                // Create new collection
+                dest = {
+                    info: { name: newCollectionName, waveId: crypto.randomUUID(), schema: 'v1' as const },
+                    item: [],
+                    filename: destinationFileName
+                };
+                store.collections.push(dest);
+            } else if (!dest) {
+                return err(`Destination collection not found: ${destinationFileName}`);
+            }
+
+            // Simple mock: add to dest root (ignoring destinationItemPath for simplicity)
+            const isSameCollection = sourceFileName === destinationFileName;
+            if (isSameCollection) {
+                // Same collection: update in place
+                source.item = [...newSourceItems, itemToMove];
+                return ok({
+                    source: { ...source, filename: sourceFileName },
+                    destination: { ...source, filename: sourceFileName }
+                });
+            } else {
+                // Cross collection
+                source.item = newSourceItems;
+                dest.item = [...dest.item, itemToMove];
+                return ok({
+                    source: { ...source, filename: sourceFileName },
+                    destination: { ...dest, filename: destinationFileName }
+                });
+            }
         },
         async importCollection(fileName, fileContent) {
             try {

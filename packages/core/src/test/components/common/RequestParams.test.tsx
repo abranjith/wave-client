@@ -109,6 +109,36 @@ describe('RequestParams — copy/paste in table header', () => {
         expect(copyBtn).toBeEnabled();
     });
 
+    it('does not mark the tab dirty when a param input blurs without changes', async () => {
+        seedTab([makeParam('token', 'abc')]);
+        renderParams();
+
+        const keyInput = screen.getByDisplayValue('token');
+        fireEvent.focus(keyInput);
+        fireEvent.blur(keyInput);
+
+        await waitFor(() => {
+            const activeTab = useAppStateStore.getState().tabs[0];
+            expect(activeTab.isDirty).toBe(false);
+            expect(activeTab.params).toHaveLength(1);
+        });
+    });
+
+    it('marks the tab dirty when a param value actually changes before blur', async () => {
+        seedTab([makeParam('token', 'abc')]);
+        renderParams();
+
+        const valueInput = screen.getByDisplayValue('abc');
+        fireEvent.change(valueInput, { target: { value: 'updated' } });
+        fireEvent.blur(valueInput);
+
+        await waitFor(() => {
+            const activeTab = useAppStateStore.getState().tabs[0];
+            expect(activeTab.isDirty).toBe(true);
+            expect(activeTab.params.some((p) => p.value === 'updated')).toBe(true);
+        });
+    });
+
     it('appends parsed rows when Paste is clicked (behavioral pin)', async () => {
         seedTab([createEmptyParamRow()]);
         renderParams('alpha=1\nbeta=2');

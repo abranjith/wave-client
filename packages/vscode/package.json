@@ -1,8 +1,8 @@
 {
   "name": "wave-client-vscode",
-  "displayName": "Wave Client(Ctrl+Alt+W)",
+  "displayName": "Wave Client",
   "description": "A modern, intuitive REST client for VS Code using React and Tailwind CSS",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "license": "SEE LICENSE IN LICENSE",
   "publisher": "ab-ranjith",
   "engines": {
@@ -54,7 +54,7 @@
       "activitybar": [
         {
           "id": "wave-client-vscode-container",
-          "title": "Wave Client",
+          "title": "Wave Client (Ctrl+Alt+W)",
           "icon": "assets/wave-client-activitybar.svg"
         }
       ]

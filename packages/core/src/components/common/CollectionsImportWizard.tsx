@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { XIcon, ImportIcon } from 'lucide-react';
 import { PrimaryButton } from '../ui/PrimaryButton';
 import { SecondaryButton } from '../ui/SecondaryButton';
 import { Label } from '../ui/label';
+import { Input } from '../ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import {
   Dialog,
@@ -21,11 +22,37 @@ import {
   detectFormatFromContent,
   detectFormatFromFilename,
 } from '../../utils/transformers';
+import CollectionDestinationPicker, { type SelectedDestination } from './CollectionDestinationPicker';
+import useAppStateStore from '../../hooks/store/useAppStateStore';
+import type { CollectionImportTarget } from '../../types/collection';
+
+/** Extract a suggested collection display name from the raw file content, if parseable. */
+function extractNameFromContent(content: string | null): string | null {
+  if (!content) return null;
+  try {
+    const parsed = JSON.parse(content);
+    const name = parsed?.info?.name;
+    return typeof name === 'string' && name.trim() ? name.trim() : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Return the file basename without its final extension. */
+function filenameStem(filename: string): string {
+  const idx = filename.lastIndexOf('.');
+  return idx > 0 ? filename.slice(0, idx) : filename;
+}
 
 interface CollectionsImportWizardProps {
   isOpen: boolean;
   onClose: () => void;
-  onImportCollection: (fileName: string, fileContent: string, collectionType: string) => void;
+  onImportCollection: (
+    fileName: string,
+    fileContent: string,
+    collectionType: string,
+    target: CollectionImportTarget
+  ) => void;
 }
 
 const CollectionsImportWizard: React.FC<CollectionsImportWizardProps> = ({
@@ -39,9 +66,36 @@ const CollectionsImportWizard: React.FC<CollectionsImportWizardProps> = ({
   const [error, setError] = useState<string | null>(null);
   const [isImporting, setIsImporting] = useState(false);
 
+  // Destination mode
+  const [importMode, setImportMode] = useState<'new' | 'existing'>('new');
+  const [newCollectionName, setNewCollectionName] = useState('');
+  const [nameError, setNameError] = useState<string | null>(null);
+  const [existingDestination, setExistingDestination] = useState<SelectedDestination | null>(null);
+
+  const collections = useAppStateStore((state) => state.collections);
+
+  /** Validate the new-collection name and surface inline error. Returns true when valid. */
+  const validateNewName = (name: string): boolean => {
+    const trimmed = name.trim();
+    if (!trimmed) {
+      setNameError('Please enter a collection name');
+      return false;
+    }
+    const duplicate = collections.some(
+      (c) => c.info.name.toLowerCase() === trimmed.toLowerCase()
+    );
+    if (duplicate) {
+      setNameError(`A collection named "${trimmed}" already exists`);
+      return false;
+    }
+    setNameError(null);
+    return true;
+  };
+
   /**
    * Handles file selection — reads content immediately for content-based detection.
    * Detection chain: content → filename → fallback 'wave'.
+   * Prefills new-collection name from `info.name` (Wave/Postman JSON) or filename stem.
    */
   const handleFilesAdded = async (addedFiles: FileWithPreview[]) => {
     if (addedFiles.length === 0) return;
@@ -49,6 +103,7 @@ const CollectionsImportWizard: React.FC<CollectionsImportWizardProps> = ({
     const file = addedFiles[0];
     setSelectedFile(file);
     setError(null);
+    setNameError(null);
 
     if (!(file.file instanceof File)) return;
 
@@ -60,29 +115,36 @@ const CollectionsImportWizard: React.FC<CollectionsImportWizardProps> = ({
         detectFormatFromFilename(file.file.name) ??
         'wave';
       setCollectionType(detected);
+      const suggestedName = extractNameFromContent(text) ?? filenameStem(file.file.name);
+      setNewCollectionName(suggestedName);
     } catch {
-      // Read failed — fall back to filename-only detection
       setFileContent(null);
       const detected = detectFormatFromFilename(file.file.name) ?? 'wave';
       setCollectionType(detected);
+      setNewCollectionName(filenameStem(file.file.name));
     }
   };
 
-  /**
-   * Handles file removal.
-   */
   const handleFileRemoved = () => {
     setSelectedFile(null);
     setFileContent(null);
+    setNewCollectionName('');
+    setNameError(null);
     setError(null);
   };
 
-  /**
-   * Handles import action — uses the content cached at selection time.
-   */
   const handleImport = async () => {
     if (!selectedFile) {
       setError('Please select a file to import');
+      return;
+    }
+
+    if (importMode === 'new' && !validateNewName(newCollectionName)) {
+      return;
+    }
+
+    if (importMode === 'existing' && !existingDestination) {
+      setError('Please select a destination collection or folder');
       return;
     }
 
@@ -94,7 +156,6 @@ const CollectionsImportWizard: React.FC<CollectionsImportWizardProps> = ({
       let fileName: string;
 
       if (selectedFile.file instanceof File) {
-        // Reuse cached content; fall back to a fresh read only if the cache is missing.
         content = fileContent ?? (await selectedFile.file.text());
         fileName = selectedFile.file.name;
       } else {
@@ -103,7 +164,16 @@ const CollectionsImportWizard: React.FC<CollectionsImportWizardProps> = ({
         return;
       }
 
-      onImportCollection(fileName, content, collectionType);
+      const target: CollectionImportTarget =
+        importMode === 'new'
+          ? { mode: 'new', collectionName: newCollectionName.trim() }
+          : {
+              mode: 'existing',
+              collectionName: existingDestination!.collectionName,
+              folderPath: existingDestination!.folderPath,
+            };
+
+      onImportCollection(fileName, content, collectionType, target);
       handleClose();
     } catch (err: any) {
       setError(`Failed to import collection: ${err.message}`);
@@ -112,17 +182,32 @@ const CollectionsImportWizard: React.FC<CollectionsImportWizardProps> = ({
     }
   };
 
-  /**
-   * Handles dialog close — resets all wizard state.
-   */
   const handleClose = () => {
     setSelectedFile(null);
     setFileContent(null);
     setCollectionType('wave');
     setError(null);
     setIsImporting(false);
+    setImportMode('new');
+    setNewCollectionName('');
+    setNameError(null);
+    setExistingDestination(null);
     onClose();
   };
+
+  // Re-validate the name when collections change (e.g. another import succeeded).
+  useEffect(() => {
+    if (importMode === 'new' && newCollectionName) {
+      validateNewName(newCollectionName);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [collections]);
+
+  const isImportDisabled =
+    !selectedFile ||
+    isImporting ||
+    (importMode === 'new' && (!newCollectionName.trim() || Boolean(nameError))) ||
+    (importMode === 'existing' && !existingDestination);
 
   return (
     <Dialog open={isOpen} onOpenChange={handleClose}>
@@ -145,30 +230,103 @@ const CollectionsImportWizard: React.FC<CollectionsImportWizardProps> = ({
             useFileIcon={true}
           />
 
-          {/* Collection Type Selection */}
           {selectedFile && (
-            <div className="space-y-2">
-              <Label htmlFor="collection-type" className="text-sm font-medium text-slate-700 dark:text-slate-300">
-                Collection Type
-              </Label>
-              <Select value={collectionType} onValueChange={(value) => setCollectionType(value as ImportFormatType)}>
-                <SelectTrigger id="collection-type" className="w-full">
-                  <SelectValue placeholder="Select collection type" />
-                </SelectTrigger>
-                <SelectContent>
-                  {IMPORT_FORMAT_OPTIONS.map((option) => (
-                    <SelectItem key={option.value} value={option.value}>
-                      {option.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <p className="text-xs text-slate-500 dark:text-slate-400">
-                {fileContent !== null
-                  ? 'Detected from file content. Select manually to override.'
-                  : 'Select the collection type manually.'}
-              </p>
-            </div>
+            <>
+              {/* Collection Type Selection */}
+              <div className="space-y-2">
+                <Label htmlFor="collection-type" className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                  Collection Type
+                </Label>
+                <Select value={collectionType} onValueChange={(value) => setCollectionType(value as ImportFormatType)}>
+                  <SelectTrigger id="collection-type" className="w-full">
+                    <SelectValue placeholder="Select collection type" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {IMPORT_FORMAT_OPTIONS.map((option) => (
+                      <SelectItem key={option.value} value={option.value}>
+                        {option.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-slate-500 dark:text-slate-400">
+                  {fileContent !== null
+                    ? 'Detected from file content. Select manually to override.'
+                    : 'Select the collection type manually.'}
+                </p>
+              </div>
+
+              {/* Import Into */}
+              <div className="space-y-3">
+                <Label className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                  Import Into
+                </Label>
+                <div className="flex gap-4">
+                  <label className="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300 cursor-pointer">
+                    <input
+                      type="radio"
+                      name="import-mode"
+                      value="new"
+                      checked={importMode === 'new'}
+                      onChange={() => {
+                        setImportMode('new');
+                        setError(null);
+                      }}
+                    />
+                    Create new collection
+                  </label>
+                  <label className="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300 cursor-pointer">
+                    <input
+                      type="radio"
+                      name="import-mode"
+                      value="existing"
+                      checked={importMode === 'existing'}
+                      onChange={() => {
+                        setImportMode('existing');
+                        setNameError(null);
+                        setError(null);
+                      }}
+                    />
+                    Existing collection
+                  </label>
+                </div>
+
+                {importMode === 'new' && (
+                  <div className="space-y-1">
+                    <Input
+                      id="new-collection-name"
+                      type="text"
+                      placeholder="Collection name..."
+                      value={newCollectionName}
+                      onChange={(e) => {
+                        setNewCollectionName(e.target.value);
+                        validateNewName(e.target.value);
+                      }}
+                      className="w-full text-sm rounded bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-200 focus:outline-none"
+                    />
+                    {nameError && (
+                      <p className="text-xs text-red-500 dark:text-red-400">{nameError}</p>
+                    )}
+                  </div>
+                )}
+
+                {importMode === 'existing' && (
+                  <CollectionDestinationPicker
+                    selected={existingDestination}
+                    onSelectedChange={(dest) => {
+                      setExistingDestination(dest);
+                      setError(null);
+                    }}
+                    isCreatingNew={false}
+                    onIsCreatingNewChange={() => {}}
+                    newCollectionName=""
+                    onNewCollectionNameChange={() => {}}
+                    includeCreateNew={false}
+                    selectId="import-destination-select"
+                  />
+                )}
+              </div>
+            </>
           )}
 
           {/* Error Message */}
@@ -189,7 +347,7 @@ const CollectionsImportWizard: React.FC<CollectionsImportWizardProps> = ({
           />
           <PrimaryButton
             onClick={handleImport}
-            disabled={!selectedFile || isImporting}
+            disabled={isImportDisabled}
             icon={<ImportIcon />}
             text={isImporting ? 'Importing...' : 'Import'}
           />

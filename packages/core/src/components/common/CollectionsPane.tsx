@@ -1,16 +1,20 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { ChevronRightIcon, ChevronDownIcon, FolderIcon, LayoutGridIcon, ImportIcon, DownloadIcon, MoreVertical, PlayIcon, PencilIcon, Trash2Icon } from 'lucide-react';
-import { Collection, CollectionItem, AnyCollectionRequest } from '../../types/collection';
+import { ChevronRightIcon, ChevronDownIcon, FolderIcon, FolderPlusIcon, LayoutGridIcon, ImportIcon, DownloadIcon, MoreVertical, PlayIcon, PencilIcon, Trash2Icon, PlusIcon } from 'lucide-react';
+import { Collection, CollectionItem, AnyCollectionRequest, CollectionImportTarget } from '../../types/collection';
+import { CURRENT_COLLECTION_SCHEMA_VERSION } from '../../schemas/collectionSchema';
 import {
+  addItemAtPath,
   countRequests,
   duplicateRequestItem,
   extractRequestFromItem,
   generateUniqueCopyName,
   getItemsAtPath,
   getSiblingsAtPath,
+  isDescendantPath,
   renameItemInTree,
   validateItemName,
 } from '../../utils/collectionParser';
+import { generateUniqueId } from '../../utils/common';
 import useAppStateStore from '../../hooks/store/useAppStateStore';
 import { useStorageAdapter, useNotificationAdapter } from '../../hooks/useAdapter';
 import { useConfirmDialog } from '../../hooks/useConfirmDialog';
@@ -23,6 +27,8 @@ import {
   DropdownMenuTrigger,
 } from '../ui/dropdown-menu';
 import CollectionsImportWizard from './CollectionsImportWizard';
+import CollectionAddWizard from './CollectionAddWizard';
+import FolderAddWizard from './FolderAddWizard';
 import CollectionExportWizard from './CollectionExportWizard';
 import CollectionTreeItem from './CollectionTreeItem';
 import RunCollectionModal from './RunCollectionModal';
@@ -32,7 +38,7 @@ import { SecondaryButton } from '../ui';
 
 interface CollectionsPaneProps {
   onRequestSelect: (request: AnyCollectionRequest) => void;
-  onImportCollection: (fileName: string, fileContent: string, collectionType: string) => void;
+  onImportCollection: (fileName: string, fileContent: string, collectionType: string, target: CollectionImportTarget) => void;
   onExportCollection: (collectionName: string, exportFormat: string) => void;
   onRetry?: () => void;
 }
@@ -133,24 +139,59 @@ const toCollectionFilenameStem = (collectionName: string): string => {
   return stem.length > 0 ? stem : 'new_collection';
 };
 
-interface MoveRequestDraft {
+const generateUniqueCollectionFilename = (collectionName: string, existingFilenames: string[]): string => {
+  const baseStem = toCollectionFilenameStem(collectionName);
+  const existing = new Set(existingFilenames.map((name) => name.toLowerCase()));
+
+  let candidate = `${baseStem}.json`;
+  let counter = 1;
+  while (existing.has(candidate.toLowerCase())) {
+    candidate = `${baseStem}_${counter}.json`;
+    counter += 1;
+  }
+
+  return candidate;
+};
+
+interface MoveItemDraft {
   sourceCollectionFilename: string;
   sourceCollectionName: string;
   sourceParentPath: string[];
   item: CollectionItem;
 }
 
+interface FolderAddDraft {
+  collectionFilename: string;
+  /** Folder path within the collection where the new folder will be created. */
+  parentPath: string[];
+}
+
 interface CollectionsPaneHeaderProps {
   label: string;
+  onAddClick: () => void;
   onImportClick: () => void;
   onExportClick: () => void;
 }
 
-const CollectionsPaneHeader: React.FC<CollectionsPaneHeaderProps> = ({ label, onImportClick, onExportClick }) => {
+const CollectionsPaneHeader: React.FC<CollectionsPaneHeaderProps> = ({ label, onAddClick, onImportClick, onExportClick }) => {
   return (
     <div className="flex items-center justify-between mb-4">
       <h2 className="text-lg font-semibold text-slate-800 dark:text-slate-200">{label}</h2>
       <div className="flex items-center gap-2">
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={onAddClick}
+              className="h-8 w-8 p-0 text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-100"
+              aria-label="Add Collection"
+            >
+              <PlusIcon className="h-4 w-4" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>Add Collection</TooltipContent>
+        </Tooltip>
         <Tooltip>
           <TooltipTrigger asChild>
             <Button
@@ -210,6 +251,7 @@ const CollectionsPane: React.FC<CollectionsPaneProps> = ({
   const [expandedCollections, setExpandedCollections] = useState<Set<string>>(new Set());
   const [sortedCollections, setSortedCollections] = useState<Collection[]>([]);
   const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set());
+  const [isAddWizardOpen, setIsAddWizardOpen] = useState(false);
   const [isImportWizardOpen, setIsImportWizardOpen] = useState(false);
   const [isExportWizardOpen, setIsExportWizardOpen] = useState(false);
   const [debouncedSearch, setDebouncedSearch] = useState(searchText.trim());
@@ -220,7 +262,8 @@ const CollectionsPane: React.FC<CollectionsPaneProps> = ({
     items: CollectionItem[];
     itemPath: string[];
   }>({ isOpen: false, collectionName: '', items: [], itemPath: [] });
-  const [moveRequestDraft, setMoveRequestDraft] = useState<MoveRequestDraft | null>(null);
+  const [moveItemDraft, setMoveItemDraft] = useState<MoveItemDraft | null>(null);
+  const [folderAddDraft, setFolderAddDraft] = useState<FolderAddDraft | null>(null);
   /** Filename of the collection currently in inline-rename mode (null = no rename active). */
   const [editingCollectionFilename, setEditingCollectionFilename] = useState<string | null>(null);
   /** Draft text while a collection name is being edited inline. */
@@ -345,6 +388,107 @@ const CollectionsPane: React.FC<CollectionsPaneProps> = ({
   }, [openConfirmDialog, storageAdapter, notification, removeCollection]);
 
   /**
+   * Opens the FolderAddWizard for a target location within a collection.
+   *
+   * @param collectionFilename - Owning collection's persistence key
+   * @param parentPath         - Folder path where the new folder will be created
+   */
+  const handleAddFolder = useCallback((collectionFilename: string, parentPath: string[]) => {
+    setFolderAddDraft({ collectionFilename, parentPath });
+  }, []);
+
+  /**
+   * Creates and persists a new empty collection JSON file.
+   * The saved collection is schema-valid (waveId/name/version + empty item array).
+   */
+  const handleAddCollection = useCallback(async (name: string): Promise<{ success: boolean; error?: string }> => {
+    const trimmedName = name.trim();
+    if (!trimmedName) {
+      return { success: false, error: 'Collection name cannot be empty' };
+    }
+
+    const duplicateName = collections.some(
+      (collection) => collection.info.name.toLowerCase() === trimmedName.toLowerCase()
+    );
+    if (duplicateName) {
+      return { success: false, error: `A collection named "${trimmedName}" already exists` };
+    }
+
+    const filename = generateUniqueCollectionFilename(
+      trimmedName,
+      collections.map((collection) => collection.filename || '')
+    );
+
+    const newCollection: Collection = {
+      filename,
+      info: {
+        waveId: generateUniqueId(),
+        name: trimmedName,
+        version: CURRENT_COLLECTION_SCHEMA_VERSION,
+      },
+      item: [],
+    };
+
+    const saveResult = await storageAdapter.saveCollection(newCollection);
+    if (!saveResult.isOk) {
+      return { success: false, error: saveResult.error };
+    }
+
+    const savedCollection: Collection = {
+      ...newCollection,
+      ...saveResult.value,
+      filename: saveResult.value.filename || newCollection.filename,
+    };
+
+    addCollection(savedCollection);
+    setExpandedCollections((previous) => new Set([...previous, savedCollection.filename || filename]));
+    return { success: true };
+  }, [addCollection, collections, storageAdapter]);
+
+  /**
+   * Persists a new empty folder at the current `folderAddDraft` location.
+   * Returns null on success, or an error message string on failure.
+   */
+  const handleConfirmAddFolder = useCallback(async (name: string): Promise<string | null> => {
+    if (!folderAddDraft) return 'No target selected';
+
+    const collection = collections.find(c => c.filename === folderAddDraft.collectionFilename);
+    if (!collection) return 'Collection not found';
+
+    const newFolder: CollectionItem = {
+      id: generateUniqueId(),
+      name,
+      item: [],
+    };
+
+    const updatedItems = addItemAtPath(collection.item, folderAddDraft.parentPath, newFolder);
+    const updatedCollection: Collection = { ...collection, item: updatedItems };
+    const result = await storageAdapter.saveCollection(updatedCollection);
+    if (!result.isOk) {
+      return result.error;
+    }
+
+    updateCollection(folderAddDraft.collectionFilename, { item: updatedItems });
+
+    // Auto-expand the parent chain so the new folder is visible
+    setExpandedCollections(prev => new Set([...prev, folderAddDraft.collectionFilename]));
+    if (folderAddDraft.parentPath.length > 0) {
+      setExpandedFolders(prev => {
+        const next = new Set(prev);
+        let cumPath: string[] = [];
+        for (const segment of folderAddDraft.parentPath) {
+          cumPath = [...cumPath, segment];
+          next.add(`${folderAddDraft.collectionFilename}:${cumPath.join('/')}`);
+        }
+        return next;
+      });
+    }
+
+    setFolderAddDraft(null);
+    return null;
+  }, [folderAddDraft, collections, storageAdapter, updateCollection]);
+
+  /**
    * Renames a folder or request inside a collection, with sibling-level uniqueness check.
    * Called from CollectionTreeItem via onRenameItem callback.
    *
@@ -463,11 +607,11 @@ const CollectionsPane: React.FC<CollectionsPaneProps> = ({
     parentItemPath: string[],
     item: CollectionItem
   ) => {
-    if (!item.request || !collection.filename) {
+    if (!collection.filename) {
       return;
     }
 
-    setMoveRequestDraft({
+    setMoveItemDraft({
       sourceCollectionFilename: collection.filename,
       sourceCollectionName: collection.info.name,
       sourceParentPath: [...parentItemPath],
@@ -479,12 +623,12 @@ const CollectionsPane: React.FC<CollectionsPaneProps> = ({
    * Executes a move operation after destination confirmation.
    * Save happens before delete to avoid data loss if source deletion fails.
    */
-  const handleConfirmMoveRequest = useCallback(async (
+  const handleConfirmMove = useCallback(async (
     destinationCollectionName: string,
     _requestName: string,
     destinationFolderPath: string[]
   ) => {
-    if (!moveRequestDraft) {
+    if (!moveItemDraft) {
       return;
     }
 
@@ -501,82 +645,148 @@ const CollectionsPane: React.FC<CollectionsPaneProps> = ({
     const destinationFilename = destinationCollection?.filename
       || `${toCollectionFilenameStem(destinationCollectionNameTrimmed)}.json`;
 
-    const sourcePath = moveRequestDraft.sourceParentPath;
-    const sourceFilename = moveRequestDraft.sourceCollectionFilename;
+    const sourcePath = moveItemDraft.sourceParentPath;
+    const sourceFilename = moveItemDraft.sourceCollectionFilename;
     const isSameCollectionMove = !isCreatingNewCollection && sourceFilename === destinationFilename;
 
+    // Client-side pre-checks (same as service-side validation, for early UX feedback)
     if (isSameCollectionMove && pathsEqual(sourcePath, destinationFolderPath)) {
       notification.showNotification('error', 'Cannot move to the same collection and folder path.');
       return;
     }
 
-    if (destinationCollection) {
-      const destinationItems = getItemsAtPath(destinationCollection, destinationFolderPath);
-      const conflict = destinationItems.find(
-        (item) =>
-          item.id !== moveRequestDraft.item.id
-          && item.name.trim().toLowerCase() === moveRequestDraft.item.name.trim().toLowerCase()
-      );
+    const isFolder = Array.isArray(moveItemDraft.item.item);
 
-      if (conflict) {
+    // Cycle detection for folders: prevent moving a folder into itself or its descendants
+    if (isFolder && isSameCollectionMove) {
+      const movedFolderFullPath = [...sourcePath, moveItemDraft.item.name];
+      if (isDescendantPath(movedFolderFullPath, destinationFolderPath)) {
         notification.showNotification(
           'error',
-          `Cannot move "${moveRequestDraft.item.name}": destination already contains an item named "${conflict.name}".`
+          `Cannot move folder "${moveItemDraft.item.name}" into itself or its descendants.`
         );
         return;
       }
     }
 
-    const saveResult = isCreatingNewCollection
-      ? await storageAdapter.saveRequestToCollection(
-        destinationFilename,
-        destinationFolderPath,
-        moveRequestDraft.item,
-        destinationCollectionNameTrimmed
-      )
-      : await storageAdapter.saveRequestToCollection(
-        destinationFilename,
-        destinationFolderPath,
-        moveRequestDraft.item
-      );
-    if (!saveResult.isOk) {
-      notification.showNotification('error', saveResult.error);
-      return;
-    }
-
-    if (!isSameCollectionMove) {
-      const savedDestinationCollection = saveResult.value;
-      const destinationAlreadyExistsInStore = collections.some(
-        (collection) => collection.filename === savedDestinationCollection.filename
+    // Name conflict check
+    if (destinationCollection) {
+      const destinationItems = getItemsAtPath(destinationCollection, destinationFolderPath);
+      const conflict = destinationItems.find(
+        (item) =>
+          item.id !== moveItemDraft.item.id
+          && item.name.trim().toLowerCase() === moveItemDraft.item.name.trim().toLowerCase()
       );
 
-      if (destinationAlreadyExistsInStore) {
-        updateCollection(savedDestinationCollection.filename!, { item: savedDestinationCollection.item });
-      } else {
-        addCollection(savedDestinationCollection);
+      if (conflict) {
+        notification.showNotification(
+          'error',
+          `Cannot move "${moveItemDraft.item.name}": destination already contains an item named "${conflict.name}".`
+        );
+        return;
       }
     }
 
-    const deleteResult = await storageAdapter.deleteRequestFromCollection(
+    // Call the new atomic moveCollectionItem adapter method
+    const moveResult = await storageAdapter.moveCollectionItem(
       sourceFilename,
       sourcePath,
-      moveRequestDraft.item.id
+      moveItemDraft.item.id,
+      destinationFilename,
+      destinationFolderPath,
+      isCreatingNewCollection ? destinationCollectionNameTrimmed : undefined
     );
-    if (!deleteResult.isOk) {
-      if (isSameCollectionMove) {
-        // Keep local state consistent with persisted save when delete fails.
-        updateCollection(moveRequestDraft.sourceCollectionFilename, { item: saveResult.value.item });
-      }
-      notification.showNotification(
-        'error',
-        `Request moved, but removing it from the source failed: ${deleteResult.error}`
-      );
+
+    if (!moveResult.isOk) {
+      notification.showNotification('error', moveResult.error);
       return;
     }
 
-    updateCollection(moveRequestDraft.sourceCollectionFilename, { item: deleteResult.value.item });
-    setMoveRequestDraft(null);
-  }, [addCollection, collections, moveRequestDraft, notification, storageAdapter, updateCollection]);
+    // Update store with both source and destination collections
+    const { source, destination } = moveResult.value;
+
+    // If destination is newly created, add it to the store
+    const destinationAlreadyExistsInStore = collections.some(
+      (c) => c.filename === destination.filename
+    );
+    if (destinationAlreadyExistsInStore) {
+      updateCollection(destination.filename, { item: destination.item });
+    } else {
+      addCollection(destination);
+    }
+
+    // Update source collection (unless it's the same as destination)
+    if (!isSameCollectionMove) {
+      updateCollection(source.filename, { item: source.item });
+    }
+
+    // Folder move follow-through: update expanded folders and tabs
+    if (isFolder) {
+      // 1. Remap expanded-state keys for the moved folder and its descendants
+      const oldPrefix = `${sourceFilename}:${[...sourcePath, moveItemDraft.item.name].join('/')}`;
+      const newPrefix = `${destinationFilename}:${[...destinationFolderPath, moveItemDraft.item.name].join('/')}`;
+      setExpandedFolders(prev => new Set(
+        Array.from(prev).map(key =>
+          key === oldPrefix || key.startsWith(`${oldPrefix}/`)
+            ? `${newPrefix}${key.slice(oldPrefix.length)}`
+            : key
+        )
+      ));
+
+      // 2. Update open tabs whose collectionRef path runs through the moved folder
+      const { tabs, updateTabMetadata } = useAppStateStore.getState();
+      const oldFullPath = [...sourcePath, moveItemDraft.item.name];
+      const newFullPath = [...destinationFolderPath, moveItemDraft.item.name];
+
+      for (const tab of tabs) {
+        const ref = tab.collectionRef;
+        if (!ref || ref.collectionFilename !== sourceFilename) {
+          continue;
+        }
+
+        // Check if this tab's itemPath runs through the moved folder
+        if (isDescendantPath(oldFullPath, ref.itemPath) || pathsEqual(oldFullPath, ref.itemPath)) {
+          // Remap the itemPath to the new destination
+          const relativePathSuffix = ref.itemPath.slice(oldFullPath.length);
+          const newItemPath = [...newFullPath, ...relativePathSuffix];
+          const newFolderPath = [destinationCollection?.info.name || destinationCollectionNameTrimmed, ...newItemPath.slice(0, -1)];
+
+          updateTabMetadata(tab.id, {
+            collectionRef: {
+              collectionFilename: destinationFilename,
+              collectionName: destinationCollection?.info.name || destinationCollectionNameTrimmed,
+              itemPath: newItemPath,
+            },
+            folderPath: newFolderPath,
+          });
+        }
+      }
+    } else {
+      // Request move: update the single tab if it's open
+      const { tabs, updateTabMetadata } = useAppStateStore.getState();
+      const movedRequestTab = tabs.find(
+        (tab) =>
+          tab.collectionRef?.collectionFilename === sourceFilename &&
+          pathsEqual(tab.collectionRef.itemPath, [...sourcePath, moveItemDraft.item.name])
+      );
+
+      if (movedRequestTab) {
+        const newItemPath = [...destinationFolderPath, moveItemDraft.item.name];
+        const newFolderPath = [destinationCollection?.info.name || destinationCollectionNameTrimmed, ...destinationFolderPath];
+
+        updateTabMetadata(movedRequestTab.id, {
+          collectionRef: {
+            collectionFilename: destinationFilename,
+            collectionName: destinationCollection?.info.name || destinationCollectionNameTrimmed,
+            itemPath: newItemPath,
+          },
+          folderPath: newFolderPath,
+        });
+      }
+    }
+
+    setMoveItemDraft(null);
+  }, [addCollection, collections, moveItemDraft, notification, storageAdapter, updateCollection]);
 
   /**
    * Duplicates a request in-place with a unique copy name and fresh identifiers.
@@ -688,6 +898,7 @@ const CollectionsPane: React.FC<CollectionsPaneProps> = ({
         <div className="p-4">
           <CollectionsPaneHeader 
             label="Collections" 
+            onAddClick={() => setIsAddWizardOpen(true)}
             onImportClick={() => setIsImportWizardOpen(true)} 
             onExportClick={() => setIsExportWizardOpen(true)}
           />
@@ -702,6 +913,11 @@ const CollectionsPane: React.FC<CollectionsPaneProps> = ({
           isOpen={isImportWizardOpen}
           onClose={() => setIsImportWizardOpen(false)}
           onImportCollection={onImportCollection}
+        />
+        <CollectionAddWizard
+          isOpen={isAddWizardOpen}
+          onClose={() => setIsAddWizardOpen(false)}
+          onAddCollection={handleAddCollection}
         />
         <CollectionExportWizard
           isOpen={isExportWizardOpen}
@@ -718,6 +934,7 @@ const CollectionsPane: React.FC<CollectionsPaneProps> = ({
         <div className="p-4">
           <CollectionsPaneHeader 
             label="Collections" 
+            onAddClick={() => setIsAddWizardOpen(true)}
             onImportClick={() => setIsImportWizardOpen(true)} 
             onExportClick={() => setIsExportWizardOpen(true)}
           />
@@ -744,6 +961,11 @@ const CollectionsPane: React.FC<CollectionsPaneProps> = ({
           onClose={() => setIsImportWizardOpen(false)}
           onImportCollection={onImportCollection}
         />
+        <CollectionAddWizard
+          isOpen={isAddWizardOpen}
+          onClose={() => setIsAddWizardOpen(false)}
+          onAddCollection={handleAddCollection}
+        />
         <CollectionExportWizard
           isOpen={isExportWizardOpen}
           onClose={() => setIsExportWizardOpen(false)}
@@ -759,6 +981,7 @@ const CollectionsPane: React.FC<CollectionsPaneProps> = ({
         <div className="p-4">
           <CollectionsPaneHeader 
             label="Collections" 
+            onAddClick={() => setIsAddWizardOpen(true)}
             onImportClick={() => setIsImportWizardOpen(true)} 
             onExportClick={() => setIsExportWizardOpen(true)}
           />
@@ -777,6 +1000,11 @@ const CollectionsPane: React.FC<CollectionsPaneProps> = ({
           onClose={() => setIsImportWizardOpen(false)}
           onImportCollection={onImportCollection}
         />
+        <CollectionAddWizard
+          isOpen={isAddWizardOpen}
+          onClose={() => setIsAddWizardOpen(false)}
+          onAddCollection={handleAddCollection}
+        />
         <CollectionExportWizard
           isOpen={isExportWizardOpen}
           onClose={() => setIsExportWizardOpen(false)}
@@ -793,6 +1021,7 @@ const CollectionsPane: React.FC<CollectionsPaneProps> = ({
       <div className="h-full overflow-auto p-4">
         <CollectionsPaneHeader 
           label="Collections" 
+          onAddClick={() => setIsAddWizardOpen(true)}
           onImportClick={() => setIsImportWizardOpen(true)} 
           onExportClick={() => setIsExportWizardOpen(true)}
         />
@@ -871,6 +1100,13 @@ const CollectionsPane: React.FC<CollectionsPaneProps> = ({
                       </DropdownMenuItem>
                       <DropdownMenuItem onClick={(e) => {
                         e.stopPropagation();
+                        handleAddFolder(filename, []);
+                      }}>
+                        <FolderPlusIcon className="h-4 w-4 mr-2" />
+                        New Folder
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={(e) => {
+                        e.stopPropagation();
                         handleRenameCollectionStart(filename, collection.info.name);
                       }}>
                         <PencilIcon className="h-4 w-4 mr-2" />
@@ -919,6 +1155,9 @@ const CollectionsPane: React.FC<CollectionsPaneProps> = ({
                                 onDuplicateItem={(duplicatedItem, parentItemPath) =>
                                   handleDuplicateItem(collection, parentItemPath, duplicatedItem)
                                 }
+                                onAddFolder={(parentItemPath) =>
+                                  handleAddFolder(filename, parentItemPath)
+                                }
                             />
                         ))}
                     </div>
@@ -933,6 +1172,11 @@ const CollectionsPane: React.FC<CollectionsPaneProps> = ({
         onClose={() => setIsImportWizardOpen(false)}
         onImportCollection={onImportCollection}
       />
+      <CollectionAddWizard
+        isOpen={isAddWizardOpen}
+        onClose={() => setIsAddWizardOpen(false)}
+        onAddCollection={handleAddCollection}
+      />
       <CollectionExportWizard
         isOpen={isExportWizardOpen}
         onClose={() => setIsExportWizardOpen(false)}
@@ -946,15 +1190,53 @@ const CollectionsPane: React.FC<CollectionsPaneProps> = ({
         itemPath={runModalData.itemPath}
       />
       <RequestSaveWizard
-        isOpen={Boolean(moveRequestDraft)}
+        isOpen={Boolean(moveItemDraft)}
         mode="move"
-        sourceCollectionName={moveRequestDraft?.sourceCollectionName}
-        initialCollectionName={moveRequestDraft?.sourceCollectionName}
-        currentPath={moveRequestDraft?.sourceParentPath || []}
-        initialRequestName={moveRequestDraft?.item.name}
-        onClose={() => setMoveRequestDraft(null)}
-        onSave={handleConfirmMoveRequest}
+        itemKind={moveItemDraft && Array.isArray(moveItemDraft.item.item) ? 'folder' : 'request'}
+        sourceCollectionName={moveItemDraft?.sourceCollectionName}
+        initialCollectionName={moveItemDraft?.sourceCollectionName}
+        currentPath={moveItemDraft?.sourceParentPath || []}
+        initialRequestName={moveItemDraft?.item.name}
+        onClose={() => setMoveItemDraft(null)}
+        onSave={handleConfirmMove}
+        filterDestination={(collectionFilename, collectionName, folderPath) => {
+          // For folder moves: exclude the folder itself and all its descendants
+          if (!moveItemDraft || !Array.isArray(moveItemDraft.item.item)) {
+            return true; // No filtering for requests
+          }
+
+          const sourceCollection = collections.find(
+            (c) => c.filename === moveItemDraft.sourceCollectionFilename
+          );
+          if (!sourceCollection) {
+            return true;
+          }
+
+          // Only filter if moving within the same collection
+          const isSameCollection = collectionFilename === moveItemDraft.sourceCollectionFilename;
+          if (!isSameCollection) {
+            return true;
+          }
+
+          // Exclude the folder itself and its descendants
+          const movedFolderFullPath = [...moveItemDraft.sourceParentPath, moveItemDraft.item.name];
+          return !isDescendantPath(movedFolderFullPath, folderPath) && !pathsEqual(movedFolderFullPath, folderPath);
+        }}
       />
+      {(() => {
+        const draft = folderAddDraft;
+        if (!draft) return null;
+        const col = collections.find(c => c.filename === draft.collectionFilename);
+        const siblings = col ? getSiblingsAtPath(col.item, draft.parentPath) : [];
+        return (
+          <FolderAddWizard
+            isOpen
+            onClose={() => setFolderAddDraft(null)}
+            siblings={siblings}
+            onAdd={handleConfirmAddFolder}
+          />
+        );
+      })()}
       <ConfirmDialogComponent />
     </div>
   );

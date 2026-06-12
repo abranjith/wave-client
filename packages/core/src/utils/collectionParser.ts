@@ -422,6 +422,45 @@ export function removeItemFromTree(items: CollectionItem[], itemPath: string[], 
 }
 
 /**
+ * Inserts `newItem` at the folder level described by `folderPath`, returning
+ * a new immutable root-level array. The path must point to an existing folder;
+ * an empty path appends to the collection root.
+ *
+ * @param items      Root-level items of the collection
+ * @param folderPath Ordered folder names from root to the desired parent folder
+ * @param newItem    The item to append
+ */
+export function addItemAtPath(
+  items: CollectionItem[],
+  folderPath: string[],
+  newItem: CollectionItem
+): CollectionItem[] {
+  if (folderPath.length === 0) {
+    return [...items, newItem];
+  }
+  const [head, ...rest] = folderPath;
+  return items.map((item) => {
+    if (item.name === head && item.item !== undefined) {
+      return { ...item, item: addItemAtPath(item.item, rest, newItem) };
+    }
+    return item;
+  });
+}
+
+/**
+ * Returns `true` when `path` starts with all segments of `prefix`
+ * (case-insensitive), including when both are equal.  Use this to detect
+ * cycle-causing moves: a folder must not move into itself or any descendant.
+ *
+ * @param prefix - The path to check for (e.g., the moved folder's own full path).
+ * @param path   - The candidate destination path.
+ */
+export function isDescendantPath(prefix: string[], path: string[]): boolean {
+  if (path.length < prefix.length) return false;
+  return prefix.every((seg, i) => seg.toLowerCase() === path[i].toLowerCase());
+}
+
+/**
  * Returns the sibling items at the folder level described by `folderPath`.
  * An empty path refers to the root level.
  *
@@ -481,6 +520,98 @@ export function duplicateRequestItem(item: CollectionItem): CollectionItem {
     cloned.request.id = crypto.randomUUID();
   }
   return cloned;
+}
+
+/**
+ * Deep-clones a `CollectionItem`, assigning fresh `crypto.randomUUID()` ids to
+ * the cloned item, its nested request (if any), and every descendant folder/
+ * request recursively. Use this when merging imported items to avoid id
+ * collisions with items already in the destination collection.
+ */
+export function cloneItemWithFreshIds(item: CollectionItem): CollectionItem {
+  const cloned = structuredClone(item);
+  cloned.id = crypto.randomUUID();
+  if (cloned.request) {
+    cloned.request.id = crypto.randomUUID();
+  }
+  if (cloned.item) {
+    cloned.item = cloned.item.map(cloneItemWithFreshIds);
+  }
+  return cloned;
+}
+
+/**
+ * Merges `incoming` top-level items into the target tree at `folderPath`.
+ *
+ * Rules (all-or-nothing):
+ * - Each incoming item name must be unique among itself (case-insensitive).
+ * - Each incoming item name must not match any existing sibling at the
+ *   destination (case-insensitive).
+ * - If any conflict is found the entire merge is rejected and an error listing
+ *   the conflicting names is returned.
+ * - On success, returns an immutably updated root-level `CollectionItem[]`.
+ */
+export function mergeCollectionItems(
+  targetItems: CollectionItem[],
+  folderPath: string[],
+  incoming: CollectionItem[]
+): Result<CollectionItem[], string> {
+  if (incoming.length === 0) {
+    return ok(targetItems);
+  }
+
+  // Validate that the destination path exists (root is always valid)
+  if (folderPath.length > 0) {
+    const [head, ...rest] = folderPath;
+    const folder = targetItems.find((i) => i.name === head && i.item !== undefined);
+    if (!folder) {
+      return err(`Destination folder "${head}" not found`);
+    }
+    const innerCheck = mergeCollectionItems(folder.item!, rest, []);
+    if (!innerCheck.isOk) return innerCheck;
+  }
+
+  // Check incoming items for duplicate names among themselves
+  const incomingNames = incoming.map((i) => i.name.trim().toLowerCase());
+  const incomingDuplicates = incomingNames.filter(
+    (name, idx) => incomingNames.indexOf(name) !== idx
+  );
+
+  // Check incoming items against existing siblings at the destination path
+  const siblings = getSiblingsAtPath(targetItems, folderPath);
+  const siblingNames = new Set(siblings.map((s) => s.name.trim().toLowerCase()));
+  const conflictsWithSiblings = incoming
+    .map((i) => i.name.trim())
+    .filter((name) => siblingNames.has(name.toLowerCase()));
+
+  const allConflicts = [
+    ...new Set([
+      ...incomingDuplicates.map((n) => incoming.find((i) => i.name.trim().toLowerCase() === n)!.name.trim()),
+      ...conflictsWithSiblings,
+    ]),
+  ];
+
+  if (allConflicts.length > 0) {
+    return err(
+      `Import conflicts at destination: ${allConflicts.map((n) => `"${n}"`).join(', ')}`
+    );
+  }
+
+  // Apply the merge immutably
+  const applyMerge = (items: CollectionItem[], path: string[]): CollectionItem[] => {
+    if (path.length === 0) {
+      return [...items, ...incoming];
+    }
+    const [head, ...rest] = path;
+    return items.map((item) => {
+      if (item.name === head && item.item !== undefined) {
+        return { ...item, item: applyMerge(item.item, rest) };
+      }
+      return item;
+    });
+  };
+
+  return ok(applyMerge(targetItems, folderPath));
 }
 
 // ============================================================================

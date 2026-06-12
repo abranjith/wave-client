@@ -82,17 +82,29 @@ const RequestParams: React.FC = () => {
 
   const commitParam = (id: string) => {
     const localParam = localParams[id];
-    if (localParam) {
-      upsertParam(id, localParam.key, localParam.value);
-      
-      // If both key and value are present, add an empty row for next entry
-      if (localParam.key.trim() && localParam.value.trim()) {
-        const isLastRow = params[params.length - 1].id === id;
-        const hasEmptyRow = params.some(p => !p.key.trim() && !p.value.trim());
-        
-        if (isLastRow && !hasEmptyRow) {
-          addEmptyParam();
-        }
+    if (!localParam) {
+      return;
+    }
+
+    const existingParam = params.find((param) => param.id === id);
+    const hasChanged =
+      !existingParam ||
+      existingParam.key !== localParam.key ||
+      existingParam.value !== localParam.value;
+
+    if (!hasChanged) {
+      return;
+    }
+
+    upsertParam(id, localParam.key, localParam.value);
+
+    // If both key and value are present, add an empty row for next entry.
+    if (localParam.key.trim() && localParam.value.trim()) {
+      const isLastRow = params[params.length - 1].id === id;
+      const hasEmptyRow = params.some(p => !p.key.trim() && !p.value.trim());
+
+      if (isLastRow && !hasEmptyRow) {
+        addEmptyParam();
       }
     }
   };

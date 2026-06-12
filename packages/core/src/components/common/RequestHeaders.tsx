@@ -93,17 +93,29 @@ const RequestHeaders: React.FC = () => {
 
   const commitHeader = (id: string) => {
     const localHeader = localHeaders[id];
-    if (localHeader) {
-      upsertHeader(id, localHeader.key, localHeader.value);
-      
-      // If both key and value are present, add an empty row for next entry
-      if (localHeader.key.trim() && localHeader.value.trim()) {
-        const isLastRow = headers[headers.length - 1].id === id;
-        const hasEmptyRow = headers.some(h => !h.key.trim() && !h.value.trim());
-        
-        if (isLastRow && !hasEmptyRow) {
-          addEmptyHeader();
-        }
+    if (!localHeader) {
+      return;
+    }
+
+    const existingHeader = headers.find((header) => header.id === id);
+    const hasChanged =
+      !existingHeader ||
+      existingHeader.key !== localHeader.key ||
+      existingHeader.value !== localHeader.value;
+
+    if (!hasChanged) {
+      return;
+    }
+
+    upsertHeader(id, localHeader.key, localHeader.value);
+
+    // If both key and value are present, add an empty row for next entry.
+    if (localHeader.key.trim() && localHeader.value.trim()) {
+      const isLastRow = headers[headers.length - 1].id === id;
+      const hasEmptyRow = headers.some(h => !h.key.trim() && !h.value.trim());
+
+      if (isLastRow && !hasEmptyRow) {
+        addEmptyHeader();
       }
     }
   };

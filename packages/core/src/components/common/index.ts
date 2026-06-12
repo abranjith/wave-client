@@ -29,9 +29,13 @@ export { default as RequestSent } from './RequestSent';
 // Collections management
 export { default as CollectionsPane } from './CollectionsPane';
 export { default as CollectionTreeItem } from './CollectionTreeItem';
+export { default as CollectionAddWizard } from './CollectionAddWizard';
 export { default as CollectionsImportWizard } from './CollectionsImportWizard';
 export { default as CollectionExportWizard } from './CollectionExportWizard';
 export { default as RequestSaveWizard } from './RequestSaveWizard';
+export { default as CollectionDestinationPicker } from './CollectionDestinationPicker';
+export type { CollectionDestinationPickerProps, SelectedDestination } from './CollectionDestinationPicker';
+export { default as FolderAddWizard } from './FolderAddWizard';
 
 // Collection runner
 export { default as RunCollectionModal } from './RunCollectionModal';

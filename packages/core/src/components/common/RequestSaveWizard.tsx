@@ -12,31 +12,9 @@ import {
   DialogHeader,
   DialogTitle,
 } from '../ui/dialog';
-import useAppStateStore from '../../hooks/store/useAppStateStore';
-import SearchableSelect from '../ui/searchable-select';
-import { getFolderPathOptions } from '../../utils/collectionParser';
-
-const pathsEqual = (left: string[], right: string[]): boolean => {
-  if (left.length !== right.length) {
-    return false;
-  }
-
-  return left.every((segment, index) => segment === right[index]);
-};
+import CollectionDestinationPicker, { type SelectedDestination } from './CollectionDestinationPicker';
 
 export type RequestSaveWizardMode = 'save' | 'move';
-
-/** A selectable destination: a collection root or a folder within a collection. */
-interface DestinationOption {
-  collectionName: string;
-  folderPath: string[];
-  label: string;
-}
-
-interface SelectedDestination {
-  collectionName: string;
-  folderPath: string[];
-}
 
 interface RequestSaveWizardProps {
   isOpen: boolean;
@@ -48,6 +26,12 @@ interface RequestSaveWizardProps {
    * - move: move an existing request to a destination
    */
   mode?: RequestSaveWizardMode;
+  /**
+   * Item kind being moved/saved.
+   * - request: moving/saving a request
+   * - folder: moving a folder (only valid in move mode)
+   */
+  itemKind?: 'request' | 'folder';
   /** Destination collection prefill used for move workflows. */
   initialCollectionName?: string;
   /** Source/destination folder prefill used for move workflows. */
@@ -56,6 +40,11 @@ interface RequestSaveWizardProps {
   sourceCollectionName?: string;
   /** Existing request name used when mode is move. */
   initialRequestName?: string;
+  /**
+   * Optional filter function for CollectionDestinationPicker.
+   * Used to exclude invalid destinations (e.g., moving a folder into itself or its descendants).
+   */
+  filterDestination?: (collectionFilename: string, collectionName: string, folderPath: string[]) => boolean;
 }
 
 const RequestSaveWizard: React.FC<RequestSaveWizardProps> = ({
@@ -63,55 +52,21 @@ const RequestSaveWizard: React.FC<RequestSaveWizardProps> = ({
   onClose,
   onSave,
   mode = 'save',
+  itemKind = 'request',
   initialCollectionName,
   currentPath,
   sourceCollectionName,
   initialRequestName,
+  filterDestination,
 }) => {
   const isMoveMode = mode === 'move';
+  const isFolderMove = isMoveMode && itemKind === 'folder';
   const [requestName, setRequestName] = useState('');
   const [selectedDestination, setSelectedDestination] = useState<SelectedDestination | null>(null);
   const [newCollectionName, setNewCollectionName] = useState('');
   const [isCollectionInput, setIsCollectionInput] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
-  const collections = useAppStateStore((state) => state.collections);
-
-  /**
-   * One flat list of every destination: each collection root plus every folder
-   * (any depth) within it, labelled "Collection / Folder / Subfolder".
-   */
-  const destinationOptions = useMemo(() => {
-    const options: DestinationOption[] = [];
-
-    for (const collection of collections) {
-      const collectionName = collection.info.name;
-      for (const folderOption of getFolderPathOptions(collection)) {
-        options.push({
-          collectionName,
-          folderPath: folderOption.path,
-          label:
-            folderOption.path.length === 0
-              ? collectionName
-              : `${collectionName} / ${folderOption.displayPath}`,
-        });
-      }
-    }
-
-    return options;
-  }, [collections]);
-
-  const selectedDestinationIndex = useMemo(() => {
-    if (!selectedDestination) {
-      return -1;
-    }
-
-    return destinationOptions.findIndex(
-      (option) =>
-        option.collectionName === selectedDestination.collectionName &&
-        pathsEqual(option.folderPath, selectedDestination.folderPath)
-    );
-  }, [destinationOptions, selectedDestination]);
 
   const currentLocationText = useMemo(() => {
     if (!isMoveMode) {
@@ -139,11 +94,14 @@ const RequestSaveWizard: React.FC<RequestSaveWizardProps> = ({
       ? newCollectionName.trim()
       : selectedDestination?.collectionName ?? '';
     const folderPath = isCollectionInput ? [] : selectedDestination?.folderPath ?? [];
-    const reqName = isMoveMode
+    const reqName = isFolderMove
+      ? '' // Folders don't have a request name
+      : isMoveMode
       ? (initialRequestName || requestName).trim()
       : requestName.trim();
 
-    if (!reqName) {
+    // Only validate request name for request operations
+    if (!isFolderMove && !reqName) {
       setError('Please enter a request name');
       return;
     }
@@ -216,11 +174,16 @@ const RequestSaveWizard: React.FC<RequestSaveWizardProps> = ({
       <DialogContent className="sm:max-w-[500px]">
         <DialogHeader>
           <DialogTitle className="text-lg font-semibold text-slate-800 dark:text-slate-200">
-            {isMoveMode ? 'Move Request to Collection' : 'Save Request to Collection'}
+            {isMoveMode
+              ? (isFolderMove ? 'Move Folder to Collection' : 'Move Request to Collection')
+              : 'Save Request to Collection'
+            }
           </DialogTitle>
           <DialogDescription className="text-sm text-slate-600 dark:text-slate-400">
             {isMoveMode
-              ? 'Select a destination collection or folder for this request.'
+              ? (isFolderMove
+                  ? 'Select a destination collection or folder for this folder.'
+                  : 'Select a destination collection or folder for this request.')
               : 'Enter a request name and select a destination collection or folder, or create a new collection'}
           </DialogDescription>
         </DialogHeader>
@@ -255,54 +218,31 @@ const RequestSaveWizard: React.FC<RequestSaveWizardProps> = ({
             <Label htmlFor="destination-select" className="text-sm font-medium text-slate-700 dark:text-slate-300">
               Destination <span className="text-red-500">*</span>
             </Label>
-            <SearchableSelect
-              id="destination-select"
-              name="Collection"
-              placeholder="Select destination..."
-              options={destinationOptions.map((option, index) => ({
-                label: option.label,
-                // Use stable indexes so names containing '/' remain intact.
-                value: String(index),
-              }))}
-              setSelectedValue={(value) => {
-                const parsedIndex = Number.parseInt(value, 10);
-                const option = Number.isNaN(parsedIndex)
-                  ? undefined
-                  : destinationOptions[parsedIndex];
-                setSelectedDestination(
-                  option
-                    ? { collectionName: option.collectionName, folderPath: option.folderPath }
-                    : null
-                );
+            <CollectionDestinationPicker
+              selected={selectedDestination}
+              onSelectedChange={(dest) => {
+                setSelectedDestination(dest);
                 setError(null);
               }}
-              selectedValue={selectedDestinationIndex >= 0 ? String(selectedDestinationIndex) : ''}
-              includeOptionToCreateNew
-              onCreateNewOption={(isSelected) => {
-                setIsCollectionInput(isSelected);
+              isCreatingNew={isCollectionInput}
+              onIsCreatingNewChange={(isCreating) => {
+                setIsCollectionInput(isCreating);
                 // Only reset state when entering create-new mode; a regular
                 // selection must survive the (false) notification.
-                if (isSelected) {
-                  setSelectedDestination(null);
+                if (isCreating) {
                   setNewCollectionName('');
                   setError(null);
                 }
               }}
+              newCollectionName={newCollectionName}
+              onNewCollectionNameChange={setNewCollectionName}
+              includeCreateNew
+              onKeyDown={handleKeyDown}
+              filterDestination={filterDestination}
             />
             <p className="text-xs text-slate-500 dark:text-slate-400">
               Pick a collection or a folder within it
             </p>
-            {isCollectionInput && (
-              <Input
-                id="collection-name"
-                type="text"
-                placeholder="Enter new collection name..."
-                value={newCollectionName}
-                onChange={(e) => setNewCollectionName(e.target.value)}
-                onKeyDown={handleKeyDown}
-                className="w-full text-sm rounded bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-200 focus:outline-none"
-              />
-            )}
           </div>
 
           {/* Error Message */}
@@ -324,7 +264,10 @@ const RequestSaveWizard: React.FC<RequestSaveWizardProps> = ({
             onClick={handleSave}
             disabled={!hasDestination || (!isMoveMode && !requestName.trim()) || isSaving}
             icon={<SaveIcon />}
-            text={isSaving ? (isMoveMode ? 'Moving...' : 'Saving...') : (isMoveMode ? 'Move' : 'Save')}
+            text={isSaving
+              ? (isMoveMode ? (isFolderMove ? 'Moving folder...' : 'Moving...') : 'Saving...')
+              : (isMoveMode ? 'Move' : 'Save')
+            }
           />
         </DialogFooter>
       </DialogContent>

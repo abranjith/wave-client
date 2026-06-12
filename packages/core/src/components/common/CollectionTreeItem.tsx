@@ -1,5 +1,5 @@
 import React, { useState, useCallback } from 'react';
-import { ChevronRightIcon, ChevronDownIcon, CopyIcon, FolderIcon, FolderInputIcon, MoreVertical, PencilIcon, PlayIcon, Trash2Icon } from 'lucide-react';
+import { ChevronRightIcon, ChevronDownIcon, CopyIcon, FolderIcon, FolderInputIcon, FolderPlusIcon, MoreVertical, PencilIcon, PlayIcon, Trash2Icon } from 'lucide-react';
 import { CollectionItem, isFolder, isRequest } from '../../types/collection';
 import { isWsRequest } from '../../utils/requestTypeGuards';
 import {
@@ -56,6 +56,11 @@ interface CollectionTreeItemProps {
    * @param parentItemPath - Folder path where the duplicate should be created
    */
   onDuplicateItem?: (item: CollectionItem, parentItemPath: string[]) => void;
+  /**
+   * Called when the user chooses "New Folder" from a folder row's menu.
+   * @param parentItemPath - Path including this folder (new folder is a child)
+   */
+  onAddFolder?: (parentItemPath: string[]) => void;
 }
 
 /**
@@ -77,6 +82,7 @@ const CollectionTreeItem: React.FC<CollectionTreeItemProps> = ({
   onDeleteItem,
   onMoveItem,
   onDuplicateItem,
+  onAddFolder,
 }) => {
   // Generate unique key for this folder
   const folderKey = `${collectionFilename}:${[...itemPath, item.name].join('/')}`;
@@ -173,9 +179,17 @@ const CollectionTreeItem: React.FC<CollectionTreeItemProps> = ({
                   <PlayIcon className="h-4 w-4 mr-2" />
                   Run
                 </DropdownMenuItem>
+                <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onAddFolder?.([...itemPath, item.name]); }}>
+                  <FolderPlusIcon className="h-4 w-4 mr-2" />
+                  New Folder
+                </DropdownMenuItem>
                 <DropdownMenuItem onClick={(e) => { e.stopPropagation(); handleRenameStart(); }}>
                   <PencilIcon className="h-4 w-4 mr-2" />
                   Rename
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onMoveItem?.(item, itemPath); }}>
+                  <FolderInputIcon className="h-4 w-4 mr-2" />
+                  Move
                 </DropdownMenuItem>
                 <DropdownMenuItem
                   className="text-red-600 focus:text-red-600 focus:bg-red-50 dark:focus:bg-red-900/20"
@@ -209,6 +223,7 @@ const CollectionTreeItem: React.FC<CollectionTreeItemProps> = ({
                 onDeleteItem={onDeleteItem}
                 onMoveItem={onMoveItem}
                 onDuplicateItem={onDuplicateItem}
+                onAddFolder={onAddFolder}
               />
             ))}
           </div>

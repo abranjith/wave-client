@@ -349,6 +349,26 @@ export interface FolderPathOption {
   depth: number; // Nesting depth (0 for root)
 }
 
+/**
+ * Destination target for a collection import operation.
+ * - `new`: create a brand-new collection with the given display name.
+ * - `existing`: merge the imported items into an existing collection (root or folder).
+ */
+export type CollectionImportTarget =
+  | { mode: 'new'; collectionName: string }
+  | { mode: 'existing'; collectionName: string; folderPath: string[] };
+
+/**
+ * Returned by `CollectionService.moveItem` (and `IStorageAdapter.moveCollectionItem`).
+ * Both the updated source and destination collections are included so the UI can
+ * refresh both stores in one pass.  For same-collection moves both fields point
+ * to the same collection (same filename).
+ */
+export type MoveCollectionItemResult = {
+  source: Collection & { filename: string };
+  destination: Collection & { filename: string };
+};
+
 // ============================================================================
 // Environment Types
 // ============================================================================

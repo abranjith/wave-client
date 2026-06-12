@@ -6,6 +6,9 @@ import {
     CURRENT_COLLECTION_SCHEMA_VERSION,
     validateWaveCollection,
     validateCollectionTree,
+    addItemAtPath,
+    isDescendantPath,
+    type MoveCollectionItemResult,
 } from '@wave-client/core';
 import {
     isSseRequest,
@@ -195,6 +198,19 @@ function removeItemFromTree(items: CollectionItem[], itemPath: string[], itemId:
         }
         return item;
     });
+}
+
+/**
+ * Navigates the item tree along `folderPath` and returns the items array at
+ * that level, or `null` when any segment of the path is missing or not a folder.
+ * An empty path returns the root-level items array.
+ */
+function findFolderAtPath(items: CollectionItem[], folderPath: string[]): CollectionItem[] | null {
+    if (folderPath.length === 0) return items;
+    const [head, ...rest] = folderPath;
+    const folder = items.find(i => i.name === head && i.item !== undefined);
+    if (!folder || !folder.item) return null;
+    return findFolderAtPath(folder.item, rest);
 }
 
 /**
@@ -493,11 +509,22 @@ export class CollectionService extends BaseStorageService {
 
     /**
      * Imports a collection from file content.
-     * @param fileName The filename to save as
-     * @param fileContent The JSON content of the collection (Wave format)
-     * @returns The imported collection with filename
+     *
+     * When `newCollectionName` is provided the collection's display name is
+     * overridden, case-insensitive uniqueness is enforced against all loaded
+     * collections, and the filename is always generated fresh (no silent
+     * overwrite). When omitted, a unique filename is still generated — the
+     * original silent-overwrite behaviour is no longer supported.
+     *
+     * @param fileName    Source filename (used only to derive a base if needed)
+     * @param fileContent Wave-format JSON string
+     * @param newCollectionName Optional display-name override
      */
-    async import(fileName: string, fileContent: string): Promise<Collection & { filename: string }> {
+    async import(
+        fileName: string,
+        fileContent: string,
+        newCollectionName?: string
+    ): Promise<Collection & { filename: string }> {
         const collectionsDir = await this.getCollectionsDir();
         this.ensureDirectoryExists(collectionsDir);
 
@@ -508,7 +535,7 @@ export class CollectionService extends BaseStorageService {
         } catch {
             throw new Error('Failed to parse collection JSON. Please ensure the file is valid Wave JSON format.');
         }
-        
+
         // Ensure collection has required fields
         if (!collection.info) {
             throw new Error('Invalid collection format: missing info section.');
@@ -523,6 +550,19 @@ export class CollectionService extends BaseStorageService {
             collection.item = [];
         }
 
+        // Apply display-name override and enforce uniqueness
+        if (newCollectionName) {
+            const trimmed = newCollectionName.trim();
+            const existing = await this.loadAll();
+            const duplicate = existing.some(
+                (c) => c.info.name.toLowerCase() === trimmed.toLowerCase()
+            );
+            if (duplicate) {
+                throw new Error(`A collection named "${trimmed}" already exists`);
+            }
+            collection.info.name = trimmed;
+        }
+
         // Ensure all items have IDs and normalize request payloads
         collection.item = collection.item.map((item: CollectionItem) => normalizeItemRequests(ensureItemIds(item)));
 
@@ -535,13 +575,169 @@ export class CollectionService extends BaseStorageService {
             throw new Error(`Invalid collection: ${validation.error}`);
         }
 
-        // Generate a JSON filename for saving
-        const jsonFileName = fileName.replace(/\.[^.]*$/, '.json');
-        
-        const filePath = path.join(collectionsDir, jsonFileName);
+        // Always generate a unique filename — prevents silent overwrites.
+        const uniqueFileName = await this.generateUniqueFileName(collection.info.name);
+        const filePath = path.join(collectionsDir, uniqueFileName);
         await this.writeJsonFileSecure(filePath, collection);
 
-        return { ...collection, filename: jsonFileName };
+        return { ...collection, filename: uniqueFileName };
+    }
+
+    /**
+     * Moves an item (folder or request) atomically from one location to another.
+     *
+     * All validations run before any file is written:
+     * - Source item must exist at `sourceItemPath` + `itemId`.
+     * - Destination must exist (or be created via `newCollectionName`).
+     * - Not a same-location no-op.
+     * - For folders (same-collection only): destination must not be inside the
+     *   moved folder itself (cycle prevention).
+     * - No case-insensitive name conflict at the destination.
+     * - Both resulting trees pass `validateCollectionTree`.
+     *
+     * Same-collection moves issue a single `save` call.
+     * Cross-collection moves write the destination first, then the source.
+     * If the source write fails the destination is restored from its pre-move
+     * state and the error is re-thrown — never partial.
+     */
+    async moveItem(
+        sourceFileName: string,
+        sourceItemPath: string[],
+        itemId: string,
+        destinationFileName: string,
+        destinationItemPath: string[],
+        newCollectionName?: string
+    ): Promise<MoveCollectionItemResult> {
+        // 1. Load source
+        const source = await this.loadOne(sourceFileName);
+        if (!source) {
+            throw new Error(`Source collection not found: ${sourceFileName}`);
+        }
+
+        // 2. Locate item by path + id
+        const sourceSiblings = findFolderAtPath(source.item, sourceItemPath);
+        if (sourceSiblings === null) {
+            throw new Error(`Source path [${sourceItemPath.join('/')}] not found in "${sourceFileName}"`);
+        }
+        const item = sourceSiblings.find(i => i.id === itemId);
+        if (!item) {
+            throw new Error(`Item "${itemId}" not found at path [${sourceItemPath.join('/')}] in "${sourceFileName}"`);
+        }
+
+        // 3. Resolve destination
+        let dest: Collection;
+        let finalDestFileName: string;
+        if (newCollectionName) {
+            finalDestFileName = await this.generateUniqueFileName(newCollectionName);
+            dest = this.createNewCollection(newCollectionName);
+        } else {
+            finalDestFileName = destinationFileName;
+            const loaded = await this.loadOne(destinationFileName);
+            if (!loaded) {
+                throw new Error(`Destination collection not found: ${destinationFileName}`);
+            }
+            dest = loaded;
+        }
+
+        const isSameCollection = sourceFileName === finalDestFileName;
+
+        // 4. Validate before any write
+
+        // 4a. Same-location no-op
+        if (isSameCollection) {
+            const sameLocation =
+                sourceItemPath.length === destinationItemPath.length &&
+                sourceItemPath.every((s, i) => s.toLowerCase() === destinationItemPath[i]?.toLowerCase());
+            if (sameLocation) {
+                throw new Error('Item is already at the destination location');
+            }
+        }
+
+        // 4b. Cycle check — folder cannot move into itself or any descendant
+        if (isSameCollection && item.item !== undefined) {
+            const itemFullPath = [...sourceItemPath, item.name];
+            if (isDescendantPath(itemFullPath, destinationItemPath)) {
+                throw new Error('Cannot move a folder into itself or one of its descendants');
+            }
+        }
+
+        // Compute post-removal source tree (used for conflict check + write)
+        const newSourceItems = removeItemFromTree(source.item, sourceItemPath, itemId);
+        // For same-collection moves the destination is the post-removal tree
+        const destBaseItems = isSameCollection ? newSourceItems : dest.item;
+
+        // 4c. Verify destination path exists
+        const destFolderContents = findFolderAtPath(destBaseItems, destinationItemPath);
+        if (destFolderContents === null) {
+            throw new Error(`Destination path [${destinationItemPath.join('/')}] not found`);
+        }
+
+        // 4d. Name conflict at destination
+        const nameConflict = destFolderContents.find(
+            s => s.name.toLowerCase() === item.name.toLowerCase() && s.id !== itemId
+        );
+        if (nameConflict) {
+            const kind = item.item !== undefined ? 'folder' : 'request';
+            throw new Error(`A ${kind} named "${item.name}" already exists at the destination`);
+        }
+
+        // 4e. Validate resulting trees
+        const newDestItems = addItemAtPath(destBaseItems, destinationItemPath, item);
+
+        if (isSameCollection) {
+            const validation = validateCollectionTree({ ...source, item: newDestItems });
+            if (!validation.isOk) {
+                throw new Error(`Move would leave collection in invalid state: ${validation.error}`);
+            }
+        } else {
+            const srcValidation = validateCollectionTree({ ...source, item: newSourceItems });
+            if (!srcValidation.isOk) {
+                throw new Error(`Move would leave source in invalid state: ${srcValidation.error}`);
+            }
+            const dstValidation = validateCollectionTree({ ...dest, item: newDestItems });
+            if (!dstValidation.isOk) {
+                throw new Error(`Move would leave destination in invalid state: ${dstValidation.error}`);
+            }
+        }
+
+        // 5. Apply writes
+        if (isSameCollection) {
+            const updated = { ...source, item: newDestItems };
+            await this.save(updated, sourceFileName);
+            console.log(`[CollectionService] moveItem: moved item "${itemId}" within "${sourceFileName}" ([${sourceItemPath}] → [${destinationItemPath}])`);
+            return {
+                source: { ...updated, filename: sourceFileName },
+                destination: { ...updated, filename: sourceFileName },
+            };
+        }
+
+        // Cross-collection: write destination first, rollback on source failure
+        const updatedDest = { ...dest, item: newDestItems };
+        const updatedSource = { ...source, item: newSourceItems };
+
+        await this.save(updatedDest, finalDestFileName);
+        console.log(`[CollectionService] moveItem: wrote destination "${finalDestFileName}"`);
+
+        try {
+            await this.save(updatedSource, sourceFileName);
+            console.log(`[CollectionService] moveItem: moved item "${itemId}" from "${sourceFileName}" to "${finalDestFileName}"`);
+            return {
+                source: { ...updatedSource, filename: sourceFileName },
+                destination: { ...updatedDest, filename: finalDestFileName },
+            };
+        } catch (saveError) {
+            console.error(`[CollectionService] moveItem: source write failed — rolling back "${finalDestFileName}"`);
+            try {
+                if (newCollectionName) {
+                    await this.delete(finalDestFileName);
+                } else {
+                    await this.save(dest, finalDestFileName);
+                }
+            } catch (rollbackError) {
+                console.error('[CollectionService] moveItem: rollback also failed:', rollbackError);
+            }
+            throw saveError;
+        }
     }
 
     /**

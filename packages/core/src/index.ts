@@ -182,6 +182,8 @@ export type {
     SelfSignedCert,
     FolderPathOption,
     ResponseContentType,
+    CollectionImportTarget,
+    MoveCollectionItemResult,
 } from './types/collection';
 
 export { isFolder, isRequest, CertType, isCollectionUrl, getRawUrl } from './types/collection';

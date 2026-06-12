@@ -20,6 +20,7 @@ import type {
   AppSettings,
   Collection,
   CollectionItem,
+  MoveCollectionItemResult,
   Environment,
   CollectionRequest,
   Cookie,
@@ -514,14 +515,43 @@ class WebStorageAdapter implements IStorageAdapter {
     }
   }
 
+  async moveCollectionItem(
+    sourceFileName: string,
+    sourceItemPath: string[],
+    itemId: string,
+    destinationFileName: string,
+    destinationItemPath: string[],
+    newCollectionName?: string
+  ): Promise<Result<MoveCollectionItemResult, string>> {
+    try {
+      const response = await api.post('/api/collections/move', {
+        sourceFileName,
+        sourceItemPath,
+        itemId,
+        destinationFileName,
+        destinationItemPath,
+        ...(newCollectionName ? { newCollectionName } : {}),
+      });
+      if (response.data.isOk) {
+        return ok(response.data.value);
+      }
+      return err(response.data.error || 'Failed to move item');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      return err(`Server error: ${message}`);
+    }
+  }
+
   async importCollection(
     fileName: string,
-    fileContent: string
+    fileContent: string,
+    newCollectionName?: string
   ): Promise<Result<Collection[], string>> {
     try {
       const response = await api.post('/api/collections/import', {
         fileName,
         fileContent,
+        newCollectionName,
       });
       if (response.data.isOk) {
         return ok(response.data.value);

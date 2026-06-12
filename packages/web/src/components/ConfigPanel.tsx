@@ -21,6 +21,7 @@ import {
   type Flow,
   type TestSuite,
   AnyCollectionRequest,
+  type CollectionImportTarget,
 } from '@wave-client/core';
 import { useTheme } from '../App';
 
@@ -32,7 +33,7 @@ interface ConfigPanelProps {
   onFlowRun?: (flow: Flow) => void;
   onTestSuiteSelect?: (suite: TestSuite) => void;
   onSettingsSelect: () => void;
-  onImportCollection: (fileName: string, fileContent: string, collectionType: string) => void;
+  onImportCollection: (fileName: string, fileContent: string, collectionType: string, target: CollectionImportTarget) => void;
   onExportCollection: (collectionName: string, exportFormat: string) => void;
   onImportEnvironments: (fileName: string, fileContent: string) => void;
   onExportEnvironments: () => void;

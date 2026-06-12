@@ -27,6 +27,8 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import CollectionsImportWizard from '../../../components/common/CollectionsImportWizard';
 import type { FileWithPreview } from '../../../hooks/useFileUpload';
+import useAppStateStore from '../../../hooks/store/useAppStateStore';
+import type { Collection } from '../../../types/collection';
 
 // ---------------------------------------------------------------------------
 // UI Stubs
@@ -110,6 +112,43 @@ vi.mock('../../../components/ui/banner', () => ({
     default: ({ message }: { message: string }) => <div data-testid="error-banner">{message}</div>,
 }));
 
+vi.mock('../../../components/ui/input', () => ({
+    Input: (props: React.InputHTMLAttributes<HTMLInputElement>) => <input {...props} />,
+}));
+
+vi.mock('../../../components/ui/searchable-select', () => ({
+    default: ({
+        id,
+        options,
+        selectedValue,
+        setSelectedValue,
+        includeOptionToCreateNew,
+        onCreateNewOption,
+    }: {
+        id: string;
+        options: Array<{ label: string; value: string }>;
+        selectedValue: string;
+        setSelectedValue: (v: string) => void;
+        includeOptionToCreateNew?: boolean;
+        onCreateNewOption?: (v: boolean) => void;
+    }) => (
+        <div>
+            <select
+                id={id}
+                data-testid={id}
+                value={selectedValue}
+                onChange={(e) => { setSelectedValue(e.target.value); onCreateNewOption?.(false); }}
+            >
+                <option value="">(none)</option>
+                {options.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+            </select>
+            {includeOptionToCreateNew && (
+                <button data-testid={`${id}-create`} onClick={() => onCreateNewOption?.(true)}>create-new</button>
+            )}
+        </div>
+    ),
+}));
+
 /**
  * FileInput stub — exposes two test-control buttons:
  *  - "trigger-add": calls onFilesAdded with the current `pendingFiles` variable
@@ -171,6 +210,14 @@ function renderWizard(onImport = vi.fn(), onClose = vi.fn()) {
     );
 }
 
+const noCollectionsCollection: Collection[] = [];
+
+const existingCollection: Collection = {
+    filename: 'existing.json',
+    info: { waveId: 'ex-1', name: 'Existing API' },
+    item: [{ id: 'f1', name: 'Folder1', item: [] }],
+};
+
 async function selectFile(entry: FileWithPreview) {
     pendingFiles = [entry];
     fireEvent.click(screen.getByTestId('trigger-add'));
@@ -187,6 +234,7 @@ async function selectFile(entry: FileWithPreview) {
 describe('CollectionsImportWizard', () => {
     beforeEach(() => {
         pendingFiles = [];
+        useAppStateStore.setState({ collections: noCollectionsCollection });
     });
 
     describe('auto-detection on file select', () => {
@@ -282,7 +330,7 @@ describe('CollectionsImportWizard', () => {
             fireEvent.click(screen.getByTestId('import-btn'));
 
             await waitFor(() => {
-                expect(onImport).toHaveBeenCalledWith('myapi.json', postmanContent, 'wave');
+                expect(onImport).toHaveBeenCalledWith('myapi.json', postmanContent, 'wave', { mode: 'new', collectionName: 'API' });
             });
         });
     });
@@ -300,7 +348,7 @@ describe('CollectionsImportWizard', () => {
             fireEvent.click(screen.getByTestId('import-btn'));
 
             await waitFor(() => {
-                expect(onImport).toHaveBeenCalledWith('cache.json', waveContent, 'wave');
+                expect(onImport).toHaveBeenCalledWith('cache.json', waveContent, 'wave', { mode: 'new', collectionName: 'Cache Test' });
             });
         });
     });
@@ -367,6 +415,141 @@ describe('CollectionsImportWizard', () => {
             await selectFile(makeFileEntry('test.json', content));
 
             expect((screen.getByTestId('import-btn') as HTMLButtonElement).disabled).toBe(false);
+        });
+    });
+
+    // ── TASK-004: destination mode ────────────────────────────────────────────
+
+    describe('destination mode — create new (default)', () => {
+        it('shows "Create new collection" as the default mode after file select', async () => {
+            renderWizard();
+            const content = JSON.stringify({ info: { waveId: 'w', name: 'My API', version: '0.0.1' }, item: [] });
+            await selectFile(makeFileEntry('api.json', content));
+
+            const radio = screen.getByDisplayValue('new') as HTMLInputElement;
+            expect(radio.checked).toBe(true);
+        });
+
+        it('prefills the collection name from info.name for Wave/Postman JSON', async () => {
+            renderWizard();
+            const content = JSON.stringify({ info: { waveId: 'w', name: 'My Wave API', version: '0.0.1' }, item: [] });
+            await selectFile(makeFileEntry('api.json', content));
+
+            expect((screen.getByPlaceholderText('Collection name...') as HTMLInputElement).value).toBe('My Wave API');
+        });
+
+        it('falls back to the filename stem when content has no info.name', async () => {
+            renderWizard();
+            const content = 'openapi: 3.0.0\ninfo:\n  title: My API\n  version: "1"\npaths: {}';
+            await selectFile(makeFileEntry('my-spec.yaml', content));
+
+            expect((screen.getByPlaceholderText('Collection name...') as HTMLInputElement).value).toBe('my-spec');
+        });
+
+        it('disables Import and shows inline error when name is empty', async () => {
+            renderWizard();
+            const content = JSON.stringify({ info: { waveId: 'w', name: 'API', version: '0.0.1' }, item: [] });
+            await selectFile(makeFileEntry('api.json', content));
+
+            fireEvent.change(screen.getByPlaceholderText('Collection name...'), { target: { value: '' } });
+
+            expect((screen.getByTestId('import-btn') as HTMLButtonElement).disabled).toBe(true);
+            expect(screen.getByText(/please enter a collection name/i)).toBeInTheDocument();
+        });
+
+        it('disables Import and shows inline error when name duplicates an existing collection', async () => {
+            useAppStateStore.setState({ collections: [existingCollection] });
+            renderWizard();
+            const content = JSON.stringify({ info: { waveId: 'w', name: 'Unique', version: '0.0.1' }, item: [] });
+            await selectFile(makeFileEntry('api.json', content));
+
+            fireEvent.change(screen.getByPlaceholderText('Collection name...'), {
+                target: { value: 'Existing API' },
+            });
+
+            expect((screen.getByTestId('import-btn') as HTMLButtonElement).disabled).toBe(true);
+            expect(screen.getByText(/already exists/i)).toBeInTheDocument();
+        });
+
+        it('passes mode:new with the trimmed collectionName to onImportCollection', async () => {
+            const onImport = vi.fn();
+            renderWizard(onImport);
+            const content = JSON.stringify({ info: { waveId: 'w', name: 'Great API', version: '0.0.1' }, item: [] });
+            await selectFile(makeFileEntry('great.json', content));
+
+            fireEvent.click(screen.getByTestId('import-btn'));
+
+            await waitFor(() => {
+                expect(onImport).toHaveBeenCalledWith(
+                    'great.json', content, 'wave',
+                    { mode: 'new', collectionName: 'Great API' }
+                );
+            });
+        });
+    });
+
+    describe('destination mode — existing collection', () => {
+        it('shows the destination picker when "Existing collection" radio is selected', async () => {
+            useAppStateStore.setState({ collections: [existingCollection] });
+            renderWizard();
+            const content = JSON.stringify({ info: { waveId: 'w', name: 'API', version: '0.0.1' }, item: [] });
+            await selectFile(makeFileEntry('api.json', content));
+
+            fireEvent.click(screen.getByDisplayValue('existing'));
+
+            expect(screen.getByTestId('import-destination-select')).toBeInTheDocument();
+        });
+
+        it('keeps Import disabled in existing mode until a destination is chosen', async () => {
+            useAppStateStore.setState({ collections: [existingCollection] });
+            renderWizard();
+            const content = JSON.stringify({ info: { waveId: 'w', name: 'API', version: '0.0.1' }, item: [] });
+            await selectFile(makeFileEntry('api.json', content));
+
+            fireEvent.click(screen.getByDisplayValue('existing'));
+
+            expect((screen.getByTestId('import-btn') as HTMLButtonElement).disabled).toBe(true);
+        });
+
+        it('passes mode:existing with collectionName and folderPath to onImportCollection', async () => {
+            useAppStateStore.setState({ collections: [existingCollection] });
+            const onImport = vi.fn();
+            renderWizard(onImport);
+            const content = JSON.stringify({ info: { waveId: 'w', name: 'API', version: '0.0.1' }, item: [] });
+            await selectFile(makeFileEntry('api.json', content));
+
+            fireEvent.click(screen.getByDisplayValue('existing'));
+
+            // Select "Existing API" root (index 0 after options are built)
+            fireEvent.change(screen.getByTestId('import-destination-select'), { target: { value: '0' } });
+
+            fireEvent.click(screen.getByTestId('import-btn'));
+
+            await waitFor(() => {
+                expect(onImport).toHaveBeenCalledWith(
+                    'api.json', content, 'wave',
+                    { mode: 'existing', collectionName: 'Existing API', folderPath: [] }
+                );
+            });
+        });
+
+        it('resets back to create-new mode on close and re-open', async () => {
+            renderWizard();
+            const content = JSON.stringify({ info: { waveId: 'w', name: 'API', version: '0.0.1' }, item: [] });
+            await selectFile(makeFileEntry('api.json', content));
+
+            // Switch to existing mode
+            fireEvent.click(screen.getByDisplayValue('existing'));
+            expect((screen.getByDisplayValue('existing') as HTMLInputElement).checked).toBe(true);
+
+            // Close resets state; dialog stays mounted because isOpen=true
+            fireEvent.click(screen.getByTestId('cancel-btn'));
+
+            // Select a file again — this simulates reopening after state reset
+            await selectFile(makeFileEntry('api.json', content));
+
+            // Mode should be back to 'new'
+            expect((screen.getByDisplayValue('new') as HTMLInputElement).checked).toBe(true);
         });
     });
 });

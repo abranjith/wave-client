@@ -148,11 +148,12 @@ describe('CollectionService', () => {
 
             const result = await service.import('imported.json', collectionJson);
 
-            expect(result.filename).toBe('imported.json');
+            // Filename is derived from the collection display name, not the source filename
+            expect(result.filename).toBe('imported_collection.json');
             expect(result.info.name).toBe('Imported Collection');
 
             const collectionsDir = path.join(testDir, 'collections');
-            const importedFile = path.join(collectionsDir, 'imported.json');
+            const importedFile = path.join(collectionsDir, 'imported_collection.json');
             expect(fs.existsSync(importedFile)).toBe(true);
         });
 

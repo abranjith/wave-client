@@ -489,3 +489,87 @@ describe('insertHeaderAfter', () => {
         expect(useAppStateStore.getState().getActiveTab()!.isDirty).toBe(true);
     });
 });
+
+// ── updateTabMetadata — save write-back (FEAT-FP-COL-001 TASK-001) ─────────────
+
+describe('updateTabMetadata — save write-back', () => {
+    /** Load an HTTP request into a new tab and mark it dirty. */
+    function loadAndDirtyTab(id = 'tab-save-1', sourceCollectionFilename = 'api.json', itemPath: string[] = []) {
+        useAppStateStore.getState().loadRequestIntoTab({
+            ...mkHttp({ id }),
+            name: 'Get Users',
+            sourceRef: {
+                collectionFilename: sourceCollectionFilename,
+                collectionName: 'My API',
+                itemPath,
+            },
+        });
+        useAppStateStore.getState().markTabDirty(id);
+        return id;
+    }
+
+    it('clears isDirty after updateTabMetadata', () => {
+        const id = loadAndDirtyTab('tm-dirty');
+        expect(useAppStateStore.getState().getTabById(id)!.isDirty).toBe(true);
+        useAppStateStore.getState().updateTabMetadata(id, {
+            name: 'Get Users',
+            folderPath: ['My API'],
+            collectionRef: { collectionFilename: 'api.json', collectionName: 'My API', itemPath: [] },
+        });
+        expect(useAppStateStore.getState().getTabById(id)!.isDirty).toBe(false);
+    });
+
+    it('folderPath for root-level save is [collectionName] only — no request name appended', () => {
+        const id = loadAndDirtyTab('tm-root');
+        useAppStateStore.getState().updateTabMetadata(id, {
+            name: 'Get Users',
+            folderPath: ['My API'],
+            collectionRef: { collectionFilename: 'api.json', collectionName: 'My API', itemPath: [] },
+        });
+        const tab = useAppStateStore.getState().getTabById(id)!;
+        expect(tab.folderPath).toEqual(['My API']);
+        expect(tab.folderPath).not.toContain('Get Users');
+    });
+
+    it('folderPath for a nested save is [collectionName, ...folderPath] — no request name', () => {
+        const id = loadAndDirtyTab('tm-nested', 'api.json', ['v1', 'Users']);
+        useAppStateStore.getState().updateTabMetadata(id, {
+            name: 'Get Users',
+            folderPath: ['My API', 'v1', 'Users'],
+            collectionRef: {
+                collectionFilename: 'api.json',
+                collectionName: 'My API',
+                itemPath: ['v1', 'Users'],
+            },
+        });
+        const tab = useAppStateStore.getState().getTabById(id)!;
+        expect(tab.folderPath).toEqual(['My API', 'v1', 'Users']);
+        expect(tab.folderPath).not.toContain('Get Users');
+    });
+
+    it('collectionRef is stored after save', () => {
+        const id = loadAndDirtyTab('tm-ref');
+        const ref = { collectionFilename: 'api.json', collectionName: 'My API', itemPath: ['v1'] };
+        useAppStateStore.getState().updateTabMetadata(id, {
+            name: 'Get Users',
+            folderPath: ['My API', 'v1'],
+            collectionRef: ref,
+        });
+        expect(useAppStateStore.getState().getTabById(id)!.collectionRef).toEqual(ref);
+    });
+
+    it('subsequent getCollectionRequest uses stored collectionRef for sourceRef', () => {
+        const id = loadAndDirtyTab('tm-subsequent');
+        const ref = { collectionFilename: 'saved.json', collectionName: 'Saved API', itemPath: ['auth'] };
+        useAppStateStore.getState().updateTabMetadata(id, {
+            name: 'Login',
+            folderPath: ['Saved API', 'auth'],
+            collectionRef: ref,
+        });
+        useAppStateStore.getState().setActiveTab(id);
+        const req = useAppStateStore.getState().getCollectionRequest(id);
+        expect(req.sourceRef?.collectionFilename).toBe('saved.json');
+        expect(req.sourceRef?.collectionName).toBe('Saved API');
+        expect(req.sourceRef?.itemPath).toEqual(['auth']);
+    });
+});

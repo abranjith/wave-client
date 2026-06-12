@@ -164,6 +164,11 @@ const RequestEditor: React.FC<RequestEditorProps> = ({
     return renderParameterizedText(activeTab?.url || '', activeEnvVariables);
   }, [activeTab?.environmentId, activeTab?.url, getActiveEnvVariableKeys]);
 
+  const isSaveActionDisabled =
+    !Boolean(activeTab?.url?.trim()) ||
+    Boolean(activeTab?.isRequestProcessing) ||
+    (!activeTab?.isDirty && Boolean(activeTab?.folderPath?.length));
+
   // ==================== Event Handlers ====================
 
   const handleSaveRequest = useCallback(
@@ -189,8 +194,11 @@ const RequestEditor: React.FC<RequestEditorProps> = ({
 
   // Stable wrapper so useSaveShortcut receives a () => void callback.
   const handleSaveShortcut = useCallback(() => {
+    if (isSaveActionDisabled) {
+      return;
+    }
     handleSaveRequest(activeTabId);
-  }, [handleSaveRequest, activeTabId]);
+  }, [handleSaveRequest, activeTabId, isSaveActionDisabled]);
 
   // Disabled while the wizard is open to avoid double-opening.
   const { onKeyDown: onSaveShortcutKeyDown } = useSaveShortcut(handleSaveShortcut, {
@@ -400,11 +408,7 @@ const RequestEditor: React.FC<RequestEditorProps> = ({
               icon={<SaveIcon />}
               colorTheme="success"
               tooltip="Save to Collection"
-              disabled={
-                isRequestProcessing ||
-                !Boolean(url?.trim()) ||
-                (!activeTab?.isDirty && !!activeTab?.folderPath)
-              }
+              disabled={isSaveActionDisabled}
               className="px-6 py-2"
             />
           </div>

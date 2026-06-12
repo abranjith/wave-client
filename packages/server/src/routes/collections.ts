@@ -96,18 +96,16 @@ export async function registerCollectionRoutes(fastify: FastifyInstance): Promis
 
     // Import collection
     fastify.post('/api/collections/import', async (
-        request: FastifyRequest<{ Body: { fileName: string; fileContent: string } }>,
+        request: FastifyRequest<{ Body: { fileName: string; fileContent: string; newCollectionName?: string } }>,
         reply: FastifyReply
     ) => {
         try {
-            const { fileName, fileContent } = request.body;
-            const imported = await collectionService.import(fileName, fileContent);
+            const { fileName, fileContent, newCollectionName } = request.body;
+            const imported = await collectionService.import(fileName, fileContent, newCollectionName);
             emitStateChange('collections');
-            emitBanner('success', `Collection "${imported.info.name}" imported`);
             return reply.send({ isOk: true, value: [imported] });
         } catch (error) {
             const message = error instanceof Error ? error.message : 'Unknown error';
-            emitBanner('error', `Failed to import collection: ${message}`);
             return reply.status(500).send({ isOk: false, error: message });
         }
     });
@@ -145,6 +143,38 @@ export async function registerCollectionRoutes(fastify: FastifyInstance): Promis
             const updatedCollection = await collectionService.deleteItem(filename, itemPath, itemId);
             emitStateChange('collections');
             return reply.send({ isOk: true, value: updatedCollection });
+        } catch (error) {
+            const message = error instanceof Error ? error.message : 'Unknown error';
+            return reply.status(500).send({ isOk: false, error: message });
+        }
+    });
+
+    // Move a nested item (folder or request) within or across collections
+    fastify.post('/api/collections/move', async (
+        request: FastifyRequest<{
+            Body: {
+                sourceFileName: string;
+                sourceItemPath: string[];
+                itemId: string;
+                destinationFileName: string;
+                destinationItemPath: string[];
+                newCollectionName?: string;
+            };
+        }>,
+        reply: FastifyReply
+    ) => {
+        try {
+            const { sourceFileName, sourceItemPath, itemId, destinationFileName, destinationItemPath, newCollectionName } = request.body;
+            const result = await collectionService.moveItem(
+                sourceFileName,
+                sourceItemPath,
+                itemId,
+                destinationFileName,
+                destinationItemPath,
+                newCollectionName
+            );
+            emitStateChange('collections');
+            return reply.send({ isOk: true, value: result });
         } catch (error) {
             const message = error instanceof Error ? error.message : 'Unknown error';
             return reply.status(500).send({ isOk: false, error: message });

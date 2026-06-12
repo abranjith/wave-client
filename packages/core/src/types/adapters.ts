@@ -24,6 +24,7 @@ import type {
     ParamRow,
     CollectionBody,
     SentRequestData,
+    MoveCollectionItemResult,
 } from './collection';
 import type { Flow } from './flow';
 import type { TestSuite } from './testSuite';
@@ -171,8 +172,16 @@ export interface IStorageAdapter {
         itemPath: string[],
         itemId: string
     ): Promise<Result<Collection, string>>;
-    importCollection(fileName: string, fileContent: string): Promise<Result<Collection[], string>>;
+    importCollection(fileName: string, fileContent: string, newCollectionName?: string): Promise<Result<Collection[], string>>;
     exportCollection(collectionFileName: string): Promise<Result<{ filePath: string; fileName: string }, string>>;
+    moveCollectionItem(
+        sourceFileName: string,
+        sourceItemPath: string[],
+        itemId: string,
+        destinationFileName: string,
+        destinationItemPath: string[],
+        newCollectionName?: string
+    ): Promise<Result<MoveCollectionItemResult, string>>;
 
     // Environments
     loadEnvironments(): Promise<Result<Environment[], string>>;

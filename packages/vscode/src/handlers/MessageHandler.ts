@@ -127,6 +127,9 @@ export class MessageHandler {
             case 'deleteRequestFromCollection':
                 await this.handleDeleteRequestFromCollection(message);
                 break;
+            case 'moveCollectionItem':
+                await this.handleMoveCollectionItem(message);
+                break;
             case 'importCollection':
                 await this.handleImportCollection(message);
                 break;
@@ -517,13 +520,39 @@ export class MessageHandler {
         }
     }
 
+    private async handleMoveCollectionItem(message: any): Promise<void> {
+        const requestId = message.requestId;
+        try {
+            const { sourceFileName, sourceItemPath, itemId, destinationFileName, destinationItemPath, newCollectionName } = message.data;
+            const result = await collectionService.moveItem(
+                sourceFileName,
+                sourceItemPath,
+                itemId,
+                destinationFileName,
+                destinationItemPath,
+                newCollectionName
+            );
+            this.postMessage({
+                type: 'collectionItemMoved',
+                requestId,
+                result,
+            });
+        } catch (error: any) {
+            console.error('Error moving collection item:', error);
+            this.postMessage({
+                type: 'collectionItemMoved',
+                requestId,
+                error: error.message,
+            });
+        }
+    }
+
     private async handleSaveRequestToCollection(message: any): Promise<void> {
         const requestId = message.requestId;
         try {
             // Payload carries the whole CollectionItem (id, name, description,
             // request) so item identity survives moves — see FEAT-003.
             const { item, collectionFileName, folderPath, newCollectionName } = message.data;
-            const itemName = JSON.parse(item)?.name ?? 'Request';
             const savedCollectionFileName = await collectionService.saveRequest(
                 item,
                 collectionFileName,
@@ -540,11 +569,6 @@ export class MessageHandler {
                         ...collection,
                         filename: savedCollectionFileName
                     }
-                });
-
-                this.postMessage({
-                    type: 'bannerSuccess',
-                    message: `Request "${itemName}" saved successfully`
                 });
             } else {
                 this.postMessage({
@@ -566,11 +590,11 @@ export class MessageHandler {
     private async handleImportCollection(message: any): Promise<void> {
         const requestId = message.requestId;
         try {
-            const { fileName, fileContent } = message.data;
+            const { fileName, fileContent, newCollectionName } = message.data;
             // Note: Collection format transformation (Postman, HTTP, Swagger) should be
             // handled in the webview before calling import. The extension host only
             // accepts Wave JSON format.
-            await collectionService.import(fileName, fileContent);
+            await collectionService.import(fileName, fileContent, newCollectionName);
 
             const collections = await collectionService.loadAll();
             this.postMessage({
@@ -579,20 +603,11 @@ export class MessageHandler {
                 collections,
                 fileName
             });
-            
-            this.postMessage({
-                type: 'bannerSuccess',
-                message: `Collection imported successfully: ${fileName}`
-            });
         } catch (error: any) {
             this.postMessage({
                 type: 'collectionImported',
                 requestId,
                 error: error.message
-            });
-            this.postMessage({
-                type: 'bannerError',
-                message: `Failed to import collection: ${error.message}`
             });
         }
     }

@@ -985,6 +985,28 @@ describe('MessageHandler', () => {
         })
       );
     });
+
+    it('does NOT post a bannerSuccess on successful save — notification is owned by the webview app layer (FEAT-FP-COL-001 TASK-002)', async () => {
+      const { collectionService } = await import('../../services/index.js');
+      const item = JSON.stringify({ id: 'item-2', name: 'Login', request: { id: 'r2', name: 'Login', method: 'POST', url: 'https://x/login' } });
+      (collectionService.saveRequest as any).mockResolvedValue('col2.json');
+      (collectionService.loadOne as any).mockResolvedValue({
+        info: { waveId: 'w', name: 'Auth', version: '0.0.1' },
+        item: [],
+      });
+
+      (mockPanel.webview.postMessage as any).mockClear();
+
+      await handler.handleMessage({
+        type: 'saveRequestToCollection',
+        requestId: 'req-srtc-2',
+        data: { item, collectionFileName: 'col2.json', folderPath: [] },
+      });
+
+      const calls: any[] = (mockPanel.webview.postMessage as any).mock.calls.map((c: any[]) => c[0]);
+      expect(calls.some((m: any) => m.type === 'bannerSuccess')).toBe(false);
+      expect(calls.some((m: any) => m.type === 'collectionUpdated')).toBe(true);
+    });
   });
 
   // ==========================================================================

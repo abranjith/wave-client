@@ -22,6 +22,7 @@ interface EditingVariable {
   key: string;
   value: string;
   notes: string;
+  type: 'default' | 'secret';
 }
 
 const EnvironmentGrid: React.FC<EnvironmentGridProps> = ({ environment, onBack, onSaveEnvironment }) => {
@@ -120,7 +121,8 @@ const EnvironmentGrid: React.FC<EnvironmentGridProps> = ({ environment, onBack, 
       originalKey: variable.key,
       key: variable.key,
       value: variable.value,
-      notes: variable.notes || ''
+      notes: variable.notes || '',
+      type: variable.type || 'default'
     });
     setKeyError(null);
   };
@@ -132,7 +134,8 @@ const EnvironmentGrid: React.FC<EnvironmentGridProps> = ({ environment, onBack, 
       originalKey: null,
       key: '',
       value: '',
-      notes: ''
+      notes: '',
+      type: 'default'
     });
     setKeyError(null);
   };
@@ -167,7 +170,7 @@ const EnvironmentGrid: React.FC<EnvironmentGridProps> = ({ environment, onBack, 
       const newVariable: EnvironmentVariable = {
         key: editingData.key,
         value: editingData.value,
-        type: 'default',
+        type: editingData.type,
         notes: editingData.notes || undefined,
         enabled: true
       };
@@ -176,12 +179,16 @@ const EnvironmentGrid: React.FC<EnvironmentGridProps> = ({ environment, onBack, 
       updateEnvironment(currentEnvironment.id, { values: updatedValues });
     } else {
       // Update existing variable
+      const previousVariable = currentEnvironment.values.find((variable) => variable.key === editingData.originalKey);
+      const previousType = previousVariable?.type || 'default';
+
       const updatedValues = currentEnvironment.values.map((variable) =>
         variable.key === editingData.originalKey
           ? {
               ...variable,
               key: editingData.key,
               value: editingData.value,
+              type: editingData.type,
               notes: editingData.notes || undefined
             }
           : variable
@@ -189,11 +196,21 @@ const EnvironmentGrid: React.FC<EnvironmentGridProps> = ({ environment, onBack, 
       
       updateEnvironment(currentEnvironment.id, { values: updatedValues });
       
-      // If the key changed, update the visibleSecrets set
-      if (editingData.originalKey && editingData.originalKey !== editingData.key && visibleSecrets.has(editingData.originalKey)) {
+      // Keep secret visibility state in sync when key/type changes.
+      if (editingData.originalKey) {
         const newVisible = new Set(visibleSecrets);
-        newVisible.delete(editingData.originalKey);
-        newVisible.add(editingData.key);
+
+        if (editingData.originalKey !== editingData.key && newVisible.has(editingData.originalKey)) {
+          newVisible.delete(editingData.originalKey);
+          if (editingData.type === 'secret') {
+            newVisible.add(editingData.key);
+          }
+        }
+
+        if (previousType === 'secret' && editingData.type === 'default') {
+          newVisible.delete(editingData.key);
+        }
+
         setVisibleSecrets(newVisible);
       }
     }
@@ -293,13 +310,29 @@ const EnvironmentGrid: React.FC<EnvironmentGridProps> = ({ environment, onBack, 
                           </div>
                         </TableCell>
                         <TableCell>
-                          <Input
-                            type="text"
-                            value={editingData.value}
-                            onChange={(e) => setEditingData({ ...editingData, value: e.target.value })}
-                            className="font-mono text-sm text-slate-800 dark:text-slate-200"
-                            placeholder="Value"
-                          />
+                          <div className="flex items-center gap-3">
+                            <Input
+                              type="text"
+                              value={editingData.value}
+                              onChange={(e) => setEditingData({ ...editingData, value: e.target.value })}
+                              className="font-mono text-sm text-slate-800 dark:text-slate-200 flex-1 w-auto"
+                              placeholder="Value"
+                            />
+                            <div className="flex items-center gap-2 shrink-0">
+                              <Switch
+                                id={`secret-toggle-${variable.key}`}
+                                aria-label="Secret variable"
+                                checked={editingData.type === 'secret'}
+                                onCheckedChange={(checked) =>
+                                  setEditingData({
+                                    ...editingData,
+                                    type: checked ? 'secret' : 'default',
+                                  })
+                                }
+                              />
+                              <span className="text-xs text-slate-600 dark:text-slate-400">Secret</span>
+                            </div>
+                          </div>
                         </TableCell>
                         <TableCell>
                           <Textarea
@@ -439,13 +472,29 @@ const EnvironmentGrid: React.FC<EnvironmentGridProps> = ({ environment, onBack, 
                       </div>
                     </TableCell>
                     <TableCell>
-                      <Input
-                        type="text"
-                        value={editingData.value}
-                        onChange={(e) => setEditingData({ ...editingData, value: e.target.value })}
-                        className="font-mono text-sm text-slate-800 dark:text-slate-200"
-                        placeholder="Value"
-                      />
+                      <div className="flex items-center gap-3">
+                        <Input
+                          type="text"
+                          value={editingData.value}
+                          onChange={(e) => setEditingData({ ...editingData, value: e.target.value })}
+                          className="font-mono text-sm text-slate-800 dark:text-slate-200 flex-1 w-auto"
+                          placeholder="Value"
+                        />
+                        <div className="flex items-center gap-2 shrink-0">
+                          <Switch
+                            id="secret-toggle-new"
+                            aria-label="Secret variable"
+                            checked={editingData.type === 'secret'}
+                            onCheckedChange={(checked) =>
+                              setEditingData({
+                                ...editingData,
+                                type: checked ? 'secret' : 'default',
+                              })
+                            }
+                          />
+                          <span className="text-xs text-slate-600 dark:text-slate-400">Secret</span>
+                        </div>
+                      </div>
                     </TableCell>
                     <TableCell>
                       <Textarea

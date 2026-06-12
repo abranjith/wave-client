@@ -37,6 +37,7 @@ import type {
     AppSettings,
     Collection,
     CollectionItem,
+    MoveCollectionItemResult,
     Environment,
     Cookie,
     Proxy,
@@ -339,6 +340,7 @@ function createVSCodeStorageAdapter(
                 'deleteTestSuite': '',       // void - no data field
                 'deleteCollection': '',              // void - no data field
                 'deleteRequestFromCollection': 'collection',
+                'moveCollectionItem': 'result',
             };
 
             pendingRequests.set(requestId, {
@@ -409,10 +411,23 @@ function createVSCodeStorageAdapter(
             });
         },
 
-        async importCollection(fileName: string, fileContent: string): Promise<Result<Collection[], string>> {
+        async moveCollectionItem(
+            sourceFileName: string,
+            sourceItemPath: string[],
+            itemId: string,
+            destinationFileName: string,
+            destinationItemPath: string[],
+            newCollectionName?: string
+        ): Promise<Result<MoveCollectionItemResult, string>> {
+            return sendAndWait<MoveCollectionItemResult>('moveCollectionItem', {
+                data: { sourceFileName, sourceItemPath, itemId, destinationFileName, destinationItemPath, newCollectionName }
+            });
+        },
+
+        async importCollection(fileName: string, fileContent: string, newCollectionName?: string): Promise<Result<Collection[], string>> {
             return new Promise((resolve) => {
                 const requestId = generateRequestId();
-                
+
                 const timeout = setTimeout(() => {
                     pendingRequests.delete(requestId);
                     resolve(err(`Request timed out: importCollection`));
@@ -434,7 +449,7 @@ function createVSCodeStorageAdapter(
                 vsCodeApi.postMessage({
                     type: 'importCollection',
                     requestId,
-                    data: { fileName, fileContent }
+                    data: { fileName, fileContent, newCollectionName }
                 });
             });
         },

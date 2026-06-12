@@ -20,6 +20,12 @@ My API (collection)
 
 Open the **Collections** tab in the sidebar to browse the tree. Collections can hold HTTP, WebSocket, and SSE requests side by side — see [Requests](requests.md).
 
+The pane header includes three quick actions:
+
+- **Add Collection (`+`)** — create a new empty Wave collection file from a name.
+- **Import** — import collections from Wave, Postman, OpenAPI/Swagger, or `.http` files.
+- **Export** — export a collection to file.
+
 ![The Collections pane with nested folders and requests](../images/collections-tree.png)
 
 ---

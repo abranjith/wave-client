@@ -40,8 +40,13 @@ import {
   type TestSuite,
   type AnyCollectionRequest,
   type CollectionItem,
+  type CollectionImportTarget,
+  type Collection,
   type ResponseDownloadPayload,
   isHttpRequest,
+  validateWaveCollection,
+  mergeCollectionItems,
+  cloneItemWithFreshIds,
 } from '@wave-client/core';
 
 const App: React.FC = () => {
@@ -434,10 +439,11 @@ const App: React.FC = () => {
       }
     }
 
+    const isNewCollection = !existingCollection && Boolean(saveToCollectionName);
     const collectionFileName = existingCollection ? existingCollection.filename : request.sourceRef?.collectionFilename;
     const itemPath = folderPath.length > 0 ? folderPath : request.sourceRef?.itemPath || [];
 
-    if (!collectionFileName) {
+    if (!isNewCollection && !collectionFileName) {
       notification.showNotification('error', 'Invalid collection filename');
       return;
     }
@@ -449,16 +455,23 @@ const App: React.FC = () => {
       request,
     };
 
-    const result = await storage.saveRequestToCollection(collectionFileName, itemPath, collectionItem);
-    
+    const result = await storage.saveRequestToCollection(
+      collectionFileName || 'new',
+      itemPath,
+      collectionItem,
+      isNewCollection ? saveToCollectionName : undefined
+    );
+
     if (result.isOk) {
       const collection = result.value;
       const existingColl = currentCollections.find((c) => c.filename === collection.filename);
 
       if (tabId) {
+        // folderPath = [collectionName, ...folderNames] — request name is rendered
+        // separately by the breadcrumb and must NOT be appended here.
         updateTabMetadata(tabId, {
           name: request.name,
-          folderPath: itemPath,
+          folderPath: [collection.info.name, ...itemPath],
           collectionRef: {
             collectionFilename: collection.filename || '',
             collectionName: collection.info.name,
@@ -467,13 +480,13 @@ const App: React.FC = () => {
         });
         pendingSaveInfo.current = null;
       }
-      
+
       if (!existingColl) {
         addCollection(collection);
       } else {
         updateCollection(collection.filename || '', collection);
       }
-      notification.showNotification('success', 'Request saved successfully');
+      notification.showNotification('success', `Request "${collectionItem.name}" saved successfully`);
     } else {
       notification.showNotification('error', result.error);
     }
@@ -561,7 +574,7 @@ const App: React.FC = () => {
     }
   };
 
-  const handleImportCollection = async (fileName: string, fileContent: string, collectionType: string) => {
+  const handleImportCollection = async (fileName: string, fileContent: string, collectionType: string, target: CollectionImportTarget) => {
     setIsCollectionsLoading(true);
 
     let importPayload = fileContent;
@@ -594,11 +607,57 @@ const App: React.FC = () => {
       importPayload = JSON.stringify(transformResult.value, null, 2);
     }
 
-    const result = await storage.importCollection(fileName, importPayload);
-    
+    if (target.mode === 'existing') {
+      // Merge incoming items into an existing collection / folder
+      let incoming: Collection;
+      try {
+        incoming = JSON.parse(importPayload) as Collection;
+      } catch {
+        notification.showNotification('error', 'Invalid collection JSON');
+        setIsCollectionsLoading(false);
+        return;
+      }
+      const validation = validateWaveCollection(incoming);
+      if (!validation.isOk) {
+        notification.showNotification('error', `Invalid collection: ${validation.error}`);
+        setIsCollectionsLoading(false);
+        return;
+      }
+      const currentCollections = useAppStateStore.getState().collections;
+      const destCollection = currentCollections.find((c) => c.info.name === target.collectionName);
+      if (!destCollection || !destCollection.filename) {
+        notification.showNotification('error', `Collection "${target.collectionName}" not found`);
+        setIsCollectionsLoading(false);
+        return;
+      }
+      const clonedItems = incoming.item.map(cloneItemWithFreshIds);
+      const mergeResult = mergeCollectionItems(destCollection.item ?? [], target.folderPath, clonedItems);
+      if (!mergeResult.isOk) {
+        notification.showNotification('error', mergeResult.error);
+        setIsCollectionsLoading(false);
+        return;
+      }
+      const updated: Collection = { ...destCollection, item: mergeResult.value };
+      const saveResult = await storage.saveCollection(updated);
+      if (saveResult.isOk) {
+        updateCollection(destCollection.filename, { item: mergeResult.value });
+        const dest = target.folderPath.length > 0
+          ? `${target.collectionName} / ${target.folderPath.join(' / ')}`
+          : target.collectionName;
+        notification.showNotification('success', `Imported ${clonedItems.length} item(s) into "${dest}"`);
+      } else {
+        notification.showNotification('error', saveResult.error);
+      }
+      setIsCollectionsLoading(false);
+      return;
+    }
+
+    // mode === 'new'
+    const result = await storage.importCollection(fileName, importPayload, target.collectionName);
+
     if (result.isOk) {
       setCollections(result.value);
-      notification.showNotification('success', `Collection imported successfully: ${fileName}`);
+      notification.showNotification('success', `Collection "${target.collectionName}" imported successfully`);
     } else {
       notification.showNotification('error', result.error);
     }

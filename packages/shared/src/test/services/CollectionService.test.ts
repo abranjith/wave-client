@@ -606,10 +606,10 @@ describe('CollectionService', () => {
       // Act
       const result = await service.import('imported.json', jsonContent);
 
-      // Assert
-      expect(result.filename).toBe('imported.json');
+      // Assert: filename is now derived from the display name, not the source filename
+      expect(result.filename).toBe('imported_collection.json');
       expect(result.info.name).toBe('Imported Collection');
-      expect(mockFs.hasFile(path.join(testCollectionsDir, 'imported.json'))).toBe(true);
+      expect(mockFs.hasFile(path.join(testCollectionsDir, 'imported_collection.json'))).toBe(true);
     });
 
     it('should add waveId and version if missing', async () => {
@@ -680,7 +680,7 @@ describe('CollectionService', () => {
       ).rejects.toThrow('Invalid collection format: missing info section');
     });
 
-    it('should replace file extension with .json', async () => {
+    it('filename is derived from display name, not the source filename (FEAT-FP-COL-001 TASK-005)', async () => {
       // Arrange
       const collection: Collection = {
         info: {
@@ -690,10 +690,63 @@ describe('CollectionService', () => {
       } as any;
 
       // Act
-      const result = await service.import('test.txt', JSON.stringify(collection));
+      const result = await service.import('completely_different_name.txt', JSON.stringify(collection));
+
+      // Assert: filename comes from info.name, not the source fileName arg
+      expect(result.filename).toBe('test.json');
+    });
+
+    it('newCollectionName overrides info.name and is used for filename (FEAT-FP-COL-001 TASK-005)', async () => {
+      // Arrange
+      const collection: Collection = {
+        info: { waveId: 'col-1', version: '0.0.1', name: 'Original Name' },
+        item: [],
+      };
+
+      // Act
+      const result = await service.import('any.json', JSON.stringify(collection), 'My Renamed Collection');
 
       // Assert
-      expect(result.filename).toBe('test.json');
+      expect(result.info.name).toBe('My Renamed Collection');
+      expect(result.filename).toBe('my_renamed_collection.json');
+    });
+
+    it('newCollectionName enforces case-insensitive uniqueness (FEAT-FP-COL-001 TASK-005)', async () => {
+      // Arrange — import a collection with a known display name to occupy the slot
+      await service.import('first.json', JSON.stringify({
+        info: { waveId: 'ex-1', version: '0.0.1', name: 'Existing Collection' },
+        item: [],
+      }));
+
+      const incoming = JSON.stringify({
+        info: { waveId: 'inc-1', version: '0.0.1', name: 'Something Else' },
+        item: [],
+      });
+
+      // Act & Assert: importing with a name that matches the existing collection (case-insensitive) must throw
+      await expect(
+        service.import('new.json', incoming, 'existing collection')
+      ).rejects.toThrow('A collection named "existing collection" already exists');
+    });
+
+    it('generates unique filename when display name would collide with existing file (FEAT-FP-COL-001 TASK-005)', async () => {
+      // Arrange — import a collection once to occupy the base filename
+      const col = JSON.stringify({
+        info: { waveId: 'dup-1', version: '0.0.1', name: 'Dup Collection' },
+        item: [],
+      });
+      const first = await service.import('any.json', col);
+      expect(first.filename).toBe('dup_collection.json');
+
+      // Act — import a second collection with the same display name but different waveId
+      const col2 = JSON.stringify({
+        info: { waveId: 'dup-2', version: '0.0.1', name: 'Dup Collection' },
+        item: [],
+      });
+      const second = await service.import('any.json', col2);
+
+      // Assert: unique suffix appended
+      expect(second.filename).toBe('dup_collection_1.json');
     });
   });
 
@@ -1216,6 +1269,210 @@ describe('CollectionService', () => {
 
       await expect(service.import('bad_import.json', invalid)).rejects.toThrow(/Invalid collection/);
       expect(mockFs.getFile(path.join(testCollectionsDir, 'bad_import.json'))).toBeUndefined();
+    });
+  });
+
+  describe('moveItem', () => {
+    beforeEach(() => {
+      mockFs.reset();
+      mockFs.addDirectory(testCollectionsDir);
+    });
+
+    it('should move a request within the same collection (root to folder)', async () => {
+      const collection: Collection = {
+        info: { name: 'Col', waveId: 'w1', schema: 'v1' },
+        item: [
+          { id: 'req1', name: 'Request1', request: { id: 'r1', name: 'Request1', url: '', protocol: 'http' } },
+          { id: 'folder1', name: 'Folder1', item: [] }
+        ]
+      };
+      mockFs.setFile(path.join(testCollectionsDir, 'col.json'), JSON.stringify(collection));
+
+      const result = await service.moveItem('col.json', [], 'req1', 'col.json', ['Folder1']);
+
+      expect(result.source.filename).toBe('col.json');
+      expect(result.destination.filename).toBe('col.json');
+      expect(result.source.item.find(i => i.id === 'req1')).toBeUndefined(); // removed from root
+      const folder = result.source.item.find(i => i.name === 'Folder1')!;
+      expect(folder.item!.find(i => i.id === 'req1')).toBeDefined(); // added to folder
+    });
+
+    it('should move a folder with its full subtree intact', async () => {
+      const collection: Collection = {
+        info: { name: 'Col', waveId: 'w1', schema: 'v1' },
+        item: [
+          {
+            id: 'folderA', name: 'FolderA', item: [
+              { id: 'req1', name: 'Request1', request: { id: 'r1', name: 'Request1', url: '', protocol: 'http' } },
+              { id: 'subFolder', name: 'SubFolder', item: [
+                { id: 'req2', name: 'Request2', request: { id: 'r2', name: 'Request2', url: '', protocol: 'http' } }
+              ]}
+            ]
+          },
+          { id: 'folderB', name: 'FolderB', item: [] }
+        ]
+      };
+      mockFs.setFile(path.join(testCollectionsDir, 'col.json'), JSON.stringify(collection));
+
+      const result = await service.moveItem('col.json', [], 'folderA', 'col.json', ['FolderB']);
+
+      const folderB = result.source.item.find(i => i.name === 'FolderB')!;
+      const movedFolder = folderB.item!.find(i => i.name === 'FolderA')!;
+      expect(movedFolder.item!.length).toBe(2);
+      expect(movedFolder.item!.find(i => i.name === 'SubFolder')!.item!.length).toBe(1);
+    });
+
+    it('should reject moving a folder into itself', async () => {
+      const collection: Collection = {
+        info: { name: 'Col', waveId: 'w1', schema: 'v1' },
+        item: [
+          { id: 'folderA', name: 'FolderA', item: [
+            { id: 'subFolder', name: 'SubFolder', item: [] }
+          ]}
+        ]
+      };
+      mockFs.setFile(path.join(testCollectionsDir, 'col.json'), JSON.stringify(collection));
+
+      await expect(
+        service.moveItem('col.json', [], 'folderA', 'col.json', ['FolderA', 'SubFolder'])
+      ).rejects.toThrow(/into itself or one of its descendants/);
+    });
+
+    it('should reject same-location move', async () => {
+      const collection: Collection = {
+        info: { name: 'Col', waveId: 'w1', schema: 'v1' },
+        item: [{ id: 'req1', name: 'Request1', request: { id: 'r1', name: 'Request1', url: '', protocol: 'http' } }]
+      };
+      mockFs.setFile(path.join(testCollectionsDir, 'col.json'), JSON.stringify(collection));
+
+      await expect(
+        service.moveItem('col.json', [], 'req1', 'col.json', [])
+      ).rejects.toThrow(/already at the destination/);
+    });
+
+    it('should reject name conflict at destination', async () => {
+      const collection: Collection = {
+        info: { name: 'Col', waveId: 'w1', schema: 'v1' },
+        item: [
+          { id: 'req1', name: 'Request1', request: { id: 'r1', name: 'Request1', url: '', protocol: 'http' } },
+          { id: 'folder1', name: 'Folder1', item: [
+            { id: 'req2', name: 'Request1', request: { id: 'r2', name: 'Request1', url: '', protocol: 'http' } }
+          ]}
+        ]
+      };
+      mockFs.setFile(path.join(testCollectionsDir, 'col.json'), JSON.stringify(collection));
+
+      await expect(
+        service.moveItem('col.json', [], 'req1', 'col.json', ['Folder1'])
+      ).rejects.toThrow(/already exists at the destination/);
+    });
+
+    it('should move request across collections', async () => {
+      const source: Collection = {
+        info: { name: 'Source', waveId: 'w1', schema: 'v1' },
+        item: [{ id: 'req1', name: 'Request1', request: { id: 'r1', name: 'Request1', url: '', protocol: 'http' } }]
+      };
+      const dest: Collection = {
+        info: { name: 'Dest', waveId: 'w2', schema: 'v1' },
+        item: []
+      };
+      mockFs.setFile(path.join(testCollectionsDir, 'source.json'), JSON.stringify(source));
+      mockFs.setFile(path.join(testCollectionsDir, 'dest.json'), JSON.stringify(dest));
+
+      const result = await service.moveItem('source.json', [], 'req1', 'dest.json', []);
+
+      expect(result.source.filename).toBe('source.json');
+      expect(result.destination.filename).toBe('dest.json');
+      expect(result.source.item.length).toBe(0);
+      expect(result.destination.item.length).toBe(1);
+      expect(result.destination.item[0].name).toBe('Request1');
+    });
+
+    it('should create new collection when newCollectionName provided', async () => {
+      const source: Collection = {
+        info: { name: 'Source', waveId: 'w1', schema: 'v1' },
+        item: [{ id: 'req1', name: 'Request1', request: { id: 'r1', name: 'Request1', url: '', protocol: 'http' } }]
+      };
+      mockFs.setFile(path.join(testCollectionsDir, 'source.json'), JSON.stringify(source));
+
+      const result = await service.moveItem('source.json', [], 'req1', 'new.json', [], 'New Collection');
+
+      expect(result.destination.info.name).toBe('New Collection');
+      expect(result.destination.item.length).toBe(1);
+      expect(mockFs.hasFile(path.join(testCollectionsDir, 'new_collection.json'))).toBe(true);
+    });
+
+    it('should rollback destination on source write failure (cross-collection)', async () => {
+      const source: Collection = {
+        info: { name: 'Source', waveId: 'w1', schema: 'v1' },
+        item: [{ id: 'req1', name: 'Request1', request: { id: 'r1', name: 'Request1', url: '', protocol: 'http' } }]
+      };
+      const dest: Collection = {
+        info: { name: 'Dest', waveId: 'w2', schema: 'v1' },
+        item: [{ id: 'existing', name: 'Existing', request: { id: 'e1', name: 'Existing', url: '', protocol: 'http' } }]
+      };
+      mockFs.setFile(path.join(testCollectionsDir, 'source.json'), JSON.stringify(source));
+      mockFs.setFile(path.join(testCollectionsDir, 'dest.json'), JSON.stringify(dest));
+
+      // Inject failure on second write
+      let writeCount = 0;
+      const originalWriteSync = mockFs.setFile.bind(mockFs);
+      mockFs.setFile = vi.fn((path: string, data: string) => {
+        writeCount++;
+        if (writeCount === 2) throw new Error('Disk full');
+        originalWriteSync(path, data);
+      });
+
+      await expect(
+        service.moveItem('source.json', [], 'req1', 'dest.json', [])
+      ).rejects.toThrow(/Disk full/);
+
+      // Destination should be restored to original
+      const destContent = JSON.parse(mockFs.getFile(path.join(testCollectionsDir, 'dest.json'))!);
+      expect(destContent.item.length).toBe(1);
+      expect(destContent.item[0].name).toBe('Existing');
+    });
+
+    it('should reject missing source collection', async () => {
+      await expect(
+        service.moveItem('missing.json', [], 'req1', 'dest.json', [])
+      ).rejects.toThrow(/Source collection not found/);
+    });
+
+    it('should reject missing destination collection', async () => {
+      const source: Collection = {
+        info: { name: 'Source', waveId: 'w1', schema: 'v1' },
+        item: [{ id: 'req1', name: 'Request1', request: { id: 'r1', name: 'Request1', url: '', protocol: 'http' } }]
+      };
+      mockFs.setFile(path.join(testCollectionsDir, 'source.json'), JSON.stringify(source));
+
+      await expect(
+        service.moveItem('source.json', [], 'req1', 'missing.json', [])
+      ).rejects.toThrow(/Destination collection not found/);
+    });
+
+    it('should reject missing source item', async () => {
+      const collection: Collection = {
+        info: { name: 'Col', waveId: 'w1', schema: 'v1' },
+        item: []
+      };
+      mockFs.setFile(path.join(testCollectionsDir, 'col.json'), JSON.stringify(collection));
+
+      await expect(
+        service.moveItem('col.json', [], 'nonexistent', 'col.json', [])
+      ).rejects.toThrow(/not found/);
+    });
+
+    it('should reject invalid destination path', async () => {
+      const collection: Collection = {
+        info: { name: 'Col', waveId: 'w1', schema: 'v1' },
+        item: [{ id: 'req1', name: 'Request1', request: { id: 'r1', name: 'Request1', url: '', protocol: 'http' } }]
+      };
+      mockFs.setFile(path.join(testCollectionsDir, 'col.json'), JSON.stringify(collection));
+
+      await expect(
+        service.moveItem('col.json', [], 'req1', 'col.json', ['NonExistentFolder'])
+      ).rejects.toThrow(/Destination path.*not found/);
     });
   });
 });

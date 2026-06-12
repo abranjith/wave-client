@@ -25,6 +25,7 @@ const mockCoreState = vi.hoisted(() => ({
   setActiveRequestSection: vi.fn(),
   cancelRequest: vi.fn(async () => ({ isOk: true })),
   showNotification: vi.fn(),
+  saveShortcutHandler: undefined as (() => void) | undefined,
 }));
 
 vi.mock('@wave-client/core', async () => {
@@ -86,7 +87,10 @@ vi.mock('@wave-client/core', async () => {
     useNotificationAdapter: () => ({
       showNotification: mockCoreState.showNotification,
     }),
-    useSaveShortcut: () => ({ onKeyDown: vi.fn() }),
+    useSaveShortcut: (onSave: () => void) => {
+      mockCoreState.saveShortcutHandler = onSave;
+      return { onKeyDown: vi.fn() };
+    },
     getRequestTabsForProtocol: (protocol: 'http' | 'ws' | 'sse') => {
       if (protocol === 'ws') {
         return ['Params', 'Headers'];
@@ -220,6 +224,7 @@ describe('web RequestEditor Send/Cancel toggle', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    mockCoreState.saveShortcutHandler = undefined;
     mockCoreState.cancelRequest = vi.fn(async () => ({ isOk: true }));
     mockCoreState.activeTab = {
       id: 'tab-1',
@@ -290,5 +295,59 @@ describe('web RequestEditor Send/Cancel toggle', () => {
     expect(screen.getByText('Request cancelled')).toBeInTheDocument();
     // After the cancelled response lands, the Send button is available again.
     expect(screen.getByRole('button', { name: 'Send' })).toBeInTheDocument();
+  });
+});
+
+describe('web RequestEditor save shortcut gating', () => {
+  const defaultProps = {
+    onSendRequest: vi.fn(),
+    onSaveRequest: vi.fn(),
+    onDownloadResponse: vi.fn(),
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockCoreState.saveShortcutHandler = undefined;
+    mockCoreState.activeTab = {
+      id: 'tab-1',
+      name: 'Request Tab',
+      method: 'GET',
+      url: 'https://api.example.com/users',
+      folderPath: ['Demo Collection'],
+      errorMessage: '',
+      isRequestProcessing: false,
+      responseData: null,
+      activeRequestSection: 'Params',
+      activeResponseSection: 'Body',
+      protocol: 'http',
+      authId: null,
+      environmentId: null,
+      isDirty: false,
+      sentRequest: null,
+    };
+    mockCoreState.activeTabId = 'tab-1';
+  });
+
+  it('silently ignores save shortcut when the tab has no savable changes', () => {
+    render(<RequestEditor {...defaultProps} />);
+
+    expect(mockCoreState.saveShortcutHandler).toBeTypeOf('function');
+    mockCoreState.saveShortcutHandler?.();
+
+    expect(defaultProps.onSaveRequest).not.toHaveBeenCalled();
+  });
+
+  it('still saves through shortcut when the tab is dirty', () => {
+    mockCoreState.activeTab = {
+      ...mockCoreState.activeTab,
+      isDirty: true,
+    };
+
+    render(<RequestEditor {...defaultProps} />);
+
+    expect(mockCoreState.saveShortcutHandler).toBeTypeOf('function');
+    mockCoreState.saveShortcutHandler?.();
+
+    expect(defaultProps.onSaveRequest).toHaveBeenCalledTimes(1);
   });
 });
