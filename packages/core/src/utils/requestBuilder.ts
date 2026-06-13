@@ -7,16 +7,13 @@
 import { 
     HeaderRow, 
     ParamRow, 
-    FormField, 
     Environment,
     CollectionRequest,
     CollectionBody,
     FileReference,
-    MultiPartFormField,
-    BodyMode,
 } from '../types/collection';
 import { Auth } from '../hooks/store/createAuthSlice';
-import { resolveParameterizedValue, getContentTypeFromBodyMode, isUrlInDomains } from './common';
+import { resolveParameterizedValue, isUrlInDomains, getContentTypeFromBodyMode } from './common';
 import { Result, Ok, Err } from './result';
 import { IFileAdapter } from '../types/adapters';
 
@@ -349,41 +346,6 @@ export async function convertCollectionBodyToHttpPayload(
     }
 }
 
-/**
- * Gets the Content-Type header value for a CollectionBody
- */
-export function getContentTypeForBody(body: CollectionBody | undefined): string | null {
-    if (!body || body.mode === 'none') {
-        return null;
-    }
-    
-    switch (body.mode) {
-        case 'raw':
-            const language = body.options?.raw?.language;
-            const langMap: Record<string, string> = {
-                'json': 'application/json',
-                'xml': 'application/xml',
-                'html': 'text/html',
-                'text': 'text/plain',
-                'csv': 'text/csv',
-            };
-            return language ? langMap[language] || 'text/plain' : 'text/plain';
-            
-        case 'urlencoded':
-            return 'application/x-www-form-urlencoded';
-            
-        case 'formdata':
-            // Let the browser set this with the boundary
-            return null;
-            
-        case 'file':
-            return body.file?.contentType || 'application/octet-stream';
-            
-        default:
-            return null;
-    }
-}
-
 // ==================== Auth Validation ====================
 
 /**
@@ -507,7 +469,7 @@ export async function buildHttpRequest(
     if (request.body && request.body.mode !== 'none') {
         const contentTypeKey = Object.keys(headers).find(key => key.toLowerCase() === 'content-type');
         if (!contentTypeKey) {
-            const contentType = getContentTypeForBody(request.body);
+            const contentType = getContentTypeFromBodyMode(request.body);
             if (contentType) {
                 headers['Content-Type'] = contentType;
             }

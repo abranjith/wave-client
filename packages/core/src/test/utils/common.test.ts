@@ -9,12 +9,14 @@ import {
   isUrlEncoded,
   parseUrlQueryParams,
   getContentTypeFromBody,
+  getContentTypeFromBodyMode,
   resolveParameterizedValue,
   getHttpMethodColor,
   getUrlWithoutProtocol,
   isUrlInDomains,
   getCommonHeaderNames,
 } from '../../utils/common';
+import type { CollectionBody } from '../../types/collection';
 
 describe('common', () => {
   describe('cn', () => {
@@ -46,7 +48,32 @@ describe('common', () => {
       expect(getContentTypeFromFileName('data.xml')).toBe('application/xml');
       expect(getContentTypeFromFileName('page.html')).toBe('text/html');
       expect(getContentTypeFromFileName('style.css')).toBe('text/css');
-      expect(getContentTypeFromFileName('script.js')).toBe('application/javascript');
+      expect(getContentTypeFromFileName('script.js')).toBe('text/javascript');
+      expect(getContentTypeFromFileName('script.mjs')).toBe('text/javascript');
+      expect(getContentTypeFromFileName('module.ts')).toBe('application/typescript');
+      expect(getContentTypeFromFileName('notes.md')).toBe('text/markdown');
+      expect(getContentTypeFromFileName('config.yaml')).toBe('application/yaml');
+      expect(getContentTypeFromFileName('config.yml')).toBe('application/yaml');
+      expect(getContentTypeFromFileName('config.toml')).toBe('application/toml');
+      expect(getContentTypeFromFileName('query.graphql')).toBe('application/graphql');
+      expect(getContentTypeFromFileName('data.ndjson')).toBe('application/x-ndjson');
+      expect(getContentTypeFromFileName('schema.sql')).toBe('application/sql');
+    });
+
+    it('should return correct MIME type for modern image formats', () => {
+      expect(getContentTypeFromFileName('photo.avif')).toBe('image/avif');
+      expect(getContentTypeFromFileName('photo.heic')).toBe('image/heic');
+    });
+
+    it('should return correct MIME type for archives and binary formats', () => {
+      expect(getContentTypeFromFileName('archive.zip')).toBe('application/zip');
+      expect(getContentTypeFromFileName('archive.xz')).toBe('application/x-xz');
+      expect(getContentTypeFromFileName('archive.zst')).toBe('application/zstd');
+      expect(getContentTypeFromFileName('lib.jar')).toBe('application/java-archive');
+      expect(getContentTypeFromFileName('module.wasm')).toBe('application/wasm');
+      expect(getContentTypeFromFileName('data.parquet')).toBe('application/vnd.apache.parquet');
+      expect(getContentTypeFromFileName('font.woff2')).toBe('font/woff2');
+      expect(getContentTypeFromFileName('cert.pem')).toBe('application/x-pem-file');
     });
 
     it('should be case-insensitive', () => {
@@ -84,11 +111,40 @@ describe('common', () => {
     it('should return .bin for unknown content types', () => {
       expect(getExtensionFromContentType('application/x-unknown')).toBe('.bin');
       expect(getExtensionFromContentType('unknown/type')).toBe('.bin');
+      expect(getExtensionFromContentType('')).toBe('.bin');
     });
 
     it('should be case-insensitive', () => {
       expect(getExtensionFromContentType('APPLICATION/JSON')).toBe('.json');
       expect(getExtensionFromContentType('Image/PNG')).toBe('.png');
+    });
+
+    it('should resolve MIME type aliases to the canonical extension', () => {
+      expect(getExtensionFromContentType('text/xml')).toBe('.xml');
+      expect(getExtensionFromContentType('application/javascript')).toBe('.js');
+      expect(getExtensionFromContentType('application/x-yaml')).toBe('.yaml');
+      expect(getExtensionFromContentType('audio/x-wav')).toBe('.wav');
+      expect(getExtensionFromContentType('application/x-zip-compressed')).toBe('.zip');
+      expect(getExtensionFromContentType('image/vnd.microsoft.icon')).toBe('.ico');
+    });
+
+    it('should handle modern and structured content types', () => {
+      expect(getExtensionFromContentType('application/yaml')).toBe('.yaml');
+      expect(getExtensionFromContentType('application/toml')).toBe('.toml');
+      expect(getExtensionFromContentType('application/x-ndjson')).toBe('.ndjson');
+      expect(getExtensionFromContentType('application/geo+json')).toBe('.geojson');
+      expect(getExtensionFromContentType('application/wasm')).toBe('.wasm');
+      expect(getExtensionFromContentType('image/avif')).toBe('.avif');
+      expect(getExtensionFromContentType('application/zstd')).toBe('.zst');
+      expect(getExtensionFromContentType('application/vnd.sqlite3')).toBe('.sqlite');
+    });
+
+    it('should stay consistent with getContentTypeFromFileName (round-trip)', () => {
+      // For a sample of common types, ext -> mime -> ext must return the original
+      for (const ext of ['.json', '.xml', '.html', '.png', '.pdf', '.zip', '.mp4', '.woff2', '.yaml']) {
+        const mime = getContentTypeFromFileName(`file${ext}`);
+        expect(getExtensionFromContentType(mime)).toBe(ext);
+      }
     });
   });
 
@@ -107,6 +163,11 @@ describe('common', () => {
       const headers = { 'other-header': 'value' };
       expect(getResponseContentType(headers)).toBe('');
     });
+
+    it('should return the first value for multi-value content-type headers', () => {
+      const headers: Record<string, string | string[]> = { 'content-type': ['application/json', 'text/plain'] };
+      expect(getResponseContentType(headers)).toBe('application/json');
+    });
   });
 
   describe('getResponseLanguage', () => {
@@ -115,9 +176,16 @@ describe('common', () => {
       expect(getResponseLanguage(headers)).toBe('json');
     });
 
+    it('should detect JSON content with structured suffix', () => {
+      expect(getResponseLanguage({ 'content-type': 'application/problem+json' })).toBe('json');
+      expect(getResponseLanguage({ 'content-type': 'application/vnd.api+json; charset=utf-8' })).toBe('json');
+    });
+
     it('should detect XML content', () => {
-      const headers = { 'content-type': 'application/xml' };
-      expect(getResponseLanguage(headers)).toBe('xml');
+      expect(getResponseLanguage({ 'content-type': 'application/xml' })).toBe('xml');
+      expect(getResponseLanguage({ 'content-type': 'text/xml' })).toBe('xml');
+      expect(getResponseLanguage({ 'content-type': 'application/soap+xml' })).toBe('xml');
+      expect(getResponseLanguage({ 'content-type': 'image/svg+xml' })).toBe('xml');
     });
 
     it('should detect HTML content', () => {
@@ -125,14 +193,53 @@ describe('common', () => {
       expect(getResponseLanguage(headers)).toBe('html');
     });
 
+    it('should detect CSV content', () => {
+      expect(getResponseLanguage({ 'content-type': 'text/csv' })).toBe('csv');
+      expect(getResponseLanguage({ 'content-type': 'text/csv; charset=utf-8' })).toBe('csv');
+    });
+
     it('should detect plain text', () => {
       const headers = { 'content-type': 'text/plain' };
       expect(getResponseLanguage(headers)).toBe('text');
     });
 
+    it('should treat all text/* types as text', () => {
+      expect(getResponseLanguage({ 'content-type': 'text/markdown' })).toBe('text');
+      expect(getResponseLanguage({ 'content-type': 'text/vnd.some-vendor-format' })).toBe('text');
+    });
+
+    it('should treat known text-based application types as text', () => {
+      expect(getResponseLanguage({ 'content-type': 'application/javascript' })).toBe('text');
+      expect(getResponseLanguage({ 'content-type': 'text/javascript' })).toBe('text');
+      expect(getResponseLanguage({ 'content-type': 'application/yaml' })).toBe('text');
+      expect(getResponseLanguage({ 'content-type': 'application/toml' })).toBe('text');
+      expect(getResponseLanguage({ 'content-type': 'application/x-www-form-urlencoded' })).toBe('text');
+      expect(getResponseLanguage({ 'content-type': 'application/graphql' })).toBe('text');
+      expect(getResponseLanguage({ 'content-type': 'application/x-ndjson' })).toBe('text');
+      expect(getResponseLanguage({ 'content-type': 'application/jwt' })).toBe('text');
+    });
+
+    it('should detect binary content types', () => {
+      expect(getResponseLanguage({ 'content-type': 'application/octet-stream' })).toBe('binary');
+      expect(getResponseLanguage({ 'content-type': 'image/png' })).toBe('binary');
+      expect(getResponseLanguage({ 'content-type': 'video/mp4' })).toBe('binary');
+      expect(getResponseLanguage({ 'content-type': 'audio/mpeg' })).toBe('binary');
+      expect(getResponseLanguage({ 'content-type': 'application/pdf' })).toBe('binary');
+      expect(getResponseLanguage({ 'content-type': 'application/zip' })).toBe('binary');
+      expect(getResponseLanguage({ 'content-type': 'font/woff2' })).toBe('binary');
+      expect(getResponseLanguage({ 'content-type': 'application/wasm' })).toBe('binary');
+      expect(getResponseLanguage({ 'content-type': 'application/protobuf' })).toBe('binary');
+    });
+
     it('should default to binary for unknown types', () => {
-      const headers = { 'content-type': 'application/octet-stream' };
-      expect(getResponseLanguage(headers)).toBe('binary');
+      expect(getResponseLanguage({ 'content-type': 'application/x-totally-unknown' })).toBe('binary');
+      expect(getResponseLanguage({ 'content-type': 'application/vnd.custom.format' })).toBe('binary');
+      expect(getResponseLanguage({ 'content-type': 'something/weird' })).toBe('binary');
+    });
+
+    it('should return none when content-type header is missing', () => {
+      expect(getResponseLanguage({})).toBe('none');
+      expect(getResponseLanguage({ 'other-header': 'value' })).toBe('none');
     });
   });
 
@@ -248,6 +355,67 @@ describe('common', () => {
 
     it('should default to octet-stream for binary without filename', () => {
       expect(getContentTypeFromBody('binary', null)).toBe('application/octet-stream');
+    });
+
+    it('should detect CSV text type', () => {
+      expect(getContentTypeFromBody('text', null, 'csv')).toBe('text/csv');
+    });
+
+    it('should fall back to text/plain for unknown text types', () => {
+      expect(getContentTypeFromBody('text', null, 'unknown-language')).toBe('text/plain');
+    });
+  });
+
+  describe('getContentTypeFromBodyMode', () => {
+    it('should return null for undefined body or none mode', () => {
+      expect(getContentTypeFromBodyMode(undefined)).toBeNull();
+      expect(getContentTypeFromBodyMode({ mode: 'none' })).toBeNull();
+    });
+
+    it('should return content type based on raw body language', () => {
+      const rawBody = (language: 'json' | 'xml' | 'html' | 'text' | 'csv'): CollectionBody => ({
+        mode: 'raw',
+        raw: '',
+        options: { raw: { language } },
+      });
+
+      expect(getContentTypeFromBodyMode(rawBody('json'))).toBe('application/json');
+      expect(getContentTypeFromBodyMode(rawBody('xml'))).toBe('application/xml');
+      expect(getContentTypeFromBodyMode(rawBody('html'))).toBe('text/html');
+      expect(getContentTypeFromBodyMode(rawBody('text'))).toBe('text/plain');
+      expect(getContentTypeFromBodyMode(rawBody('csv'))).toBe('text/csv');
+    });
+
+    it('should default raw body without language to text/plain', () => {
+      expect(getContentTypeFromBodyMode({ mode: 'raw', raw: 'hello' })).toBe('text/plain');
+    });
+
+    it('should return urlencoded content type', () => {
+      expect(getContentTypeFromBodyMode({ mode: 'urlencoded', urlencoded: [] }))
+        .toBe('application/x-www-form-urlencoded');
+    });
+
+    it('should return null for formdata so the HTTP client sets the boundary', () => {
+      expect(getContentTypeFromBodyMode({ mode: 'formdata', formdata: [] })).toBeNull();
+    });
+
+    it('should use the file content type for file bodies', () => {
+      const body: CollectionBody = {
+        mode: 'file',
+        file: {
+          path: '/tmp/photo.png',
+          fileName: 'photo.png',
+          contentType: 'image/png',
+          size: 100,
+          pathType: 'absolute',
+          storageType: 'local',
+        },
+      };
+      expect(getContentTypeFromBodyMode(body)).toBe('image/png');
+    });
+
+    it('should default to octet-stream for file bodies without a file', () => {
+      expect(getContentTypeFromBodyMode({ mode: 'file' })).toBe('application/octet-stream');
     });
   });
 
@@ -399,6 +567,21 @@ describe('common', () => {
       expect(headers).toContain('Authorization');
       expect(headers).toContain('Accept');
       expect(headers).toContain('User-Agent');
+    });
+
+    it('should include modern security and infrastructure headers', () => {
+      const headers = getCommonHeaderNames();
+
+      expect(headers).toContain('Content-Disposition');
+      expect(headers).toContain('Forwarded');
+      expect(headers).toContain('Referrer-Policy');
+      expect(headers).toContain('Permissions-Policy');
+      expect(headers).toContain('Cross-Origin-Resource-Policy');
+      expect(headers).toContain('Sec-Fetch-Mode');
+      expect(headers).toContain('Sec-WebSocket-Key');
+      expect(headers).toContain('Idempotency-Key');
+      expect(headers).toContain('X-RateLimit-Limit');
+      expect(headers).toContain('Priority');
     });
 
     it('should not contain duplicates', () => {

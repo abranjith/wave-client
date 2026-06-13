@@ -8,82 +8,230 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
+// ============================================================================
+// MIME Type Registry (single source of truth for content-type <-> extension)
+// ============================================================================
+
+/** Default content type when the file type is truly unknown */
+const DEFAULT_BINARY_CONTENT_TYPE = 'application/octet-stream';
+/** Default extension when the content type is truly unknown */
+const DEFAULT_BINARY_EXTENSION = '.bin';
+
+interface MimeTypeEntry {
+  /** Canonical MIME type */
+  mime: string;
+  /** File extensions (without dot); the first one is the canonical extension */
+  extensions: string[];
+  /** Alternate/legacy MIME types that map to the same canonical extension */
+  aliases?: string[];
+}
+
+/**
+ * Canonical MIME type registry. Both lookup directions
+ * (extension -> content type, content type -> extension) are derived from
+ * this single table to avoid drift between the two mappings.
+ * Entry order matters: when two entries share an extension, the first wins
+ * (e.g. '.ts' resolves to TypeScript, not MPEG transport stream).
+ */
+const MIME_TYPE_REGISTRY: readonly MimeTypeEntry[] = [
+  // Text & markup
+  { mime: 'text/plain', extensions: ['txt', 'text', 'log'] },
+  { mime: 'text/markdown', extensions: ['md', 'markdown'], aliases: ['text/x-markdown'] },
+  { mime: 'text/csv', extensions: ['csv'] },
+  { mime: 'text/tab-separated-values', extensions: ['tsv'] },
+  { mime: 'text/html', extensions: ['html', 'htm'] },
+  { mime: 'application/xhtml+xml', extensions: ['xhtml'] },
+  { mime: 'text/css', extensions: ['css'] },
+  { mime: 'text/calendar', extensions: ['ics'] },
+  { mime: 'text/vcard', extensions: ['vcf'], aliases: ['text/x-vcard'] },
+  { mime: 'application/rtf', extensions: ['rtf'], aliases: ['text/rtf'] },
+
+  // Code & scripts
+  { mime: 'text/javascript', extensions: ['js', 'mjs', 'cjs'], aliases: ['application/javascript', 'application/x-javascript', 'application/ecmascript', 'text/ecmascript'] },
+  { mime: 'application/typescript', extensions: ['ts', 'tsx', 'mts', 'cts'], aliases: ['text/typescript', 'text/x-typescript'] },
+  { mime: 'text/jsx', extensions: ['jsx'] },
+  { mime: 'application/x-sh', extensions: ['sh', 'bash'], aliases: ['text/x-shellscript'] },
+  { mime: 'text/x-python', extensions: ['py'], aliases: ['application/x-python', 'application/x-python-code'] },
+  { mime: 'text/x-ruby', extensions: ['rb'], aliases: ['application/x-ruby'] },
+  { mime: 'application/x-php', extensions: ['php'], aliases: ['text/x-php', 'application/x-httpd-php'] },
+  { mime: 'text/x-java-source', extensions: ['java'] },
+  { mime: 'text/x-c', extensions: ['c', 'h'] },
+  { mime: 'text/x-c++', extensions: ['cpp', 'hpp', 'cc'] },
+  { mime: 'text/x-csharp', extensions: ['cs'] },
+  { mime: 'text/x-go', extensions: ['go'] },
+  { mime: 'text/x-rust', extensions: ['rs'] },
+  { mime: 'application/sql', extensions: ['sql'], aliases: ['text/x-sql', 'application/x-sql'] },
+  { mime: 'application/graphql', extensions: ['graphql', 'gql'] },
+
+  // Structured data
+  { mime: 'application/json', extensions: ['json'], aliases: ['application/problem+json', 'application/hal+json', 'application/vnd.api+json', 'application/merge-patch+json', 'application/json-patch+json'] },
+  { mime: 'application/ld+json', extensions: ['jsonld'] },
+  { mime: 'application/x-ndjson', extensions: ['ndjson', 'jsonl'], aliases: ['application/jsonl', 'application/x-jsonlines'] },
+  { mime: 'application/json5', extensions: ['json5'] },
+  { mime: 'application/xml', extensions: ['xml', 'xsd'], aliases: ['text/xml', 'application/problem+xml'] },
+  { mime: 'application/xslt+xml', extensions: ['xsl', 'xslt'] },
+  { mime: 'application/yaml', extensions: ['yaml', 'yml'], aliases: ['application/x-yaml', 'text/yaml', 'text/x-yaml'] },
+  { mime: 'application/toml', extensions: ['toml'], aliases: ['text/toml'] },
+  { mime: 'application/jwt', extensions: ['jwt'] },
+  { mime: 'application/geo+json', extensions: ['geojson'] },
+  { mime: 'application/manifest+json', extensions: ['webmanifest'] },
+
+  // Images
+  { mime: 'image/jpeg', extensions: ['jpg', 'jpeg', 'jfif'] },
+  { mime: 'image/png', extensions: ['png'] },
+  { mime: 'image/apng', extensions: ['apng'] },
+  { mime: 'image/gif', extensions: ['gif'] },
+  { mime: 'image/webp', extensions: ['webp'] },
+  { mime: 'image/avif', extensions: ['avif'] },
+  { mime: 'image/heic', extensions: ['heic'] },
+  { mime: 'image/heif', extensions: ['heif'] },
+  { mime: 'image/svg+xml', extensions: ['svg'] },
+  { mime: 'image/x-icon', extensions: ['ico'], aliases: ['image/vnd.microsoft.icon'] },
+  { mime: 'image/bmp', extensions: ['bmp'] },
+  { mime: 'image/tiff', extensions: ['tiff', 'tif'] },
+  { mime: 'image/jxl', extensions: ['jxl'] },
+  { mime: 'image/x-xbitmap', extensions: ['xbm'] },
+  { mime: 'image/x-xpixmap', extensions: ['xpm'] },
+
+  // Documents
+  { mime: 'application/pdf', extensions: ['pdf'] },
+  { mime: 'application/msword', extensions: ['doc'] },
+  { mime: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', extensions: ['docx'] },
+  { mime: 'application/vnd.ms-excel', extensions: ['xls'] },
+  { mime: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', extensions: ['xlsx'] },
+  { mime: 'application/vnd.ms-powerpoint', extensions: ['ppt'] },
+  { mime: 'application/vnd.openxmlformats-officedocument.presentationml.presentation', extensions: ['pptx'] },
+  { mime: 'application/vnd.oasis.opendocument.text', extensions: ['odt'] },
+  { mime: 'application/vnd.oasis.opendocument.spreadsheet', extensions: ['ods'] },
+  { mime: 'application/vnd.oasis.opendocument.presentation', extensions: ['odp'] },
+
+  // E-books
+  { mime: 'application/epub+zip', extensions: ['epub'] },
+  { mime: 'application/x-mobipocket-ebook', extensions: ['mobi'] },
+  { mime: 'application/vnd.amazon.ebook', extensions: ['azw'] },
+
+  // Audio
+  { mime: 'audio/mpeg', extensions: ['mp3'], aliases: ['audio/mp3'] },
+  { mime: 'audio/wav', extensions: ['wav'], aliases: ['audio/wave', 'audio/x-wav', 'audio/vnd.wave'] },
+  { mime: 'audio/ogg', extensions: ['ogg', 'oga'] },
+  { mime: 'audio/flac', extensions: ['flac'], aliases: ['audio/x-flac'] },
+  { mime: 'audio/aac', extensions: ['aac'] },
+  { mime: 'audio/mp4', extensions: ['m4a'], aliases: ['audio/x-m4a'] },
+  { mime: 'audio/webm', extensions: ['weba'] },
+  { mime: 'audio/opus', extensions: ['opus'] },
+  { mime: 'audio/midi', extensions: ['midi', 'mid'], aliases: ['audio/x-midi'] },
+  { mime: 'audio/amr', extensions: ['amr'] },
+
+  // Video
+  { mime: 'video/mp4', extensions: ['mp4', 'm4v'] },
+  { mime: 'video/mpeg', extensions: ['mpeg', 'mpg'] },
+  { mime: 'video/x-msvideo', extensions: ['avi'] },
+  { mime: 'video/quicktime', extensions: ['mov'] },
+  { mime: 'video/x-ms-wmv', extensions: ['wmv'] },
+  { mime: 'video/x-flv', extensions: ['flv'] },
+  { mime: 'video/webm', extensions: ['webm'] },
+  { mime: 'video/x-matroska', extensions: ['mkv'] },
+  { mime: 'video/3gpp', extensions: ['3gp'] },
+  { mime: 'video/3gpp2', extensions: ['3g2'] },
+  { mime: 'video/ogg', extensions: ['ogv'] },
+  { mime: 'video/mp2t', extensions: ['m2ts', 'mts'] },
+
+  // Streaming manifests
+  { mime: 'application/vnd.apple.mpegurl', extensions: ['m3u8'], aliases: ['audio/mpegurl', 'audio/x-mpegurl'] },
+  { mime: 'application/dash+xml', extensions: ['mpd'] },
+
+  // Archives & compression
+  { mime: 'application/zip', extensions: ['zip'], aliases: ['application/x-zip-compressed'] },
+  { mime: 'application/vnd.rar', extensions: ['rar'], aliases: ['application/x-rar-compressed'] },
+  { mime: 'application/x-7z-compressed', extensions: ['7z'] },
+  { mime: 'application/x-tar', extensions: ['tar'] },
+  { mime: 'application/gzip', extensions: ['gz', 'tgz'], aliases: ['application/x-gzip'] },
+  { mime: 'application/x-bzip', extensions: ['bz'] },
+  { mime: 'application/x-bzip2', extensions: ['bz2'] },
+  { mime: 'application/x-xz', extensions: ['xz'] },
+  { mime: 'application/zstd', extensions: ['zst'] },
+  { mime: 'application/x-compress', extensions: ['z'], aliases: ['application/x-compressed'] },
+  { mime: 'application/java-archive', extensions: ['jar'] },
+
+  // Fonts
+  { mime: 'font/woff', extensions: ['woff'], aliases: ['application/font-woff'] },
+  { mime: 'font/woff2', extensions: ['woff2'], aliases: ['application/font-woff2'] },
+  { mime: 'font/ttf', extensions: ['ttf'], aliases: ['application/x-font-ttf'] },
+  { mime: 'font/otf', extensions: ['otf'], aliases: ['application/x-font-otf'] },
+  { mime: 'font/collection', extensions: ['ttc'] },
+  { mime: 'application/vnd.ms-fontobject', extensions: ['eot'] },
+
+  // Executables, packages & disk images
+  { mime: 'application/octet-stream', extensions: ['bin'], aliases: ['application/x-binary'] },
+  { mime: 'application/x-msdownload', extensions: ['exe', 'dll'], aliases: ['application/x-msdos-program'] },
+  { mime: 'application/x-msi', extensions: ['msi'] },
+  { mime: 'application/vnd.android.package-archive', extensions: ['apk'] },
+  { mime: 'application/vnd.apple.installer+xml', extensions: ['mpkg'] },
+  { mime: 'application/x-apple-diskimage', extensions: ['dmg'] },
+  { mime: 'application/x-iso9660-image', extensions: ['iso'] },
+  { mime: 'application/x-debian-package', extensions: ['deb'], aliases: ['application/vnd.debian.binary-package'] },
+  { mime: 'application/x-redhat-package-manager', extensions: ['rpm'], aliases: ['application/x-rpm'] },
+
+  // Binary serialization & data formats
+  { mime: 'application/wasm', extensions: ['wasm'] },
+  { mime: 'application/protobuf', extensions: ['pb'], aliases: ['application/x-protobuf', 'application/vnd.google.protobuf'] },
+  { mime: 'application/msgpack', extensions: ['msgpack'], aliases: ['application/x-msgpack', 'application/vnd.msgpack'] },
+  { mime: 'application/cbor', extensions: ['cbor'] },
+  { mime: 'application/avro', extensions: ['avro'], aliases: ['application/vnd.apache.avro+binary'] },
+  { mime: 'application/vnd.apache.parquet', extensions: ['parquet'], aliases: ['application/x-parquet'] },
+  { mime: 'application/vnd.sqlite3', extensions: ['sqlite', 'db'], aliases: ['application/x-sqlite3'] },
+  { mime: 'application/vnd.google-earth.kml+xml', extensions: ['kml'] },
+  { mime: 'application/vnd.google-earth.kmz', extensions: ['kmz'] },
+
+  // Certificates & keys
+  { mime: 'application/x-x509-ca-cert', extensions: ['crt', 'cer', 'der'] },
+  { mime: 'application/x-pem-file', extensions: ['pem'] },
+  { mime: 'application/pkcs8', extensions: ['p8', 'key'] },
+  { mime: 'application/pkcs10', extensions: ['p10', 'csr'] },
+  { mime: 'application/x-pkcs12', extensions: ['p12', 'pfx'], aliases: ['application/pkcs12'] },
+
+  // CAD & 3D models
+  { mime: 'image/vnd.dwg', extensions: ['dwg'], aliases: ['application/acad', 'application/x-autocad'] },
+  { mime: 'image/vnd.dxf', extensions: ['dxf'], aliases: ['application/dxf'] },
+  { mime: 'model/gltf+json', extensions: ['gltf'] },
+  { mime: 'model/gltf-binary', extensions: ['glb'] },
+  { mime: 'model/obj', extensions: ['obj'] },
+  { mime: 'model/stl', extensions: ['stl'] },
+  { mime: 'model/3mf', extensions: ['3mf'] },
+
+  // Email
+  { mime: 'message/rfc822', extensions: ['eml'] },
+  { mime: 'application/vnd.ms-outlook', extensions: ['msg'] },
+];
+
+/** extension (without dot) -> canonical content type. Derived from MIME_TYPE_REGISTRY. */
+const CONTENT_TYPE_BY_EXTENSION: Record<string, string> = {};
+/** content type (canonical or alias) -> canonical extension (with dot). Derived from MIME_TYPE_REGISTRY. */
+const EXTENSION_BY_CONTENT_TYPE: Record<string, string> = {};
+
+for (const entry of MIME_TYPE_REGISTRY) {
+  const primaryExtension = `.${entry.extensions[0]}`;
+  for (const extension of entry.extensions) {
+    // First registry entry wins on extension conflicts
+    if (!(extension in CONTENT_TYPE_BY_EXTENSION)) {
+      CONTENT_TYPE_BY_EXTENSION[extension] = entry.mime;
+    }
+  }
+  for (const mime of [entry.mime, ...(entry.aliases ?? [])]) {
+    if (!(mime in EXTENSION_BY_CONTENT_TYPE)) {
+      EXTENSION_BY_CONTENT_TYPE[mime] = primaryExtension;
+    }
+  }
+}
+
 /**
  * Determines the MIME type based on file extension
  * @param fileName - The name of the file including extension
  * @returns The appropriate MIME type or 'application/octet-stream' as default
  */
 export function getContentTypeFromFileName(fileName: string): string {
-  const extension = fileName.toLowerCase().split('.').pop();
-  
-  const mimeTypes: Record<string, string> = {
-    // Images
-    'jpg': 'image/jpeg',
-    'jpeg': 'image/jpeg',
-    'png': 'image/png',
-    'gif': 'image/gif',
-    'webp': 'image/webp',
-    'svg': 'image/svg+xml',
-    'ico': 'image/x-icon',
-    'bmp': 'image/bmp',
-    'tiff': 'image/tiff',
-    'tif': 'image/tiff',
-    
-    // Documents
-    'pdf': 'application/pdf',
-    'doc': 'application/msword',
-    'docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-    'xls': 'application/vnd.ms-excel',
-    'xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-    'ppt': 'application/vnd.ms-powerpoint',
-    'pptx': 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
-    'txt': 'text/plain',
-    'rtf': 'application/rtf',
-    
-    // Audio
-    'mp3': 'audio/mpeg',
-    'wav': 'audio/wav',
-    'ogg': 'audio/ogg',
-    'flac': 'audio/flac',
-    'aac': 'audio/aac',
-    'm4a': 'audio/mp4',
-    
-    // Video
-    'mp4': 'video/mp4',
-    'avi': 'video/x-msvideo',
-    'mov': 'video/quicktime',
-    'wmv': 'video/x-ms-wmv',
-    'flv': 'video/x-flv',
-    'webm': 'video/webm',
-    'mkv': 'video/x-matroska',
-    
-    // Archives
-    'zip': 'application/zip',
-    'rar': 'application/vnd.rar',
-    '7z': 'application/x-7z-compressed',
-    'tar': 'application/x-tar',
-    'gz': 'application/gzip',
-    'bz2': 'application/x-bzip2',
-    
-    // Code/Text
-    'json': 'application/json',
-    'xml': 'application/xml',
-    'html': 'text/html',
-    'css': 'text/css',
-    'js': 'application/javascript',
-    'ts': 'application/typescript',
-    'csv': 'text/csv',
-    'yaml': 'application/x-yaml',
-    'yml': 'application/x-yaml',
-    
-    // Other common types
-    'bin': 'application/octet-stream',
-    'exe': 'application/x-msdownload',
-    'dmg': 'application/x-apple-diskimage',
-    'iso': 'application/x-iso9660-image',
-  };
-  
-  return extension ? mimeTypes[extension] || 'application/octet-stream' : 'application/octet-stream';
+  const extension = fileName.toLowerCase().trim().split('.').pop();
+  return (extension && CONTENT_TYPE_BY_EXTENSION[extension]) || DEFAULT_BINARY_CONTENT_TYPE;
 }
 
 /**
@@ -94,230 +242,93 @@ export function getContentTypeFromFileName(fileName: string): string {
 export function getExtensionFromContentType(contentType: string): string {
   // Extract the main MIME type, ignoring parameters like charset
   const mimeType = contentType.split(';')[0].trim().toLowerCase();
-  
-  const extensionMap: Record<string, string> = {
-    // Images
-    'image/jpeg': '.jpg',
-    'image/png': '.png',
-    'image/gif': '.gif',
-    'image/webp': '.webp',
-    'image/svg+xml': '.svg',
-    'image/x-icon': '.ico',
-    'image/vnd.microsoft.icon': '.ico',
-    'image/bmp': '.bmp',
-    'image/tiff': '.tiff',
-    'image/avif': '.avif',
-    'image/heic': '.heic',
-    'image/heif': '.heif',
-    
-    // Documents
-    'application/pdf': '.pdf',
-    'application/msword': '.doc',
-    'application/vnd.openxmlformats-officedocument.wordprocessingml.document': '.docx',
-    'application/vnd.ms-excel': '.xls',
-    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': '.xlsx',
-    'application/vnd.ms-powerpoint': '.ppt',
-    'application/vnd.openxmlformats-officedocument.presentationml.presentation': '.pptx',
-    'application/vnd.oasis.opendocument.text': '.odt',
-    'application/vnd.oasis.opendocument.spreadsheet': '.ods',
-    'application/vnd.oasis.opendocument.presentation': '.odp',
-    'application/rtf': '.rtf',
-    'text/plain': '.txt',
-    'text/markdown': '.md',
-    'text/csv': '.csv',
-    
-    // Audio
-    'audio/mpeg': '.mp3',
-    'audio/mp3': '.mp3',
-    'audio/wav': '.wav',
-    'audio/wave': '.wav',
-    'audio/x-wav': '.wav',
-    'audio/ogg': '.ogg',
-    'audio/flac': '.flac',
-    'audio/aac': '.aac',
-    'audio/mp4': '.m4a',
-    'audio/x-m4a': '.m4a',
-    'audio/webm': '.weba',
-    'audio/opus': '.opus',
-    'audio/midi': '.midi',
-    'audio/x-midi': '.midi',
-    
-    // Video
-    'video/mp4': '.mp4',
-    'video/mpeg': '.mpeg',
-    'video/x-msvideo': '.avi',
-    'video/quicktime': '.mov',
-    'video/x-ms-wmv': '.wmv',
-    'video/x-flv': '.flv',
-    'video/webm': '.webm',
-    'video/x-matroska': '.mkv',
-    'video/3gpp': '.3gp',
-    'video/3gpp2': '.3g2',
-    'video/ogg': '.ogv',
-    
-    // Archives
-    'application/zip': '.zip',
-    'application/x-zip-compressed': '.zip',
-    'application/vnd.rar': '.rar',
-    'application/x-rar-compressed': '.rar',
-    'application/x-7z-compressed': '.7z',
-    'application/x-tar': '.tar',
-    'application/gzip': '.gz',
-    'application/x-gzip': '.gz',
-    'application/x-bzip': '.bz',
-    'application/x-bzip2': '.bz2',
-    'application/x-compress': '.z',
-    'application/x-compressed': '.z',
-    
-    // Code/Text/Data
-    'application/json': '.json',
-    'application/ld+json': '.jsonld',
-    'application/xml': '.xml',
-    'text/xml': '.xml',
-    'text/html': '.html',
-    'application/xhtml+xml': '.xhtml',
-    'text/css': '.css',
-    'text/javascript': '.js',
-    'application/javascript': '.js',
-    'application/x-javascript': '.js',
-    'application/typescript': '.ts',
-    'text/typescript': '.ts',
-    'application/yaml': '.yaml',
-    'text/yaml': '.yaml',
-    'application/x-yaml': '.yml',
-    'text/x-yaml': '.yml',
-    'application/toml': '.toml',
-    'text/toml': '.toml',
-    'application/x-sh': '.sh',
-    'application/x-python': '.py',
-    'text/x-python': '.py',
-    'application/x-ruby': '.rb',
-    'text/x-ruby': '.rb',
-    'application/x-php': '.php',
-    'text/x-php': '.php',
-    'application/sql': '.sql',
-    'text/x-sql': '.sql',
-    
-    // Fonts
-    'font/woff': '.woff',
-    'font/woff2': '.woff2',
-    'font/ttf': '.ttf',
-    'font/otf': '.otf',
-    'application/font-woff': '.woff',
-    'application/font-woff2': '.woff2',
-    'application/x-font-ttf': '.ttf',
-    'application/x-font-otf': '.otf',
-    'application/vnd.ms-fontobject': '.eot',
-    
-    // Other common types
-    'application/octet-stream': '.bin',
-    'application/x-binary': '.bin',
-    'application/x-msdownload': '.exe',
-    'application/vnd.android.package-archive': '.apk',
-    'application/vnd.apple.installer+xml': '.mpkg',
-    'application/x-apple-diskimage': '.dmg',
-    'application/x-iso9660-image': '.iso',
-    'application/x-debian-package': '.deb',
-    'application/x-redhat-package-manager': '.rpm',
-    
-    // E-books
-    'application/epub+zip': '.epub',
-    'application/x-mobipocket-ebook': '.mobi',
-    'application/vnd.amazon.ebook': '.azw',
-    
-    // CAD
-    'application/acad': '.dwg',
-    'application/x-autocad': '.dwg',
-    'image/vnd.dwg': '.dwg',
-    'application/dxf': '.dxf',
-    'image/vnd.dxf': '.dxf',
-    
-    // 3D Models
-    'model/gltf+json': '.gltf',
-    'model/gltf-binary': '.glb',
-    'model/obj': '.obj',
-    'model/stl': '.stl',
-    'model/3mf': '.3mf',
-    
-    // Other data formats
-    'application/vnd.google-earth.kml+xml': '.kml',
-    'application/vnd.google-earth.kmz': '.kmz',
-    'application/geo+json': '.geojson',
-    'application/protobuf': '.pb',
-    'application/x-protobuf': '.pb',
-    'application/msgpack': '.msgpack',
-    'application/x-msgpack': '.msgpack',
-    
-    // Certificates & Keys
-    'application/x-x509-ca-cert': '.crt',
-    'application/x-pem-file': '.pem',
-    'application/pkcs8': '.p8',
-    'application/pkcs10': '.p10',
-    'application/pkcs12': '.p12',
-    'application/x-pkcs12': '.pfx',
-    
-    // Web formats
-    'application/wasm': '.wasm',
-    'application/manifest+json': '.webmanifest',
-    'image/x-xbitmap': '.xbm',
-    'image/x-xpixmap': '.xpm',
-  };
-  
-  return extensionMap[mimeType] || '.bin';
+  return EXTENSION_BY_CONTENT_TYPE[mimeType] || DEFAULT_BINARY_EXTENSION;
 }
 
 
 /**
- * Determines the content type from response headers
+ * Extracts the Content-Type header value from response headers (case-insensitive).
+ * Multi-value headers are resolved to their first value.
+ * @param headers - Response headers map
+ * @returns The Content-Type header value, or '' if not present
  */
-export function getResponseContentType(headers: Record<string, string>): string {
-  return Object.entries(headers)
-    .find(([key]) => key.toLowerCase() === 'content-type')?.[1] || '';
+export function getResponseContentType(headers: Record<string, string | string[]>): string {
+  const value = Object.entries(headers)
+    .find(([key]) => key.toLowerCase() === 'content-type')?.[1];
+  if (Array.isArray(value)) {
+    return value[0] ?? '';
+  }
+  return value ?? '';
 }
 
 /**
- * Determines the language/format from response headers
+ * Known text-based subtypes that don't fall under text/*, message/* or a
+ * structured (+json/+xml/...) suffix. Mostly application/* code and config formats.
  */
-export function getResponseLanguage(headers: Record<string, string>): ResponseContentType {
-  const contentTypeHeader = getResponseContentType(headers).toLowerCase();
+const TEXT_BASED_SUBTYPES = new Set([
+  'javascript', 'ecmascript', 'x-javascript',
+  'typescript', 'x-typescript',
+  'x-www-form-urlencoded',
+  'yaml', 'x-yaml',
+  'toml',
+  'graphql',
+  'sql', 'x-sql',
+  'x-sh', 'x-shellscript',
+  'x-httpd-php', 'x-php',
+  'x-python', 'x-python-code',
+  'x-perl',
+  'x-ruby',
+  'x-ndjson', 'jsonl', 'x-jsonlines', 'json5',
+  'jwt',
+  'rtf',
+  'x-pem-file',
+  'vnd.apple.mpegurl',
+]);
 
-  // Check for JSON (handles both /json and +json suffixes like application/problem+json)
-  if (contentTypeHeader.includes('/json') || contentTypeHeader.includes('+json')) {
+/**
+ * Determines the language/format from response headers.
+ * Recognized text-based types map to their language; everything else is
+ * treated as binary, since assuming text for an unknown type is unsafe.
+ * A missing Content-Type header returns 'none' (nothing to classify —
+ * e.g. 204 No Content responses).
+ */
+export function getResponseLanguage(headers: Record<string, string | string[]>): ResponseContentType {
+  // Strip parameters like charset before classifying
+  const mimeType = getResponseContentType(headers).split(';')[0].trim().toLowerCase();
+
+  if (!mimeType) {
+    return 'none';
+  }
+
+  const [type, subtype = ''] = mimeType.split('/');
+
+  // Structured text formats — bare subtypes and structured-syntax suffixes
+  // (e.g. application/problem+json, image/svg+xml, application/dash+xml)
+  if (subtype === 'json' || subtype.endsWith('+json')) {
     return 'json';
   }
-  // Check for XML (handles both /xml and +xml suffixes)
-  if (contentTypeHeader.includes('/xml') || contentTypeHeader.includes('+xml')) {
+  if (subtype === 'xml' || subtype.endsWith('+xml')) {
     return 'xml';
   }
-  // Check for HTML (handles both /html and +html suffixes)
-  if (contentTypeHeader.includes('/html') || contentTypeHeader.includes('+html')) {
+  if (subtype === 'html' || subtype.endsWith('+html')) {
     return 'html';
   }
-  // Check for CSV (handles both /csv and +csv suffixes)
-  if (contentTypeHeader.includes('/csv') || contentTypeHeader.includes('+csv')) {
+  if (subtype === 'csv' || subtype.endsWith('+csv')) {
     return 'csv';
   }
-  // Check for text (handles both /text and +text suffixes)
-  if (contentTypeHeader.includes('/text') || contentTypeHeader.includes('+text')) {
+
+  // All text/* and message/* types are textual by definition
+  if (type === 'text' || type === 'message') {
     return 'text';
   }
 
-  // Check for binary content types
-  if (
-    contentTypeHeader.includes('image/') ||
-    contentTypeHeader.includes('video/') ||
-    contentTypeHeader.includes('audio/') ||
-    contentTypeHeader.includes('application/pdf') ||
-    contentTypeHeader.includes('application/zip') ||
-    contentTypeHeader.includes('application/octet-stream') ||
-    contentTypeHeader.includes('application/x-') ||
-    contentTypeHeader.includes('font/')
-  ) {
-    return 'binary';
+  // Known text-based application/* formats (code, config, etc.)
+  if (TEXT_BASED_SUBTYPES.has(subtype)) {
+    return 'text';
   }
 
-  // Default to text for unknown types
-  return 'text';
+  // Unknown content type — treat as binary rather than assuming text
+  return 'binary';
 }
 
 /**
@@ -393,6 +404,18 @@ export function parseUrlQueryParams(url: string): { id: string; key: string; val
 }
 
 /**
+ * Content-Type values for raw body editor languages.
+ * Shared by getContentTypeFromBodyMode and getContentTypeFromBody.
+ */
+const RAW_LANGUAGE_CONTENT_TYPES: Record<string, string> = {
+  'json': 'application/json',
+  'xml': 'application/xml',
+  'html': 'text/html',
+  'text': 'text/plain',
+  'csv': 'text/csv',
+};
+
+/**
  * Determines the Content-Type header value based on request body configuration
  * @param bodyType - The type of request body ('none', 'raw', 'form-data', 'x-www-form-urlencoded', 'binary')
  * @param fileName - Optional file name to determine MIME type from extension
@@ -412,14 +435,7 @@ export function getContentTypeFromBody(
 
   // If textType is specified, use that first
   if (textType && textType !== 'none') {
-    const textTypeMap: Record<string, string> = {
-      'text': 'text/plain',
-      'json': 'application/json',
-      'xml': 'application/xml',
-      'html': 'text/html',
-      'csv': 'text/csv'
-    };
-    return textTypeMap[textType] || 'text/plain';
+    return RAW_LANGUAGE_CONTENT_TYPES[textType] || RAW_LANGUAGE_CONTENT_TYPES.text;
   }
 
   // If fileName is provided, determine from extension
@@ -431,7 +447,7 @@ export function getContentTypeFromBody(
   switch (bodyType) {
     case 'text':
     case 'raw':
-      return 'text/plain';
+      return RAW_LANGUAGE_CONTENT_TYPES.text;
     case 'multipart':
     case 'formdata':
       return 'multipart/form-data';
@@ -440,9 +456,8 @@ export function getContentTypeFromBody(
       return 'application/x-www-form-urlencoded';
     case 'binary':
     case 'file':
-      return 'application/octet-stream';
     default:
-      return 'application/octet-stream';
+      return DEFAULT_BINARY_CONTENT_TYPE;
   }
 }
 
@@ -459,22 +474,15 @@ export function getContentTypeFromBodyMode(body: CollectionBody | undefined): st
   switch (body.mode) {
     case 'raw': {
       const language = body.options?.raw?.language;
-      const langMap: Record<string, string> = {
-        'json': 'application/json',
-        'xml': 'application/xml',
-        'html': 'text/html',
-        'text': 'text/plain',
-        'csv': 'text/csv',
-      };
-      return language ? langMap[language] || 'text/plain' : 'text/plain';
+      return (language && RAW_LANGUAGE_CONTENT_TYPES[language]) || RAW_LANGUAGE_CONTENT_TYPES.text;
     }
     case 'urlencoded':
       return 'application/x-www-form-urlencoded';
     case 'formdata':
-      // Let the browser set this with the boundary
+      // Let the HTTP client set this with the multipart boundary
       return null;
     case 'file':
-      return body.file?.contentType || 'application/octet-stream';
+      return body.file?.contentType || DEFAULT_BINARY_CONTENT_TYPE;
     default:
       return null;
   }
@@ -617,16 +625,23 @@ export function getCommonHeaderNames(): string[] {
     'Proxy-Authorization',
     'Proxy-Authenticate',
     
-    // Content Negotiation
+    // Content Negotiation & Representation
     'Accept',
     'Accept-Charset',
     'Accept-Encoding',
     'Accept-Language',
+    'Accept-Patch',
+    'Accept-Post',
     'Content-Type',
     'Content-Encoding',
     'Content-Language',
     'Content-Length',
-    
+    'Content-Disposition',
+    'Content-Location',
+    'Content-Digest',
+    'Repr-Digest',
+    'Want-Content-Digest',
+
     // Caching
     'Cache-Control',
     'Pragma',
@@ -658,20 +673,33 @@ export function getCommonHeaderNames(): string[] {
     'Connection',
     'Keep-Alive',
     'Transfer-Encoding',
+    'TE',
+    'Trailer',
     'Upgrade',
-    
+
     // Request Context
     'User-Agent',
     'Referer',
     'Host',
     'From',
-    
+    'Expect',
+    'Max-Forwards',
+    'Prefer',
+    'Preference-Applied',
+    'Idempotency-Key',
+    'Last-Event-ID',
+
     // Response Context
     'Server',
     'Allow',
     'Location',
     'Retry-After',
-    
+    'Alt-Svc',
+    'Server-Timing',
+    'Timing-Allow-Origin',
+    'Sunset',
+    'Deprecation',
+
     // Range Requests
     'Range',
     'Accept-Ranges',
@@ -681,28 +709,57 @@ export function getCommonHeaderNames(): string[] {
     // Security
     'Strict-Transport-Security',
     'Content-Security-Policy',
+    'Content-Security-Policy-Report-Only',
     'X-Content-Type-Options',
     'X-Frame-Options',
     'X-XSS-Protection',
     'X-CSRF-Token',
     'X-Request-ID',
     'X-Correlation-ID',
-    
-    // Custom Headers
+    'Referrer-Policy',
+    'Permissions-Policy',
+    'Cross-Origin-Embedder-Policy',
+    'Cross-Origin-Opener-Policy',
+    'Cross-Origin-Resource-Policy',
+    'Clear-Site-Data',
+    'Upgrade-Insecure-Requests',
+
+    // Fetch Metadata
+    'Sec-Fetch-Dest',
+    'Sec-Fetch-Mode',
+    'Sec-Fetch-Site',
+    'Sec-Fetch-User',
+
+    // WebSockets
+    'Sec-WebSocket-Key',
+    'Sec-WebSocket-Accept',
+    'Sec-WebSocket-Protocol',
+    'Sec-WebSocket-Version',
+    'Sec-WebSocket-Extensions',
+
+    // Proxies & Custom Headers
     'X-API-Key',
     'X-Auth-Token',
     'X-Requested-With',
+    'Forwarded',
     'X-Forwarded-For',
     'X-Forwarded-Host',
     'X-Forwarded-Proto',
+    'X-Forwarded-Port',
     'X-Real-IP',
-    
+
+    // Rate Limiting
+    'X-RateLimit-Limit',
+    'X-RateLimit-Remaining',
+    'X-RateLimit-Reset',
+
     // Other Common Headers
     'Date',
     'Via',
     'Warning',
     'Vary',
     'Link',
+    'Priority',
   ];
 }
 

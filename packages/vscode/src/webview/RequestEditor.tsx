@@ -549,7 +549,7 @@ const RequestEditor: React.FC<RequestEditorProps> = ({
                                         <span className="font-bold">Size:</span>
                                         <span>{responseData.size >= 1024 ? `${(responseData.size / 1024).toFixed(1)} KB` : `${responseData.size} B`}</span>
                                     </div>
-                                    {contentLang && <div className="flex items-center gap-1 text-blue-600 dark:text-blue-400">
+                                    {contentLang && contentLang !== 'none' && <div className="flex items-center gap-1 text-blue-600 dark:text-blue-400">
                                         <span className="font-bold">Content:</span>
                                         <span>{contentLang.toUpperCase()}</span>
                                         </div>}

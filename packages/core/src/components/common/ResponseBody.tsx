@@ -3,7 +3,7 @@ import { FileIcon, DownloadIcon, CopyIcon, CheckCheckIcon } from 'lucide-react';
 import { Button } from '../ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/tooltip';
 import { base64ToText, base64ToJson } from '../../utils/encoding';
-import {getExtensionFromContentType, getResponseLanguage} from '../../utils/common';
+import {getExtensionFromContentType, getResponseContentType, getResponseLanguage} from '../../utils/common';
 import SyntaxHighlighter from '../ui/syntax-highlighter';
 import type { ResponseContentType, ResponseDownloadPayload } from '../../types/collection';
 
@@ -54,13 +54,10 @@ function formatBody(body: string, contentType: ResponseContentType): string {
 }
 
 /**
- * Gets appropriate file extension for content type
+ * Gets appropriate file extension (including the dot) for content type
  */
 function getFileExtension(headers: Record<string, string>): string {
-  const contentTypeHeader = Object.entries(headers)
-    .find(([key]) => key.toLowerCase() === 'content-type')?.[1]
-    ?.toLowerCase() || '';
-  return getExtensionFromContentType(contentTypeHeader);
+  return getExtensionFromContentType(getResponseContentType(headers));
 }
 
 /**
@@ -79,9 +76,10 @@ function getFileName(headers: Record<string, string>, contentType: ResponseConte
   }
 
   // Generate a filename based on timestamp and content type
+  // (getFileExtension already includes the leading dot)
   const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
   const extension = getFileExtension(headers);
-  return `response_${timestamp}.${extension}`;
+  return `response_${timestamp}${extension}`;
 }
 
 function uint8ArrayToBase64(bytes: Uint8Array): string {
