@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { SwaggerTransformer, swaggerTransformer } from '../../../utils/transformers/SwaggerTransformer';
 import type { Collection, CollectionRequest } from '../../../types/collection';
+import { validateCollectionTree } from '../../../utils/collectionParser';
 
 describe('SwaggerTransformer', () => {
   const transformer = new SwaggerTransformer();
@@ -259,6 +260,95 @@ paths:
     it('should return error for invalid yaml/json input', async () => {
       const result = await transformer.transformFrom('openapi: 3.0.3\ninfo:\n  title: Broken');
       expect(result.isOk).toBe(false);
+    });
+
+    it('should suffix duplicate request names within the same tagged folder', async () => {
+      const input = {
+        openapi: '3.0.3',
+        info: { title: 'Dup API', version: '1.0.0' },
+        paths: {
+          '/users': {
+            get: {
+              tags: ['Users'],
+              summary: 'List Users',
+              responses: { '200': { description: 'ok' } },
+            },
+          },
+          '/admins': {
+            get: {
+              tags: ['Users'],
+              summary: 'List Users',
+              responses: { '200': { description: 'ok' } },
+            },
+          },
+          '/guests': {
+            get: {
+              tags: ['Users'],
+              summary: 'list users',
+              responses: { '200': { description: 'ok' } },
+            },
+          },
+        },
+      };
+
+      const result = await transformer.transformFrom(input, 'dup.json');
+      expect(result.isOk, result.isOk ? '' : result.error).toBe(true);
+      if (!result.isOk) {
+        return;
+      }
+
+      expect(result.value.item).toHaveLength(1);
+      const usersFolder = result.value.item[0];
+      const requestNames = (usersFolder.item ?? []).map((entry) => entry.name);
+      const nestedRequestNames = (usersFolder.item ?? []).map((entry) => entry.request?.name);
+
+      expect(usersFolder.name).toBe('Users');
+      expect(requestNames).toEqual(['List Users', 'List Users 2', 'list users 3']);
+      expect(nestedRequestNames).toEqual(['List Users', 'List Users 2', 'list users 3']);
+      expect(validateCollectionTree(result.value).isOk).toBe(true);
+    });
+
+    it('should suffix untagged request names when they collide with root folder names', async () => {
+      const input = {
+        openapi: '3.0.3',
+        info: { title: 'Root Collision API', version: '1.0.0' },
+        paths: {
+          '/pets': {
+            get: {
+              summary: 'Pets',
+              responses: { '200': { description: 'ok' } },
+            },
+          },
+          '/pets-search': {
+            get: {
+              summary: 'Pets',
+              responses: { '200': { description: 'ok' } },
+            },
+          },
+          '/tagged': {
+            get: {
+              tags: ['Pets'],
+              summary: 'Get Tagged Pets',
+              responses: { '200': { description: 'ok' } },
+            },
+          },
+        },
+      };
+
+      const result = await transformer.transformFrom(input, 'root-collision.json');
+      expect(result.isOk, result.isOk ? '' : result.error).toBe(true);
+      if (!result.isOk) {
+        return;
+      }
+
+      const rootNames = result.value.item.map((entry) => entry.name);
+      const untaggedRequestNames = result.value.item
+        .filter((entry) => Boolean(entry.request))
+        .map((entry) => entry.request?.name);
+
+      expect(rootNames).toEqual(['Pets', 'Pets 2', 'Pets 3']);
+      expect(untaggedRequestNames).toEqual(['Pets 2', 'Pets 3']);
+      expect(validateCollectionTree(result.value).isOk).toBe(true);
     });
   });
 

@@ -279,11 +279,25 @@ export type {
     BasicAuth,
     DigestAuth,
     OAuth2RefreshAuth,
+    OAuth2ClientCredentialsAuth,
+    OAuth2AuthorizationCodeAuth,
+    OAuth2ClientAuthMethod,
+    HmacAuth,
+    HmacHashAlgorithm,
     BaseAuth,
     EnvVarsMap,
 } from './types/auth';
 
 export { AuthType } from './types/auth';
+
+// OAuth2 / PKCE utilities (shared by auth wizard and auth services)
+export {
+    generatePkcePair,
+    buildAuthorizationUrl,
+    applyClientAuth,
+    parseAuthorizationResponse,
+} from './utils/oauth2';
+export type { BuildAuthorizationUrlParams, ParsedAuthorizationResponse } from './utils/oauth2';
 
 // Validation types
 export type {

@@ -27,6 +27,18 @@ The full Wave Client app always opens as an editor-area webview panel (`ViewColu
 
 ---
 
+## Authentication
+
+**FEAT-FP-AUTH-001: Auth Flows Enhancement — OAuth2 Client Credentials, Authorization Code (PKCE), HMAC** *(updated: 2026-06-13 by implement)*
+Source spec: [feature_auth_flows_enhancement.md](.spec-lite/features/feature_auth_flows_enhancement.md)
+The Auth Store now supports three new industry-standard auth types in addition to the existing API Key, Basic, Digest, and OAuth2 Refresh types. **OAuth2 Client Credentials** (`oauth2ClientCredentials`) fetches machine-to-machine tokens at request time with optional scope/audience parameters, caches by TTL when `expires_in` is provided, and skips caching otherwise. **OAuth2 Authorization Code with PKCE** (`oauth2AuthorizationCode`) has a two-phase model: the wizard drives an interactive PKCE acquisition flow (generate code-verifier + S256 challenge, open authorization URL in browser, paste callback URL or bare code, exchange for tokens); the service applies the stored access token and refreshes transparently via the refresh token when expired. **HMAC** (`hmac`) computes a per-request signature from a user-defined template (supporting `{method}`, `{url}`, `{path}`, `{query}`, `{host}`, `{body}`, `{timestamp}`, `{nonce}` placeholders) using `crypto.createHmac`, encodes as hex or base64, and places the result in a configurable header or query parameter with optional prefix and companion timestamp/nonce headers.
+
+All three types are supported end-to-end: new type definitions in `packages/core/src/types/auth.ts`, service implementations in `packages/shared/src/services/auth/`, wizard configuration sections in `AuthWizard.tsx`, and icon/label support in `AuthStoreGrid.tsx`. A new `OAuth2ServiceBase` shared base class consolidates token-endpoint mechanics (form-urlencoded POST, client auth method, response parsing, caching) across all three OAuth2 grant types. Pure PKCE helpers (`generatePkcePair`, `buildAuthorizationUrl`, `applyClientAuth`, `parseAuthorizationResponse`) in `packages/core/src/utils/oauth2.ts` use the Web Crypto API and are importable by both the wizard UI and the shared services.
+
+Dead configuration was removed: `base64Encode` from `BaseAuth`, seven challenge-derived fields from `DigestAuth`, and unused `accessToken`/`tokenExpiresAt` from `OAuth2RefreshAuth`. The fabricated `|| 300` fallback for `expires_in` in `OAuth2RefreshService` was removed; `token_type` defaults to `'Bearer'` per RFC 6750 §6.1.1. All OAuth2 types require an explicit `clientAuthMethod` (`'basic'` = `client_secret_basic` / `'body'` = `client_secret_post`) with no preselected default. PKCE `state` is validated on exchange to prevent CSRF. Secrets are never logged.
+
+---
+
 ## Request Processing
 
 **Request Editor Spacing Polish & Params/Headers Copy-Paste Placement** *(updated: 2026-06-10 by implement)*
@@ -142,8 +154,8 @@ The import wizard now detects the collection format from file content on selecti
 Source spec: [feature_http_file_transformer.md](features/feature_http_file_transformer.md)
 Importing `.http`/`.rest` files now supports the full ASP.NET Core / VS Code REST Client syntax: `###` separators (separator text becomes the request name), `#` and `//` comments anywhere outside the body, `# @name` / `// @name` directives, file-variable lines (`@var=value`, skipped without error), optional request methods (default GET) including `TRACE`/`CONNECT`, ignored `HTTP/x.y` version tokens, and multi-line URL continuation (`?`/`&` lines). Bodies are preserved byte-for-byte (comments inside bodies are not stripped). Request names resolve by priority (directive → separator/comment → URL-derived) and are de-duplicated with numeric suffixes; `item.name` always equals `request.name`. `{{var}}` references pass through unresolved. The `---` separator is no longer recognized (not part of the spec).
 
-**FEAT-FP-001: Scalar OpenAPI Parser Migration** *(updated: 2026-04-05 by implement)*
-OpenAPI/Swagger import now uses `@scalar/openapi-parser` for robust parsing and inline `$ref` dereferencing instead of hand-rolled schema types. The Swagger transformer now accepts both JSON and YAML inputs, supports OpenAPI 3.x and Swagger 2.0 documents, and preserves request grouping/body/header/query mapping into Wave collections. The web and VS Code app import handlers now run non-Wave formats through `transformCollection` before persistence, so Swagger, Postman, and HTTP imports are transformed consistently instead of being sent raw to storage. Transformer contracts are async end-to-end, and the new Swagger transformer test suite validates JSON, YAML, Swagger 2.0, `$ref` resolution, export mapping, and error paths.
+**FEAT-FP-001: Scalar OpenAPI Parser Migration** *(updated: 2026-06-13 by fix)*
+OpenAPI/Swagger import now uses `@scalar/openapi-parser` for robust parsing and inline `$ref` dereferencing instead of hand-rolled schema types. The Swagger transformer accepts both JSON and YAML inputs, supports OpenAPI 3.x and Swagger 2.0 documents, preserves request grouping/body/header/query mapping into Wave collections, and now de-duplicates generated request names per sibling level with ordinal suffixes (`name`, `name 2`, `name 3`, ...). This prevents collection-import failures caused by duplicate OpenAPI `summary` or `operationId` values under the same parent. The web and VS Code app import handlers run non-Wave formats through `transformCollection` before persistence, so Swagger, Postman, and HTTP imports are transformed consistently instead of being sent raw to storage. Transformer contracts are async end-to-end, and the Swagger transformer test suite validates JSON, YAML, Swagger 2.0, `$ref` resolution, duplicate-name handling, export mapping, and error paths.
 
 ---
 

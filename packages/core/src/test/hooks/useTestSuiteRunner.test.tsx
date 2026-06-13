@@ -189,7 +189,6 @@ describe('useTestSuiteRunner', () => {
     sendIn: 'header',
     enabled: true,
     domainFilters: [],
-    base64Encode: false,
   };
 
   beforeEach(() => {

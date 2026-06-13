@@ -80,20 +80,29 @@ export class SwaggerTransformer extends BaseCollectionTransformer<unknown> {
 
             // Create collection items
             const items: CollectionItem[] = [];
+            const usedRootNames = new Set<string>();
 
+            // Build tagged folders first so tag names remain stable at the root.
             for (const [tag, operations] of taggedOperations) {
                 if (tag === '__untagged__') {
-                    // Add untagged operations directly to root
-                    items.push(...operations.map(op => this.createRequestItem(op, baseUrl)));
-                } else {
-                    // Create folder for tag
-                    items.push({
-                        id: this.generateId(),
-                        name: tag,
-                        description: this.getTagDescription(spec, tag),
-                        item: operations.map(op => this.createRequestItem(op, baseUrl))
-                    });
+                    continue;
                 }
+
+                const usedRequestNames = new Set<string>();
+                const uniqueTagName = this.makeUniqueSiblingName(tag, usedRootNames);
+                items.push({
+                    id: this.generateId(),
+                    name: uniqueTagName,
+                    description: this.getTagDescription(spec, tag),
+                    item: operations.map((op) => this.createRequestItem(op, baseUrl, usedRequestNames))
+                });
+            }
+
+            // Add untagged operations directly to root with root-level de-duplication.
+            const untaggedOperations = taggedOperations.get('__untagged__') || [];
+            for (const operation of untaggedOperations) {
+                const requestItem = this.createRequestItem(operation, baseUrl, usedRootNames);
+                items.push(requestItem);
             }
 
             const collection: Collection = {
@@ -281,7 +290,8 @@ export class SwaggerTransformer extends BaseCollectionTransformer<unknown> {
      */
     private createRequestItem(
         op: TaggedOperation,
-        baseUrl: string
+        baseUrl: string,
+        usedRequestNames: Set<string>
     ): CollectionItem {
         const { method, path, operation, parameters } = op;
         // Convert OpenAPI path parameters {param} to app format {{param}}
@@ -329,7 +339,8 @@ export class SwaggerTransformer extends BaseCollectionTransformer<unknown> {
         };
 
         const requestId = this.generateId();
-        const requestName = this.readString(operation.summary) || this.readString(operation.operationId) || `${method.toUpperCase()} ${path}`;
+        const requestNameBase = this.readString(operation.summary) || this.readString(operation.operationId) || `${method.toUpperCase()} ${path}`;
+        const requestName = this.makeUniqueSiblingName(requestNameBase, usedRequestNames);
 
         const request: CollectionRequest = {
             id: requestId,
@@ -346,6 +357,20 @@ export class SwaggerTransformer extends BaseCollectionTransformer<unknown> {
             description: this.readString(operation.description),
             request
         };
+    }
+
+    private makeUniqueSiblingName(baseName: string, usedNames: Set<string>): string {
+        const normalizedBaseName = baseName.trim() || 'Request';
+        let candidate = normalizedBaseName;
+        let suffix = 2;
+
+        while (usedNames.has(candidate.toLowerCase())) {
+            candidate = `${normalizedBaseName} ${suffix}`;
+            suffix++;
+        }
+
+        usedNames.add(candidate.toLowerCase());
+        return candidate;
     }
 
     /**

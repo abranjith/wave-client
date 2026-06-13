@@ -117,6 +117,83 @@ function findItemById(items: CollectionItem[], itemId: string): CollectionItem |
     return null;
 }
 
+/**
+ * Navigates the item tree to return the items array at the provided folder path.
+ * Returns null when the path does not exist.
+ */
+function findFolderAtPath(items: CollectionItem[], folderPath: string[]): CollectionItem[] | null {
+    if (folderPath.length === 0) {
+        return items;
+    }
+
+    const [head, ...rest] = folderPath;
+    const folder = items.find((item) => item.name === head && Array.isArray(item.item));
+    if (!folder || !folder.item) {
+        return null;
+    }
+
+    return findFolderAtPath(folder.item, rest);
+}
+
+/**
+ * Inserts an item at folderPath, creating missing folders on the way.
+ */
+function addItemAtPathCreatingFolders(
+    items: CollectionItem[],
+    folderPath: string[],
+    newItem: CollectionItem
+): CollectionItem[] {
+    if (folderPath.length === 0) {
+        return [...items, newItem];
+    }
+
+    const [head, ...rest] = folderPath;
+    let folderFound = false;
+
+    const updatedItems = items.map((item) => {
+        if (item.name === head && Array.isArray(item.item)) {
+            folderFound = true;
+            return {
+                ...item,
+                item: addItemAtPathCreatingFolders(item.item, rest, newItem),
+            };
+        }
+
+        return item;
+    });
+
+    if (folderFound) {
+        return updatedItems;
+    }
+
+    const newFolder: CollectionItem = {
+        id: crypto.randomUUID(),
+        name: head,
+        item: addItemAtPathCreatingFolders([], rest, newItem),
+    };
+
+    return [...updatedItems, newFolder];
+}
+
+/**
+ * Returns true when path starts with prefix (case-insensitive).
+ */
+function isDescendantPath(prefix: string[], path: string[]): boolean {
+    if (path.length < prefix.length) {
+        return false;
+    }
+
+    return prefix.every((segment, index) => segment.toLowerCase() === path[index]?.toLowerCase());
+}
+
+function pathsEqual(left: string[], right: string[]): boolean {
+    if (left.length !== right.length) {
+        return false;
+    }
+
+    return left.every((segment, index) => segment === right[index]);
+}
+
 // ============================================================================
 // Mock Data Store (in-memory)
 // ============================================================================
@@ -248,8 +325,12 @@ function createMockStorageAdapter(store: MockDataStore): IStorageAdapter {
                 return err(`Source collection not found: ${sourceFileName}`);
             }
 
-            // Find item before removal
-            const itemToMove = findItemById(source.item, itemId);
+            // Find item at the explicit source path
+            const sourceSiblings = findFolderAtPath(source.item, sourceItemPath);
+            if (!sourceSiblings) {
+                return err(`Source path [${sourceItemPath.join('/')}] not found`);
+            }
+            const itemToMove = sourceSiblings.find((item) => item.id === itemId) || null;
             if (!itemToMove) {
                 return err(`Item ${itemId} not found`);
             }
@@ -270,11 +351,44 @@ function createMockStorageAdapter(store: MockDataStore): IStorageAdapter {
                 return err(`Destination collection not found: ${destinationFileName}`);
             }
 
-            // Simple mock: add to dest root (ignoring destinationItemPath for simplicity)
             const isSameCollection = sourceFileName === destinationFileName;
+
+            // Prevent same-location no-op
+            if (isSameCollection && pathsEqual(sourceItemPath, destinationItemPath)) {
+                return err('Item is already at the destination location');
+            }
+
+            // Prevent moving a folder into itself or descendants
+            if (isSameCollection && Array.isArray(itemToMove.item)) {
+                const itemFullPath = [...sourceItemPath, itemToMove.name];
+                if (isDescendantPath(itemFullPath, destinationItemPath)) {
+                    return err('Cannot move a folder into itself or one of its descendants');
+                }
+            }
+
+            const destBaseItems = isSameCollection ? newSourceItems : dest.item;
+
+            // Check name conflict if destination folder exists
+            const destinationSiblings = findFolderAtPath(destBaseItems, destinationItemPath);
+            if (destinationSiblings) {
+                const nameConflict = destinationSiblings.find(
+                    (item) => item.name.toLowerCase() === itemToMove.name.toLowerCase() && item.id !== itemToMove.id
+                );
+                if (nameConflict) {
+                    const kind = Array.isArray(itemToMove.item) ? 'folder' : 'request';
+                    return err(`A ${kind} named "${itemToMove.name}" already exists at the destination`);
+                }
+            }
+
+            const newDestinationItems = addItemAtPathCreatingFolders(
+                destBaseItems,
+                destinationItemPath,
+                itemToMove
+            );
+
             if (isSameCollection) {
                 // Same collection: update in place
-                source.item = [...newSourceItems, itemToMove];
+                source.item = newDestinationItems;
                 return ok({
                     source: { ...source, filename: sourceFileName },
                     destination: { ...source, filename: sourceFileName }
@@ -282,7 +396,7 @@ function createMockStorageAdapter(store: MockDataStore): IStorageAdapter {
             } else {
                 // Cross collection
                 source.item = newSourceItems;
-                dest.item = [...dest.item, itemToMove];
+                dest.item = newDestinationItems;
                 return ok({
                     source: { ...source, filename: sourceFileName },
                     destination: { ...dest, filename: destinationFileName }

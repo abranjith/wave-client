@@ -7,12 +7,29 @@ import {
     type BasicAuth,
     type DigestAuth,
     type OAuth2RefreshAuth,
+    type OAuth2ClientCredentialsAuth,
+    type OAuth2AuthorizationCodeAuth,
+    type OAuth2ClientAuthMethod,
+    type HmacAuth,
+    type HmacHashAlgorithm,
     type Auth,
 } from '../../types/auth';
 
-// Re-export types for backward compatibility
+// Re-export types
 export { AuthType };
-export type { Auth, ApiKeyAuth, BasicAuth, DigestAuth, OAuth2RefreshAuth, BaseAuth };
+export type {
+    Auth,
+    ApiKeyAuth,
+    BasicAuth,
+    DigestAuth,
+    OAuth2RefreshAuth,
+    OAuth2ClientCredentialsAuth,
+    OAuth2AuthorizationCodeAuth,
+    OAuth2ClientAuthMethod,
+    HmacAuth,
+    HmacHashAlgorithm,
+    BaseAuth,
+};
 
 // Auth store interface
 interface AuthSlice {

@@ -310,7 +310,6 @@ describe('requestBuilder', () => {
         value: 'token123',
         sendIn: 'header',
         domainFilters: [],
-        base64Encode: false,
       };
 
       const result = getAuthForRequest(auth, 'https://api.example.com');
@@ -328,7 +327,6 @@ describe('requestBuilder', () => {
         value: 'token123',
         sendIn: 'header',
         domainFilters: [],
-        base64Encode: false,
         expiryDate: new Date(Date.now() - 1000).toISOString(),
       };
 
@@ -347,7 +345,6 @@ describe('requestBuilder', () => {
         value: 'token123',
         sendIn: 'header',
         domainFilters: ['allowed-domain.com'],
-        base64Encode: false,
       };
 
       const result = getAuthForRequest(auth, 'https://not-allowed.com/api');
@@ -365,7 +362,6 @@ describe('requestBuilder', () => {
         value: 'token123',
         sendIn: 'header',
         domainFilters: ['api.example.com'],
-        base64Encode: false,
       };
 
       const result = getAuthForRequest(auth, 'https://api.example.com/v1/users');
@@ -382,7 +378,6 @@ describe('requestBuilder', () => {
         username: 'user',
         password: 'pass',
         domainFilters: [],
-        base64Encode: false,
       };
 
       const result = getAuthForRequest(auth, 'https://any-domain.com');
@@ -478,7 +473,6 @@ describe('requestBuilder', () => {
         value: 'req-token',
         sendIn: 'header',
         domainFilters: [],
-        base64Encode: false,
       };
       const defaultAuth: Auth = {
         id: 'auth2',
@@ -489,7 +483,6 @@ describe('requestBuilder', () => {
         value: 'default-token',
         sendIn: 'header',
         domainFilters: [],
-        base64Encode: false,
       };
       const input: CollectionRequest = {
         id: '1',
@@ -514,7 +507,6 @@ describe('requestBuilder', () => {
         value: 'default-token',
         sendIn: 'header',
         domainFilters: [],
-        base64Encode: false,
       };
       const input: CollectionRequest = {
         id: '1',

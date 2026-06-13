@@ -18,6 +18,11 @@ export type {
     BasicAuth,
     DigestAuth,
     OAuth2RefreshAuth,
+    OAuth2ClientCredentialsAuth,
+    OAuth2AuthorizationCodeAuth,
+    OAuth2ClientAuthMethod,
+    HmacAuth,
+    HmacHashAlgorithm,
     EnvVarsMap,
 } from '@wave-client/core';
 

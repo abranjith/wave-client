@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { ArrowLeftIcon, PencilIcon, Trash2Icon, PlusIcon, KeyIcon, UserIcon, ShieldIcon, AlertTriangleIcon, RefreshCwIcon, XIcon, CheckIcon } from 'lucide-react';
+import { ArrowLeftIcon, PencilIcon, Trash2Icon, PlusIcon, KeyIcon, UserIcon, ShieldIcon, AlertTriangleIcon, RefreshCwIcon, XIcon, CheckIcon, ZapIcon, CodeIcon, FingerprintIcon } from 'lucide-react';
 import { Button } from '../ui/button';
 import { SecondaryButton } from '../ui/SecondaryButton';
 import { PrimaryButton } from '../ui/PrimaryButton';
@@ -134,6 +134,12 @@ const AuthStoreGrid: React.FC<AuthStoreGridProps> = ({ onBack, onSaveAuths }) =>
         return <ShieldIcon className="h-4 w-4" />;
       case AuthType.OAUTH2_REFRESH:
         return <RefreshCwIcon className="h-4 w-4" />;
+      case AuthType.OAUTH2_CLIENT_CREDENTIALS:
+        return <ZapIcon className="h-4 w-4" />;
+      case AuthType.OAUTH2_AUTHORIZATION_CODE:
+        return <CodeIcon className="h-4 w-4" />;
+      case AuthType.HMAC:
+        return <FingerprintIcon className="h-4 w-4" />;
       default:
         return <KeyIcon className="h-4 w-4" />;
     }
@@ -149,6 +155,12 @@ const AuthStoreGrid: React.FC<AuthStoreGridProps> = ({ onBack, onSaveAuths }) =>
         return 'Digest Auth';
       case AuthType.OAUTH2_REFRESH:
         return 'OAuth2 Refresh';
+      case AuthType.OAUTH2_CLIENT_CREDENTIALS:
+        return 'OAuth2 Client Credentials';
+      case AuthType.OAUTH2_AUTHORIZATION_CODE:
+        return 'OAuth2 Authorization Code';
+      case AuthType.HMAC:
+        return 'HMAC';
       default:
         return type;
     }

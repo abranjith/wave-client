@@ -8,6 +8,9 @@ import { ApiKeyAuthService } from './ApiKeyAuthService';
 import { BasicAuthService } from './BasicAuthService';
 import { DigestAuthService } from './DigestAuthService';
 import { OAuth2RefreshService } from './OAuth2RefreshService';
+import { OAuth2ClientCredentialsService } from './OAuth2ClientCredentialsService';
+import { OAuth2AuthorizationCodeService } from './OAuth2AuthorizationCodeService';
+import { HmacAuthService } from './HmacAuthService';
 import { AuthType } from './types';
 
 /**
@@ -43,6 +46,15 @@ class AuthServiceFactoryClass {
                 break;
             case AuthType.OAUTH2_REFRESH:
                 service = new OAuth2RefreshService();
+                break;
+            case AuthType.OAUTH2_CLIENT_CREDENTIALS:
+                service = new OAuth2ClientCredentialsService();
+                break;
+            case AuthType.OAUTH2_AUTHORIZATION_CODE:
+                service = new OAuth2AuthorizationCodeService();
+                break;
+            case AuthType.HMAC:
+                service = new HmacAuthService();
                 break;
             default:
                 return null;
